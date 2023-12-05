@@ -21,6 +21,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -271,30 +272,45 @@ public class IncrementalImageUtil {
             mDevice.executeShellV2Command("snapshotctl unmap-snapshots");
             mDevice.executeShellV2Command("snapshotctl delete-snapshots");
 
-            List<Callable<Boolean>> pushTasks = new ArrayList<>();
-            for (File f : workDir.listFiles()) {
-                try (CloseableTraceScope push = new CloseableTraceScope("push:" + f.getName())) {
-                    pushTasks.add(
-                            () -> {
-                                boolean success;
-                                if (f.isDirectory()) {
-                                    success = mDevice.pushDir(f, "/data/ndb/");
-                                } else {
-                                    success = mDevice.pushFile(f, "/data/ndb/" + f.getName());
-                                }
-                                CLog.d(
-                                        "Push status: %s. %s->%s",
-                                        success, f, "/data/ndb/" + f.getName());
-                                assertTrue(success);
-                                return true;
-                            });
+            RecoveryMode mode = mDevice.getRecoveryMode();
+            mDevice.setRecoveryMode(RecoveryMode.NONE);
+            try {
+                List<Callable<Boolean>> pushTasks = new ArrayList<>();
+                for (File f : workDir.listFiles()) {
+                    try (CloseableTraceScope push =
+                            new CloseableTraceScope("push:" + f.getName())) {
+                        pushTasks.add(
+                                () -> {
+                                    boolean success;
+                                    if (f.isDirectory()) {
+                                        success = mDevice.pushDir(f, "/data/ndb/");
+                                    } else {
+                                        success = mDevice.pushFile(f, "/data/ndb/" + f.getName());
+                                    }
+                                    CLog.d(
+                                            "Push status: %s. %s->%s",
+                                            success, f, "/data/ndb/" + f.getName());
+                                    assertTrue(success);
+                                    return true;
+                                });
+                    }
                 }
-            }
-            ParallelDeviceExecutor<Boolean> pushExec =
-                    new ParallelDeviceExecutor<Boolean>(pushTasks.size());
-            pushExec.invokeAll(pushTasks, 0, TimeUnit.MINUTES);
-            if (pushExec.hasErrors()) {
-                throw new RuntimeException(pushExec.getErrors().get(0));
+                ParallelDeviceExecutor<Boolean> pushExec =
+                        new ParallelDeviceExecutor<Boolean>(pushTasks.size());
+                pushExec.invokeAll(pushTasks, 0, TimeUnit.MINUTES);
+                if (pushExec.hasErrors()) {
+                    for (Throwable err : pushExec.getErrors()) {
+                        if (err instanceof DeviceNotAvailableException) {
+                            throw (DeviceNotAvailableException) err;
+                        }
+                    }
+                    throw new TargetSetupError(
+                            String.format("Failed to push patches."),
+                            pushExec.getErrors().get(0),
+                            InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+                }
+            } finally {
+                mDevice.setRecoveryMode(mode);
             }
 
             CommandResult listSnapshots = mDevice.executeShellV2Command("ls -l /data/ndb/");
