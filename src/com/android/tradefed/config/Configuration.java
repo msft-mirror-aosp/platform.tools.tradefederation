@@ -723,6 +723,9 @@ public class Configuration implements IConfiguration {
      */
     @Override
     public void injectOptionValues(List<OptionDef> optionDefs) throws ConfigurationException {
+        if (optionDefs.isEmpty()) {
+            return;
+        }
         OptionSetter optionSetter = createOptionSetter();
         for (OptionDef optionDef : optionDefs) {
             internalInjectOptionValue(optionSetter, optionDef.name, optionDef.key, optionDef.value,
@@ -733,6 +736,9 @@ public class Configuration implements IConfiguration {
     /** {@inheritDoc} */
     @Override
     public void safeInjectOptionValues(List<OptionDef> optionDefs) throws ConfigurationException {
+        if (optionDefs.isEmpty()) {
+            return;
+        }
         OptionSetter optionSetter = createOptionSetter();
         for (OptionDef optionDef : optionDefs) {
             try {
