@@ -200,6 +200,7 @@ public class ClusterCommandConfigBuilder {
         envVars.putAll(systemEnvMap);
 
         envVars.put("TF_WORK_DIR", mWorkDir.getAbsolutePath());
+        envVars.put("TF_ATTEMPT_ID", mCommand.getAttemptId());
         envVars.putAll(mTestEnvironment.getEnvVars());
         envVars.putAll(mTestContext.getEnvVars());
 
