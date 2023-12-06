@@ -74,7 +74,7 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
             name = "new-parameterized-handling",
             description =
                     "Feature flag to test out the newer parameterized method handling for retry.")
-    private boolean mParameterizedHandling = false;
+    private boolean mParameterizedHandling = true;
 
     @Option(
         name = BaseTestSuite.MODULE_OPTION,
