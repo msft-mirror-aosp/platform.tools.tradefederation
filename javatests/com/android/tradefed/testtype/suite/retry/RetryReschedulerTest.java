@@ -338,6 +338,9 @@ public class RetryReschedulerTest {
     /** Test rescheduling a configuration when no parameterized tests previously failed. */
     @Test
     public void testReschedule_parameterized_nofail() throws Exception {
+        OptionSetter setter = new OptionSetter(mTest);
+        // We specify to exclude "run1"
+        setter.setOptionValue("new-parameterized-handling", "false");
         populateFakeResults(2, 4, 1, 0, 2, false);
 
         when(mMockLoader.getCommandLine()).thenReturn("previous_command");
@@ -372,6 +375,9 @@ public class RetryReschedulerTest {
     /** Test rescheduling a configuration when some parameterized tests previously failed. */
     @Test
     public void testReschedule_parameterized_failed() throws Exception {
+        OptionSetter setter = new OptionSetter(mTest);
+        // We specify to exclude "run1"
+        setter.setOptionValue("new-parameterized-handling", "false");
         populateFakeResults(2, 4, 1, 0, 2, true);
 
         when(mMockLoader.getCommandLine()).thenReturn("previous_command");
