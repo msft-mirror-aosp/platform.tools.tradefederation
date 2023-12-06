@@ -193,6 +193,7 @@ public class ClusterCommandConfigBuilderTest {
         // work directory and environment variables from both sources were injected
         verify(mConfig, times(1))
                 .injectOptionValue("cluster:env-var", "TF_WORK_DIR", mWorkDir.getAbsolutePath());
+        verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "TF_ATTEMPT_ID", ATTEMPT_ID);
         verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "E1", "V1");
         verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "E2", "V2");
     }
