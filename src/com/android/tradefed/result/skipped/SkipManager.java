@@ -173,7 +173,9 @@ public class SkipManager implements IDisableable {
             if (mTestArtifactsAnalysisContent.isEmpty()) {
                 return false;
             } else {
-                try (CloseableTraceScope ignored = new CloseableTraceScope("TestContentAnalyzer")) {
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(
+                                InvocationMetricKey.TestContentAnalyzer.toString())) {
                     TestContentAnalyzer analyzer =
                             new TestContentAnalyzer(
                                     information,

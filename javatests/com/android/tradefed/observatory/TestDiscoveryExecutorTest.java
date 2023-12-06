@@ -43,6 +43,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentMatcher;
 import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -82,8 +83,21 @@ public class TestDiscoveryExecutorTest {
                 };
         doReturn(mMockedConfiguration)
                 .when(mMockConfigFactory)
-                .createConfigurationFromArgs(
-                        Mockito.any(), Mockito.isNull(), Mockito.isA(DryRunKeyStore.class));
+                .createPartialConfigurationFromArgs(
+                        Mockito.any(),
+                        Mockito.isA(DryRunKeyStore.class),
+                        Mockito.argThat(
+                                new ArgumentMatcher<Set<String>>() {
+                                    @Override
+                                    public boolean matches(Set<String> argument) {
+                                        return argument.containsAll(
+                                                Set.of(
+                                                        Configuration.TEST_TYPE_NAME,
+                                                        Configuration.TARGET_PREPARER_TYPE_NAME));
+                                    }
+                                    ;
+                                }),
+                        Mockito.isNull());
     }
 
     public static class DiscoverablePreparer extends BaseTargetPreparer
