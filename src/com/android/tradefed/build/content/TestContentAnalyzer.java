@@ -63,10 +63,18 @@ public class TestContentAnalyzer {
 
     private final TestInformation information;
     private final List<ContentAnalysisContext> contexts;
+    private final List<String> discoveredModules;
+    private final List<String> dependencyFiles;
 
-    public TestContentAnalyzer(TestInformation information, List<ContentAnalysisContext> contexts) {
+    public TestContentAnalyzer(
+            TestInformation information,
+            List<ContentAnalysisContext> contexts,
+            List<String> discoveredModules,
+            List<String> dependencyFiles) {
         this.information = information;
         this.contexts = contexts;
+        this.discoveredModules = discoveredModules;
+        this.dependencyFiles = dependencyFiles;
     }
 
     public ContentAnalysisResults evaluate() {
@@ -131,10 +139,31 @@ public class TestContentAnalyzer {
             CLog.e("Could find a testcases directory, something went wrong.");
             return null;
         }
+        for (String depFile : dependencyFiles) {
+            File dep = FileUtil.findFile(rootDir, depFile);
+            if (dep == null) {
+                continue;
+            }
+            Path relativeRootFilePath = rootDir.toPath().relativize(dep.toPath());
+            if (diffPaths.contains(relativeRootFilePath.toString())) {
+                results.addModifiedFile();
+            } else {
+                results.addUnchangedFile();
+            }
+        }
         // Then check changes in modules
         for (File rootFile : testcasesRoot.listFiles()) {
             if (rootFile.isDirectory()) {
                 File moduleDir = rootFile;
+                if (!discoveredModules.isEmpty()
+                        && !discoveredModules.contains(moduleDir.getName())) {
+                    // Only consider modules that are going to execute
+                    continue;
+                }
+                if (moduleDir.list().length == 0) {
+                    // Skip empty directories
+                    continue;
+                }
                 String relativeModulePath =
                         String.format("%s/testcases/%s/", rootPackage, moduleDir.getName());
                 Set<String> moduleDiff =
@@ -232,6 +261,12 @@ public class TestContentAnalyzer {
         List<String> entryNames = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
         for (ContentAnalysisContext context : contexts) {
+            if (context.abortAnalysis()) {
+                CLog.w("Analysis was aborted.");
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
+                return null;
+            }
             List<ArtifactFileDescriptor> diff =
                     analyzeContentDiff(context.contentInformation(), context.contentEntry());
             if (diff == null) {
@@ -284,6 +319,15 @@ public class TestContentAnalyzer {
                 }
                 Path relativeRootFilePath = testsDirRoot.toPath().relativize(testCasesDir.toPath());
                 for (File moduleDir : testCasesDir.listFiles()) {
+                    if (!discoveredModules.isEmpty()
+                            && !discoveredModules.contains(moduleDir.getName())) {
+                        // Only consider modules that are going to execute
+                        continue;
+                    }
+                    if (moduleDir.list().length == 0) {
+                        // Skip empty directories
+                        continue;
+                    }
                     String relativeModulePath =
                             String.format(
                                     "%s/%s/", relativeRootFilePath.toString(), moduleDir.getName());

@@ -299,11 +299,20 @@ public class OxygenUtil {
                 return metrics;
             }
             File vdlStdout = new File(files.iterator().next());
+            // Keep collecting cuttlefish-common for legacy
             double cuttlefishCommon = 0;
+            // cuttlefish-host-resources and cuttlefish-operator replaces cuttlefish-common
+            // in recent versions of cuttlefish debian packages.
+            double cuttlefishHostResources = 0;
+            double cuttlefishOperator = 0;
             double launchDevice = 0;
             double mainstart = 0;
             Pattern cuttlefishCommonPatteren =
                     Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sCuttlefishCommon");
+            Pattern cuttlefishHostResourcesPatteren =
+                    Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sCuttlefishHostResources");
+            Pattern cuttlefishOperatorPatteren =
+                    Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sCuttlefishOperator");
             Pattern launchDevicePatteren =
                     Pattern.compile(".*\\|\\s*(\\d+\\.\\d+)\\s*\\|\\sLaunchDevice");
             Pattern mainstartPatteren =
@@ -326,6 +335,18 @@ public class OxygenUtil {
                             cuttlefishCommon = Double.parseDouble(matcher.group(1));
                         }
                     }
+                    if (cuttlefishHostResources == 0) {
+                        matcher = cuttlefishHostResourcesPatteren.matcher(line);
+                        if (matcher.find()) {
+                            cuttlefishHostResources = Double.parseDouble(matcher.group(1));
+                        }
+                    }
+                    if (cuttlefishOperator == 0) {
+                        matcher = cuttlefishOperatorPatteren.matcher(line);
+                        if (matcher.find()) {
+                            cuttlefishOperator = Double.parseDouble(matcher.group(1));
+                        }
+                    }
                     if (launchDevice == 0) {
                         matcher = launchDevicePatteren.matcher(line);
                         if (matcher.find()) {
@@ -341,7 +362,14 @@ public class OxygenUtil {
                 }
             }
             if (mainstart > 0) {
-                metrics[0] = (long) ((mainstart - launchDevice - cuttlefishCommon) * 1000);
+                metrics[0] =
+                        (long)
+                                ((mainstart
+                                                - launchDevice
+                                                - cuttlefishCommon
+                                                - cuttlefishHostResources
+                                                - cuttlefishOperator)
+                                        * 1000);
                 metrics[1] = (long) (launchDevice * 1000);
             }
         } catch (Exception e) {

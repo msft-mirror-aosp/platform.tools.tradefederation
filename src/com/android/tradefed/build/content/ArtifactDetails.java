@@ -17,14 +17,15 @@ package com.android.tradefed.build.content;
 
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.util.FileUtil;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,8 +47,10 @@ public class ArtifactDetails {
     public static ArtifactDetails parseFile(File input, String targetArtifact) throws IOException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("parse_artifacts_details")) {
             Gson gson = new Gson();
-            JsonArray mainArray =
-                    gson.fromJson(FileUtil.readStringFromFile(input), JsonArray.class);
+            JsonArray mainArray = null;
+            try (BufferedReader reader = new BufferedReader(new FileReader(input))) {
+                mainArray = gson.fromJson(reader, JsonArray.class);
+            }
             for (JsonElement e : mainArray) {
                 JsonObject o = e.getAsJsonObject();
                 JsonElement name = o.asMap().get("artifact");

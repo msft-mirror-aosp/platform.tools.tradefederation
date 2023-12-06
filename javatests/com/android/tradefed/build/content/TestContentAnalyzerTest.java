@@ -36,6 +36,7 @@ import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 /** Unit tests for {@link TestContentAnalyzer}. */
@@ -72,7 +73,11 @@ public class TestContentAnalyzerTest {
                             "mydevice-tests-P8888.zip", contentInfo, AnalysisMethod.FILE);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
+                    new TestContentAnalyzer(
+                            mTestInformation,
+                            Arrays.asList(analysisContext),
+                            new ArrayList<String>(),
+                            new ArrayList<String>());
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertTrue(results.hasAnyTestsChange());
@@ -97,7 +102,11 @@ public class TestContentAnalyzerTest {
                             "mydevice-tests-P8888.zip", contentInfo, AnalysisMethod.FILE);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
+                    new TestContentAnalyzer(
+                            mTestInformation,
+                            Arrays.asList(analysisContext),
+                            new ArrayList<String>(),
+                            new ArrayList<String>());
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertFalse(results.hasAnyTestsChange());
@@ -128,10 +137,50 @@ public class TestContentAnalyzerTest {
                             "android-cts.zip", contentInfo, AnalysisMethod.MODULE_XTS);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
+                    new TestContentAnalyzer(
+                            mTestInformation,
+                            Arrays.asList(analysisContext),
+                            new ArrayList<String>(),
+                            new ArrayList<String>());
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertTrue(results.hasAnyTestsChange());
+        } finally {
+            contentInfo.clean();
+            FileUtil.recursiveDelete(testsDir);
+        }
+    }
+
+    @Test
+    public void testAnalyzeXtsSuite_withDiscovery() throws Exception {
+        File testsDir = FileUtil.createTempDir("analysis-unit-tests");
+        File rootDir = new File(testsDir, "android-cts");
+        rootDir.mkdir();
+        File testCases = new File(rootDir, "testcases");
+        testCases.mkdirs();
+        new File(testCases, "module1").mkdirs();
+        new File(testCases, "module1/someapk.apk").createNewFile();
+        new File(testCases, "module2").mkdirs();
+        new File(testCases, "module2/otherfile.xml").createNewFile();
+        mBuildInfo.setFile(BuildInfoFileKey.ROOT_DIRECTORY, rootDir, "P8888");
+        ContentInformation contentInfo =
+                new ContentInformation(
+                        generateBaseContent(), "6777", generateCurrentContent(), "P8888");
+        try {
+            ContentAnalysisContext analysisContext =
+                    new ContentAnalysisContext(
+                            "android-cts.zip", contentInfo, AnalysisMethod.MODULE_XTS);
+
+            TestContentAnalyzer analyzer =
+                    new TestContentAnalyzer(
+                            mTestInformation,
+                            Arrays.asList(analysisContext),
+                            Arrays.asList("module2"),
+                            new ArrayList<String>());
+            ContentAnalysisResults results = analyzer.evaluate();
+            assertNotNull(results);
+            // Only module2 is considered and didn't change
+            assertFalse(results.hasAnyTestsChange());
         } finally {
             contentInfo.clean();
             FileUtil.recursiveDelete(testsDir);
@@ -157,7 +206,11 @@ public class TestContentAnalyzerTest {
                             "android-cts.zip", contentInfo, AnalysisMethod.MODULE_XTS);
 
             TestContentAnalyzer analyzer =
-                    new TestContentAnalyzer(mTestInformation, Arrays.asList(analysisContext));
+                    new TestContentAnalyzer(
+                            mTestInformation,
+                            Arrays.asList(analysisContext),
+                            new ArrayList<String>(),
+                            new ArrayList<String>());
             ContentAnalysisResults results = analyzer.evaluate();
             assertNotNull(results);
             assertFalse(results.hasAnyTestsChange());
