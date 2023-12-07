@@ -19,6 +19,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
+import com.android.tradefed.device.internal.DeviceSnapshotHandler;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -28,8 +29,12 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
+import com.google.common.base.Strings;
+
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Default connection representation of a device, assumed to be a standard adb connection of the
@@ -47,8 +52,11 @@ public class AdbTcpConnection extends DefaultConnection {
 
     private File mAdbConnectLogs = null;
 
+    private Map<ITestDevice, String> mInvocationSnapshots;
+
     public AdbTcpConnection(ConnectionBuilder builder) {
         super(builder);
+        mInvocationSnapshots = new HashMap<>();
     }
 
     /**
@@ -56,6 +64,11 @@ public class AdbTcpConnection extends DefaultConnection {
      */
     public void setAdbLogFile(File adbLogFile) {
         mAdbConnectLogs = adbLogFile;
+    }
+
+    /** Returns the map of snapshots */
+    public Map<ITestDevice, String> getSuiteSnapshots() {
+        return mInvocationSnapshots;
     }
 
     @Override
@@ -73,19 +86,57 @@ public class AdbTcpConnection extends DefaultConnection {
 
     /** {@inheritDoc} */
     @Override
-    public void recoverVirtualDevice(ITestDevice device, DeviceNotAvailableException dnae)
+    public void recoverVirtualDevice(
+            ITestDevice device, String snapshotId, DeviceNotAvailableException dnae)
             throws DeviceNotAvailableException {
-        DeviceResetHandler recoveryHandler = new DeviceResetHandler();
-        boolean recoverSuccess = recoveryHandler.resetDevice(device);
-        if (recoverSuccess) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricLogger.InvocationMetricKey.DEVICE_RECOVERED_FROM_DEVICE_RESET,
-                    1);
+        if (Strings.isNullOrEmpty(snapshotId)) {
+            DeviceResetHandler recoveryHandler = new DeviceResetHandler();
+            boolean recoverSuccess = recoveryHandler.resetDevice(device);
+            if (recoverSuccess) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricLogger.InvocationMetricKey
+                                .DEVICE_RECOVERED_FROM_DEVICE_RESET,
+                        1);
+            } else {
+                throw new DeviceNotAvailableException(
+                        String.format("Failed to recover device: %s", device.getSerialNumber()),
+                        device.getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+            }
         } else {
-            throw new DeviceNotAvailableException(
-                    String.format("Failed to recover device: %s", device.getSerialNumber()),
-                    device.getSerialNumber(),
-                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+            DeviceSnapshotHandler restoreHandler = new DeviceSnapshotHandler();
+            boolean restoreSuccess = restoreHandler.restoreSnapshotDevice(device, snapshotId);
+            if (restoreSuccess) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricLogger.InvocationMetricKey
+                                .DEVICE_RECOVERED_FROM_DEVICE_RESET,
+                        1);
+            } else {
+                throw new DeviceNotAvailableException(
+                        String.format(
+                                "Failed to restore device: %s with snapshot ID: %s",
+                                device.getSerialNumber(), snapshotId),
+                        device.getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+            }
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void snapshotDevice(ITestDevice device, String snapshotId)
+            throws DeviceNotAvailableException {
+        if (!Strings.isNullOrEmpty(snapshotId)) {
+            DeviceSnapshotHandler snapshotHandler = new DeviceSnapshotHandler();
+            boolean snapshotSuccess = snapshotHandler.snapshotDevice(device, snapshotId);
+            if (!snapshotSuccess) {
+                throw new DeviceNotAvailableException(
+                        String.format(
+                                "Failed to snapshot device: %s with snapshot ID: %s",
+                                device.getSerialNumber(), snapshotId),
+                        device.getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
+            }
         }
     }
 
