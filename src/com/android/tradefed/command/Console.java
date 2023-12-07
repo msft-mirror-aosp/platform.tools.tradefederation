@@ -1362,6 +1362,8 @@ public class Console extends Thread {
             server.start();
         } catch (RuntimeException e) {
             System.out.println(String.format("Error starting feature server: %s", e));
+            // Abort the start if we fail to start the server, it is a critical component.
+            throw e;
         }
         TestInvocationManagementServer invocationManagementServer = null;
         DeviceManagementGrpcServer deviceManagementServer = null;
