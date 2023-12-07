@@ -90,6 +90,11 @@ public class KUnitModuleTest extends ExecutableTargetTest {
     }
 
     @Override
+    public String findBinary(String binary) throws DeviceNotAvailableException {
+        return getSkipBinaryCheck() || getDevice().doesFileExist(binary) ? binary : null;
+    }
+
+    @Override
     public void runBinary(
             String modulePath, ITestInvocationListener listener, TestDescription description)
             throws DeviceNotAvailableException, IOException {
