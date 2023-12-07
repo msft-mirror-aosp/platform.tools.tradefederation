@@ -140,6 +140,7 @@ public class GTestResultParserTest extends GTestParserTestBase {
                         Mockito.<HashMap<String, Metric>>any());
         verify(mockRunListener)
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        assertTrue("Test run contains Unexpected Test.", !resultParser.isUnexpectedTestFound());
     }
 
     /** Tests the parser for a run with test errors. */
