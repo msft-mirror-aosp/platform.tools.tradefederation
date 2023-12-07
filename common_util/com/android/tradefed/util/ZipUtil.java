@@ -113,6 +113,7 @@ public class ZipUtil {
         while (entries.hasMoreElements()) {
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
+            validateDestinationDir(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (entry.isDirectory()) {
                 childFile.mkdirs();
@@ -136,6 +137,7 @@ public class ZipUtil {
         while (entries.hasMoreElements()) {
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
+            validateDestinationDir(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (!entry.isDirectory() && shouldExtract.test(entry)) {
                 FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
@@ -648,6 +650,15 @@ public class ZipUtil {
                     String.format(
                             "Failed to match CRC for file %s [expected=%s, actual=%s]",
                             targetFile, zipEntry.getCrc(), targetFileCrc));
+        }
+    }
+
+    protected static void validateDestinationDir(File destDir, String filename) throws IOException {
+        String canonicalDestinationDirPath = destDir.getCanonicalPath();
+        File destinationfile = new File(destDir, filename);
+        String canonicalDestinationFile = destinationfile.getCanonicalPath();
+        if (!canonicalDestinationFile.startsWith(canonicalDestinationDirPath + File.separator)) {
+            throw new RuntimeException("Entry is outside of the target dir: " + filename);
         }
     }
 }
