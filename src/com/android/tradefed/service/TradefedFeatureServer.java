@@ -25,6 +25,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.internal.IRemoteScheduledListenersFeature;
 import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SystemUtil;
 
 import com.proto.tradefed.feature.ErrorInfo;
 import com.proto.tradefed.feature.FeatureRequest;
@@ -81,7 +82,11 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
             CLog.d("Starting feature server.");
             mServer.start();
         } catch (IOException e) {
-            CLog.w("TradefedFeatureServer already started: %s", e.getMessage());
+            if (SystemUtil.isLocalMode()) {
+                CLog.w("TradefedFeatureServer already started: %s", e.getMessage());
+            } else {
+                throw new RuntimeException(e);
+            }
         }
     }
 
