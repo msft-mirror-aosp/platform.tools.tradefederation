@@ -32,6 +32,7 @@ import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.BundletoolUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -93,6 +94,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private Set<String> mApkToInstall = new LinkedHashSet<>();
     private List<String> mApkInstalled = new ArrayList<>();
     private List<String> mSplitsInstallArgs = new ArrayList<>();
+    private List<File> mSplitsDir = new ArrayList<>();
     private BundletoolUtil mBundletoolUtil;
     private String mDeviceSpecFilePath = "";
     private boolean mOptimizeMainlineTest = false;
@@ -420,6 +422,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
 
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
+        for (File dir : mSplitsDir) {
+            FileUtil.recursiveDelete(dir);
+        }
+        mSplitsDir.clear();
         if (mOptimizeMainlineTest) {
             CLog.d("Skipping tearDown as the installed modules may be used for the next test.");
             return;
@@ -547,6 +553,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (splitsDir == null || splitsDir.listFiles() == null) {
             return null;
         }
+        mSplitsDir.add(splitsDir);
         return Arrays.asList(splitsDir.listFiles());
     }
 
