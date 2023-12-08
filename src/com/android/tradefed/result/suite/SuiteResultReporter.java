@@ -253,9 +253,12 @@ public class SuiteResultReporter extends CollectingTestListener {
     private void printTopSlowModules(Collection<TestRunResult> results) {
         List<TestRunResult> moduleTime = new ArrayList<>();
         moduleTime.addAll(results);
-        // We don't consider module which runs in less than 5 sec.
+        // We don't consider module which runs in less than 5 sec or that didn't run tests
         for (TestRunResult t : results) {
             if (t.getElapsedTime() < 5000) {
+                moduleTime.remove(t);
+            }
+            if (t.getNumTests() == 0) {
                 moduleTime.remove(t);
             }
         }
