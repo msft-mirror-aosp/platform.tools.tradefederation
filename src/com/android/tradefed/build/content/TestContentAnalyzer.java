@@ -85,6 +85,15 @@ public class TestContentAnalyzer {
         try (CloseableTraceScope ignored = new CloseableTraceScope("content_analysis")) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
+            // Handle invalidation should it be set.
+            for (ContentAnalysisContext context : contexts) {
+                if (context.abortAnalysis()) {
+                    CLog.w("Analysis was aborted.");
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
+                    return null;
+                }
+            }
             AnalysisMethod method = contexts.get(0).analysisMethod();
             switch (method) {
                 case MODULE_XTS:
@@ -261,12 +270,6 @@ public class TestContentAnalyzer {
         List<String> entryNames = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
         for (ContentAnalysisContext context : contexts) {
-            if (context.abortAnalysis()) {
-                CLog.w("Analysis was aborted.");
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
-                return null;
-            }
             List<ArtifactFileDescriptor> diff =
                     analyzeContentDiff(context.contentInformation(), context.contentEntry());
             if (diff == null) {
