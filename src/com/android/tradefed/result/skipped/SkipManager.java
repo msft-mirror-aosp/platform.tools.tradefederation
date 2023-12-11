@@ -68,6 +68,16 @@ public class SkipManager implements IDisableable {
             description = "Enable the layer of skipping when there is no discovered tests to run.")
     private boolean mSkipOnNoTestsDiscovered = false;
 
+    @Option(
+            name = "skip-on-no-change-presubmit-only",
+            description = "Allow enabling the skip logic only in presubmit.")
+    private boolean mSkipOnNoChangePresubmitOnly = false;
+
+    @Option(
+            name = "considered-for-content-analysis",
+            description = "Some tests do not directly rely on content for being relevant.")
+    private boolean mConsideredForContent = true;
+
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
@@ -202,7 +212,11 @@ public class SkipManager implements IDisableable {
         if (results.deviceImageChanged()) {
             return false;
         }
-        if (!"WORK_NODE".equals(information.getContext().getAttribute("trigger"))) {
+        if (!mConsideredForContent) {
+            return false;
+        }
+        boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+        if (!presubmit) {
             // Eventually support postsubmit analysis.
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.NO_CHANGES_POSTSUBMIT, 1);
@@ -211,6 +225,9 @@ public class SkipManager implements IDisableable {
         // Currently only consider skipping in presubmit
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SKIP_NO_CHANGES, 1);
         if (mSkipOnNoChange) {
+            return true;
+        }
+        if (presubmit && mSkipOnNoChangePresubmitOnly) {
             return true;
         }
         InvocationMetricLogger.addInvocationMetrics(
