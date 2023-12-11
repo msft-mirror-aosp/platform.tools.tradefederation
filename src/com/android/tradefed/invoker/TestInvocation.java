@@ -1242,9 +1242,12 @@ public class TestInvocation implements ITestInvocation {
             if (!providerSuccess) {
                 return;
             }
-            // Skip invocation can only happen in the parent process
-            if (!config.getCommandOptions().getInvocationData()
-                        .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+            // Skip invocation can only happen in the parent process and not in the parent
+            // delegator.
+            if (!config.getCommandOptions()
+                            .getInvocationData()
+                            .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
+                    && !RunMode.DELEGATED_INVOCATION.equals(mode)) {
                 if (config.getSkipManager().shouldSkipInvocation(info)) {
                     CLog.d("Skipping invocation early.");
                     startInvocation(config, info.getContext(), listener);
