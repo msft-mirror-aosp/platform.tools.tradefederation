@@ -107,12 +107,9 @@ public class DeviceSnapshotFeature
                 String snapshotId = request.getArgsMap().get(SNAPSHOT_ID);
                 boolean restoreFlag = Boolean.parseBoolean(request.getArgsMap().get(RESTORE_FLAG));
                 if (restoreFlag) {
-                    stop(responseBuilder, connection, user, offset);
                     restoreSnapshot(responseBuilder, connection, user, offset, snapshotId);
                 } else {
-                    suspend(responseBuilder, connection, user, offset);
                     snapshot(responseBuilder, connection, user, offset, snapshotId);
-                    resume(responseBuilder, connection, user, offset);
                 }
             } else if (mTestInformation.getDevice() instanceof RemoteAndroidDevice) {
                 responseBuilder.setResponse(" RemoteAndroidDevice has no snapshot support.");
@@ -208,111 +205,6 @@ public class DeviceSnapshotFeature
         }
     }
 
-    private void suspend(
-            FeatureResponse.Builder responseBuilder,
-            AbstractConnection connection,
-            String user,
-            Integer offset)
-            throws DeviceNotAvailableException, TargetSetupError {
-        String response =
-                String.format(
-                        "Attempting suspend device on %s (%s).",
-                        mTestInformation.getDevice().getSerialNumber(),
-                        mTestInformation.getDevice().getClass().getSimpleName());
-        try {
-            long startTime = System.currentTimeMillis();
-            CommandResult result = suspendGce(connection, user, offset);
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to suspend device: %s. status:%s\n"
-                                        + "stdout: %s\n"
-                                        + "stderr:%s",
-                                mTestInformation.getDevice().getSerialNumber(),
-                                result.getStatus(),
-                                result.getStdout(),
-                                result.getStderr()),
-                        mTestInformation.getDevice().getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_SUSPEND);
-            }
-            response +=
-                    String.format(
-                            " Suspend finished in %d ms.", System.currentTimeMillis() - startTime);
-        } finally {
-            responseBuilder.setResponse(response);
-        }
-    }
-
-    private void resume(
-            FeatureResponse.Builder responseBuilder,
-            AbstractConnection connection,
-            String user,
-            Integer offset)
-            throws DeviceNotAvailableException, TargetSetupError {
-        String response =
-                String.format(
-                        "Attempting resume device on %s (%s).",
-                        mTestInformation.getDevice().getSerialNumber(),
-                        mTestInformation.getDevice().getClass().getSimpleName());
-        try {
-            long startTime = System.currentTimeMillis();
-            CommandResult result = resumeGce(connection, user, offset);
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to resume device: %s. status:%s\n"
-                                        + "stdout: %s\n"
-                                        + "stderr:%s",
-                                mTestInformation.getDevice().getSerialNumber(),
-                                result.getStatus(),
-                                result.getStdout(),
-                                result.getStderr()),
-                        mTestInformation.getDevice().getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESUME);
-            }
-            response +=
-                    String.format(
-                            " Resume finished in %d ms.", System.currentTimeMillis() - startTime);
-        } finally {
-            responseBuilder.setResponse(response);
-        }
-    }
-
-    private void stop(
-            FeatureResponse.Builder responseBuilder,
-            AbstractConnection connection,
-            String user,
-            Integer offset)
-            throws DeviceNotAvailableException, TargetSetupError {
-        String response =
-                String.format(
-                        "Attempting stop device on %s (%s).",
-                        mTestInformation.getDevice().getSerialNumber(),
-                        mTestInformation.getDevice().getClass().getSimpleName());
-        try {
-            long startTime = System.currentTimeMillis();
-            CommandResult result = stopGce(connection, user, offset);
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to stop device: %s. status:%s\n"
-                                        + "stdout: %s\n"
-                                        + "stderr:%s",
-                                mTestInformation.getDevice().getSerialNumber(),
-                                result.getStatus(),
-                                result.getStdout(),
-                                result.getStderr()),
-                        mTestInformation.getDevice().getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
-            }
-            response +=
-                    String.format(
-                            " Stop finished in %d ms.", System.currentTimeMillis() - startTime);
-        } finally {
-            responseBuilder.setResponse(response);
-        }
-    }
-
     private GceAvdInfo getAvdInfo(ITestDevice device, AbstractConnection connection) {
         if (connection instanceof AdbSshConnection) {
             return ((AdbSshConnection) connection).getAvdInfo();
@@ -342,36 +234,6 @@ public class DeviceSnapshotFeature
         }
         CommandResult res = new CommandResult(CommandStatus.EXCEPTION);
         res.setStderr("Incorrect connection type while attempting device restore");
-        return res;
-    }
-
-    private CommandResult suspendGce(AbstractConnection connection, String user, Integer offset)
-            throws TargetSetupError {
-        if (connection instanceof AdbSshConnection) {
-            return ((AdbSshConnection) connection).suspendGce(user, offset);
-        }
-        CommandResult res = new CommandResult(CommandStatus.EXCEPTION);
-        res.setStderr("Incorrect connection type while attempting device suspend");
-        return res;
-    }
-
-    private CommandResult resumeGce(AbstractConnection connection, String user, Integer offset)
-            throws TargetSetupError {
-        if (connection instanceof AdbSshConnection) {
-            return ((AdbSshConnection) connection).resumeGce(user, offset);
-        }
-        CommandResult res = new CommandResult(CommandStatus.EXCEPTION);
-        res.setStderr("Incorrect connection type while attempting device resume");
-        return res;
-    }
-
-    private CommandResult stopGce(AbstractConnection connection, String user, Integer offset)
-            throws TargetSetupError {
-        if (connection instanceof AdbSshConnection) {
-            return ((AdbSshConnection) connection).stopGce(user, offset);
-        }
-        CommandResult res = new CommandResult(CommandStatus.EXCEPTION);
-        res.setStderr("Incorrect connection type while attempting device stop");
         return res;
     }
 }
