@@ -26,10 +26,6 @@ public class ContentInformation {
     public final File currentContent;
     public final String currentBuildId;
 
-    public ContentInformation(File baseContent, File currentContent) {
-        this(baseContent, null, currentContent, null);
-    }
-
     public ContentInformation(
             File baseContent, String baseBuildId, File currentContent, String currentBuildId) {
         this.baseContent = baseContent;
