@@ -637,6 +637,7 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public CommandResult snapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
+        suspendGce(user, offset);
         long startTime = System.currentTimeMillis();
 
         if (mGceAvd == null) {
@@ -692,6 +693,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
         }
+        resumeGce(user, offset);
 
         return snapshotRes;
     }
@@ -702,10 +704,9 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
-     * @return returns CommandResult of the suspend attempts
      * @throws TargetSetupError
      */
-    public CommandResult suspendGce(String user, Integer offset) throws TargetSetupError {
+    private void suspendGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -747,8 +748,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SUSPEND);
         }
-
-        return suspendRes;
     }
 
     /**
@@ -757,10 +756,9 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
-     * @return returns CommandResult of the resume attempts
      * @throws TargetSetupError
      */
-    public CommandResult resumeGce(String user, Integer offset) throws TargetSetupError {
+    private void resumeGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -801,8 +799,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESUME);
         }
-
-        return resumeRes;
     }
 
     /**
@@ -817,6 +813,7 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public CommandResult restoreSnapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
+        stopGce(user, offset);
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -873,10 +870,9 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
-     * @return returns CommandResult of the stop attempts
      * @throws TargetSetupError
      */
-    public CommandResult stopGce(String user, Integer offset) throws TargetSetupError {
+    private void stopGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -917,8 +913,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
         }
-
-        return stopRes;
     }
 
     /**
