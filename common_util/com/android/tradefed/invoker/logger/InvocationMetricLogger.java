@@ -213,6 +213,10 @@ public class InvocationMetricLogger {
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
+        // Represents the time we spent deleting file on host
+        DELETE_SNAPSHOT_FILES("delete_host_file_time_ms", true),
+        // Represents how many times we call the delete host file method
+        DELETE_SNAPSHOT_FILES_COUNT("delete_host_file_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
