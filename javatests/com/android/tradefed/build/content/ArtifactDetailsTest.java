@@ -54,7 +54,8 @@ public class ArtifactDetailsTest {
         File currentJson = generateCurrentContent();
         try {
             String artifactName = "mine-tests-P9999.zip";
-            ArtifactDetails base = ArtifactDetails.parseFile(baseJson, artifactName);
+            ArtifactDetails base =
+                    ArtifactDetails.parseFile(baseJson, artifactName, "8888", "P9999");
             ArtifactDetails presubmit = ArtifactDetails.parseFile(currentJson, artifactName);
             List<ArtifactFileDescriptor> diffs = ArtifactDetails.diffContents(base, presubmit);
             assertEquals(1, diffs.size());

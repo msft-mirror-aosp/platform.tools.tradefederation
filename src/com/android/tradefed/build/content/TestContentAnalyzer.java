@@ -363,7 +363,12 @@ public class TestContentAnalyzer {
     private List<ArtifactFileDescriptor> analyzeContentDiff(
             ContentInformation information, String entry) {
         try (CloseableTraceScope ignored = new CloseableTraceScope("analyze_content_diff")) {
-            ArtifactDetails base = ArtifactDetails.parseFile(information.baseContent, entry);
+            ArtifactDetails base =
+                    ArtifactDetails.parseFile(
+                            information.baseContent,
+                            entry,
+                            information.baseBuildId,
+                            information.currentBuildId);
             ArtifactDetails presubmit =
                     ArtifactDetails.parseFile(information.currentContent, entry);
             List<ArtifactFileDescriptor> diffs = ArtifactDetails.diffContents(base, presubmit);
