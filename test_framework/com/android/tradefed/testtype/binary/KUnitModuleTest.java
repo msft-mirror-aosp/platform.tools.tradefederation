@@ -135,14 +135,14 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                                     getTimeoutPerBinaryMs(),
                                     TimeUnit.MILLISECONDS);
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                String error_message =
+                String errorMessage =
                         String.format(
                                 "binary returned non-zero. Exit code: %d, stderr: %s, stdout: %s",
                                 result.getExitCode(), result.getStderr(), result.getStdout());
                 listener.testStarted(description);
                 listener.testFailed(
                         description,
-                        FailureDescription.create(error_message)
+                        FailureDescription.create(errorMessage)
                                 .setFailureStatus(FailureStatus.TEST_FAILURE));
                 listener.testEnded(description, new HashMap<String, Metric>());
                 return;
@@ -153,6 +153,21 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                     new ArrayList<String>(
                             Arrays.asList(getDevice().getChildren(KUNIT_DEBUGFS_PATH)));
             kunitTestSuitesAfter.removeAll(kunitTestSuitesBefore);
+
+            if (kunitTestSuitesAfter.isEmpty()) {
+                String errorMessage =
+                        String.format(
+                                "No KTAP results generated in '%s' for module '%s'",
+                                KUNIT_DEBUGFS_PATH, kunitModule);
+                CLog.e(errorMessage);
+                listener.testStarted(description);
+                listener.testFailed(
+                        description,
+                        FailureDescription.create(errorMessage)
+                                .setFailureStatus(FailureStatus.TEST_FAILURE));
+                listener.testEnded(description, new HashMap<String, Metric>());
+            }
+
             for (String testSuite : kunitTestSuitesAfter) {
                 String ktapResults =
                         getDevice().pullFileContents(String.format(KUNIT_RESULTS_FMT, testSuite));
@@ -180,11 +195,11 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                             .executeShellV2Command(String.format(RMMOD_COMMAND_FMT, kunitModule));
 
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                String error_message =
+                String errorMessage =
                         String.format(
                                 "binary returned non-zero. Exit code: %d, stderr: %s, stdout: %s",
                                 result.getExitCode(), result.getStderr(), result.getStdout());
-                CLog.w("Unable to unload module '%s'. %s", kunitModule, error_message);
+                CLog.w("Unable to unload module '%s'. %s", kunitModule, errorMessage);
             }
         } finally {
             if (debugfsAlreadyMounted) {

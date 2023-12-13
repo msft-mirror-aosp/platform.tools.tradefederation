@@ -132,10 +132,13 @@ public class KUnitModuleTestTest {
         setter.setOptionValue("binary", MODULE_NAME_01, MODULE_01);
         setter.setOptionValue("binary", MODULE_NAME_02, MODULE_02);
 
+        // For 2 modules: first rmmod call expect fail, second rmmod call expect pass
         when(mMockDevice.executeShellV2Command(
                         startsWith(String.format(KUnitModuleTest.RMMOD_COMMAND_FMT, ""))))
-                .thenReturn(mFailedResult) // First rmmod call, expect fail
-                .thenReturn(mSuccessResult); // Second rmmod call, expect pass
+                .thenReturn(mFailedResult)
+                .thenReturn(mSuccessResult)
+                .thenReturn(mFailedResult)
+                .thenReturn(mSuccessResult);
         when(mMockDevice.isDebugfsMounted()).thenReturn(false);
 
         when(mMockDevice.getChildren(KUnitModuleTest.KUNIT_DEBUGFS_PATH))
@@ -255,6 +258,60 @@ public class KUnitModuleTestTest {
         when(mMockDevice.pullFileContents(
                         String.format(KUnitModuleTest.KUNIT_RESULTS_FMT, MODULE_NAME_02)))
                 .thenReturn(KTAP_RESULTS_02.substring(0, KTAP_RESULTS_02.length() / 2));
+
+        // Run test
+        mKUnitModuleTest.run(mTestInfo, mListener);
+
+        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
+                new ArrayList<>() {
+                    {
+                        add(
+                                Pair.create(
+                                        new TestDescription(
+                                                MODULE_01, "main_test_01.example_test_1.test_1"),
+                                        true));
+                        add(
+                                Pair.create(
+                                        new TestDescription(
+                                                MODULE_01, "main_test_01.example_test_2.test_1"),
+                                        true));
+                        add(
+                                Pair.create(
+                                        new TestDescription(
+                                                MODULE_01, "main_test_01.example_test_2.test_2"),
+                                        true));
+                        add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
+                    }
+                };
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
+        for (Pair<TestDescription, Boolean> testResult : expectedTestResults) {
+            Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testResult.first));
+            if (!testResult.second) {
+                Mockito.verify(mListener, Mockito.times(1))
+                        .testFailed(Mockito.eq(testResult.first), any(FailureDescription.class));
+            }
+            Mockito.verify(mListener, Mockito.times(1))
+                    .testEnded(
+                            Mockito.eq(testResult.first),
+                            Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+        }
+
+        Mockito.verify(mListener, Mockito.times(1))
+                .testRunEnded(
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
+    }
+
+    @Test
+    public void test_missing_ktap_results_file()
+            throws DeviceNotAvailableException, ConfigurationException {
+
+        when(mMockDevice.getChildren(KUnitModuleTest.KUNIT_DEBUGFS_PATH))
+                .thenReturn(new String[0]) // module 1, call 1
+                .thenReturn(new String[] {MODULE_NAME_01}) // module 1, call 2
+                .thenReturn(new String[0]) // module 2, call 1
+                .thenReturn(
+                        new String[0]); // This is the injected error, nothing for module 2, call 2
 
         // Run test
         mKUnitModuleTest.run(mTestInfo, mListener);
