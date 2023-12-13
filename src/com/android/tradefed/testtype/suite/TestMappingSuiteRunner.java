@@ -298,6 +298,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     @Override
     public LinkedHashMap<String, IConfiguration> loadTests() {
         Set<TestInfo> testInfosToRun = loadTestInfos();
+        if (testInfosToRun.isEmpty() && getIncludeFilter().isEmpty()) {
+            // No need to load any test configs as there is no test info to run based on
+            // TEST_MAPPING files and include-filters.
+            return new LinkedHashMap<String, IConfiguration>();
+        }
 
         // load all the configurations with include-filter injected.
         LinkedHashMap<String, IConfiguration> testConfigs = super.loadTests();
@@ -328,7 +333,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                         mRemoteTestTimeOut.toString()
                 );
             }
-
         }
         return testConfigs;
     }

@@ -43,18 +43,28 @@ public class ArtifactDetails {
         public long size;
     }
 
-    /** Parses cas_content_details.json and extract information for the entry considered. */
     public static ArtifactDetails parseFile(File input, String targetArtifact) throws IOException {
+        return parseFile(input, targetArtifact, null, null);
+    }
+
+    /** Parses cas_content_details.json and extract information for the entry considered. */
+    public static ArtifactDetails parseFile(
+            File input, String targetArtifact, String baseBuildId, String currentBuildId)
+            throws IOException {
         try (CloseableTraceScope ignored = new CloseableTraceScope("parse_artifacts_details")) {
             Gson gson = new Gson();
             JsonArray mainArray = null;
             try (BufferedReader reader = new BufferedReader(new FileReader(input))) {
                 mainArray = gson.fromJson(reader, JsonArray.class);
             }
+            String namedArtifact = targetArtifact;
+            if (currentBuildId != null && targetArtifact.contains(currentBuildId)) {
+                namedArtifact = namedArtifact.replace(currentBuildId, baseBuildId);
+            }
             for (JsonElement e : mainArray) {
                 JsonObject o = e.getAsJsonObject();
                 JsonElement name = o.asMap().get("artifact");
-                if (name.getAsString().equals(targetArtifact)) {
+                if (name.getAsString().equals(namedArtifact)) {
                     ArtifactDetails d = gson.fromJson(e, ArtifactDetails.class);
                     if (d == null) {
                         throw new RuntimeException("Failed to parse for content.");
@@ -62,23 +72,7 @@ public class ArtifactDetails {
                     return d;
                 }
             }
-            // TODO: Use build-id instead to clean up
-            if (targetArtifact.contains("-tests-")) {
-                String prefix = targetArtifact.substring(0, targetArtifact.indexOf("-tests-") + 7);
-                // approximate for artifact that contains a build id
-                for (JsonElement e : mainArray) {
-                    JsonObject o = e.getAsJsonObject();
-                    JsonElement name = o.asMap().get("artifact");
-                    if (name.getAsString().startsWith(prefix)) {
-                        ArtifactDetails d = gson.fromJson(e, ArtifactDetails.class);
-                        if (d == null) {
-                            throw new RuntimeException("Failed to parse for content.");
-                        }
-                        return d;
-                    }
-                }
-            }
-            throw new RuntimeException(targetArtifact + " entry was not found.");
+            throw new RuntimeException(namedArtifact + " entry was not found.");
         }
     }
 
