@@ -75,6 +75,7 @@ public class TestContentAnalyzerTest {
             TestContentAnalyzer analyzer =
                     new TestContentAnalyzer(
                             mTestInformation,
+                            false,
                             Arrays.asList(analysisContext),
                             new ArrayList<String>(),
                             new ArrayList<String>());
@@ -104,6 +105,7 @@ public class TestContentAnalyzerTest {
             TestContentAnalyzer analyzer =
                     new TestContentAnalyzer(
                             mTestInformation,
+                            false,
                             Arrays.asList(analysisContext),
                             new ArrayList<String>(),
                             new ArrayList<String>());
@@ -139,6 +141,7 @@ public class TestContentAnalyzerTest {
             TestContentAnalyzer analyzer =
                     new TestContentAnalyzer(
                             mTestInformation,
+                            false,
                             Arrays.asList(analysisContext),
                             new ArrayList<String>(),
                             new ArrayList<String>());
@@ -174,6 +177,7 @@ public class TestContentAnalyzerTest {
             TestContentAnalyzer analyzer =
                     new TestContentAnalyzer(
                             mTestInformation,
+                            false,
                             Arrays.asList(analysisContext),
                             Arrays.asList("module2"),
                             new ArrayList<String>());
@@ -208,6 +212,7 @@ public class TestContentAnalyzerTest {
             TestContentAnalyzer analyzer =
                     new TestContentAnalyzer(
                             mTestInformation,
+                            false,
                             Arrays.asList(analysisContext),
                             new ArrayList<String>(),
                             new ArrayList<String>());
