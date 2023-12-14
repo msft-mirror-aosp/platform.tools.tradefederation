@@ -178,6 +178,7 @@ public class SkipManager implements IDisableable {
         if (results == null) {
             return false;
         }
+        boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
         // Do the analysis regardless
         if (results.hasTestsArtifacts()) {
             if (mTestArtifactsAnalysisContent.isEmpty()) {
@@ -189,6 +190,7 @@ public class SkipManager implements IDisableable {
                     TestContentAnalyzer analyzer =
                             new TestContentAnalyzer(
                                     information,
+                                    presubmit,
                                     mTestArtifactsAnalysisContent,
                                     mModulesDiscovered,
                                     mDependencyFiles);
@@ -215,7 +217,6 @@ public class SkipManager implements IDisableable {
         if (!mConsideredForContent) {
             return false;
         }
-        boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
         if (!presubmit) {
             // Eventually support postsubmit analysis.
             InvocationMetricLogger.addInvocationMetrics(

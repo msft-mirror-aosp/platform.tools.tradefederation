@@ -62,16 +62,19 @@ public class TestContentAnalyzer {
                     Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"));
 
     private final TestInformation information;
+    private final boolean presubmitMode;
     private final List<ContentAnalysisContext> contexts;
     private final List<String> discoveredModules;
     private final List<String> dependencyFiles;
 
     public TestContentAnalyzer(
             TestInformation information,
+            boolean presubmitMode,
             List<ContentAnalysisContext> contexts,
             List<String> discoveredModules,
             List<String> dependencyFiles) {
         this.information = information;
+        this.presubmitMode = presubmitMode;
         this.contexts = contexts;
         this.discoveredModules = discoveredModules;
         this.dependencyFiles = dependencyFiles;
@@ -82,11 +85,24 @@ public class TestContentAnalyzer {
             CLog.d("Analysis doesn't currently support multi-builds.");
             return null;
         }
+        List<ContentAnalysisContext> activeContexts = new ArrayList<>(contexts);
         try (CloseableTraceScope ignored = new CloseableTraceScope("content_analysis")) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
+            if (presubmitMode) {
+                for (ContentAnalysisContext context : contexts) {
+                    if (context.contentInformation() != null
+                            && !context.contentInformation().currentBuildId.startsWith("P")) {
+                        activeContexts.remove(context);
+                        CLog.d(
+                                "Removing context '%s' from content analysis in presubmit as it's"
+                                        + " not a moving head.",
+                                context);
+                    }
+                }
+            }
             // Handle invalidation should it be set.
-            for (ContentAnalysisContext context : contexts) {
+            for (ContentAnalysisContext context : activeContexts) {
                 if (context.abortAnalysis()) {
                     CLog.w("Analysis was aborted.");
                     InvocationMetricLogger.addInvocationMetrics(
@@ -94,14 +110,26 @@ public class TestContentAnalyzer {
                     return null;
                 }
             }
-            AnalysisMethod method = contexts.get(0).analysisMethod();
+            List<ContentAnalysisContext> buildKeyAnalysis =
+                    activeContexts.stream()
+                            .filter(c -> AnalysisMethod.BUILD_KEY.equals(c.analysisMethod()))
+                            .collect(Collectors.toList());
+            // Analyze separately the BUILD_KEY files
+            for (ContentAnalysisContext context : buildKeyAnalysis) {
+                if (AnalysisMethod.BUILD_KEY.equals(context.analysisMethod())) {
+                    // TODO: Implement support
+                    return null;
+                }
+            }
+            activeContexts.removeAll(buildKeyAnalysis);
+            AnalysisMethod method = activeContexts.get(0).analysisMethod();
             switch (method) {
                 case MODULE_XTS:
-                    return xtsAnalysis(information.getBuildInfo(), contexts.get(0));
+                    return xtsAnalysis(information.getBuildInfo(), activeContexts.get(0));
                 case FILE:
-                    return fileAnalysis(information.getBuildInfo(), contexts.get(0));
+                    return fileAnalysis(information.getBuildInfo(), activeContexts.get(0));
                 case SANDBOX_WORKDIR:
-                    return workdirAnalysis(information.getBuildInfo(), contexts);
+                    return workdirAnalysis(information.getBuildInfo(), activeContexts);
                 default:
                     // do nothing for the rest for now.
                     return null;
