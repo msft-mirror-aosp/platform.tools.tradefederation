@@ -2321,7 +2321,17 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
-        return createWifiHelper(true);
+        return createWifiHelper(false);
+    }
+
+    @Override
+    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+        if (useV2) {
+            CLog.d("Using WifiHelper V2. WifiUtil apk installation skipped.");
+            return createWifiHelper(useV2, false);
+        } else {
+            return createWifiHelper(useV2, true);
+        }
     }
 
     /**
@@ -2329,13 +2339,14 @@ public class TestDevice extends NativeDevice {
      * setup or not.
      */
     @VisibleForTesting
-    IWifiHelper createWifiHelper(boolean doSetup) throws DeviceNotAvailableException {
+    IWifiHelper createWifiHelper(boolean useV2, boolean doSetup)
+            throws DeviceNotAvailableException {
         if (doSetup) {
             mWasWifiHelperInstalled = true;
             // Ensure device is ready before attempting wifi setup
             waitForDeviceAvailable();
         }
-        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup);
+        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup, useV2);
     }
 
     /** {@inheritDoc} */
@@ -2357,7 +2368,7 @@ public class TestDevice extends NativeDevice {
             }
             try {
                 // Uninstall the wifi utility if it was installed.
-                IWifiHelper wifi = createWifiHelper(false);
+                IWifiHelper wifi = createWifiHelper(false, false);
                 wifi.cleanUp();
             } catch (DeviceNotAvailableException e) {
                 CLog.e("Device became unavailable while uninstalling wifi util.");

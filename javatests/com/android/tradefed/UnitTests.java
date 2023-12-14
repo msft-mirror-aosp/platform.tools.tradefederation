@@ -90,6 +90,7 @@ import com.android.tradefed.device.NativeDeviceTest;
 import com.android.tradefed.device.RemoteAndroidDeviceTest;
 import com.android.tradefed.device.TestDeviceTest;
 import com.android.tradefed.device.WaitDeviceRecoveryTest;
+import com.android.tradefed.device.WifiCommandUtilTest;
 import com.android.tradefed.device.WifiHelperTest;
 import com.android.tradefed.device.cloud.AcloudConfigParserTest;
 import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
@@ -606,6 +607,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TestDeviceTest.class,
     WaitDeviceRecoveryTest.class,
     WifiHelperTest.class,
+    WifiCommandUtilTest.class,
 
     // device.cloud
     AcloudConfigParserTest.class,
