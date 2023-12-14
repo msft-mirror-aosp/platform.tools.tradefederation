@@ -256,6 +256,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             // The local option disable the feature, and skip tracking baseline
             // for this run to avoid tracking a potentially bad baseline.
             mUseIncrementalFlashing = false;
+            // Do not keep a cache when we are about to override it
+            DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
         }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
         if (useIncrementalFlashing) {
