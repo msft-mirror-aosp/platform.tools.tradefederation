@@ -96,8 +96,11 @@ public class IncrementalImageUtil {
             CLog.d("Not tracking current baseline image.");
             return null;
         }
-        if (!tracker.buildId.equals(device.getBuildId())) {
-            CLog.d("On-device build isn't matching the cache.");
+        String deviceBuildId = device.getBuildId();
+        if (!tracker.buildId.equals(deviceBuildId)) {
+            CLog.d(
+                    "On-device build (id = %s) isn't matching the cache (id = %s).",
+                    deviceBuildId, tracker.buildId);
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
             return null;
