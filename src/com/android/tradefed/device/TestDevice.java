@@ -2328,6 +2328,7 @@ public class TestDevice extends NativeDevice {
     IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
         if (useV2) {
             CLog.d("Using WifiHelper V2. WifiUtil apk installation skipped.");
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_HELPER_V2, "true");
             return createWifiHelper(useV2, false);
         } else {
             return createWifiHelper(useV2, true);
