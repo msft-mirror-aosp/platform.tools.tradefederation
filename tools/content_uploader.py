@@ -106,6 +106,8 @@ ARTIFACTS = [
     ArtifactConfig('device-tests.zip', True),
     ArtifactConfig('device-tests_configs.zip', True),
     ArtifactConfig('*-tests-*zip', True),
+    ArtifactConfig('*-continuous_instrumentation_tests-*zip', True),
+    ArtifactConfig('*-continuous_native_tests-*zip', True),
     ArtifactConfig('*-img-*zip', False)
 ]
 
