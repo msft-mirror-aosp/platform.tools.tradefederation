@@ -25,7 +25,8 @@ public class ContentAnalysisContext {
     public enum AnalysisMethod {
         FILE,
         MODULE_XTS,
-        SANDBOX_WORKDIR
+        SANDBOX_WORKDIR,
+        BUILD_KEY // Search directly for a specific item in build info
     }
 
     private final String contentEntry;
