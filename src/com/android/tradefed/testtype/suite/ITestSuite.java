@@ -1697,4 +1697,8 @@ public abstract class ITestSuite
     public void setIntraModuleSharding(boolean intraModuleSharding) {
         mIntraModuleSharding = intraModuleSharding;
     }
+
+    public boolean getIntraModuleSharding() {
+        return mIntraModuleSharding;
+    }
 }
