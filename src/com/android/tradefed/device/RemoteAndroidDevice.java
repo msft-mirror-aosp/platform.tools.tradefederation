@@ -124,7 +124,7 @@ public class RemoteAndroidDevice extends TestDevice {
                 CommandResult connectOutput =
                         executeShellV2Command(
                                 String.format(
-                                        "cmd wifi connect-network %s %s open",
+                                        "cmd wifi connect-network %s open %s",
                                         wifiPair.getKey(), wifiPair.getValue()));
                 if (CommandStatus.SUCCESS.equals(connectOutput.getStatus())) {
                     CLog.i("Successfully connected to wifi network %s", wifiPair.getKey());
@@ -135,7 +135,7 @@ public class RemoteAndroidDevice extends TestDevice {
                 } else {
                     CLog.w(
                             "Failed to connect to wifi wifi. stdout: %s\nstderr:%s",
-                            enableOutput.getStdout(), enableOutput.getStderr());
+                            connectOutput.getStdout(), connectOutput.getStderr());
                 }
             }
         } finally {
