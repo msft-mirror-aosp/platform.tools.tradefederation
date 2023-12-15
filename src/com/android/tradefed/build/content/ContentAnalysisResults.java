@@ -25,6 +25,7 @@ public class ContentAnalysisResults {
     private long modifiedFiles = 0;
     private long sharedFolderChanges = 0;
     private long modifiedModules = 0;
+    private long buildKeyChanges = 0;
     private Set<String> unchangedModules = new HashSet<>();
 
     public ContentAnalysisResults() {}
@@ -54,9 +55,17 @@ public class ContentAnalysisResults {
         return this;
     }
 
+    public ContentAnalysisResults addChangedBuildKey(long count) {
+        buildKeyChanges += count;
+        return this;
+    }
+
     /** Returns true if any tests artifact was modified between the base build and current build. */
     public boolean hasAnyTestsChange() {
-        if (modifiedFiles > 0 || sharedFolderChanges > 0 || modifiedModules > 0) {
+        if (modifiedFiles > 0
+                || sharedFolderChanges > 0
+                || modifiedModules > 0
+                || buildKeyChanges > 0) {
             return true;
         }
         return false;
@@ -72,6 +81,8 @@ public class ContentAnalysisResults {
                 + sharedFolderChanges
                 + ", modifiedModules="
                 + modifiedModules
+                + ", buildKeyChanges="
+                + buildKeyChanges
                 + ", unchangedModules="
                 + unchangedModules
                 + "]";
