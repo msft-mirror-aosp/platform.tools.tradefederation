@@ -110,30 +110,47 @@ public class TestContentAnalyzer {
                     return null;
                 }
             }
+
             List<ContentAnalysisContext> buildKeyAnalysis =
                     activeContexts.stream()
                             .filter(c -> AnalysisMethod.BUILD_KEY.equals(c.analysisMethod()))
                             .collect(Collectors.toList());
             // Analyze separately the BUILD_KEY files
+            int countBuildKeyDiff = 0;
             for (ContentAnalysisContext context : buildKeyAnalysis) {
                 if (AnalysisMethod.BUILD_KEY.equals(context.analysisMethod())) {
-                    // TODO: Implement support
-                    return null;
+                    boolean hasChanged = buildKeyAnalysis(context);
+                    if (hasChanged) {
+                        CLog.d(
+                                "build key '%s' has changed or couldn't be evaluated.",
+                                context.contentEntry());
+                        countBuildKeyDiff++;
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
+                    }
                 }
             }
             activeContexts.removeAll(buildKeyAnalysis);
+            ContentAnalysisResults results;
             AnalysisMethod method = activeContexts.get(0).analysisMethod();
             switch (method) {
                 case MODULE_XTS:
-                    return xtsAnalysis(information.getBuildInfo(), activeContexts.get(0));
+                    results = xtsAnalysis(information.getBuildInfo(), activeContexts.get(0));
+                    break;
                 case FILE:
-                    return fileAnalysis(information.getBuildInfo(), activeContexts.get(0));
+                    results = fileAnalysis(information.getBuildInfo(), activeContexts.get(0));
+                    break;
                 case SANDBOX_WORKDIR:
-                    return workdirAnalysis(information.getBuildInfo(), activeContexts);
+                    results = workdirAnalysis(information.getBuildInfo(), activeContexts);
+                    break;
                 default:
                     // do nothing for the rest for now.
                     return null;
             }
+            if (results != null) {
+                results.addChangedBuildKey(countBuildKeyDiff);
+            }
+            return results;
         }
     }
 
@@ -409,5 +426,17 @@ public class TestContentAnalyzer {
             CLog.e(e);
         }
         return null;
+    }
+
+    /** Returns true if the analysis has differences */
+    private boolean buildKeyAnalysis(ContentAnalysisContext context) {
+        try {
+            List<ArtifactFileDescriptor> diffs =
+                    analyzeContentDiff(context.contentInformation(), context.contentEntry());
+            return !diffs.isEmpty();
+        } catch (RuntimeException e) {
+            CLog.e(e);
+        }
+        return true;
     }
 }
