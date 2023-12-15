@@ -108,6 +108,7 @@ ARTIFACTS = [
     ArtifactConfig('*-tests-*zip', True),
     ArtifactConfig('*-continuous_instrumentation_tests-*zip', True),
     ArtifactConfig('*-continuous_native_tests-*zip', True),
+    ArtifactConfig('cvd-host_package.tar.gz', False),
     ArtifactConfig('*-img-*zip', False)
 ]
 
