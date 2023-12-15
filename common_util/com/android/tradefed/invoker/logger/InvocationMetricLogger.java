@@ -310,6 +310,7 @@ public class InvocationMetricLogger {
         XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
         XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
         XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
+        BUILD_KEY_WITH_DIFFS("build_key_with_diffs", true),
         FILE_WITH_DIFFS("file_with_diffs", true),
         UNCHANGED_FILE("unchanged_file", true),
 
