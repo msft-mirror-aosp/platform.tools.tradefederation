@@ -207,9 +207,8 @@ public class SandboxConfigDump {
         for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
             IDeviceSelection requirements = deviceConfig.getDeviceRequirements();
             if (requirements.nullDeviceRequested()
-                    || requirements.tcpDeviceRequested()
                     || requirements.gceDeviceRequested()) {
-                // Reset serials, ensure any null/tcp/gce-device can be selected.
+                // Reset serials, ensure any null/gce-device can be selected.
                 requirements.setSerial();
             }
             // Reset device requested type, we don't need it in the sandbox

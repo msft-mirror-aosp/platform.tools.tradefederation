@@ -87,12 +87,15 @@ public interface IDeviceSelection extends IMatcher<IDevice> {
      */
     public boolean nullDeviceRequested();
 
-    /** @return <code>true</code> if a tcp device (aka a adb connected device) has been requested */
+    /**
+     * @return <code>true</code> if a tcp device (aka a adb connected device) has been requested
+     */
+    @Deprecated
     public boolean tcpDeviceRequested();
 
     /** @return <code>true</code> if a gce device (aka a remote device) has been requested */
     public boolean gceDeviceRequested();
-    
+
     /**
      * Gets the given devices product type
      *
