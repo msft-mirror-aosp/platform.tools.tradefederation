@@ -90,6 +90,14 @@ public class DynamicShardHelper extends StrictShardHelper {
             shouldDelegate = true;
         }
 
+        // Check if any of the tests are not ITestSuite instances
+        // If not, make sure that intra-module sharding is off and delegate
+        if (config.getTests().stream()
+                .anyMatch(x -> !ITestSuite.class.isAssignableFrom(x.getClass()))) {
+            CLog.d("Found non-ITestSuite tests, falling back to strict sharding");
+            shouldDelegate = true;
+        }
+
         if (shouldDelegate) {
             CLog.d(
                     "Setting option 'remote-dynamic-sharding' to false since precondition checks"
@@ -190,14 +198,20 @@ public class DynamicShardHelper extends StrictShardHelper {
         List<ITestSuite> allTests = new ArrayList<>();
         for (IRemoteTest test : config.getTests()) {
             if (test instanceof ITestSuite) {
+                ITestSuite suite = (ITestSuite) test;
                 // Disable intra-module-sharding when requesting dynamic sharding
                 // as it's currently not supported together.
-                ((ITestSuite) test).setIntraModuleSharding(false);
+                if (suite.getIntraModuleSharding()) {
+                    CLog.w(
+                            "Disabling intra-module sharding because it is not supported with"
+                                    + "dynamic sharding.");
+                    suite.setIntraModuleSharding(false);
+                }
+
                 allTests.addAll(
-                        ((ITestSuite) test)
-                                .split(1000000, testInfo).stream()
-                                        .map(x -> (ITestSuite) x)
-                                        .collect(Collectors.toList()));
+                        suite.split(1000000, testInfo).stream()
+                                .map(x -> (ITestSuite) x)
+                                .collect(Collectors.toList()));
             } else {
                 throw new HarnessRuntimeException(
                         "Test not an instance of ITestSuite, cannot execute this using dynamic"

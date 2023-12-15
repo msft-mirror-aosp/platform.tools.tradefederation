@@ -46,7 +46,8 @@ public class OptionFetcher implements AutoCloseable {
                     "enable-tracing",
                     "auto-collect",
                     "skip-retry-in-presubmit",
-                    "skip-retrying-list");
+                    "skip-retrying-list",
+                    "remote-dynamic-sharding");
 
     private TradefedFeatureClient mClient;
 

@@ -95,7 +95,7 @@ public class LogcatReceiver implements ILogcatReceiver {
 
     /** Get the default logcat command, only append uid format if api level > 24. */
     public static String getDefaultLogcatCmd(ITestDevice device) {
-        String logcatCmd = "logcat -v threadtime";
+        String logcatCmd = "logcat -b all -v threadtime";
         // Logcat format support UID started from api level 24.
         try {
             if (SystemUtil.isLocalMode() || device.getApiLevel() >= 24) {
