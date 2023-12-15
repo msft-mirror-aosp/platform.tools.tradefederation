@@ -156,6 +156,11 @@ public class NativeDeviceTest {
                     IWifiHelper createWifiHelper() {
                         return mMockWifi;
                     }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) {
+                        return mMockWifi;
+                    }
                 };
         mTestDevice.setRecovery(mMockRecovery);
         mTestDevice.setCommandTimeout(100);

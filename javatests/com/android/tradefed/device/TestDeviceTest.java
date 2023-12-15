@@ -5798,12 +5798,17 @@ public class TestDeviceTest {
 
                     @Override
                     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
-                        super.createWifiHelper(true);
+                        super.createWifiHelper(false, true);
                         return mMockWifi;
                     }
 
                     @Override
-                    IWifiHelper createWifiHelper(boolean doSetup)
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2, boolean doSetup)
                             throws DeviceNotAvailableException {
                         return mMockWifi;
                     }
