@@ -20,6 +20,8 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -61,7 +63,8 @@ public class KTapResultParser {
         ERROR
     }
 
-    private static class TestResult {
+    @VisibleForTesting
+    static class TestResult {
         public String version;
         public boolean expectSubtests;
         public int numberOfSubtests;
@@ -83,6 +86,15 @@ public class KTapResultParser {
         public String createDiagnosticTrace() {
             return String.format("%s\n%s", String.join("\n", diagnosticLines), diagnosticData)
                     .trim();
+        }
+
+        public String toStringWithSubtests(String prefix) {
+            StringBuilder builder = new StringBuilder();
+            builder.append(prefix + name + System.lineSeparator());
+            for (TestResult tr : subtests) {
+                builder.append(tr.toStringWithSubtests(prefix + "   "));
+            }
+            return builder.toString();
         }
     }
 
@@ -134,7 +146,8 @@ public class KTapResultParser {
         parser.applyToListener(listener, testRunName, root, "");
     }
 
-    private TestResult processResultsFileContent(String fileContent) {
+    @VisibleForTesting
+    TestResult processResultsFileContent(String fileContent) {
         TestResult root = new TestResult();
         root.isRoot = true;
         root.expectSubtests = true;
@@ -145,19 +158,24 @@ public class KTapResultParser {
 
     private void processLines(TestResult currentTest, Iterator<String> lineIterator) {
         if (!lineIterator.hasNext()) {
+            // Reached the end of file, confirm that the final test is in fact the root test
+            if (!currentTest.isRoot) {
+                throw new RuntimeException(
+                        String.format("Incomplete KTap results. All tests not closed properly."));
+            }
             return;
         }
 
         String line = lineIterator.next().trim();
 
         if (IS_VERSION.test(line)) {
-            if (currentTest.expectSubtests) {
+            if (currentTest.isRoot && currentTest.version == null || !currentTest.expectSubtests) {
+                currentTest.version = line;
+            } else {
                 TestResult subtest = new TestResult();
                 subtest.version = line;
                 currentTest.subtests.add(subtest);
                 processLines(subtest, lineIterator);
-            } else {
-                currentTest.version = line;
             }
         } else if (IS_SUBTEST.test(line)) {
             Matcher matcher = SUBTEST_PATTERN.matcher(line);
@@ -190,7 +208,6 @@ public class KTapResultParser {
             boolean isOk = matcher.group(OK_OR_NOT).equals("ok");
             int testNum = Integer.parseInt(matcher.group(TEST_NUM));
 
-            // The remainder of the results are all optional in various formats.
             String name =
                     matcher.group(TEST_NAME) != null
                             ? matcher.group(TEST_NAME).trim().replace(" ", "_")
@@ -219,6 +236,17 @@ public class KTapResultParser {
                 TestResult leafSubtest = new TestResult();
                 leafSubtest.name = name;
                 leafSubtest.isOk = isOk;
+
+                // For situations where the number of subtests is known
+                // validate that the testNum is not out of order.
+                if (currentTest.numberOfSubtests != 0
+                        && testNum != currentTest.subtests.size() + 1) {
+                    throw new RuntimeException(
+                            String.format(
+                                    "Test encountered out of order expected '%d' but received '%d'."
+                                            + " Line: '%s'",
+                                    currentTest.subtests.size() + 1, testNum, line));
+                }
                 leafSubtest.testNum = testNum;
                 leafSubtest.directive = directive;
                 leafSubtest.diagnosticData = diagnosticData;
@@ -228,7 +256,6 @@ public class KTapResultParser {
                 // out the parents lines.
                 leafSubtest.diagnosticLines.addAll(currentTest.diagnosticLines);
                 currentTest.diagnosticLines.clear();
-
                 currentTest.subtests.add(leafSubtest);
             }
         } else if (!line.isEmpty()) {

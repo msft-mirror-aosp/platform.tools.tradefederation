@@ -28,6 +28,8 @@ import com.android.tradefed.invoker.TestInformation;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -67,7 +69,8 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
             throws TargetSetupError, DeviceNotAvailableException {
         removeNonForTestingUsers(testInfo.getDevice());
 
-        int secondaryUserId = getForTestingSecondaryUserId(testInfo.getDevice());
+        // This must be a for-testing user because we removed the not-for-testing ones
+        int secondaryUserId = getSecondaryUserId(testInfo.getDevice());
 
         if (secondaryUserId == -1) {
             if (!assumeTrue(
@@ -102,14 +105,13 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
     }
 
     /**
-     * Get the id of a for-testing or main secondary user currently on the device. -1 if there is
+     * Get the id of a secondary user currently on the device. -1 if there is
      * none.
      */
-    private static int getForTestingSecondaryUserId(ITestDevice device)
+    private static int getSecondaryUserId(ITestDevice device)
             throws DeviceNotAvailableException {
         for (Map.Entry<Integer, UserInfo> userInfo : device.getUserInfos().entrySet()) {
-            if ((userInfo.getValue().isFlagForTesting() || userInfo.getValue().isMain())
-                    && userInfo.getValue().isSecondary()) {
+            if (userInfo.getValue().isSecondary()) {
                 return userInfo.getKey();
             }
         }
@@ -169,15 +171,34 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
      */
     private static void removeNonForTestingUsers(ITestDevice device)
             throws DeviceNotAvailableException {
-        for (Map.Entry<Integer, UserInfo> userInfo : device.getUserInfos().entrySet()) {
-            if (userInfo.getValue().isSystem()
-                    || userInfo.getValue().isFlagForTesting()
-                    || userInfo.getValue().isMain()
-                    || userInfo.getValue().isCommunalProfile()) {
+        Map<Integer, UserInfo> userInfoMap = device.getUserInfos();
+
+        List<UserInfo> userInfos = new ArrayList<>(userInfoMap.values());
+        Collections.sort(userInfos, Comparator.comparing(UserInfo::userId));
+
+        int maxSkippedUsers = device.isHeadlessSystemUserMode() ? 1 : 0;
+        int skippedUsers = 0;
+
+        for (UserInfo userInfo : userInfos) {
+            if (isForTesting(userInfo)) {
                 continue;
             }
-            device.removeUser(userInfo.getValue().userId());
+
+            if (skippedUsers < maxSkippedUsers) {
+                skippedUsers++;
+                continue;
+            }
+
+            device.removeUser(userInfo.userId());
         }
+    }
+
+    private static boolean isForTesting(UserInfo userInfo) {
+        return userInfo.isSystem()
+                || userInfo.isFlagForTesting()
+                // Communal profile doesn't align with DPM implementation - it's only acceptable
+                // here for now because no test with communal profile also uses enterprise
+                || userInfo.isCommunalProfile();
     }
 
     /** Checks whether it is possible to create the desired number of users. */

@@ -618,7 +618,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 CLog.e("Failed to locate %s: %s", bin, result.getStderr());
                 return "";
             }
-            String commandPath = result.getStdout();
+            String commandPath = result.getStdout().trim();
             // Remove tailing `/bin/COMMAND`
             String tmpDir = commandPath.substring(0, commandPath.length() - (bin.length() + 5));
             builtCommand = String.format("HOME=%s %s %s", tmpDir, commandPath, args);
@@ -637,6 +637,8 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public CommandResult snapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
+        cleanupSnapshotGce(user, snapshotId);
+        suspendGce(user, offset);
         long startTime = System.currentTimeMillis();
 
         if (mGceAvd == null) {
@@ -673,7 +675,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         // TODO(khei): explore shorter timeouts.
                         Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
-                        snapshotCommand);
+                        snapshotCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
             // Time taken for snapshot this invocation
@@ -692,6 +694,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
         }
+        resumeGce(user, offset);
 
         return snapshotRes;
     }
@@ -702,10 +705,9 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
-     * @return returns CommandResult of the suspend attempts
      * @throws TargetSetupError
      */
-    public CommandResult suspendGce(String user, Integer offset) throws TargetSetupError {
+    private void suspendGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -728,7 +730,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getRunUtil(),
                         // TODO(khei): explore shorter timeouts.
                         Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
-                        suspendCommand);
+                        suspendCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(suspendRes.getStatus())) {
             // Time taken for suspend this invocation
@@ -747,8 +749,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_SUSPEND);
         }
-
-        return suspendRes;
     }
 
     /**
@@ -757,10 +757,9 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
-     * @return returns CommandResult of the resume attempts
      * @throws TargetSetupError
      */
-    public CommandResult resumeGce(String user, Integer offset) throws TargetSetupError {
+    private void resumeGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -782,7 +781,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        resumeCommand);
+                        resumeCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(resumeRes.getStatus())) {
             // Time taken for resume this invocation
@@ -801,8 +800,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESUME);
         }
-
-        return resumeRes;
     }
 
     /**
@@ -817,6 +814,7 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public CommandResult restoreSnapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
+        stopGce(user, offset);
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -844,7 +842,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        restoreCommand);
+                        restoreCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             // Time taken for restore this invocation
@@ -873,10 +871,9 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @param user the host running user of AVD, <code>null</code> if not applicable.
      * @param offset the device num offset of the AVD in the host, <code>null</code> if not
      *     applicable
-     * @return returns CommandResult of the stop attempts
      * @throws TargetSetupError
      */
-    public CommandResult stopGce(String user, Integer offset) throws TargetSetupError {
+    private void stopGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
 
         // Get the user from options instance-user if user is null.
@@ -898,7 +895,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                         getDevice().getOptions(),
                         getRunUtil(),
                         Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        stopCommand);
+                        stopCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(stopRes.getStatus())) {
             // Time taken for stop this invocation
@@ -917,8 +914,44 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
         }
+    }
 
-        return stopRes;
+    /**
+     * Delete snapshot folder
+     *
+     * @param user the host running use of AVD, <code>null</code> if not applicable.
+     * @param snapshotId the id of the snapshot to delete.
+     */
+    private void cleanupSnapshotGce(String user, String snapshotId) {
+        long startTime = System.currentTimeMillis();
+
+        // Get the user from options instance-user if user is null.
+        if (user == null) {
+            user = getDevice().getOptions().getInstanceUser();
+        }
+
+        String cleanupSnapshotCommand =
+                String.format("rm -rf /tmp/%s/snapshots/%s", user, snapshotId);
+
+        CommandResult deleteRes =
+                GceManager.remoteSshCommandExecution(
+                        mGceAvd,
+                        getDevice().getOptions(),
+                        getRunUtil(),
+                        Math.max(3000L, getDevice().getOptions().getGceCmdTimeout()),
+                        cleanupSnapshotCommand.split(" "));
+
+        if (CommandStatus.SUCCESS.equals(deleteRes.getStatus())) {
+            // Time taken for stop this invocation
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_SNAPSHOT_FILES,
+                    Long.toString(System.currentTimeMillis() - startTime));
+
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DELETE_SNAPSHOT_FILES_COUNT, 1);
+        } else {
+            CLog.e("failed to delete snapshot with ID: %s. Does the snapshot exist?", snapshotId);
+        }
     }
 
     /**

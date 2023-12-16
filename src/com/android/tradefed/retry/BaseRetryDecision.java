@@ -24,6 +24,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
+import com.android.tradefed.device.internal.DeviceSnapshotHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -134,6 +135,11 @@ public class BaseRetryDecision
                     "retry strategy."
     )
     private boolean mModulePreparationRetry = false;
+
+    @Option(
+            name = "use-snapshot-for-reset",
+            description = "Feature flag to use snapshot/restore instead of powerwash.")
+    private boolean mUseSnapshotForReset = false;
 
     private IInvocationContext mContext;
     private IConfiguration mConfiguration;
@@ -689,9 +695,13 @@ public class BaseRetryDecision
                     mTestInformation.properties().getAll());
             mTestInformation.properties().clear();
             // Rerun suite level preparer if we are inside a subprocess
-            reSetupModule(module, mConfiguration.getCommandOptions()
-                    .getInvocationData()
-                    .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
+            reSetupModule(
+                    module,
+                    (mConfiguration
+                                    .getCommandOptions()
+                                    .getInvocationData()
+                                    .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
+                            && !mUseSnapshotForReset));
         } finally {
             InvocationMetricLogger.addInvocationPairMetrics(
                     InvocationMetricKey.RESET_RETRY_ISOLATION_PAIR,
@@ -701,14 +711,30 @@ public class BaseRetryDecision
 
     @VisibleForTesting
     protected void isolateRetry(List<ITestDevice> devices) throws DeviceNotAvailableException {
-        DeviceResetHandler handler = new DeviceResetHandler(mContext);
-        for (ITestDevice device : devices) {
-            boolean resetSuccess = handler.resetDevice(device);
-            if (!resetSuccess) {
-                throw new DeviceNotAvailableException(
-                        String.format("Failed to reset device: %s", device.getSerialNumber()),
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+        if (!mUseSnapshotForReset) {
+            DeviceResetHandler handler = new DeviceResetHandler(mContext);
+            for (ITestDevice device : devices) {
+                boolean resetSuccess = handler.resetDevice(device);
+                if (!resetSuccess) {
+                    throw new DeviceNotAvailableException(
+                            String.format("Failed to reset device: %s", device.getSerialNumber()),
+                            device.getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+                }
+            }
+        } else {
+            DeviceSnapshotHandler handler = new DeviceSnapshotHandler();
+            for (ITestDevice device : devices) {
+                boolean restoreSuccess =
+                        handler.restoreSnapshotDevice(device, mContext.getInvocationId());
+                if (!restoreSuccess) {
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Failed to restore device: %s with snapshot ID: %s",
+                                    device.getSerialNumber(), mContext.getInvocationId()),
+                            device.getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
+                }
             }
         }
     }

@@ -90,6 +90,7 @@ import com.android.tradefed.device.NativeDeviceTest;
 import com.android.tradefed.device.RemoteAndroidDeviceTest;
 import com.android.tradefed.device.TestDeviceTest;
 import com.android.tradefed.device.WaitDeviceRecoveryTest;
+import com.android.tradefed.device.WifiCommandUtilTest;
 import com.android.tradefed.device.WifiHelperTest;
 import com.android.tradefed.device.cloud.AcloudConfigParserTest;
 import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
@@ -347,6 +348,7 @@ import com.android.tradefed.testtype.binary.ExecutableHostTestTest;
 import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
 import com.android.tradefed.testtype.binary.KTapResultParserTest;
 import com.android.tradefed.testtype.binary.KernelTargetTestTest;
+import com.android.tradefed.testtype.binary.KUnitModuleTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
@@ -605,6 +607,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TestDeviceTest.class,
     WaitDeviceRecoveryTest.class,
     WifiHelperTest.class,
+    WifiCommandUtilTest.class,
 
     // device.cloud
     AcloudConfigParserTest.class,
@@ -934,6 +937,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ExecutableTargetTestTest.class,
     KernelTargetTestTest.class,
     KTapResultParserTest.class,
+    KUnitModuleTestTest.class,
 
     // testtype/junit4
     BaseHostJUnit4TestTest.class,

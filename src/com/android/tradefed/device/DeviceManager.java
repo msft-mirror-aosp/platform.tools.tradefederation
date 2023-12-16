@@ -137,9 +137,10 @@ public class DeviceManager implements IDeviceManager {
     @Option(name = "max-null-devices",
             description = "the maximum number of no device runs that can be allocated at one time.")
     private int mNumNullDevicesSupported = 7;
+    @Deprecated
     @Option(name = "max-tcp-devices",
             description = "the maximum number of tcp devices that can be allocated at one time")
-    private int mNumTcpDevicesSupported = 1;
+    private int mNumTcpDevicesSupported = 0;
 
     @Option(
         name = "max-gce-devices",

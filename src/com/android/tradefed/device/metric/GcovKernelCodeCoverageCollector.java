@@ -25,6 +25,7 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.INativeDevice;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -49,14 +50,8 @@ import java.util.Map;
 public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricCollector
         implements IConfigurationReceiver {
 
-    public static final String DEBUGFS_PATH = "/sys/kernel/debug";
-    public static final String CHECK_DEBUGFS_MNT_COMMAND =
-            String.format("mountpoint -q %s", DEBUGFS_PATH);
-    public static final String MOUNT_DEBUGFS_COMMAND =
-            String.format("mount -t debugfs debugfs %s", DEBUGFS_PATH);
-    public static final String UNMOUNT_DEBUGFS_COMMAND = String.format("umount %s", DEBUGFS_PATH);
     public static final String RESET_GCOV_COUNTS_COMMAND =
-            String.format("echo 1 > %s/gcov/reset", DEBUGFS_PATH);
+            String.format("echo 1 > %s/gcov/reset", NativeDevice.DEBUGFS_PATH);
     public static final String MAKE_TEMP_DIR_COMMAND = "mktemp -d -p /data/local/tmp/";
     public static final String MAKE_GCDA_TEMP_DIR_COMMAND_FMT = "mkdir -p %s";
     public static final String COPY_GCOV_DATA_COMMAND_FMT = "cp -rf %s/* %s";
@@ -100,8 +95,10 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
 
         try {
             for (ITestDevice device : getRealDevices()) {
-                mountDebugfs(device);
-                resetGcovCounts(device);
+                try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                    device.mountDebugfs();
+                    resetGcovCounts(device);
+                }
             }
         } catch (Throwable t) {
             mTestRunStartFail = true;
@@ -123,21 +120,27 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
         }
 
         for (ITestDevice device : getRealDevices()) {
-            collectGcovDebugfsCoverage(device, getTarBasename());
-            unmountDebugfs(device);
+            try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+                collectGcovDebugfsCoverage(device, getTarBasename());
+                device.unmountDebugfs();
+            }
         }
     }
 
     @Override
     public void rebootStarted(ITestDevice device) throws DeviceNotAvailableException {
         super.rebootStarted(device);
-        collectGcovDebugfsCoverage(device, getTarBasename());
+        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+            collectGcovDebugfsCoverage(device, getTarBasename());
+        }
     }
 
     @Override
     public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
         super.rebootEnded(device);
-        mountDebugfs(device);
+        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
+            device.mountDebugfs();
+        }
     }
 
     /* Gets the name to be used for the collected coverage tar file.
@@ -148,57 +151,14 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
         return Strings.isNullOrEmpty(collectionFilename) ? getRunName() : collectionFilename;
     }
 
-    /** Check if debugfs is mounted. */
-    private boolean isDebugfsMounted(INativeDevice device) throws DeviceNotAvailableException {
-        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-            return device.executeShellV2Command(CHECK_DEBUGFS_MNT_COMMAND).getStatus()
-                    == CommandStatus.SUCCESS;
-        }
-    }
-
-    /** Mount debugfs. */
-    private void mountDebugfs(INativeDevice device) throws DeviceNotAvailableException {
-        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-            if (isDebugfsMounted(device)) {
-                CLog.w("debugfs already mounted for %s.", getTarBasename());
-                return;
-            }
-
-            CommandResult result = device.executeShellV2Command(MOUNT_DEBUGFS_COMMAND);
-            if (result.getStatus() != CommandStatus.SUCCESS) {
-                CLog.e("Failed to mount debugfs. %s", result);
-                throw new DeviceRuntimeException(
-                        "'" + MOUNT_DEBUGFS_COMMAND + "' has failed: " + result,
-                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-            }
-        }
-    }
-
-    /** Unmount debugfs. */
-    private void unmountDebugfs(ITestDevice device) throws DeviceNotAvailableException {
-        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-            if (!isDebugfsMounted(device)) {
-                CLog.w("debugfs not mounted to unmount for %s.", getTarBasename());
-                return;
-            }
-
-            CommandResult result = device.executeShellV2Command(UNMOUNT_DEBUGFS_COMMAND);
-            if (result.getStatus() != CommandStatus.SUCCESS) {
-                CLog.e("Failed to unmount debugfs for %s. %s", getTarBasename(), result);
-            }
-        }
-    }
-
     /** Reset gcov counts by writing to the gcov debugfs reset node. */
     private void resetGcovCounts(ITestDevice device) throws DeviceNotAvailableException {
-        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-            CommandResult result = device.executeShellV2Command(RESET_GCOV_COUNTS_COMMAND);
-            if (result.getStatus() != CommandStatus.SUCCESS) {
-                CLog.e("Failed to reset gcov counts for %s. %s", getTarBasename(), result);
-                throw new DeviceRuntimeException(
-                        "'" + RESET_GCOV_COUNTS_COMMAND + "' has failed: " + result,
-                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-            }
+        CommandResult result = device.executeShellV2Command(RESET_GCOV_COUNTS_COMMAND);
+        if (result.getStatus() != CommandStatus.SUCCESS) {
+            CLog.e("Failed to reset gcov counts for %s. %s", getTarBasename(), result);
+            throw new DeviceRuntimeException(
+                    "'" + RESET_GCOV_COUNTS_COMMAND + "' has failed: " + result,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
     }
 
@@ -217,8 +177,7 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
      */
     private void collectGcovDebugfsCoverage(INativeDevice device, String name)
             throws DeviceNotAvailableException {
-        try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-            if (!isDebugfsMounted(device)) {
+        if (!device.isDebugfsMounted()) {
                 String errorMessage =
                         String.format("debugfs not mounted, unable to collect for %s.", name);
                 CLog.e(errorMessage);
@@ -293,6 +252,5 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
             } finally {
                 device.deleteFile(tempDir);
             }
-        }
     }
 }

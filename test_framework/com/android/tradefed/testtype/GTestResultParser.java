@@ -132,6 +132,9 @@ public class GTestResultParser extends MultiLineReceiver {
     /** List of tests that failed in the current run */
     private Set<String> mFailedTests = new LinkedHashSet<>();
 
+    /** Whether current test run contained unexpected tests. Used for unit testing. */
+    private boolean mUnexpectedTestFound = false;
+
     /** The final status of the test. */
     enum TestStatus {
         OK,
@@ -508,6 +511,13 @@ public class GTestResultParser extends MultiLineReceiver {
             returnInfo.mTestRunTime = timeString;
         }
 
+        // filter out messages for parameterized tests: classname.testname, getParam() = (..)
+        Pattern parameterizedPattern = Pattern.compile("([a-zA-Z_0-9]+[\\S]*)(,\\s+.*)?$");
+        Matcher parameterizedMsg = parameterizedPattern.matcher(identifier);
+        if (parameterizedMsg.find()) {
+            identifier = parameterizedMsg.group(1);
+        }
+
         String[] testId = identifier.split("\\.");
         if (testId.length < 2) {
             CLog.e("Could not detect the test class and test name, received: %s", identifier);
@@ -676,6 +686,7 @@ public class GTestResultParser extends MultiLineReceiver {
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testFailed(testId, mCurrentTestResult.getTrace());
             }
+            mUnexpectedTestFound = true;
         } else if (TestStatus.FAILED.equals(testStatus)) { // test failed
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testFailed(testId, mCurrentTestResult.getTrace());
@@ -853,5 +864,10 @@ public class GTestResultParser extends MultiLineReceiver {
 
     private FailureDescription createFailure(String message) {
         return FailureDescription.create(message, FailureStatus.TEST_FAILURE);
+    }
+
+    /** Exposed for unit testing. */
+    protected boolean isUnexpectedTestFound() {
+        return mUnexpectedTestFound;
     }
 }

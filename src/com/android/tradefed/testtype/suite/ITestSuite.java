@@ -34,6 +34,8 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
+import com.android.tradefed.device.connection.AdbTcpConnection;
+import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -350,6 +352,11 @@ public abstract class ITestSuite
             name = "multi-devices-modules",
             description = "Running strategy for modules that require multiple devices.")
     private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
+
+    @Option(
+            name = "use-snapshot-for-reset",
+            description = "Feature flag to use snapshot/restore instead of powerwash.")
+    private boolean mUseSnapshotForReset = false;
 
     public enum MultiDeviceModuleStrategy {
         EXCLUDE_ALL,
@@ -756,6 +763,16 @@ public abstract class ITestSuite
                         mContext.getDevices(), mBugReportOnFailure, mRebootOnFailure);
         /** Create the list of listeners applicable at the module level. */
         List<ITestInvocationListener> moduleListeners = createModuleListeners();
+
+        if (mUseSnapshotForReset) {
+            AbstractConnection connection = mDevice.getConnection();
+            if (connection instanceof AdbTcpConnection) {
+                ((AdbTcpConnection) connection).snapshotDevice(mDevice, mContext.getInvocationId());
+                ((AdbTcpConnection) connection)
+                        .getSuiteSnapshots()
+                        .put(mDevice, mContext.getInvocationId());
+            }
+        }
 
         // Only print the running log if we are going to run something.
         if (mRunModules.get(0).hasTests()) {
@@ -1679,5 +1696,9 @@ public abstract class ITestSuite
 
     public void setIntraModuleSharding(boolean intraModuleSharding) {
         mIntraModuleSharding = intraModuleSharding;
+    }
+
+    public boolean getIntraModuleSharding() {
+        return mIntraModuleSharding;
     }
 }

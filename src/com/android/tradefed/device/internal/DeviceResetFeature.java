@@ -90,13 +90,13 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
             }
             index++;
         }
+        mTestInformation.setActiveDeviceIndex(index);
         String response =
                 String.format(
                         "Attempting device reset on %s (%s).",
                         mTestInformation.getDevice().getSerialNumber(),
                         mTestInformation.getDevice().getClass().getSimpleName());
         try {
-            mTestInformation.setActiveDeviceIndex(index);
             AbstractConnection connection = mTestInformation.getDevice().getConnection();
             if ((mTestInformation.getDevice() instanceof RemoteAndroidVirtualDevice)
                     || (connection instanceof AdbSshConnection)) {

@@ -25,10 +25,15 @@ import com.android.tradefed.result.TextResultReporter;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.multi.IMultiTargetPreparer;
 import com.android.tradefed.testtype.suite.module.BaseModuleController;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ModuleTestTypeUtil;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * This class will help validating that the {@link IConfiguration} loaded for the suite are meeting
@@ -41,6 +46,11 @@ public class ValidateSuiteConfigHelper {
      * the suite level.
      */
     private static final List<String> ALLOWED_COLLECTOR_IN_MODULE = new ArrayList<>();
+
+    private static final String XML_COMMENT_REGEX = "<!--(\n|.)*?-->";
+    // Matches both 'include' and 'template-include' tags.
+    private static final String INCLUDE_TAG_REGEX = "<\\s*(template-)?include\\s";
+    private static Pattern mIncludeTagPattern = null;
 
     static {
         // This collector simply pull and log file from the device. it is useful at the module level
@@ -147,6 +157,37 @@ public class ValidateSuiteConfigHelper {
                                     BaseModuleController.class));
                 }
             }
+        }
+    }
+
+    /**
+     * Check that a module config file is valid - no templates or includes
+     *
+     * @param configFile a config {@link File} to be validated for a suite.
+     */
+    public static void validateConfigFile(File configFile) {
+        try {
+            if (mIncludeTagPattern == null) {
+                mIncludeTagPattern = Pattern.compile(INCLUDE_TAG_REGEX);
+            }
+
+            // Read config and remove all xml comments
+            String source = FileUtil.readStringFromFile(configFile);
+            source = source.replaceAll(XML_COMMENT_REGEX, "");
+
+            // Find matches for 'template-include' or 'include' tags.
+            Matcher matcher = mIncludeTagPattern.matcher(source);
+            if (matcher.find()) {
+                throw new RuntimeException(
+                        String.format(
+                                "Found template-include or include tag in config file: %s",
+                                configFile.getAbsolutePath()));
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    String.format(
+                            "Failed to read file %s with exception %s",
+                            configFile.getAbsolutePath(), e));
         }
     }
 

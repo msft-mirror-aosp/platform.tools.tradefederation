@@ -2321,7 +2321,18 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
-        return createWifiHelper(true);
+        return createWifiHelper(false);
+    }
+
+    @Override
+    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+        if (useV2) {
+            CLog.d("Using WifiHelper V2. WifiUtil apk installation skipped.");
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_HELPER_V2, "true");
+            return createWifiHelper(useV2, false);
+        } else {
+            return createWifiHelper(useV2, true);
+        }
     }
 
     /**
@@ -2329,13 +2340,14 @@ public class TestDevice extends NativeDevice {
      * setup or not.
      */
     @VisibleForTesting
-    IWifiHelper createWifiHelper(boolean doSetup) throws DeviceNotAvailableException {
+    IWifiHelper createWifiHelper(boolean useV2, boolean doSetup)
+            throws DeviceNotAvailableException {
         if (doSetup) {
             mWasWifiHelperInstalled = true;
             // Ensure device is ready before attempting wifi setup
             waitForDeviceAvailable();
         }
-        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup);
+        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup, useV2);
     }
 
     /** {@inheritDoc} */
@@ -2357,7 +2369,7 @@ public class TestDevice extends NativeDevice {
             }
             try {
                 // Uninstall the wifi utility if it was installed.
-                IWifiHelper wifi = createWifiHelper(false);
+                IWifiHelper wifi = createWifiHelper(false, false);
                 wifi.cleanUp();
             } catch (DeviceNotAvailableException e) {
                 CLog.e("Device became unavailable while uninstalling wifi util.");
@@ -2769,6 +2781,7 @@ public class TestDevice extends NativeDevice {
                 Strings.isNullOrEmpty(builder.mCpuTopology)
                         ? ""
                         : "--cpu-topology " + builder.mCpuTopology;
+        final String gkiFlag = Strings.isNullOrEmpty(builder.mGki) ? "" : "--gki " + builder.mGki;
 
         List<String> args =
                 new ArrayList<>(
@@ -2786,6 +2799,7 @@ public class TestDevice extends NativeDevice {
                                 cpuFlag,
                                 cpuAffinityFlag,
                                 cpuTopologyFlag,
+                                gkiFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
                                 instanceImg,
@@ -3103,6 +3117,7 @@ public class TestDevice extends NativeDevice {
         private Map<File, String> mBootFiles;
         private long mAdbConnectTimeoutMs;
         private List<String> mAssignedDevices;
+        private String mGki;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3242,6 +3257,16 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder setAdbConnectTimeoutMs(long timeoutMs) {
             mAdbConnectTimeoutMs = timeoutMs;
+            return this;
+        }
+
+        /**
+         * Uses GKI kernel instead of microdroid kernel
+         *
+         * @param version The GKI version to use
+         */
+        public MicrodroidBuilder gki(String version) {
+            mGki = version;
             return this;
         }
 

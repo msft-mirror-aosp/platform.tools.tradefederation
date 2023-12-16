@@ -30,6 +30,7 @@ public class InvocationMetricLogger {
         WIFI_CONNECT_TIME("wifi_connect_time", true),
         WIFI_CONNECT_COUNT("wifi_connect_count", true),
         WIFI_CONNECT_RETRY_COUNT("wifi_connect_retry_count", true),
+        WIFI_HELPER_V2("wifi_helper_v2", false),
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
@@ -213,6 +214,10 @@ public class InvocationMetricLogger {
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
+        // Represents the time we spent deleting file on host
+        DELETE_SNAPSHOT_FILES("delete_host_file_time_ms", true),
+        // Represents how many times we call the delete host file method
+        DELETE_SNAPSHOT_FILES_COUNT("delete_host_file_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
@@ -298,9 +303,14 @@ public class InvocationMetricLogger {
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
+        WORKDIR_DIFFS_IN_COMMON("workdir_diffs_in_common", true),
+        WOKRDIR_MODULE_WITH_DIFFS("workdir_module_with_diffs", true),
+        WORKDIR_UNCHANGED_MODULES("workdir_unchanged_modules", true),
+        ABORT_CONTENT_ANALYSIS("abort_content_analysis", true),
         XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
         XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
         XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
+        BUILD_KEY_WITH_DIFFS("build_key_with_diffs", true),
         FILE_WITH_DIFFS("file_with_diffs", true),
         UNCHANGED_FILE("unchanged_file", true),
 
@@ -348,6 +358,7 @@ public class InvocationMetricLogger {
         stage_suite_test_artifacts("stage_suite_test_artifacts", true),
         wait_for_results_update("wait_for_results_update", true),
         instru_collect_tests("instru_collect_tests", true),
+        TestContentAnalyzer("TestContentAnalyzer", true),
 
         // Test caching metrics
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
