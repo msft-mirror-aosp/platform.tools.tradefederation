@@ -776,4 +776,8 @@ public class BaseTestSuite extends ITestSuite {
     public String getRunSuiteTag() {
         return mSuiteTag;
     }
+
+    public boolean reverseExcludeFilters() {
+        return mReverseExcludeFilters;
+    }
 }
