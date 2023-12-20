@@ -84,7 +84,6 @@ CONTENT_DETAILS_PATH = 'logs/cas_content_details.json'
 # TODO(b/298890453) Add artifacts after this script is attached to build process.
 ARTIFACTS = [
     # test_suite targets
-    ArtifactConfig('android-catbox.zip', True),
     ArtifactConfig('android-csuite.zip', True),
     ArtifactConfig('android-cts.zip', True),
     ArtifactConfig('android-gts.zip', True),
@@ -110,10 +109,7 @@ ARTIFACTS = [
     ArtifactConfig('*-continuous_instrumentation_tests-*zip', True),
     ArtifactConfig('*-continuous_native_tests-*zip', True),
     ArtifactConfig('cvd-host_package.tar.gz', False),
-    ArtifactConfig('*-target_files-*.zip', True),
-    ArtifactConfig('*-img-*zip', False),
-    ArtifactConfig('bootloader.img', False),
-    ArtifactConfig('radio.img', False)
+    ArtifactConfig('*-img-*zip', False)
 ]
 
 # Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
