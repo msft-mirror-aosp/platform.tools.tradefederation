@@ -19,6 +19,7 @@ import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.TimeoutException;
 import com.android.helper.aoa.UsbDevice;
+import com.android.helper.aoa.UsbException;
 import com.android.helper.aoa.UsbHelper;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -509,11 +510,15 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
             CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
             return false;
         }
-        String serial = monitor.getSerialNumber();
+        if (monitor.isAdbTcp()) {
+            CLog.d("Device is connected via TCP, skipping USB reset attempt.");
+            return false;
+        }
         boolean recoveryAttempted = false;
         if (!mDisableUsbReset) {
             // First try to do a USB reset to get the device back
             try (UsbHelper usb = getUsbHelper()) {
+                String serial = monitor.getSerialNumber();
                 try (UsbDevice usbDevice = usb.getDevice(serial)) {
                     if (usbDevice != null) {
                         CLog.d("Resetting USB port for device '%s'", serial);
@@ -532,6 +537,9 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
                 CLog.w("Problem initializing USB helper, skipping USB reset and disabling it.");
                 CLog.w(e);
                 mDisableUsbReset = true;
+            } catch (UsbException e) {
+                CLog.w("Problem initializing USB helper, skipping USB reset.");
+                CLog.w(e);
             }
         }
         if (recoveryAttempted) {
