@@ -3140,7 +3140,6 @@ public class NativeDevice
         int backoffSlotCount = 2;
         int slotTime = mOptions.getWifiRetryWaitTime();
         int waitTime = 0;
-        IWifiHelper wifi = createWifiHelper();
         long startTime = mClock.millis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("connectToWifiNetwork")) {
             for (int i = 1; i <= mOptions.getWifiAttempts(); i++) {
@@ -3152,9 +3151,18 @@ public class NativeDevice
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.WIFI_CONNECT_RETRY_COUNT, i);
                     CLog.i("Connecting to wifi network %s on %s", wifiSsid, getSerialNumber());
+                    IWifiHelper wifi = null;
+                    if (!getOptions().useCmdWifiCommands()
+                            || !enableAdbRoot()
+                            || getApiLevel() < 31) {
+                        wifi = createWifiHelper(false);
+                    } else {
+                        wifi = createWifiHelper(true);
+                    }
                     WifiConnectionResult result =
                             wifi.connectToNetwork(
                                     wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
+
                     final Map<String, String> wifiInfo = wifi.getWifiInfo();
                     if (WifiConnectionResult.SUCCESS.equals(result)) {
                         CLog.i(
@@ -3364,6 +3372,21 @@ public class NativeDevice
      */
     @VisibleForTesting
     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+        // current wifi helper won't work on AndroidNativeDevice
+        // TODO: create a new Wifi helper with supported feature of AndroidNativeDevice when
+        // we learn what is available.
+        throw new UnsupportedOperationException("Wifi helper is not supported.");
+    }
+
+    /**
+     * Create a {@link WifiHelper} to use
+     *
+     * @param useV2 Whether to use WifiHelper v2 which does not install any apk.
+     *     <p>
+     * @throws DeviceNotAvailableException
+     */
+    @VisibleForTesting
+    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
         // current wifi helper won't work on AndroidNativeDevice
         // TODO: create a new Wifi helper with supported feature of AndroidNativeDevice when
         // we learn what is available.

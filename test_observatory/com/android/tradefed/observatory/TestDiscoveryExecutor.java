@@ -238,7 +238,10 @@ public class TestDiscoveryExecutor {
                 // then metadata are applied on top, so having metadata filters
                 // and include-filters can actually be resolved to a super-set
                 // which is better than falling back.
-                if (!suiteIncludeFilters.isEmpty()) {
+                if (!excludeFilters.isEmpty() && ((BaseTestSuite) test).reverseExcludeFilters()) {
+                    includeFilters.addAll(excludeFilters);
+                    excludeFilters.clear();
+                } else if (!suiteIncludeFilters.isEmpty()) {
                     includeFilters.addAll(suiteIncludeFilters);
                 } else if (!moduleMetadataIncludeFilters.isEmpty()) {
                     String rootDirPath =

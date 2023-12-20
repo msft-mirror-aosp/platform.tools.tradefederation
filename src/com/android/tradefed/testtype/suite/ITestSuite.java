@@ -929,9 +929,12 @@ public abstract class ITestSuite
      */
     private void moduleIsolation(IInvocationContext context, ITestLogger logger)
             throws DeviceNotAvailableException {
+        if (!mIsolatedModule) {
+            return;
+        }
         // TODO: we can probably make it smarter: Did any test ran for example?
         ITestDevice device = context.getDevices().get(0);
-        if (mIsolatedModule && (device instanceof NestedRemoteDevice)) {
+        if (device instanceof NestedRemoteDevice) {
             boolean res = ((NestedRemoteDevice) device).resetVirtualDevice();
             if (!res) {
                 String serial = device.getSerialNumber();
@@ -939,6 +942,13 @@ public abstract class ITestSuite
                         String.format(
                                 "Failed to reset the AVD '%s' during module isolation.", serial),
                         serial);
+            }
+        } else if (mUseSnapshotForReset) {
+            AbstractConnection connection = device.getConnection();
+            if (connection instanceof AdbTcpConnection) {
+                String snapshot = ((AdbTcpConnection) connection).getSuiteSnapshots().get(device);
+                // snapshot should not be null, otherwise the device would have crashed.
+                ((AdbTcpConnection) connection).recoverVirtualDevice(device, snapshot, null);
             }
         }
     }
@@ -1696,5 +1706,9 @@ public abstract class ITestSuite
 
     public void setIntraModuleSharding(boolean intraModuleSharding) {
         mIntraModuleSharding = intraModuleSharding;
+    }
+
+    public boolean getIntraModuleSharding() {
+        return mIntraModuleSharding;
     }
 }

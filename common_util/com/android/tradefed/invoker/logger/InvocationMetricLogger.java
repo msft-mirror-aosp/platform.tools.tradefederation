@@ -30,6 +30,7 @@ public class InvocationMetricLogger {
         WIFI_CONNECT_TIME("wifi_connect_time", true),
         WIFI_CONNECT_COUNT("wifi_connect_count", true),
         WIFI_CONNECT_RETRY_COUNT("wifi_connect_retry_count", true),
+        WIFI_HELPER_V2("wifi_helper_v2", false),
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
@@ -309,6 +310,7 @@ public class InvocationMetricLogger {
         XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
         XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
         XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
+        BUILD_KEY_WITH_DIFFS("build_key_with_diffs", true),
         FILE_WITH_DIFFS("file_with_diffs", true),
         UNCHANGED_FILE("unchanged_file", true),
 

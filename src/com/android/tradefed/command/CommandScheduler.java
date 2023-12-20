@@ -633,9 +633,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                                 .getInvocationData()
                                 .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
             }
-            // Set experimental flags for non-presubmit builds
-            if (config.getCommandOptions().isExperimentEnabled()
-                    && !isPresubmitBuild(mInvocationContext)) {
+            // Set experimental flags
+            if (config.getCommandOptions().isExperimentEnabled()) {
                 try {
                     for (Map.Entry<String, String> entry :
                             config.getCommandOptions().getExperimentalFlags().entrySet()) {
@@ -979,16 +978,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     }
                 }
             }
-        }
-
-        /**
-         * Checks if the current Invocation is for a pre-submit build or not.
-         *
-         * @param context {@link IInvocationContext} for the current test.
-         * @return returns true if invocation is for a pre-submit build, false otherwise.
-         */
-        private boolean isPresubmitBuild(IInvocationContext context) {
-            return "WORK_NODE".equals(context.getAttribute("trigger"));
         }
     }
 

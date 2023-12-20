@@ -346,6 +346,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         // only set bootloader image if this build doesn't have one already
         // TODO: move this logic to the BuildProvider step
         if (bootloaderVersion != null && localBuild.getBootloaderImageFile() == null) {
+            CLog.v("Bootloader image was not included in the build artifacts (%s, %s), "
+                + "fetching from blob service instead.",
+                localBuild.getDeviceBuildId(), localBuild.getDeviceBuildFlavor());
             localBuild.setBootloaderImageFile(
                     getFlashingResourcesRetriever()
                             .retrieveFile(getBootloaderFilePrefix(device), bootloaderVersion),
@@ -354,6 +357,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         String basebandVersion = resourceParser.getRequiredBasebandVersion();
         // only set baseband image if this build doesn't have one already
         if (basebandVersion != null && localBuild.getBasebandImageFile() == null) {
+            CLog.v("Baseband image was not included in the build artifacts (%s, %s), "
+                + "fetching from blob service instead.",
+                localBuild.getDeviceBuildId(), localBuild.getDeviceBuildFlavor());
             localBuild.setBasebandImage(getFlashingResourcesRetriever().retrieveFile(
                     BASEBAND_IMAGE_NAME, basebandVersion), basebandVersion);
         }

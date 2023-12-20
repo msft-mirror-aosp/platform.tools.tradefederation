@@ -70,6 +70,10 @@ public class TradefedFeatureClient implements AutoCloseable {
      */
     private FeatureResponse triggerFeature(
             String featureName, String invocationReference, Map<String, String> args) {
+        if (mChannel == null) {
+            throw new IllegalStateException(
+                    "Tradefed feature channel is null due to being uninitialized or closed.");
+        }
         FeatureResponse response;
         try (CloseableTraceScope ignore =
                 new CloseableTraceScope("triggerFeature:" + featureName)) {
