@@ -26,8 +26,6 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
-import com.google.common.collect.ImmutableMap;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitOption;
@@ -35,31 +33,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /** The analyzer takes context for the analysis and determine what is interesting. */
 public class TestContentAnalyzer {
-
-    private static final Map<String, List<String>> WORKDIR_COMMON_DIR =
-            ImmutableMap.of(
-                    "tradefed.zip",
-                    new ArrayList<>(),
-                    "google-tradefed.zip",
-                    new ArrayList<>(),
-                    "host-unit-tests.zip",
-                    Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"),
-                    "robolectric-tests.zip",
-                    Arrays.asList("host/testcases/android-all/"),
-                    "device-tests.zip",
-                    Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"),
-                    "general-tests.zip",
-                    Arrays.asList("host/testcases/lib/", "host/testcases/lib64/"));
 
     private final TestInformation information;
     private final boolean presubmitMode;
@@ -312,7 +293,6 @@ public class TestContentAnalyzer {
         File testsDirRoot = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
         ContentAnalysisResults results = new ContentAnalysisResults();
         List<ArtifactFileDescriptor> diffs = new ArrayList<>();
-        List<String> entryNames = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
         for (ContentAnalysisContext context : contexts) {
             List<ArtifactFileDescriptor> diff =
@@ -321,21 +301,9 @@ public class TestContentAnalyzer {
                 CLog.w("Analysis failed.");
                 return null;
             }
-            entryNames.add(context.contentEntry());
             diffs.addAll(diff);
             diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
             AllCommonDirs.addAll(context.commonLocations());
-        }
-        // Obtain common dirs for situation
-        for (String entry : entryNames) {
-            List<String> commonDirs = WORKDIR_COMMON_DIR.get(entry);
-            if (commonDirs == null) {
-                CLog.w(
-                        "Did not find a common dir for %s, we might not support this analysis yet.",
-                        entry);
-                return null;
-            }
-            AllCommonDirs.addAll(commonDirs);
         }
         Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
         // Check common dirs
@@ -408,7 +376,7 @@ public class TestContentAnalyzer {
         return results;
     }
 
-    private List<ArtifactFileDescriptor> analyzeContentDiff(
+    public static List<ArtifactFileDescriptor> analyzeContentDiff(
             ContentInformation information, String entry) {
         try (CloseableTraceScope ignored = new CloseableTraceScope("analyze_content_diff")) {
             ArtifactDetails base =

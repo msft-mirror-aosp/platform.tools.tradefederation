@@ -71,6 +71,10 @@ public class ContentAnalysisResults {
         return false;
     }
 
+    public boolean hasAnyBuildKeyChanges() {
+        return buildKeyChanges > 0;
+    }
+
     @Override
     public String toString() {
         return "ContentAnalysisResults [unchangedFiles="
