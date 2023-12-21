@@ -16,20 +16,19 @@
 package com.android.tradefed.result.skipped;
 
 import com.android.tradefed.build.content.ContentAnalysisContext;
-import com.android.tradefed.build.content.ContentAnalysisResults;
-import com.android.tradefed.build.content.TestContentAnalyzer;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
-import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.skipped.SkipReason.DemotionTrigger;
 import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.util.IDisableable;
+import com.android.tradefed.util.MultiMap;
 
 import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.PartResponse;
@@ -82,6 +81,7 @@ public class SkipManager implements IDisableable {
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
     private boolean mNoTestsDiscovered = false;
+    private MultiMap<ITestDevice, ContentAnalysisContext> mImageAnalysis = new MultiMap<>();
     private List<ContentAnalysisContext> mTestArtifactsAnalysisContent = new ArrayList<>();
     private List<String> mModulesDiscovered = new ArrayList<String>();
     private List<String> mDependencyFiles = new ArrayList<String>();
@@ -103,6 +103,11 @@ public class SkipManager implements IDisableable {
     /** Returns the demoted tests and the reason for demotion */
     public Map<String, SkipReason> getDemotedTests() {
         return mDemotionFilters;
+    }
+
+    public void setImageAnalysis(ITestDevice device, ContentAnalysisContext analysisContext) {
+        CLog.d("Received image artifact analysis for %s", device.getSerialNumber());
+        mImageAnalysis.put(device, analysisContext);
     }
 
     public void setTestArtifactsAnalysis(ContentAnalysisContext analysisContext) {
@@ -138,7 +143,13 @@ public class SkipManager implements IDisableable {
                 return false;
             }
         }
-        ArtifactsAnalyzer analyzer = new ArtifactsAnalyzer(information);
+        ArtifactsAnalyzer analyzer =
+                new ArtifactsAnalyzer(
+                        information,
+                        mImageAnalysis,
+                        mTestArtifactsAnalysisContent,
+                        mModulesDiscovered,
+                        mDependencyFiles);
         return buildAnalysisDecision(information, analyzer.analyzeArtifacts());
     }
 
@@ -179,40 +190,20 @@ public class SkipManager implements IDisableable {
             return false;
         }
         boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
-        // Do the analysis regardless
-        if (results.hasTestsArtifacts()) {
-            if (mTestArtifactsAnalysisContent.isEmpty()) {
-                return false;
-            } else {
-                try (CloseableTraceScope ignored =
-                        new CloseableTraceScope(
-                                InvocationMetricKey.TestContentAnalyzer.toString())) {
-                    TestContentAnalyzer analyzer =
-                            new TestContentAnalyzer(
-                                    information,
-                                    presubmit,
-                                    mTestArtifactsAnalysisContent,
-                                    mModulesDiscovered,
-                                    mDependencyFiles);
-                    ContentAnalysisResults analysisResults = analyzer.evaluate();
-                    if (analysisResults == null) {
-                        return false;
-                    }
-                    CLog.d("%s", analysisResults.toString());
-                    if (analysisResults.hasAnyTestsChange()) {
-                        if (!results.deviceImageChanged()) {
-                            InvocationMetricLogger.addInvocationMetrics(
-                                    InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
-                        }
-                        return false;
-                    }
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.TEST_ARTIFACT_NOT_CHANGED, 1);
-                }
-            }
-        }
         if (results.deviceImageChanged()) {
             return false;
+        }
+        if (results.hasTestsArtifacts()) {
+            if (results.hasChangesInTestsArtifacts()) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.TEST_ARTIFACT_NOT_CHANGED, 1);
+            }
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.PURE_DEVICE_IMAGE_UNCHANGED, 1);
         }
         if (!mConsideredForContent) {
             return false;
