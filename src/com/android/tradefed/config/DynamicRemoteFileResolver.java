@@ -33,6 +33,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -163,6 +164,9 @@ public class DynamicRemoteFileResolver {
                 for (Map.Entry<Object, Field> fieldEntry : optionFields) {
 
                     final Object obj = fieldEntry.getKey();
+                    if (obj instanceof IDisableable && ((IDisableable) obj).isDisabled()) {
+                        continue;
+                    }
                     final Field field = fieldEntry.getValue();
                     final Option option = field.getAnnotation(Option.class);
                     if (option == null) {
