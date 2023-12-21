@@ -24,6 +24,7 @@ import com.android.tradefed.build.content.TestContentAnalyzer;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -120,6 +121,8 @@ public class ArtifactsAnalyzer {
                 ImageContentAnalyzer analyze = new ImageContentAnalyzer(presubmit, context);
                 ContentAnalysisResults res = analyze.evaluate();
                 if (res == null || res.hasAnyBuildKeyChanges()) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.IMAGE_CHANGES_IN_KEY_FILE, 1);
                     CLog.d("Changes in build key for device image.");
                     deviceImageChanged = true;
                 }

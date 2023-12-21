@@ -300,6 +300,7 @@ public class InvocationMetricLogger {
         DEVICE_ERROR_SIGNATURES("device_failure_signatures", false),
 
         DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
+        IMAGE_CHANGES_IN_KEY_FILE("image_changes_in_key_file", true),
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
