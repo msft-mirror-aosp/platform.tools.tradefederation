@@ -91,6 +91,8 @@ public class ImageContentAnalyzer {
             List<ArtifactFileDescriptor> diffs =
                     TestContentAnalyzer.analyzeContentDiff(
                             context.contentInformation(), context.contentEntry());
+            // Remove paths that are ignored
+            diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
             return !diffs.isEmpty();
         } catch (RuntimeException e) {
             CLog.e(e);
