@@ -17,12 +17,17 @@ package com.android.tradefed.result.skipped;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.ContentAnalysisResults;
+import com.android.tradefed.build.content.ImageContentAnalyzer;
+import com.android.tradefed.build.content.TestContentAnalyzer;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SystemUtil;
 
 import java.util.ArrayList;
@@ -36,9 +41,22 @@ public class ArtifactsAnalyzer {
     public static final String DEVICE_IMAGE_NOT_CHANGED = "DEVICE_IMAGE_NOT_CHANGED";
 
     private final TestInformation information;
+    private final MultiMap<ITestDevice, ContentAnalysisContext> mImageAnalysis;
+    private final List<ContentAnalysisContext> mTestArtifactsAnalysisContent;
+    private final List<String> mModulesDiscovered;
+    private final List<String> mDependencyFiles;
 
-    public ArtifactsAnalyzer(TestInformation information) {
+    public ArtifactsAnalyzer(
+            TestInformation information,
+            MultiMap<ITestDevice, ContentAnalysisContext> imageAnalysis,
+            List<ContentAnalysisContext> testAnalysisContexts,
+            List<String> moduleDiscovered,
+            List<String> dependencyFiles) {
         this.information = information;
+        this.mImageAnalysis = imageAnalysis;
+        this.mTestArtifactsAnalysisContent = testAnalysisContexts;
+        this.mModulesDiscovered = moduleDiscovered;
+        this.mDependencyFiles = dependencyFiles;
     }
 
     public BuildAnalysis analyzeArtifacts() {
@@ -48,24 +66,45 @@ public class ArtifactsAnalyzer {
         List<BuildAnalysis> reports = new ArrayList<>();
         for (Entry<ITestDevice, IBuildInfo> deviceBuild :
                 information.getContext().getDeviceBuildMap().entrySet()) {
-            BuildAnalysis report = analyzeArtifact(deviceBuild);
+            BuildAnalysis report =
+                    analyzeArtifact(deviceBuild, mImageAnalysis.get(deviceBuild.getKey()));
             reports.add(report);
         }
         BuildAnalysis finalReport = BuildAnalysis.mergeReports(reports);
         CLog.d("Build analysis report: %s", finalReport.toString());
-        if (!finalReport.deviceImageChanged()) {
-            if (finalReport.hasTestsArtifacts()) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
+        boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+        // Do the analysis regardless
+        if (finalReport.hasTestsArtifacts()) {
+            if (mTestArtifactsAnalysisContent.isEmpty()) {
+                // Couldn't do analysis, assume changes
+                finalReport.setChangesInTests(true);
+                return finalReport;
             } else {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.PURE_DEVICE_IMAGE_UNCHANGED, 1);
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(
+                                InvocationMetricKey.TestContentAnalyzer.toString())) {
+                    TestContentAnalyzer analyzer =
+                            new TestContentAnalyzer(
+                                    information,
+                                    presubmit,
+                                    mTestArtifactsAnalysisContent,
+                                    mModulesDiscovered,
+                                    mDependencyFiles);
+                    ContentAnalysisResults analysisResults = analyzer.evaluate();
+                    if (analysisResults == null) {
+                        finalReport.setChangesInTests(true);
+                        return finalReport;
+                    }
+                    CLog.d("%s", analysisResults.toString());
+                    finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
+                }
             }
         }
         return finalReport;
     }
 
-    private BuildAnalysis analyzeArtifact(Entry<ITestDevice, IBuildInfo> deviceBuild) {
+    private BuildAnalysis analyzeArtifact(
+            Entry<ITestDevice, IBuildInfo> deviceBuild, List<ContentAnalysisContext> context) {
         ITestDevice device = deviceBuild.getKey();
         IBuildInfo build = deviceBuild.getValue();
         boolean deviceImageChanged = true; // anchor toward changing
@@ -75,6 +114,16 @@ public class ArtifactsAnalyzer {
         } else {
             deviceImageChanged =
                     !"true".equals(build.getBuildAttributes().get(DEVICE_IMAGE_NOT_CHANGED));
+            if (!deviceImageChanged && context != null) {
+                boolean presubmit =
+                        "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+                ImageContentAnalyzer analyze = new ImageContentAnalyzer(presubmit, context);
+                ContentAnalysisResults res = analyze.evaluate();
+                if (res == null || res.hasAnyBuildKeyChanges()) {
+                    CLog.d("Changes in build key for device image.");
+                    deviceImageChanged = true;
+                }
+            }
         }
         boolean hasTestsArtifacts = true;
         if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null
