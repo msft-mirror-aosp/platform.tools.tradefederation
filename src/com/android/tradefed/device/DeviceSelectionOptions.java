@@ -48,6 +48,8 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         NULL_DEVICE(NullDevice.class),
         /** Allocate an emulator running locally for the test. */
         LOCAL_EMULATOR(StubDevice.class),
+        /** Use a placeholder for a remote device that will be connected later. */
+        TCP_DEVICE(TcpDevice.class),
         /** Use a placeholder for a remote device nested in a virtualized environment. */
         GCE_DEVICE(RemoteAvdIDevice.class),
         /** Use a placeholder for a remote device in virtualized environment. */
@@ -101,6 +103,10 @@ public class DeviceSelectionOptions implements IDeviceSelection {
     @Option(name = "null-device", shortName = 'n', description =
         "do not allocate a device for this test.")
     private boolean mNullDeviceRequested = false;
+
+    @Option(name = "tcp-device", description =
+            "start a placeholder for a tcp device that will be connected later.")
+    private boolean mTcpDeviceRequested = false;
 
     @Option(
             name = "gce-device",
@@ -302,8 +308,10 @@ public class DeviceSelectionOptions implements IDeviceSelection {
     /** {@inheritDoc} */
     @Override
     public boolean tcpDeviceRequested() {
-        CLog.e("method tcpDeviceRequested() is deprecated.");
-        return false;
+        if (mRequestedType != null) {
+            return mRequestedType.equals(DeviceRequestedType.TCP_DEVICE);
+        }
+        return mTcpDeviceRequested;
     }
 
     /** {@inheritDoc} */
@@ -353,6 +361,13 @@ public class DeviceSelectionOptions implements IDeviceSelection {
      */
     public void setNullDeviceRequested(boolean nullDeviceRequested) {
         mNullDeviceRequested = nullDeviceRequested;
+    }
+
+    /**
+     * Sets the tcp device requested flag
+     */
+    public void setTcpDeviceRequested(boolean tcpDeviceRequested) {
+        mTcpDeviceRequested = tcpDeviceRequested;
     }
 
     public void setDeviceTypeRequested(DeviceRequestedType requestedType) {
@@ -660,6 +675,11 @@ public class DeviceSelectionOptions implements IDeviceSelection {
             if (nullDeviceRequested() != (device instanceof NullDevice)) {
                 addNoMatchReason(
                         deviceSerial, "device is null-device while requested type was not");
+                return false;
+            }
+            if (tcpDeviceRequested() != TcpDevice.class.equals(device.getClass())) {
+                // We only match an exact TcpDevice here, no child class.
+                addNoMatchReason(deviceSerial, "device is tcp-device while requested type was not");
                 return false;
             }
             if (gceDeviceRequested() != RemoteAvdIDevice.class.equals(device.getClass())) {
