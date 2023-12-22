@@ -46,7 +46,7 @@ public class MockDeviceManager implements IDeviceManager {
 
     private int mTotalDevices;
     private DeviceMonitorMultiplexer mDvcMon = new DeviceMonitorMultiplexer();
-    private boolean mGceDeviceRequested = false;
+    private boolean mTcpDeviceRequested = false;
     private boolean mNullDeviceRequested = false;
     private boolean mStubDeviceRequested = false;
     private int mStopAdbBridgeCallCount = 0;
@@ -119,8 +119,8 @@ public class MockDeviceManager implements IDeviceManager {
     }
 
     public void setNumDevicesStub(int numDevices, TestDeviceState state, IDevice idevice) {
-        if (idevice instanceof RemoteAvdIDevice) {
-            mGceDeviceRequested = true;
+        if (idevice instanceof TcpDevice) {
+            mTcpDeviceRequested = true;
         } else if (idevice instanceof NullDevice) {
             mNullDeviceRequested = true;
         } else if (idevice instanceof StubDevice) {
@@ -196,8 +196,8 @@ public class MockDeviceManager implements IDeviceManager {
     /** {@inheritDoc} */
     @Override
     public ITestDevice allocateDevice(IDeviceSelection options, boolean isTemporary) {
-        if (mGceDeviceRequested) {
-            ((DeviceSelectionOptions) options).setGceDeviceRequested(true);
+        if (mTcpDeviceRequested) {
+            ((DeviceSelectionOptions) options).setTcpDeviceRequested(true);
         }
         if (mNullDeviceRequested) {
             ((DeviceSelectionOptions) options).setNullDeviceRequested(true);
