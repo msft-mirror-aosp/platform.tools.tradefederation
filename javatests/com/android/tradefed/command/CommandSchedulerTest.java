@@ -57,8 +57,8 @@ import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.MockDeviceManager;
 import com.android.tradefed.device.NoDeviceException;
 import com.android.tradefed.device.NullDevice;
-import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.TcpDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
@@ -918,7 +918,7 @@ public class CommandSchedulerTest {
     public void testTcpDevice_NotReleased() throws Throwable {
         String[] args = new String[] {"test"};
         mFakeDeviceManager.setNumDevicesStub(
-                1, TestDeviceState.NOT_AVAILABLE, new RemoteAvdIDevice("serial"));
+                1, TestDeviceState.NOT_AVAILABLE, new TcpDevice("serial"));
         assertTrue(mFakeDeviceManager.getQueueOfAvailableDeviceSize() == 1);
         setCreateConfigExpectations(args);
         mMockConfiguration.validateOptions();
@@ -941,7 +941,7 @@ public class CommandSchedulerTest {
     public void testTcpDevice_NotReleasedMulti() throws Throwable {
         String[] args = new String[] {"test"};
         mFakeDeviceManager.setNumDevicesStub(
-                2, TestDeviceState.NOT_AVAILABLE, new RemoteAvdIDevice("serial"));
+                2, TestDeviceState.NOT_AVAILABLE, new TcpDevice("serial"));
         assertTrue(mFakeDeviceManager.getQueueOfAvailableDeviceSize() == 2);
         setCreateConfigExpectations(args);
         mMockConfiguration.validateOptions();
