@@ -22,6 +22,7 @@ public class BuildAnalysis {
 
     private final boolean mDeviceImageChanged;
     private final boolean mHasTestsArtifacts;
+    private boolean mHasChangesInTests = false;
 
     public BuildAnalysis(boolean deviceImageChanged, boolean hasTestsArtifacts) {
         this.mDeviceImageChanged = deviceImageChanged;
@@ -36,12 +37,22 @@ public class BuildAnalysis {
         return mHasTestsArtifacts;
     }
 
+    public boolean hasChangesInTestsArtifacts() {
+        return mHasChangesInTests;
+    }
+
+    public void setChangesInTests(boolean hasChanges) {
+        mHasChangesInTests = hasChanges;
+    }
+
     @Override
     public String toString() {
         return "BuildAnalysis [mDeviceImageChanged="
                 + mDeviceImageChanged
                 + ", mHasTestsArtifacts="
                 + mHasTestsArtifacts
+                + ", mHasChangesInTests="
+                + mHasChangesInTests
                 + "]";
     }
 
