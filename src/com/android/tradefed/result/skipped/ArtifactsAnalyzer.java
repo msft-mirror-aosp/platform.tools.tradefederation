@@ -98,6 +98,9 @@ public class ArtifactsAnalyzer {
                     }
                     CLog.d("%s", analysisResults.toString());
                     finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
+                } catch (RuntimeException e) {
+                    CLog.e(e);
+                    return null;
                 }
             }
         }
