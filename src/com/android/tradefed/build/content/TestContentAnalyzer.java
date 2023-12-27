@@ -112,6 +112,10 @@ public class TestContentAnalyzer {
                 }
             }
             activeContexts.removeAll(buildKeyAnalysis);
+            if (activeContexts.isEmpty()) {
+                CLog.d("No context to analyze.");
+                return new ContentAnalysisResults();
+            }
             ContentAnalysisResults results;
             AnalysisMethod method = activeContexts.get(0).analysisMethod();
             switch (method) {
