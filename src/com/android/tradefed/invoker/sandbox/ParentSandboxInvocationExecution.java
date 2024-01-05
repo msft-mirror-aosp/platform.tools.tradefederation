@@ -18,7 +18,6 @@ package com.android.tradefed.invoker.sandbox;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.config.Configuration;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
@@ -48,7 +47,6 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -335,7 +333,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                                         config.getCommandLine(),
                                         /** no logging */
                                         false));
-            } catch (BuildRetrievalError | IOException | ConfigurationException e) {
+            } catch (Throwable e) {
                 error = e;
             }
         }
