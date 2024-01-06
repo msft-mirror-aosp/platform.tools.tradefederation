@@ -25,6 +25,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -58,6 +59,7 @@ import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
@@ -267,6 +269,9 @@ public class TestInvocationTest {
                 ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
         mStubInvocationMetadata.addDeviceBuildInfo(
                 ConfigurationDef.DEFAULT_DEVICE_NAME, mMockBuildInfo);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(mMockDevice.getOptions()).thenReturn(options);
 
         // create the BaseTestInvocation to test
         mTestInvocation =
