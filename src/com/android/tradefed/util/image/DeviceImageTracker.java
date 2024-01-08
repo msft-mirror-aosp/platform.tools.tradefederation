@@ -135,12 +135,17 @@ public class DeviceImageTracker {
         FileUtil.deleteFile(copyInCacheDeviceImage);
         File copyInCacheBootloader = new File(mCacheDir, serial + "_bootloader");
         FileUtil.deleteFile(copyInCacheBootloader);
-        File copyInCacheBaseband = new File(mCacheDir, serial + "_baseband");
-        FileUtil.deleteFile(copyInCacheBaseband);
+        File copyInCacheBaseband = null;
+        if (baseband != null) { // Baseband is optional on some devices
+            copyInCacheBaseband = new File(mCacheDir, serial + "_baseband");
+            FileUtil.deleteFile(copyInCacheBaseband);
+        }
         try {
             FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
             FileUtil.hardlinkFile(bootloader, copyInCacheBootloader);
-            FileUtil.hardlinkFile(baseband, copyInCacheBaseband);
+            if (copyInCacheBaseband != null) {
+                FileUtil.hardlinkFile(baseband, copyInCacheBaseband);
+            }
             mImageCache.put(
                     serial,
                     new FileCacheTracker(
