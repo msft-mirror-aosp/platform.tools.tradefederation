@@ -132,7 +132,9 @@ public class IncrementalImageUtil {
         try {
             deviceImage = copyImage(tracker.zippedDeviceImage);
             bootloader = copyImage(tracker.zippedBootloaderImage);
-            baseband = copyImage(tracker.zippedBasebandImage);
+            if (tracker.zippedBasebandImage != null) {
+                baseband = copyImage(tracker.zippedBasebandImage);
+            }
         } catch (IOException e) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
