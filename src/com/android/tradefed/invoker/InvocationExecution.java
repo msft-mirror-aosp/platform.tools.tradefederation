@@ -124,6 +124,8 @@ public class InvocationExecution implements IInvocationExecution {
     private Set<IMultiTargetPreparer> mTrackMultiPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackLabPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackTargetPreparers = null;
+    // GceManager for multi-device leasing. It's needed for releasing the devices.
+    private GceManager mMultiDeviceRequester = null;
 
     /** Timer to make sure Test Phase does not run for too long. */
     private class TestPhaseMonitor extends TimerTask {
@@ -726,7 +728,7 @@ public class InvocationExecution implements IInvocationExecution {
         // One GceManager is needed to lease the whole device group
         String firstDeviceName = context.getDeviceConfigNames().get(0);
         ITestDevice firstDevice = context.getDevice(firstDeviceName);
-        GceManager multiDeviceRequester =
+        mMultiDeviceRequester =
                 new GceManager(
                         firstDevice.getDeviceDescriptor(),
                         firstDevice.getOptions(),
@@ -743,7 +745,7 @@ public class InvocationExecution implements IInvocationExecution {
 
         // Start multiple devices in a group
         List<GceAvdInfo> gceAvdInfoList =
-                multiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
+                mMultiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
         for (int i = 0; i < devices.size(); i++) {
             // For each device, do setup with its GceAvdInfo
             CLog.d(
@@ -816,6 +818,8 @@ public class InvocationExecution implements IInvocationExecution {
             CLog.i("--disable-invocation-setup-and-teardown, skipping post-invocation teardown.");
             return;
         }
+        // Check if device tear down is needed for multi-device tests.
+        boolean shouldTearDown = false;
         for (String deviceName : context.getDeviceConfigNames()) {
             ITestDevice device = context.getDevice(deviceName);
             IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
@@ -823,7 +827,12 @@ public class InvocationExecution implements IInvocationExecution {
                 CLog.d("Skip postInvocationTearDown on fake device %s", device);
                 continue;
             }
+            // For multi-device tests, only the last device is flagged to be tear down if needed.
+            shouldTearDown |= !device.getOptions().shouldSkipTearDown();
             device.postInvocationTearDown(exception);
+        }
+        if (mMultiDeviceRequester != null && shouldTearDown) {
+            mMultiDeviceRequester.shutdownGce();
         }
     }
 
