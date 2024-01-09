@@ -581,6 +581,7 @@ public class FastbootDeviceFlasherTest {
         IDeviceBuildInfo mockBuild = mock(IDeviceBuildInfo.class);
         when(mockBuild.getDeviceBuildId()).thenReturn(buildId);
         when(mockBuild.getBuildFlavor()).thenReturn(buildFlavor);
+        when(mockBuild.getDeviceSerial()).thenReturn("serial");
 
         assertFalse(mFlasher.checkAndFlashSystem(mMockDevice, buildId, buildFlavor, mockBuild));
         verify(mMockDevice, times(1)).rebootUntilOnline();
@@ -728,6 +729,7 @@ public class FastbootDeviceFlasherTest {
         try {
             when(mockBuild.getDeviceBuildId()).thenReturn(buildId);
             when(mockBuild.getBuildFlavor()).thenReturn(buildFlavor);
+            when(mockBuild.getDeviceSerial()).thenReturn("serial");
 
             CommandResult res = new CommandResult(CommandStatus.SUCCESS);
             res.setStderr("flashing");
