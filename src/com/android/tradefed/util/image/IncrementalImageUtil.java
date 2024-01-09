@@ -255,10 +255,15 @@ public class IncrementalImageUtil {
         }
 
         // Join the unzip thread
+        long startWait = System.currentTimeMillis();
         try {
             mParallelSetup.join();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_FLASHING_WAIT_PARALLEL_SETUP,
+                    System.currentTimeMillis() - startWait);
         }
         if (mParallelSetup.getError() != null) {
             throw mParallelSetup.getError();
