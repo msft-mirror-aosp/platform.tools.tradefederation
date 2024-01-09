@@ -34,6 +34,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
@@ -173,9 +174,11 @@ public class IncrementalImageUtil {
         if (createSnapshot != null) {
             File snapshot = null;
             try {
-                File destDir = ZipUtil2.extractZipToTemp(createSnapshot, "create_snapshot");
-                snapshot = FileUtil.findFile(destDir, "create_snapshot");
-                FileUtil.chmodGroupRWX(snapshot);
+                if (ZipUtil.isZipFileValid(createSnapshot, false)) {
+                    File destDir = ZipUtil2.extractZipToTemp(createSnapshot, "create_snapshot");
+                    snapshot = FileUtil.findFile(destDir, "create_snapshot");
+                    FileUtil.chmodGroupRWX(snapshot);
+                }
             } catch (IOException e) {
                 CLog.e(e);
             }
