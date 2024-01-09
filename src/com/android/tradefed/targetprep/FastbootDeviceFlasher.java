@@ -41,6 +41,7 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
+import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
@@ -726,9 +727,23 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             return true;
         }
         // If we have the same build id and build flavor we don't need to flash it.
-        if (systemBuildId.equals(deviceBuild.getDeviceBuildId()) &&
-                systemBuildFlavor.equalsIgnoreCase(deviceBuild.getBuildFlavor())) {
-            return false;
+        if (systemBuildId.equals(deviceBuild.getDeviceBuildId())) {
+            FileCacheTracker tracker =
+                    DeviceImageTracker.getDefaultCache()
+                            .getBaselineDeviceImage(deviceBuild.getDeviceSerial());
+            if (tracker != null
+                    && tracker.buildId.equals(systemBuildId)
+                    && tracker.flavor.equals(deviceBuild.getBuildFlavor())) {
+                if (mIncrementalFlashing != null
+                        && mIncrementalFlashing.isSameBuildFlashingAllowed()) {
+                    CLog.d("Same build incremental flashing is allowed");
+                    return true;
+                }
+                return false;
+            }
+            if (systemBuildFlavor.equalsIgnoreCase(deviceBuild.getBuildFlavor())) {
+                return false;
+            }
         }
         return true;
     }

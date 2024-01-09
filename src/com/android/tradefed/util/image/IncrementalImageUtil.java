@@ -73,6 +73,7 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
 
+    private boolean mAllowSameBuildFlashing = false;
     private boolean mBootloaderNeedsRevert = false;
     private boolean mBasebandNeedsRevert = false;
     private File mSourceDirectory;
@@ -219,6 +220,14 @@ public class IncrementalImageUtil {
 
     public void notifyBasebadNeedsRevert() {
         mBasebandNeedsRevert = true;
+    }
+
+    public void allowSameBuildFlashing() {
+        mAllowSameBuildFlashing = true;
+    }
+
+    public boolean isSameBuildFlashingAllowed() {
+        return mAllowSameBuildFlashing;
     }
 
     /** Returns whether device is currently using snapshots or not. */
