@@ -34,6 +34,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
@@ -73,6 +74,7 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
 
+    private boolean mAllowSameBuildFlashing = false;
     private boolean mBootloaderNeedsRevert = false;
     private boolean mBasebandNeedsRevert = false;
     private File mSourceDirectory;
@@ -132,7 +134,9 @@ public class IncrementalImageUtil {
         try {
             deviceImage = copyImage(tracker.zippedDeviceImage);
             bootloader = copyImage(tracker.zippedBootloaderImage);
-            baseband = copyImage(tracker.zippedBasebandImage);
+            if (tracker.zippedBasebandImage != null) {
+                baseband = copyImage(tracker.zippedBasebandImage);
+            }
         } catch (IOException e) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
@@ -170,9 +174,11 @@ public class IncrementalImageUtil {
         if (createSnapshot != null) {
             File snapshot = null;
             try {
-                File destDir = ZipUtil2.extractZipToTemp(createSnapshot, "create_snapshot");
-                snapshot = FileUtil.findFile(destDir, "create_snapshot");
-                FileUtil.chmodGroupRWX(snapshot);
+                if (ZipUtil.isZipFileValid(createSnapshot, false)) {
+                    File destDir = ZipUtil2.extractZipToTemp(createSnapshot, "create_snapshot");
+                    snapshot = FileUtil.findFile(destDir, "create_snapshot");
+                    FileUtil.chmodGroupRWX(snapshot);
+                }
             } catch (IOException e) {
                 CLog.e(e);
             }
@@ -219,6 +225,14 @@ public class IncrementalImageUtil {
         mBasebandNeedsRevert = true;
     }
 
+    public void allowSameBuildFlashing() {
+        mAllowSameBuildFlashing = true;
+    }
+
+    public boolean isSameBuildFlashingAllowed() {
+        return mAllowSameBuildFlashing;
+    }
+
     /** Returns whether device is currently using snapshots or not. */
     public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
         CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
@@ -253,10 +267,15 @@ public class IncrementalImageUtil {
         }
 
         // Join the unzip thread
+        long startWait = System.currentTimeMillis();
         try {
             mParallelSetup.join();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_FLASHING_WAIT_PARALLEL_SETUP,
+                    System.currentTimeMillis() - startWait);
         }
         if (mParallelSetup.getError() != null) {
             throw mParallelSetup.getError();

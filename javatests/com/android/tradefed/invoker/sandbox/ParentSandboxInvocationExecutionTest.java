@@ -18,8 +18,10 @@ package com.android.tradefed.invoker.sandbox;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
@@ -31,6 +33,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -102,6 +105,9 @@ public class ParentSandboxInvocationExecutionTest {
         mContext = new InvocationContext();
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(mMockDevice.getOptions()).thenReturn(options);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
         mConfig = new Configuration("test", "test");
         mConfig.setCommandLine(new String[] {"empty"});

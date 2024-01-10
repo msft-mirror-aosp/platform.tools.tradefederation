@@ -38,6 +38,7 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
@@ -383,7 +384,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         TestInformation testInfo =
                 TestInformation.newBuilder().setInvocationContext(mContext).build();
         mExec.doSetup(testInfo, mConfig, mMockListener);
@@ -431,7 +436,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         TestInformation testInfo =
                 TestInformation.newBuilder().setInvocationContext(mContext).build();
         mExec.doSetup(testInfo, mConfig, mMockLogger);
@@ -470,8 +479,12 @@ public class InvocationExecutionTest {
         boolean[] wasCalled = new boolean[2];
         wasCalled[0] = false;
         wasCalled[1] = false;
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
         ITestDevice mockDevice1 = mock(ITestDevice.class);
+        when(mockDevice1.getOptions()).thenReturn(options);
         ITestDevice mockDevice2 = mock(ITestDevice.class);
+        when(mockDevice2.getOptions()).thenReturn(options);
         BaseTargetPreparer cleaner =
                 new BaseTargetPreparer() {
                     @Override
@@ -527,7 +540,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         // Ensure that the original error is the one passed around.
         Throwable exception = new Throwable("Original error");
         ITestLogger logger = new CollectingTestListener();
@@ -576,7 +593,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         TestInformation testInfo =
                 TestInformation.newBuilder().setInvocationContext(mContext).build();
         // Ensure that the original error is the one passed around.
