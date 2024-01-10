@@ -152,6 +152,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             description = "Override the create_snapshot binary for incremental flashing.")
     private File mCreateSnapshotBinary = null;
 
+    @Option(
+            name = "allow-incremental-same-build",
+            description = "Allow doing incremental update on same build.")
+    private boolean mAllowIncrementalOnSameBuild = false;
+
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
 
@@ -273,10 +278,15 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             device, deviceBuild, mCreateSnapshotBinary, isIsolated);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
-            } else if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
-                // No need to reboot yet, it will happen later in the sequence
-                String verityOutput = device.executeAdbCommand("enable-verity");
-                CLog.d("%s", verityOutput);
+            } else {
+                if (mAllowIncrementalOnSameBuild) {
+                    mIncrementalImageUtil.allowSameBuildFlashing();
+                }
+                if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                    // No need to reboot yet, it will happen later in the sequence
+                    String verityOutput = device.executeAdbCommand("enable-verity");
+                    CLog.d("%s", verityOutput);
+                }
             }
         }
         try {

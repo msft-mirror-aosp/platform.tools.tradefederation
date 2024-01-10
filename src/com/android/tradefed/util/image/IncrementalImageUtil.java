@@ -73,6 +73,7 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
 
+    private boolean mAllowSameBuildFlashing = false;
     private boolean mBootloaderNeedsRevert = false;
     private boolean mBasebandNeedsRevert = false;
     private File mSourceDirectory;
@@ -221,6 +222,14 @@ public class IncrementalImageUtil {
         mBasebandNeedsRevert = true;
     }
 
+    public void allowSameBuildFlashing() {
+        mAllowSameBuildFlashing = true;
+    }
+
+    public boolean isSameBuildFlashingAllowed() {
+        return mAllowSameBuildFlashing;
+    }
+
     /** Returns whether device is currently using snapshots or not. */
     public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
         CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
@@ -255,10 +264,15 @@ public class IncrementalImageUtil {
         }
 
         // Join the unzip thread
+        long startWait = System.currentTimeMillis();
         try {
             mParallelSetup.join();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_FLASHING_WAIT_PARALLEL_SETUP,
+                    System.currentTimeMillis() - startWait);
         }
         if (mParallelSetup.getError() != null) {
             throw mParallelSetup.getError();
