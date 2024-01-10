@@ -51,6 +51,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
     public static final String TF_SERVICE_PORT = "TF_SERVICE_PORT";
 
     private static final int DEFAULT_PORT = 8889;
+    private static Integer sInternalPort = null;
 
     private Server mServer;
 
@@ -62,6 +63,9 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
 
     /** Returns the port used by the server. */
     public static int getPort() {
+        if (sInternalPort != null) {
+            return sInternalPort;
+        }
         return System.getenv(TF_SERVICE_PORT) != null
                 ? Integer.parseInt(System.getenv(TF_SERVICE_PORT))
                 : DEFAULT_PORT;
@@ -81,6 +85,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
         try {
             CLog.d("Starting feature server.");
             mServer.start();
+            sInternalPort = mServer.getPort();
         } catch (IOException e) {
             if (SystemUtil.isLocalMode()) {
                 CLog.w("TradefedFeatureServer already started: %s", e.getMessage());
