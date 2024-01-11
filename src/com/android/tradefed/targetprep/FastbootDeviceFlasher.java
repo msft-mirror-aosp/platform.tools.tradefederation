@@ -817,6 +817,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             throws DeviceNotAvailableException, TargetSetupError {
         FuseUtil fuseUtil = getFuseUtil();
         File mountPoint = null;
+        Throwable exception = null;
         try {
             mountPoint = FileUtil.createTempDir("FlashAllMountPoint");
             fuseUtil.mountZip(deviceBuild.getDeviceImageFile().getAbsoluteFile(), mountPoint);
@@ -826,12 +827,14 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             executeLongFastbootCmd(device, systemVarMap, fastbootArgs);
         } catch (DeviceNotAvailableException e) {
             // We wrap the exception from recovery if it fails to provide a clear message
+            exception = e;
             throw new DeviceNotAvailableException(
                     "Device became unavailable during fastboot 'flashall'. Please verify that "
                             + "the image you are flashing can boot properly.",
                     e,
                     device.getSerialNumber());
         } catch (IOException e) {
+            exception = e;
             throw new TargetSetupError(
                     String.format(
                             "Unable to create a temp dir for fuse zip to mount on, error: %s",
@@ -844,11 +847,17 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             }
             // In case the unmount operation fails, deleting the mount point will fail as well.
             if (mountPoint.exists()) {
-                throw new HarnessRuntimeException(
+                String mountErrorMsg =
                         String.format(
                                 "Failed to delete mount point %s, unmount operation might failed.",
-                                mountPoint),
-                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+                                mountPoint);
+                if (exception != null) {
+                    // If a previous exception happened, surface the previous exception only
+                    CLog.e(mountErrorMsg);
+                } else {
+                    throw new HarnessRuntimeException(
+                            mountErrorMsg, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+                }
             }
         }
     }
