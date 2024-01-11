@@ -36,6 +36,7 @@ import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -668,7 +669,16 @@ public class DeviceManager implements IDeviceManager {
             addAvailableDevice(new NullDevice(serial, true));
             options.setSerial(serial);
         }
-        return mManagedDeviceList.allocate(options);
+        ITestDevice device = mManagedDeviceList.allocate(options);
+        int maxRetry = 6;
+        while (device == null
+                && System.getenv(TradefedSandbox.SANDBOX_ENABLED) != null
+                && maxRetry != 0) {
+            RunUtil.getDefault().sleep(500); // Give up to 30 seconds to detect a device in sandbox
+            device = mManagedDeviceList.allocate(options);
+            maxRetry--;
+        }
+        return device;
     }
 
     /**
