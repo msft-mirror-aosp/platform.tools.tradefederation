@@ -150,7 +150,7 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil)
                 .setEnvVariable(
                         Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
-        verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
+        verify(mMockRunUtil, times(2)).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
@@ -197,7 +197,7 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil)
                 .setEnvVariable(
                         Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
-        verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
+        verify(mMockRunUtil, times(2)).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
@@ -241,7 +241,7 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil)
                 .setEnvVariable(
                         Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
-        verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
+        verify(mMockRunUtil, times(2)).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
