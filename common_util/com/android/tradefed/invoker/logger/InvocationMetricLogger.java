@@ -290,6 +290,13 @@ public class InvocationMetricLogger {
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
         ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
         DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
+        AB_LIST_API_TIME_PAIR("ab_list_api_time_pair", true),
+
+        // Ants metrics
+        ANTS_MODULE_START_TIME("ants_module_start_time", true),
+        ANTS_MODULE_END_TIME("ants_module_end_time", true),
+        ANTS_RUN_START_TIME("ants_run_start_time", true),
+        ANTS_RUN_END_TIME("ants_run_end_time", true),
 
         DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
 
