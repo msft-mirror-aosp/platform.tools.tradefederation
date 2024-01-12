@@ -68,7 +68,7 @@ public class ContentAnalysisContext {
     }
 
     public boolean abortAnalysis() {
-        return invalidateAnalysis;
+        return invalidateAnalysis || information == null;
     }
 
     public ContentAnalysisContext addIgnoreChange(String path) {
