@@ -245,6 +245,14 @@ public class IncrementalImageUtil {
 
     /** Updates the device using the snapshot logic. */
     public void updateDevice() throws DeviceNotAvailableException, TargetSetupError {
+        if (mDevice.isStateBootloaderOrFastbootd()) {
+            mDevice.rebootUntilOnline();
+        }
+        if (!mDevice.enableAdbRoot()) {
+            throw new TargetSetupError(
+                    "Failed to obtain root, this is required for incremental update.",
+                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+        }
         try {
             internalUpdateDevice();
         } catch (DeviceNotAvailableException | TargetSetupError | RuntimeException e) {
@@ -257,15 +265,6 @@ public class IncrementalImageUtil {
     private void internalUpdateDevice() throws DeviceNotAvailableException, TargetSetupError {
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.INCREMENTAL_FLASHING_ATTEMPT_COUNT, 1);
-        if (mDevice.isStateBootloaderOrFastbootd()) {
-            mDevice.rebootUntilOnline();
-        }
-        if (!mDevice.enableAdbRoot()) {
-            throw new TargetSetupError(
-                    "Failed to obtain root, this is required for incremental update.",
-                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
-        }
-
         // Join the unzip thread
         long startWait = System.currentTimeMillis();
         try {
