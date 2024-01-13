@@ -167,6 +167,7 @@ public class TestInvocation implements ITestInvocation {
     public static final String INVOCATION_EXTERNAL_DEPENDENCIES =
             "invocation-external-dependencies";
     public static final long AVAILABILITY_CHECK_TIMEOUT = 180000L; // 3 minutes
+    static final String GOOGLE_USB_VENDOR_ID = "0x18d1";
 
     public enum Stage {
         ERROR("error"),
@@ -1687,6 +1688,12 @@ public class TestInvocation implements ITestInvocation {
                                                 .getFastbootPath(),
                                         "devices");
                 CLog.d("'fastboot devices' output:\n%s", fastbootResult.getStdout());
+
+                CommandResult lsusbResult =
+                        getRunUtil()
+                                .runTimedCmdSilently(
+                                        60000L, "lsusb", "-d", GOOGLE_USB_VENDOR_ID + ":");
+                CLog.d("'lsusb -d %s:' output:\n%s", GOOGLE_USB_VENDOR_ID, lsusbResult.getStdout());
             }
         } else if (countVirtualLost > 0) {
             CLog.e("Counting as virtual_device_lost.");
