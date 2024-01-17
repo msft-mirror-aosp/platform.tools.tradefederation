@@ -197,6 +197,9 @@ public class TestDevice extends NativeDevice {
     private static final String BUGREPORTZ_CMD = "bugreportz";
     private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
 
+    /** Number of attempts made to get user info. */
+    private static final int NUM_USER_INFO_ATTEMPTS = 3;
+
     /** Track microdroid and its resources */
     private class MicrodroidTracker {
         ExecutorService executor;
@@ -1562,7 +1565,25 @@ public class TestDevice extends NativeDevice {
 
     private ArrayList<String[]> tokenizeListUserPostT() throws DeviceNotAvailableException {
         String command = "cmd user list -v";
-        String commandOutput = executeShellCommand(command);
+        String commandOutput = null;
+        for (int i = 0; i < NUM_USER_INFO_ATTEMPTS; i++) {
+            commandOutput = executeShellCommand(command);
+            if (commandOutput == null || commandOutput.trim().isEmpty()) {
+                CLog.d("Command `%s` executed with no output. (attempt %d)", command, i);
+                // Throw exception if the last attempt failed too.
+                if (i == NUM_USER_INFO_ATTEMPTS - 1) {
+                    throw new DeviceRuntimeException(
+                            String.format(
+                                    "Command `%s` executed with no output. Attempts made = %d.",
+                                    command, NUM_USER_INFO_ATTEMPTS),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                }
+            } else {
+                break;
+            }
+            // wait before retrying
+            RunUtil.getDefault().sleep(1000);
+        }
         // Extract the id of all existing users.
         List<String> lines =
                 Arrays.stream(commandOutput.split("\\r?\\n"))
@@ -1622,7 +1643,25 @@ public class TestDevice extends NativeDevice {
 
     private ArrayList<String[]> tokenizeListUsersPreT() throws DeviceNotAvailableException {
         String command = "pm list users";
-        String commandOutput = executeShellCommand(command);
+        String commandOutput = null;
+        for (int i = 0; i < NUM_USER_INFO_ATTEMPTS; i++) {
+            commandOutput = executeShellCommand(command);
+            if (commandOutput == null || commandOutput.trim().isEmpty()) {
+                CLog.d("Command `%s` executed with no output. (attempt %d)", command, i);
+                // Throw exception if the last attempt failed too.
+                if (i == NUM_USER_INFO_ATTEMPTS - 1) {
+                    throw new DeviceRuntimeException(
+                            String.format(
+                                    "Command `%s` executed with no output. Attempts made = %d.",
+                                    command, NUM_USER_INFO_ATTEMPTS),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                }
+            } else {
+                break;
+            }
+            // wait before retrying
+            RunUtil.getDefault().sleep(1000);
+        }
         // Extract the id of all existing users.
         String[] lines = commandOutput.split("\\r?\\n");
         if (!lines[0].equals("Users:")) {

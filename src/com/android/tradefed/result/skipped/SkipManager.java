@@ -197,6 +197,7 @@ public class SkipManager implements IDisableable {
             if (results.hasChangesInTestsArtifacts()) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
+                return false;
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.TEST_ARTIFACT_NOT_CHANGED, 1);
@@ -205,6 +206,7 @@ public class SkipManager implements IDisableable {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.PURE_DEVICE_IMAGE_UNCHANGED, 1);
         }
+        // If we get here, it means both device image and test artifacts are unaffected.
         if (!mConsideredForContent) {
             return false;
         }

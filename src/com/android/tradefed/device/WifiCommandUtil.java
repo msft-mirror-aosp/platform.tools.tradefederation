@@ -49,6 +49,11 @@ public class WifiCommandUtil {
         public String getInfo(String infoKey) {
             return scanInfo.get(infoKey);
         }
+
+        @Override
+        public String toString() {
+            return scanInfo.toString();
+        }
     }
 
     /**

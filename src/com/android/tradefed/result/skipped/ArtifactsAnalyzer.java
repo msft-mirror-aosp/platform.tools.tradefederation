@@ -79,7 +79,6 @@ public class ArtifactsAnalyzer {
             if (mTestArtifactsAnalysisContent.isEmpty()) {
                 // Couldn't do analysis, assume changes
                 finalReport.setChangesInTests(true);
-                return finalReport;
             } else {
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(
@@ -94,16 +93,17 @@ public class ArtifactsAnalyzer {
                     ContentAnalysisResults analysisResults = analyzer.evaluate();
                     if (analysisResults == null) {
                         finalReport.setChangesInTests(true);
-                        return finalReport;
+                    } else {
+                        CLog.d("%s", analysisResults.toString());
+                        finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
                     }
-                    CLog.d("%s", analysisResults.toString());
-                    finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
                 } catch (RuntimeException e) {
                     CLog.e(e);
                     return null;
                 }
             }
         }
+        CLog.d("Analysis report after test analysis: %s", finalReport.toString());
         return finalReport;
     }
 
