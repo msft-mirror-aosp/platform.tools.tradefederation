@@ -15,7 +15,9 @@
  */
 package com.android.tradefed.build.content;
 
+
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /** Summary of the content analysis. */
@@ -90,5 +92,22 @@ public class ContentAnalysisResults {
                 + ", unchangedModules="
                 + unchangedModules
                 + "]";
+    }
+
+    /** Merges a list of multiple analysis together. */
+    public static ContentAnalysisResults mergeResults(List<ContentAnalysisResults> results) {
+        if (results.size() == 1) {
+            return results.get(0);
+        }
+        ContentAnalysisResults mergedResults = new ContentAnalysisResults();
+        for (ContentAnalysisResults res : results) {
+            mergedResults.unchangedFiles += res.unchangedFiles;
+            mergedResults.modifiedFiles += res.modifiedFiles;
+            mergedResults.sharedFolderChanges += res.sharedFolderChanges;
+            mergedResults.modifiedModules += res.modifiedModules;
+            mergedResults.buildKeyChanges += res.buildKeyChanges;
+            mergedResults.unchangedModules.addAll(res.unchangedModules);
+        }
+        return mergedResults;
     }
 }
