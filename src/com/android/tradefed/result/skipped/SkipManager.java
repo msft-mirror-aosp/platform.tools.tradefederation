@@ -193,6 +193,8 @@ public class SkipManager implements IDisableable {
         if (results.deviceImageChanged()) {
             return false;
         }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.DEVICE_IMAGE_NOT_CHANGED, 1);
         if (results.hasTestsArtifacts()) {
             if (results.hasChangesInTestsArtifacts()) {
                 InvocationMetricLogger.addInvocationMetrics(
