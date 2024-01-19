@@ -34,6 +34,7 @@ public class ModifiedFilesParser {
 
     private static final Set<String> INOP_IMAGE_CHANGES =
             ImmutableSet.of("build.prop", "prop.default");
+    private static final String TEST_CASES_PATH = "testcases/";
 
     private final File mModifiedFilesJson;
     private final boolean mIsDeviceImage;
@@ -97,6 +98,9 @@ public class ModifiedFilesParser {
             // Eventually this needs improvement to ensure the only modification
             // is really inop
             if (INOP_IMAGE_CHANGES.contains(new File(files).getName())) {
+                continue;
+            }
+            if (files.startsWith(TEST_CASES_PATH)) {
                 continue;
             }
             return true;

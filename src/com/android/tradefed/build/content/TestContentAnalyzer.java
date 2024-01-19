@@ -116,26 +116,35 @@ public class TestContentAnalyzer {
                 CLog.d("No context to analyze.");
                 return new ContentAnalysisResults();
             }
-            ContentAnalysisResults results;
-            AnalysisMethod method = activeContexts.get(0).analysisMethod();
-            switch (method) {
-                case MODULE_XTS:
-                    results = xtsAnalysis(information.getBuildInfo(), activeContexts.get(0));
-                    break;
-                case FILE:
-                    results = fileAnalysis(information.getBuildInfo(), activeContexts.get(0));
-                    break;
-                case SANDBOX_WORKDIR:
-                    results = workdirAnalysis(information.getBuildInfo(), activeContexts);
-                    break;
-                default:
-                    // do nothing for the rest for now.
+            List<ContentAnalysisResults> allResults = new ArrayList<>();
+            for (ContentAnalysisContext ac : activeContexts) {
+                ContentAnalysisResults results;
+                AnalysisMethod method = ac.analysisMethod();
+                switch (method) {
+                    case MODULE_XTS:
+                        results = xtsAnalysis(information.getBuildInfo(), ac);
+                        break;
+                    case FILE:
+                        results = fileAnalysis(information.getBuildInfo(), ac);
+                        break;
+                    case SANDBOX_WORKDIR:
+                        results = workdirAnalysis(information.getBuildInfo(), ac);
+                        break;
+                    default:
+                        // do nothing for the rest for now.
+                        return null;
+                }
+                if (results == null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
                     return null;
+                }
+                CLog.d("content analysis results for %s: %s", ac.contentEntry(), results);
+                allResults.add(results);
             }
-            if (results != null) {
-                results.addChangedBuildKey(countBuildKeyDiff);
-            }
-            return results;
+            ContentAnalysisResults finalResults = ContentAnalysisResults.mergeResults(allResults);
+            finalResults.addChangedBuildKey(countBuildKeyDiff);
+            return finalResults;
         }
     }
 
@@ -289,7 +298,7 @@ public class TestContentAnalyzer {
     }
 
     private ContentAnalysisResults workdirAnalysis(
-            IBuildInfo build, List<ContentAnalysisContext> contexts) {
+            IBuildInfo build, ContentAnalysisContext context) {
         if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
             CLog.w("Mismatch: we would expect a testsdir directory for workdir analysis");
             return null;
@@ -298,17 +307,16 @@ public class TestContentAnalyzer {
         ContentAnalysisResults results = new ContentAnalysisResults();
         List<ArtifactFileDescriptor> diffs = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
-        for (ContentAnalysisContext context : contexts) {
-            List<ArtifactFileDescriptor> diff =
-                    analyzeContentDiff(context.contentInformation(), context.contentEntry());
-            if (diff == null) {
-                CLog.w("Analysis failed.");
-                return null;
-            }
-            diffs.addAll(diff);
-            diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
-            AllCommonDirs.addAll(context.commonLocations());
+        List<ArtifactFileDescriptor> diff =
+                analyzeContentDiff(context.contentInformation(), context.contentEntry());
+        if (diff == null) {
+            CLog.w("Analysis failed.");
+            return null;
         }
+        diffs.addAll(diff);
+        diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
+        AllCommonDirs.addAll(context.commonLocations());
+
         Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
         // Check common dirs
         Set<String> commonDiff =
