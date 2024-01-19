@@ -218,6 +218,24 @@ public class FileUtil {
     }
 
     /**
+     * Performs a best effort attempt to ensure given file group executable, readable, and writable.
+     *
+     * <p>If 'chmod' system command is not supported by underlying OS, will attempt to set
+     * permissions for all users. The operation is synchronized to prevent race condition introduced
+     * by accessing files from a cache, e.g., GCSFileDownloader.
+     *
+     * @param file the {@link File} to make owner and group writable
+     * @return <code>true</code> if permissions were set successfully, <code>false</code> otherwise
+     */
+    public static synchronized boolean ensureGroupRWX(File file) {
+        if (!file.canExecute()) {
+            // Set the executable bit if needed
+            return chmodGroupRWX(file);
+        }
+        return true;
+    }
+
+    /**
      * Performs a best effort attempt to make given file group executable, readable, and writable.
      * <p/>
      * If 'chmod' system command is not supported by underlying OS, will attempt to set permissions

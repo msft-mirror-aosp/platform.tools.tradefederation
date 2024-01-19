@@ -705,9 +705,12 @@ public class TestDeviceOptions {
                             mAvdDriverBinary.getAbsolutePath()),
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
-        if (!mAvdDriverBinary.canExecute()) {
-            // Set the executable bit if needed
-            FileUtil.chmodGroupRWX(mAvdDriverBinary);
+        if (!FileUtil.ensureGroupRWX(mAvdDriverBinary)) {
+            throw new HarnessRuntimeException(
+                    String.format(
+                            "Failed to change avd driver binary to be executable at %s",
+                            mAvdDriverBinary.getAbsolutePath()),
+                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
         return mAvdDriverBinary;
     }

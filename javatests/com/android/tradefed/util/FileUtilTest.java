@@ -111,6 +111,25 @@ public class FileUtilTest {
         }
     }
 
+    /** test {@link FileUtil#ensureGroupRWX(File)} on a system that supports 'chmod' */
+    @Test
+    public void testEnsureGroupRWX() throws IOException {
+        File testFile = null;
+        try {
+            if (!FileUtil.chmodExists()) {
+                CLog.d("Chmod not available, skipping the test");
+                return;
+            }
+            testFile = FileUtil.createTempFile("testChmodRWX", ".txt");
+            assertTrue(FileUtil.ensureGroupRWX(testFile));
+            assertTrue(testFile.canRead());
+            assertTrue(testFile.canWrite());
+            assertTrue(testFile.canExecute());
+        } finally {
+            FileUtil.deleteFile(testFile);
+        }
+    }
+
     /**
      * test {@link FileUtil#chmodGroupRWX(File)} on a system that does not supports 'chmod'. File
      * permission should still be set with the fallback.
