@@ -39,12 +39,15 @@ import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystemException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -214,6 +217,32 @@ public class FileUtil {
             CLog.d("chmod not available; attempting to set %s globally RW", file.getAbsolutePath());
             return file.setWritable(true, false /* false == writable for all */) &&
                     file.setReadable(true, false /* false == readable for all */);
+        }
+    }
+
+    /**
+     * Performs a best effort attempt to ensure given file group executable, readable, and writable.
+     *
+     * <p>If 'chmod' system command is not supported by underlying OS, will attempt to set
+     * permissions for all users. The operation first locks the file to prevent race condition
+     * introduced by accessing files from a cache, e.g., GCSFileDownloader.
+     *
+     * @param file the {@link File} to make owner and group writable
+     * @return <code>true</code> if permissions were set successfully, <code>false</code> otherwise
+     */
+    public static boolean ensureGroupRWX(File file) {
+        String filePath = file.getAbsolutePath();
+        // Lock the file with WRITE access to ensure updating file mod is atomic.
+        try (FileChannel channel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE);
+                FileLock lock = channel.lock()) {
+            if (!file.canExecute()) {
+                // Set the executable bit if needed
+                chmodGroupRWX(file);
+            }
+            return true;
+        } catch (IOException e) {
+            CLog.e(e);
+            return false;
         }
     }
 
