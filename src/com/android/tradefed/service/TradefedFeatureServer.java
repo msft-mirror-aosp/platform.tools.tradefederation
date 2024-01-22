@@ -50,7 +50,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
     public static final String TEST_INFORMATION_OBJECT = "TEST_INFORMATION";
     public static final String TF_SERVICE_PORT = "TF_SERVICE_PORT";
 
-    private static final int DEFAULT_PORT = 8889;
+    private static final int DEFAULT_PORT = 0;
     private static Integer sInternalPort = null;
 
     private Server mServer;
