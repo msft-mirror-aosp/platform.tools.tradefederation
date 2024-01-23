@@ -37,6 +37,7 @@ import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
+import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -659,6 +660,10 @@ public class InvocationExecution implements IInvocationExecution {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
                 runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            } catch (TargetSetupError e) {
+                OxygenUtil util = new OxygenUtil();
+                util.downloadLaunchFailureLogs(e, logger);
+                throw e;
             }
         } else {
             try (CloseableTraceScope ignore =
