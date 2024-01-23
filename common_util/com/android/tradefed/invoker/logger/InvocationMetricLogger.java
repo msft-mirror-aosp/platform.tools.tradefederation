@@ -321,6 +321,8 @@ public class InvocationMetricLogger {
         BUILD_KEY_WITH_DIFFS("build_key_with_diffs", true),
         FILE_WITH_DIFFS("file_with_diffs", true),
         UNCHANGED_FILE("unchanged_file", true),
+        MULTI_DEVICES_CONTENT_ANALYSIS("multi_devices_content_analysis", true),
+        DEVICELESS_CONTENT_ANALYSIS("deviceless_content_analysis", true),
 
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
