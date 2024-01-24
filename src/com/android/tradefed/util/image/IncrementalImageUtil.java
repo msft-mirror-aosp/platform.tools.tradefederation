@@ -85,7 +85,8 @@ public class IncrementalImageUtil {
             ITestDevice device,
             IDeviceBuildInfo build,
             File createSnapshot,
-            boolean isIsolatedSetup)
+            boolean isIsolatedSetup,
+            boolean allowCrossRelease)
             throws DeviceNotAvailableException {
         if (isIsolatedSetup) {
             CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
@@ -111,9 +112,17 @@ public class IncrementalImageUtil {
             CLog.d("Newer build is not on the same branch.");
             return null;
         }
+        boolean crossRelease = false;
         if (!tracker.flavor.equals(build.getBuildFlavor())) {
-            CLog.d("Newer build is not on the build flavor.");
-            return null;
+            if (allowCrossRelease) {
+                CLog.d(
+                        "Allowing cross-flavor update from '%s' to '%s'",
+                        tracker.flavor, build.getBuildFlavor());
+                crossRelease = true;
+            } else {
+                CLog.d("Newer build is not on the build flavor.");
+                return null;
+            }
         }
 
         if (!isSnapshotSupported(device)) {
@@ -126,6 +135,10 @@ public class IncrementalImageUtil {
         if (splTarget != null && !splBaseline.equals(splTarget)) {
             CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
             return null;
+        }
+        if (crossRelease) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_ACROSS_RELEASE_COUNT, 1);
         }
 
         File deviceImage = null;
