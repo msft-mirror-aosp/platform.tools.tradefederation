@@ -124,7 +124,7 @@ public class ArtifactsAnalyzer {
         } else {
             deviceImageChanged =
                     !"true".equals(build.getBuildAttributes().get(DEVICE_IMAGE_NOT_CHANGED));
-            if (!deviceImageChanged && context != null) {
+            if (context != null) {
                 boolean presubmit =
                         "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
                 ImageContentAnalyzer analyze = new ImageContentAnalyzer(presubmit, context);
