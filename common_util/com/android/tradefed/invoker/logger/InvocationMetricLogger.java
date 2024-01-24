@@ -321,6 +321,8 @@ public class InvocationMetricLogger {
         BUILD_KEY_WITH_DIFFS("build_key_with_diffs", true),
         FILE_WITH_DIFFS("file_with_diffs", true),
         UNCHANGED_FILE("unchanged_file", true),
+        MULTI_DEVICES_CONTENT_ANALYSIS("multi_devices_content_analysis", true),
+        DEVICELESS_CONTENT_ANALYSIS("deviceless_content_analysis", true),
 
         POWERWASH_TIME("powerwash_time_ms", true),
         POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
@@ -333,6 +335,7 @@ public class InvocationMetricLogger {
         INCREMENTAL_FLASHING_TIME("incremental_flashing_time", true),
         INCREMENTAL_FLASHING_WAIT_PARALLEL_SETUP("incremental_flashing_wait_parallel_setup", true),
         INCREMENTAL_FLASHING_ATTEMPT_COUNT("incremental_flashing_attempt_count", true),
+        INCREMENTAL_ACROSS_RELEASE_COUNT("incremental_across_release_count", true),
         INCREMENTAL_FLASHING_TEARDOWN_FAILURE("incremental_flashing_teardown_failure", true),
         INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),

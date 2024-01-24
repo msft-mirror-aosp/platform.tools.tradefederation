@@ -340,7 +340,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      */
     protected boolean hasTests() {
         synchronized (mTests) {
-            return mTests.isEmpty();
+            return !mTests.isEmpty();
         }
     }
 

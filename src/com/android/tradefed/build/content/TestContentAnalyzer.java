@@ -135,6 +135,8 @@ public class TestContentAnalyzer {
                         return null;
                 }
                 if (results == null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
                     return null;
                 }
                 CLog.d("content analysis results for %s: %s", ac.contentEntry(), results);

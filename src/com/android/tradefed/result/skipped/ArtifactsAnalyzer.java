@@ -71,6 +71,10 @@ public class ArtifactsAnalyzer {
                     analyzeArtifact(deviceBuild, mImageAnalysis.get(deviceBuild.getKey()));
             reports.add(report);
         }
+        if (reports.size() > 1) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MULTI_DEVICES_CONTENT_ANALYSIS, reports.size());
+        }
         BuildAnalysis finalReport = BuildAnalysis.mergeReports(reports);
         CLog.d("Build analysis report: %s", finalReport.toString());
         boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
@@ -115,6 +119,8 @@ public class ArtifactsAnalyzer {
         if (device.getIDevice() != null
                 && device.getIDevice().getClass().isAssignableFrom(NullDevice.class)) {
             deviceImageChanged = false; // No device image
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICELESS_CONTENT_ANALYSIS, 1);
         } else {
             deviceImageChanged =
                     !"true".equals(build.getBuildAttributes().get(DEVICE_IMAGE_NOT_CHANGED));

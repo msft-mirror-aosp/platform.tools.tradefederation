@@ -794,7 +794,7 @@ public abstract class ITestSuite
                 }
                 // Before running the module we ensure it has tests at this point or skip completely
                 // to avoid running SystemCheckers and preparation for nothing.
-                if (module.hasTests()) {
+                if (!module.hasTests()) {
                     continue;
                 }
 

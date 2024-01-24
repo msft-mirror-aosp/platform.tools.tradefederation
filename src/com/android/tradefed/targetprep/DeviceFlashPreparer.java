@@ -157,6 +157,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             description = "Allow doing incremental update on same build.")
     private boolean mAllowIncrementalOnSameBuild = false;
 
+    @Option(
+            name = "allow-incremental-cross-release",
+            description = "Allow doing incremental update across release build configs.")
+    private boolean mAllowIncrementalCrossRelease = false;
+
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
 
@@ -275,7 +280,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             }
             mIncrementalImageUtil =
                     IncrementalImageUtil.initialize(
-                            device, deviceBuild, mCreateSnapshotBinary, isIsolated);
+                            device,
+                            deviceBuild,
+                            mCreateSnapshotBinary,
+                            isIsolated,
+                            mAllowIncrementalCrossRelease);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
             } else {
