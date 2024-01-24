@@ -40,7 +40,7 @@ public class SkipReason {
 
     public SkipReason(String message, DemotionTrigger trigger, String bugId) {
         this.reason = message;
-        this.trigger = trigger.name();
+        this.trigger = trigger == null ? DemotionTrigger.UNKNOWN_TRIGGER.name() : trigger.name();
         this.bugId = bugId;
     }
 

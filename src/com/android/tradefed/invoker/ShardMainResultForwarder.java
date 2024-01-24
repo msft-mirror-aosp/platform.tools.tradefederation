@@ -29,6 +29,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ResultForwarder;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.TimeUtil;
 
@@ -121,6 +122,13 @@ public class ShardMainResultForwarder extends ResultForwarder implements ILogSav
     public void invocationFailed(FailureDescription failure) {
         // one of the shards failed. Fail the whole invocation
         super.invocationFailed(failure);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        // Shouldn't really happen, but if one shard is skipped, report skip.
+        super.invocationSkipped(reason);
     }
 
     /**
