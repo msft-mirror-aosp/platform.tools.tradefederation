@@ -85,7 +85,7 @@ public class TestContentAnalyzer {
             // Handle invalidation should it be set.
             for (ContentAnalysisContext context : activeContexts) {
                 if (context.abortAnalysis()) {
-                    CLog.w("Analysis was aborted.");
+                    CLog.w("Analysis was aborted: %s", context.abortReason());
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
                     return null;

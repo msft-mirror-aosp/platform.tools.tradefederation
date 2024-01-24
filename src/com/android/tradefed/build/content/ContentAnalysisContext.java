@@ -39,6 +39,7 @@ public class ContentAnalysisContext {
     private Set<String> commonLocations = new HashSet<>();
     // Set this flag if somehow we need to invalidate the full analysis.
     private boolean invalidateAnalysis = false;
+    private String mInvalidationReason;
 
     public ContentAnalysisContext(
             String contentEntry, ContentInformation information, AnalysisMethod method) {
@@ -71,6 +72,10 @@ public class ContentAnalysisContext {
         return invalidateAnalysis || information == null;
     }
 
+    public String abortReason() {
+        return mInvalidationReason;
+    }
+
     public ContentAnalysisContext addIgnoreChange(String path) {
         ignoredChange.add(path);
         return this;
@@ -93,5 +98,10 @@ public class ContentAnalysisContext {
 
     public void invalidateAnalysis() {
         invalidateAnalysis = true;
+    }
+
+    public void invalidateAnalysis(String reason) {
+        invalidateAnalysis = true;
+        mInvalidationReason = reason;
     }
 }
