@@ -67,15 +67,10 @@ public class DynamicShardHelper extends StrictShardHelper {
             shouldDelegate = true;
         }
 
-        if (shardCount == null) {
+        if (shardIndex != null && shardCount == null) {
             throw new HarnessRuntimeException(
                     "shard-count is null while shard-index is " + shardIndex,
                     InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
-        }
-
-        // No sharding needed if shard-count=1
-        if (shardCount == 1) {
-            return false;
         }
 
         // redelegate to strict sharding
