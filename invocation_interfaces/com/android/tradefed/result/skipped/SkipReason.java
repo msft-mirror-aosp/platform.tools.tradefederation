@@ -34,13 +34,24 @@ public class SkipReason {
         FLAKINESS; // Test is out of SLO on flakiness score
     }
 
+    public SkipReason(String message, String trigger) {
+        this(message, trigger, "");
+    }
+
     public SkipReason(String message, DemotionTrigger trigger) {
         this(message, trigger, "");
     }
 
     public SkipReason(String message, DemotionTrigger trigger, String bugId) {
+        this(
+                message,
+                trigger == null ? DemotionTrigger.UNKNOWN_TRIGGER.name() : trigger.name(),
+                bugId);
+    }
+
+    public SkipReason(String message, String trigger, String bugId) {
         this.reason = message;
-        this.trigger = trigger == null ? DemotionTrigger.UNKNOWN_TRIGGER.name() : trigger.name();
+        this.trigger = trigger;
         this.bugId = bugId;
     }
 
