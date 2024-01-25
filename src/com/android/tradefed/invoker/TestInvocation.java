@@ -88,6 +88,7 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.ResultAggregator;
 import com.android.tradefed.retry.RetryStrategy;
@@ -1269,6 +1270,9 @@ public class TestInvocation implements ITestInvocation {
                             InvocationMetricKey.TEARDOWN_PAIR, timestamp, timestamp);
                     InvocationMetricLogger.addInvocationPairMetrics(
                             InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
+                    // TODO: Report a proper reason from SkipManager
+                    listener.invocationSkipped(
+                            new SkipReason("SkipManager decided to skip.", null));
                     reportHostLog(listener, config);
                     reportInvocationEnded(config, info.getContext(), listener, 0L);
                     return;
