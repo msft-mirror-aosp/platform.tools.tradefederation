@@ -39,6 +39,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.StreamProtoReceiver;
 import com.android.tradefed.result.proto.StreamProtoResultReporter;
+import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -289,11 +290,18 @@ public abstract class SubprocessTfLauncher
         mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
         mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
         mRunUtil.unsetEnvVariable(ANDROID_SERIAL_VAR);
-        mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
         mRunUtil.unsetEnvVariable(DelegatedInvocationExecution.DELEGATED_MODE_VAR);
         for (String variable : AutomatedReporters.REPORTER_MAPPING) {
             mRunUtil.unsetEnvVariable(variable);
         }
+        // Handle feature server
+        getRunUtil().unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+        getRunUtil().unsetEnvVariable(TradefedFeatureServer.TF_SERVICE_PORT);
+        getRunUtil().setEnvVariablePriority(EnvPriority.SET);
+        getRunUtil()
+                .setEnvVariable(
+                        TradefedFeatureServer.TF_SERVICE_PORT,
+                        Integer.toString(TradefedFeatureServer.getPort()));
 
         if (mGlobalConfig == null) {
             // If the global configuration is not set in option, create a filtered global
@@ -310,7 +318,6 @@ public abstract class SubprocessTfLauncher
         }
         if (mGlobalConfig != null) {
             // We allow overriding this global config and then set it for the subprocess.
-            mRunUtil.setEnvVariablePriority(EnvPriority.SET);
             mRunUtil.setEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE, mGlobalConfig);
         }
     }

@@ -37,6 +37,7 @@ import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
+import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -659,6 +660,10 @@ public class InvocationExecution implements IInvocationExecution {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
                 runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            } catch (TargetSetupError e) {
+                OxygenUtil util = new OxygenUtil();
+                util.downloadLaunchFailureLogs(e, logger);
+                throw e;
             }
         } else {
             try (CloseableTraceScope ignore =
@@ -1711,16 +1716,25 @@ public class InvocationExecution implements IInvocationExecution {
             CommandResult kernelInfoResult = device.executeShellV2Command("uname -a");
             if (kernelInfoResult != null
                     && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
+                CLog.i(
+                        "Device %s kernel information: '%s'",
+                        device.getSerialNumber(), kernelInfoResult.getStdout().trim());
                 info.getBuildInfo()
                         .addBuildAttribute(
                                 "device_kernel_info", kernelInfoResult.getStdout().trim());
             }
             String system_img_info = device.getProperty("ro.system.build.fingerprint");
             if (system_img_info != null) {
+                CLog.i(
+                        "Device %s system image build information: '%s'",
+                        device.getSerialNumber(), system_img_info);
                 info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
             }
             String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
             if (vendor_img_info != null) {
+                CLog.i(
+                        "Device %s vendor image build information: '%s'",
+                        device.getSerialNumber(), vendor_img_info);
                 info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
             }
         }
