@@ -35,6 +35,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.retry.ISupportGranularResults;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -150,6 +151,12 @@ public class ResultAggregator extends CollectingTestListener {
     public void invocationFailed(FailureDescription failure) {
         super.invocationFailed(failure);
         mAllForwarder.invocationFailed(failure);
+    }
+
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        super.invocationSkipped(reason);
+        mAllForwarder.invocationSkipped(reason);
     }
 
     /** {@inheritDoc} */
