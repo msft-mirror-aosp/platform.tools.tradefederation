@@ -1271,8 +1271,7 @@ public class TestInvocation implements ITestInvocation {
                     InvocationMetricLogger.addInvocationPairMetrics(
                             InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
                     // TODO: Report a proper reason from SkipManager
-                    listener.invocationSkipped(
-                            new SkipReason("SkipManager decided to skip.", null));
+                    listener.invocationSkipped(new SkipReason("SkipManager decided to skip.", ""));
                     reportHostLog(listener, config);
                     reportInvocationEnded(config, info.getContext(), listener, 0L);
                     return;
