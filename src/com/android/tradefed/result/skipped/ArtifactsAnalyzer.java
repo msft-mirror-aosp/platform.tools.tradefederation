@@ -129,11 +129,22 @@ public class ArtifactsAnalyzer {
                         "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
                 ImageContentAnalyzer analyze = new ImageContentAnalyzer(presubmit, context);
                 ContentAnalysisResults res = analyze.evaluate();
-                if (res == null || res.hasAnyBuildKeyChanges()) {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.IMAGE_CHANGES_IN_KEY_FILE, 1);
-                    CLog.d("Changes in build key for device image.");
+                if (res == null) {
                     deviceImageChanged = true;
+                } else {
+                    if (res.hasAnyBuildKeyChanges()) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.IMAGE_CHANGES_IN_KEY_FILE, 1);
+                        CLog.d("Changes in build key for device image.");
+                        deviceImageChanged = true;
+                    }
+                    if (res.hasDeviceImageChanges()) {
+                        CLog.d("Changes in device image.");
+                        deviceImageChanged = true;
+                    } else {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.DEVICE_IMAGE_NOT_CHANGED, 1);
+                    }
                 }
             }
         }
