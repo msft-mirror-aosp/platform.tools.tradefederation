@@ -354,11 +354,6 @@ public class AndroidJUnitTest extends InstrumentationTest
             throw new IllegalArgumentException("Device has not been set");
         }
         if (mUseTestStorage) {
-            // SDK sandboxes don't have access to the test ContentProvider.
-            if (mInstrumentSdkSandbox || mInstrumentSdkInSandbox) {
-                mUseTestStorage = false;
-                CLog.d("Disable test storage for SDK sandbox instrumentation tests.");
-            }
             // Check if we are a parameterized module
             List<String> params =
                     getConfiguration()
@@ -367,6 +362,10 @@ public class AndroidJUnitTest extends InstrumentationTest
             if (params != null && params.contains(InstantAppHandler.INSTANT_APP_ID)) {
                 mUseTestStorage = false;
                 CLog.d("Disable test storage on instant app module.");
+            } else if (mInstrumentSdkSandbox || mInstrumentSdkInSandbox) {
+                // SDK sandboxes don't have access to the test ContentProvider.
+                mUseTestStorage = false;
+                CLog.d("Disable test storage for SDK sandbox instrumentation tests.");
             } else {
                 mUseTestStorage = getDevice().checkApiLevelAgainstNextRelease(34);
                 if (!mUseTestStorage) {
