@@ -23,6 +23,9 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.AbiUtils;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** Base class for a module controller to not run tests when it doesn't match the architecture . */
 public class KernelTestModuleController extends BaseModuleController {
     private final String lowMemProp = "ro.config.low_ram";
@@ -31,10 +34,10 @@ public class KernelTestModuleController extends BaseModuleController {
     @Option(
             name = "arch",
             description =
-                    "The architecture name that should run for this module."
+                    "The architecture name(s) that should run for this module."
                             + "This should be like arm64, arm, riscv64, x86_64, or x86.",
             mandatory = true)
-    private String mArch = null;
+    private List<String> mArchs = new ArrayList<>();
 
     @Option(
             name = "is-low-mem",
@@ -89,13 +92,12 @@ public class KernelTestModuleController extends BaseModuleController {
             }
         }
 
-        if (mArch.equals(moduleArchName)) {
+        if (mArchs.stream().anyMatch(arch -> arch.equals(moduleArchName))) {
             return RunStrategy.RUN;
         }
         CLog.d(
-                "Skipping module %s running on abi %s, which doesn't match any required setting "
-                        + "of %s.",
-                getModuleName(), moduleAbiName, mArch);
+                "Skipping module %s running on abi %s, which doesn't match any required abis: %s.",
+                getModuleName(), moduleAbiName, mArchs);
         return RunStrategy.FULL_MODULE_BYPASS;
     }
 
