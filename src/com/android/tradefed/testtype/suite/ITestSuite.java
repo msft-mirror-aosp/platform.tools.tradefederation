@@ -767,10 +767,16 @@ public abstract class ITestSuite
         if (mUseSnapshotForReset) {
             AbstractConnection connection = mDevice.getConnection();
             if (connection instanceof AdbTcpConnection) {
-                ((AdbTcpConnection) connection).snapshotDevice(mDevice, mContext.getInvocationId());
-                ((AdbTcpConnection) connection)
-                        .getSuiteSnapshots()
-                        .put(mDevice, mContext.getInvocationId());
+                // Capture a snapshot once at the beginning of the suite
+                if (((AdbTcpConnection) connection).getSuiteSnapshots().containsKey(mDevice)) {
+                    CLog.d("Suite snapshot already taken for '%s'", mDevice.getSerialNumber());
+                } else {
+                    ((AdbTcpConnection) connection)
+                            .snapshotDevice(mDevice, mContext.getInvocationId());
+                    ((AdbTcpConnection) connection)
+                            .getSuiteSnapshots()
+                            .put(mDevice, mContext.getInvocationId());
+                }
             }
         }
 
