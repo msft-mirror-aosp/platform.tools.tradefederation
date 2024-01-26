@@ -845,6 +845,17 @@ public class AdbSshConnection extends AdbTcpConnection {
                         restoreCommand.split(" "));
 
         if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
+            try {
+                waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+            } catch (DeviceNotAvailableException e) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
+                CLog.e("%s", e.toString());
+                throw new TargetSetupError(
+                        String.format("failed to restore device: %s", e.toString()),
+                        getDevice().getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
+            }
             // Time taken for restore this invocation
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_RESUME_DURATIONS,
