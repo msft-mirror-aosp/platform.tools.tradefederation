@@ -26,7 +26,8 @@ public class ContentAnalysisContext {
         FILE,
         MODULE_XTS,
         SANDBOX_WORKDIR,
-        BUILD_KEY // Search directly for a specific item in build info
+        BUILD_KEY, // Search directly for a specific item in build info
+        DEVICE_IMAGE // Analyze the device image content
     }
 
     private final String contentEntry;
