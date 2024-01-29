@@ -127,6 +127,8 @@ public class ImageContentAnalyzer {
             // Remove all IMAGES/ paths
             diffs.removeIf(d -> d.path.startsWith("IMAGES/"));
             diffs.removeIf(d -> d.path.startsWith("META/"));
+            diffs.removeIf(d -> d.path.startsWith("PREBUILT_IMAGES/"));
+            diffs.removeIf(d -> d.path.startsWith("RADIO/"));
             return diffs.size();
         } catch (RuntimeException e) {
             CLog.e(e);
