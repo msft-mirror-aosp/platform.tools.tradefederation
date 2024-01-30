@@ -52,6 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.grpc.protobuf.services.ProtoReflectionService;
 
 /**
  * GRPC server helping to management test invocation and their lifecycle. This service isn't
@@ -95,7 +96,11 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             ServerBuilder<?> serverBuilder,
             ICommandScheduler commandScheduler,
             DeviceManagementGrpcServer deviceReservationManager) {
-        mServer = serverBuilder.addService(this).build();
+        mServer =
+                serverBuilder
+                        .addService(this)
+                        .addService(ProtoReflectionService.newInstance())
+                        .build();
         mCommandScheduler = commandScheduler;
         mDeviceReservationManager = deviceReservationManager;
     }
