@@ -177,7 +177,10 @@ public class KUnitModuleTest extends ExecutableTargetTest {
 
                 try {
                     KTapResultParser.applyKTapResultToListener(
-                            listener, description.getTestName(), ktapResults);
+                            listener,
+                            description.getTestName(),
+                            ktapResults,
+                            KTapResultParser.ParseResolution.AGGREGATED_TOP_LEVEL);
                 } catch (RuntimeException exception) {
                     CLog.e("KTAP parse error: %s", exception.toString());
                     listener.testStarted(description);
