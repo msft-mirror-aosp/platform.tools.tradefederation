@@ -86,6 +86,8 @@ public class SkipManager implements IDisableable {
     private List<String> mModulesDiscovered = new ArrayList<String>();
     private List<String> mDependencyFiles = new ArrayList<String>();
 
+    private String mReasonForSkippingInvocation = "SkipManager decided to skip.";
+
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
@@ -221,9 +223,13 @@ public class SkipManager implements IDisableable {
         // Currently only consider skipping in presubmit
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SKIP_NO_CHANGES, 1);
         if (mSkipOnNoChange) {
+            mReasonForSkippingInvocation =
+                    "No relevant changes to device image or test artifacts detected.";
             return true;
         }
         if (presubmit && mSkipOnNoChangePresubmitOnly) {
+            mReasonForSkippingInvocation =
+                    "No relevant changes to device image or test artifacts detected.";
             return true;
         }
         InvocationMetricLogger.addInvocationMetrics(
@@ -257,5 +263,9 @@ public class SkipManager implements IDisableable {
     public void setSkipDecision(boolean shouldSkip) {
         mSkipOnNoChange = shouldSkip;
         mSkipOnNoTestsDiscovered = shouldSkip;
+    }
+
+    public String getInvocationSkipReason() {
+        return mReasonForSkippingInvocation;
     }
 }
