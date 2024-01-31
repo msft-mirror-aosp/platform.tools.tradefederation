@@ -21,6 +21,7 @@ import com.android.tradefed.build.content.ContentAnalysisContext;
 import com.android.tradefed.build.content.ContentAnalysisResults;
 import com.android.tradefed.build.content.ImageContentAnalyzer;
 import com.android.tradefed.build.content.TestContentAnalyzer;
+import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.invoker.TestInformation;
@@ -127,13 +128,36 @@ public class ArtifactsAnalyzer {
             if (context != null) {
                 boolean presubmit =
                         "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+                boolean hasOneDeviceAnalysis =
+                        context.stream()
+                                .anyMatch(
+                                        c ->
+                                                c.analysisMethod()
+                                                        .equals(AnalysisMethod.DEVICE_IMAGE));
                 ImageContentAnalyzer analyze = new ImageContentAnalyzer(presubmit, context);
                 ContentAnalysisResults res = analyze.evaluate();
-                if (res == null || res.hasAnyBuildKeyChanges()) {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.IMAGE_CHANGES_IN_KEY_FILE, 1);
-                    CLog.d("Changes in build key for device image.");
+                if (res == null) {
                     deviceImageChanged = true;
+                } else {
+                    if (hasOneDeviceAnalysis) {
+                        if (res.hasDeviceImageChanges()) {
+                            CLog.d("Changes in device image.");
+                            deviceImageChanged = true;
+                        } else {
+                            deviceImageChanged = false;
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.DEVICE_IMAGE_NOT_CHANGED, 1);
+                        }
+                    } else if (!deviceImageChanged) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.DEVICE_IMAGE_NOT_CHANGED, 1);
+                    }
+                    if (res.hasAnyBuildKeyChanges()) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.IMAGE_CHANGES_IN_KEY_FILE, 1);
+                        CLog.d("Changes in build key for device image.");
+                        deviceImageChanged = true;
+                    }
                 }
             }
         }

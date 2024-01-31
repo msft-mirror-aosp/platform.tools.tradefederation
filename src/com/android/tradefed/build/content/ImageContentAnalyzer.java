@@ -52,8 +52,16 @@ public class ImageContentAnalyzer {
                     }
                 }
             }
+            List<ContentAnalysisContext> buildKeyAnalysis =
+                    activeContexts.stream()
+                            .filter(
+                                    c ->
+                                            (AnalysisMethod.BUILD_KEY.equals(c.analysisMethod())
+                                                    || AnalysisMethod.DEVICE_IMAGE.equals(
+                                                            c.analysisMethod())))
+                            .collect(Collectors.toList());
             // Handle invalidation should it be set.
-            for (ContentAnalysisContext context : activeContexts) {
+            for (ContentAnalysisContext context : buildKeyAnalysis) {
                 if (context.abortAnalysis()) {
                     CLog.w("Analysis was aborted: %s", context.abortReason());
                     InvocationMetricLogger.addInvocationMetrics(
@@ -61,26 +69,31 @@ public class ImageContentAnalyzer {
                     return null;
                 }
             }
-            List<ContentAnalysisContext> buildKeyAnalysis =
-                    activeContexts.stream()
-                            .filter(c -> AnalysisMethod.BUILD_KEY.equals(c.analysisMethod()))
-                            .collect(Collectors.toList());
             ContentAnalysisResults results = new ContentAnalysisResults();
-            int countBuildKeyDiff = 0;
             for (ContentAnalysisContext context : buildKeyAnalysis) {
-                if (AnalysisMethod.BUILD_KEY.equals(context.analysisMethod())) {
-                    boolean hasChanged = buildKeyAnalysis(context);
-                    if (hasChanged) {
-                        CLog.d(
-                                "build key '%s' has changed or couldn't be evaluated.",
-                                context.contentEntry());
-                        countBuildKeyDiff++;
-                        InvocationMetricLogger.addInvocationMetrics(
-                                InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
-                    }
+                switch (context.analysisMethod()) {
+                    case BUILD_KEY:
+                        boolean hasChanged = buildKeyAnalysis(context);
+                        if (hasChanged) {
+                            CLog.d(
+                                    "build key '%s' has changed or couldn't be evaluated.",
+                                    context.contentEntry());
+                            results.addChangedBuildKey(1);
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
+                        }
+                        break;
+                    case DEVICE_IMAGE:
+                        long changeCount = deviceImageAnalysis(context);
+                        if (changeCount > 0) {
+                            CLog.d("device image '%s' has changed.", context.contentEntry());
+                            results.addDeviceImageChanges(changeCount);
+                        }
+                        break;
+                    default:
+                        break;
                 }
             }
-            results.addChangedBuildKey(countBuildKeyDiff);
             return results;
         }
     }
@@ -98,5 +111,28 @@ public class ImageContentAnalyzer {
             CLog.e(e);
         }
         return true;
+    }
+
+    // Analyze the target files as proxy for the device image
+    private long deviceImageAnalysis(ContentAnalysisContext context) {
+        try {
+            List<ArtifactFileDescriptor> diffs =
+                    TestContentAnalyzer.analyzeContentDiff(
+                            context.contentInformation(), context.contentEntry());
+            // Remove paths that are ignored
+            diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
+            // Remove all build.prop paths
+            diffs.removeIf(d -> d.path.endsWith("/build.prop"));
+            diffs.removeIf(d -> d.path.endsWith("/prop.default"));
+            // Remove all IMAGES/ paths
+            diffs.removeIf(d -> d.path.startsWith("IMAGES/"));
+            diffs.removeIf(d -> d.path.startsWith("META/"));
+            diffs.removeIf(d -> d.path.startsWith("PREBUILT_IMAGES/"));
+            diffs.removeIf(d -> d.path.startsWith("RADIO/"));
+            return diffs.size();
+        } catch (RuntimeException e) {
+            CLog.e(e);
+        }
+        return 1; // In case of error, skew toward image changing
     }
 }

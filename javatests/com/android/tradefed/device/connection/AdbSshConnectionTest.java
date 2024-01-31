@@ -558,6 +558,26 @@ public class AdbSshConnectionTest {
                         null,
                         null,
                         GceStatus.SUCCESS);
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    public GceSshTunnelMonitor getGceSshMonitor() {
+                        return mGceSshMonitor;
+                    }
+
+                    @Override
+                    protected void waitForAdbConnect(String serial, long waitTime)
+                            throws DeviceNotAvailableException {
+                        // Ignore
+                    }
+                };
         doReturn(gceAvd)
                 .when(mGceHandler)
                 .startGce(
@@ -688,6 +708,15 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-rf"),
                         Mockito.eq(snapshotPath)))
                 .thenReturn(successCmdResult);
+        CommandResult adbResult = new CommandResult();
+        adbResult.setStatus(CommandStatus.SUCCESS);
+        adbResult.setStdout("connected to");
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq("adb"),
+                        Mockito.eq("connect"),
+                        Mockito.eq(MOCK_DEVICE_SERIAL)))
+                .thenReturn(adbResult);
         when(mMockMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
         when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
 

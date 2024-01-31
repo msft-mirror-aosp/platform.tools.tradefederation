@@ -28,6 +28,7 @@ public class ContentAnalysisResults {
     private long sharedFolderChanges = 0;
     private long modifiedModules = 0;
     private long buildKeyChanges = 0;
+    private long deviceImageChanges = 0;
     private Set<String> unchangedModules = new HashSet<>();
 
     public ContentAnalysisResults() {}
@@ -62,6 +63,11 @@ public class ContentAnalysisResults {
         return this;
     }
 
+    public ContentAnalysisResults addDeviceImageChanges(long count) {
+        deviceImageChanges += count;
+        return this;
+    }
+
     /** Returns true if any tests artifact was modified between the base build and current build. */
     public boolean hasAnyTestsChange() {
         if (modifiedFiles > 0
@@ -75,6 +81,10 @@ public class ContentAnalysisResults {
 
     public boolean hasAnyBuildKeyChanges() {
         return buildKeyChanges > 0;
+    }
+
+    public boolean hasDeviceImageChanges() {
+        return deviceImageChanges > 0;
     }
 
     @Override
@@ -107,6 +117,7 @@ public class ContentAnalysisResults {
             mergedResults.modifiedModules += res.modifiedModules;
             mergedResults.buildKeyChanges += res.buildKeyChanges;
             mergedResults.unchangedModules.addAll(res.unchangedModules);
+            mergedResults.deviceImageChanges += res.deviceImageChanges;
         }
         return mergedResults;
     }

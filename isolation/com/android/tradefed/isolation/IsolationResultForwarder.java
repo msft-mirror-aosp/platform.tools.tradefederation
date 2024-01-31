@@ -65,7 +65,17 @@ final class IsolationResultForwarder extends RunListener {
     @Override
     public void testAssumptionFailure(Failure failure) {
         try {
+            // If this was a suite-level assumption failure, synthesize failures for each child
             Description desc = failure.getDescription();
+            if (desc.isSuite()) {
+                for (Description child : desc.getChildren()) {
+                    testStarted(child);
+                    testAssumptionFailure(new Failure(child, failure.getException()));
+                    testFinished(child);
+                }
+                return;
+            }
+
             RunnerReply.newBuilder()
                     .setRunnerStatus(RunnerStatus.RUNNER_STATUS_UNSPECIFIED)
                     .setTestEvent(
@@ -79,7 +89,7 @@ final class IsolationResultForwarder extends RunListener {
                     .build()
                     .writeDelimitedTo(mOutput);
         } catch (Exception e) {
-            System.out.println(e);
+            e.printStackTrace();
         }
     }
 

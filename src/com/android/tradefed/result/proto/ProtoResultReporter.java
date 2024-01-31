@@ -34,6 +34,7 @@ import com.android.tradefed.result.proto.TestRecordProto.DebugInfoContext;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.result.proto.TestRecordProto.TestStatus;
 import com.android.tradefed.result.retry.ISupportGranularResults;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.SerializationUtil;
 import com.android.tradefed.util.StreamUtil;
@@ -69,6 +70,7 @@ public abstract class ProtoResultReporter
     private IInvocationContext mContext;
 
     private FailureDescription mInvocationFailureDescription = null;
+    private SkipReason mInvocationSkipReason = null;
     /** Whether or not a testModuleStart had currently been called. */
     private boolean mModuleInProgress = false;
 
@@ -212,6 +214,11 @@ public abstract class ProtoResultReporter
     }
 
     @Override
+    public void invocationSkipped(SkipReason reason) {
+        mInvocationSkipReason = reason;
+    }
+
+    @Override
     public final void invocationEnded(long elapsedTime) {
         if (mModuleInProgress) {
             // If we had a module in progress, and a new module start occurs, complete the call
@@ -229,6 +236,13 @@ public abstract class ProtoResultReporter
             mInvocationRecordBuilder.setStatus(TestStatus.FAIL);
         } else {
             mInvocationRecordBuilder.setStatus(TestStatus.PASS);
+        }
+        if (mInvocationSkipReason != null) {
+            com.android.tradefed.result.proto.TestRecordProto.SkipReason.Builder reason =
+                    com.android.tradefed.result.proto.TestRecordProto.SkipReason.newBuilder();
+            reason.setReason(mInvocationSkipReason.getReason())
+                    .setTrigger(mInvocationSkipReason.getTrigger());
+            mInvocationRecordBuilder.setSkipReason(reason);
         }
 
         // Finalize the protobuf handling: where to put the results.

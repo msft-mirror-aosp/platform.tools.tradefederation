@@ -32,6 +32,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.common.collect.ArrayListMultimap;
@@ -125,6 +126,11 @@ public abstract class BasePostProcessor implements IPostProcessor {
     @Override
     public final void invocationFailed(FailureDescription failure) {
         mForwarder.invocationFailed(failure);
+    }
+
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        mForwarder.invocationSkipped(reason);
     }
 
     @Override
