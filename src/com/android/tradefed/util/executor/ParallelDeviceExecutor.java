@@ -28,9 +28,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Wrapper of {@link ExecutorService} to execute a function in parallel. */
 public class ParallelDeviceExecutor<V> {
+
+    private static final AtomicInteger poolNumber = new AtomicInteger(1);
 
     private final int mPoolSize;
     private List<Throwable> mErrors;
@@ -53,18 +56,23 @@ public class ParallelDeviceExecutor<V> {
         if (callableTasks.isEmpty()) {
             return results;
         }
+        ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
+        ThreadFactory factory =
+                new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable r) {
+                        Thread t =
+                                new Thread(
+                                        currentGroup,
+                                        r,
+                                        "tf-pool-task-" + poolNumber.getAndIncrement());
+                        t.setDaemon(true);
+                        return t;
+                    }
+                };
         ExecutorService executor =
                 TracePropagatingExecutorService.create(
-                        Executors.newFixedThreadPool(
-                                mPoolSize,
-                                new ThreadFactory() {
-                                    @Override
-                                    public Thread newThread(Runnable r) {
-                                        Thread t = Executors.defaultThreadFactory().newThread(r);
-                                        t.setDaemon(true);
-                                        return t;
-                                    }
-                                }));
+                        Executors.newFixedThreadPool(mPoolSize, factory));
         try {
             List<Future<V>> futures =
                     timeout == 0L
