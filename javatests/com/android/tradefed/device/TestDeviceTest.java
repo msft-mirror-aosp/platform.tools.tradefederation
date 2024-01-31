@@ -606,18 +606,20 @@ public class TestDeviceTest {
                         + " notResponding=false null bad=falseblah \n";
         // construct a string with 2 error dialogs of each type to ensure proper detection
         final String fourErrors = anrOutput + anrOutput + crashOutput + crashOutput;
+        mTestDevice =
+                newTestDeviceForDevelopmentApiLevel(32)
+                        .injectShellV2Command(TestDevice.DISMISS_DIALOG_BROADCAST, "completed=0");
         mMockShellResponse = mock(IShellResponse.class);
         when(mMockShellResponse.getResponse())
-                .thenReturn("")
                 .thenReturn("")
                 .thenReturn(fourErrors, "");
         injectShellResponse(null, mMockShellResponse);
 
         mTestDevice.clearErrorDialogs();
-        // expect 2 dismisses
+        // expect 1 dismisses
         // expect 4 key events to be sent - one for each dialog
         // and expect another dialog query - but return nothing
-        verify(mMockIDevice, times(2 + 1 + 4 + 1))
+        verify(mMockIDevice, times(1 + 1 + 4 + 1))
                 .executeShellCommand(
                         (String) Mockito.any(),
                         (IShellOutputReceiver) Mockito.any(),
