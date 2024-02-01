@@ -110,6 +110,9 @@ public class TestDiscoveryExecutor {
             } else {
                 exitCode = DiscoveryExitCode.ERROR;
             }
+        } catch (ConfigurationException e) {
+            System.err.print(e.getMessage());
+            exitCode = DiscoveryExitCode.CONFIGURATION_EXCEPTION;
         } catch (Exception e) {
             System.err.print(e.getMessage());
             exitCode = DiscoveryExitCode.ERROR;
