@@ -23,7 +23,6 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.command.ICommandOptions;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.result.skipped.SkipManager;
 import com.android.tradefed.util.CommandResult;
@@ -204,8 +203,8 @@ public class TestDiscoveryInvokerTest {
         when(mConfiguration.getCommandLine()).thenReturn(commandLine);
         try {
             mTestDiscoveryInvoker.discoverTestDependencies();
-            fail("Should throw a ConfigurationException");
-        } catch (ConfigurationException expected) {
+            fail("Should throw a TestDiscoveryException");
+        } catch (TestDiscoveryException expected) {
             // Expected
         }
     }

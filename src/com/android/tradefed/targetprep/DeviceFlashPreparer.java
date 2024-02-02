@@ -545,4 +545,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     public boolean isIncrementalFlashingForceDisabled() {
         return mForceDisableIncrementalFlashing;
     }
+
+    public void setAllowCrossReleaseFlashing(boolean allowCrossReleaseFlashing) {
+        mAllowIncrementalCrossRelease = allowCrossReleaseFlashing;
+    }
 }

@@ -27,6 +27,7 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -201,6 +202,10 @@ public class TestDiscoveryInvoker {
                             exitCode = code;
                         }
                     }
+                }
+                if (DiscoveryExitCode.CONFIGURATION_EXCEPTION.equals(exitCode)) {
+                    throw new ConfigurationException(
+                            res.getStderr(), InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
                 throw new TestDiscoveryException(
                         String.format(
@@ -439,7 +444,7 @@ public class TestDiscoveryInvoker {
      * @throws ConfigurationException
      */
     private List<String> buildJavaCmdForXtsDiscovery(String classpath)
-            throws ConfigurationException {
+            throws ConfigurationException, TestDiscoveryException {
         List<String> fullCommandLineArgs =
                 new ArrayList<String>(
                         Arrays.asList(
@@ -460,12 +465,14 @@ public class TestDiscoveryInvoker {
 
         if (configName == null) {
             if (mDefaultConfigName == null) {
-                throw new ConfigurationException(
+                throw new TestDiscoveryException(
                         String.format(
                                 "Failed to extract config-name from parent test command options,"
                                         + " unable to build args to invoke tradefed observatory."
                                         + " Parent test command options is: %s",
-                                fullCommandLineArgs));
+                                fullCommandLineArgs),
+                        null,
+                        DiscoveryExitCode.ERROR);
             } else {
                 CLog.i(
                         String.format(
