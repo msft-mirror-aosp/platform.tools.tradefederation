@@ -249,7 +249,13 @@ public class SkipManager implements IDisableable {
                 request.contentInformation().clean();
             }
         }
+        for (ContentAnalysisContext request : mImageAnalysis.values()) {
+            if (request.contentInformation() != null) {
+                request.contentInformation().clean();
+            }
+        }
         mTestArtifactsAnalysisContent.clear();
+        mImageAnalysis.clear();
     }
 
     @Override
