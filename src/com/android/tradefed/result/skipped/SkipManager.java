@@ -138,6 +138,8 @@ public class SkipManager implements IDisableable {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.SKIP_NO_TESTS_DISCOVERED, 1);
             if (mSkipOnNoTestsDiscovered) {
+                mReasonForSkippingInvocation =
+                        "No tests to be executed where found in the configuration.";
                 return true;
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
