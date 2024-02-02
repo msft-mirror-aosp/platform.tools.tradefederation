@@ -141,7 +141,9 @@ public class IsolatedHostTestTest {
     public void testRavenwoodResourcesPositive() throws Exception {
         OptionSetter setter = new OptionSetter(mHostTest);
         setter.setOptionValue("use-ravenwood-resources", "true");
-        new File(mMockTestDir, "ravenwood-runtime").mkdirs();
+        File dir = new File(mMockTestDir, "ravenwood-runtime");
+        dir.mkdirs();
+        File.createTempFile("temp", ".jar", dir);
         doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
         doReturn(36000).when(mMockServer).getLocalPort();
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
