@@ -27,6 +27,7 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -202,6 +203,10 @@ public class TestDiscoveryInvoker {
                         }
                     }
                 }
+                if (DiscoveryExitCode.CONFIGURATION_EXCEPTION.equals(exitCode)) {
+                    throw new ConfigurationException(
+                            res.getStderr(), InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
                 throw new TestDiscoveryException(
                         String.format(
                                 "Tradefed observatory error, unable to discover test module names."
@@ -210,49 +215,57 @@ public class TestDiscoveryInvoker {
                         null,
                         exitCode);
             }
-            String stdout = res.getStdout();
-            CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
+            try (CloseableTraceScope discoResults =
+                    new CloseableTraceScope("parse_discovery_results")) {
+                String stdout = res.getStdout();
+                CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
 
-            String result = FileUtil.readStringFromFile(outputFile);
-            CLog.i("output file content: %s", result);
+                String result = FileUtil.readStringFromFile(outputFile);
+                CLog.i("output file content: %s", result);
 
-            // For backward compatibility
-            try {
-                new JSONObject(result);
-            } catch (JSONException e) {
-                CLog.w("Output file was incorrect. Try falling back stdout");
-                result = stdout;
-            }
-
-            boolean noDiscovery = hasNoPossibleDiscovery(result);
-            if (noDiscovery) {
-                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
-            }
-            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
-            if (!noDiscovery) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-            }
-            if (!testModules.isEmpty()) {
-                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
-            } else {
-                // Only report no finding if discovery actually took effect
-                if (!noDiscovery) {
-                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                // For backward compatibility
+                try {
+                    new JSONObject(result);
+                } catch (JSONException e) {
+                    CLog.w("Output file was incorrect. Try falling back stdout");
+                    result = stdout;
                 }
-            }
 
-            List<String> testDependencies =
-                    parseTestDiscoveryOutput(result, TEST_DEPENDENCIES_LIST_KEY);
-            if (!testDependencies.isEmpty()) {
-                dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
-            }
+                boolean noDiscovery = hasNoPossibleDiscovery(result);
+                if (noDiscovery) {
+                    dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
+                }
+                List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+                if (!noDiscovery) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+                }
+                if (!testModules.isEmpty()) {
+                    dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+                } else {
+                    // Only report no finding if discovery actually took effect
+                    if (!noDiscovery) {
+                        mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                    }
+                }
 
-            String partialFallback = parsePartialFallback(result);
-            if (partialFallback != null) {
-                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+                List<String> testDependencies =
+                        parseTestDiscoveryOutput(result, TEST_DEPENDENCIES_LIST_KEY);
+                if (!testDependencies.isEmpty()) {
+                    dependencies.put(TEST_DEPENDENCIES_LIST_KEY, testDependencies);
+                }
+
+                String partialFallback = parsePartialFallback(result);
+                if (partialFallback != null) {
+                    dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+                }
+                if (!noDiscovery) {
+                    mConfiguration
+                            .getSkipManager()
+                            .reportDiscoveryDependencies(testModules, testDependencies);
+                }
+                return dependencies;
             }
-            return dependencies;
         } finally {
             FileUtil.deleteFile(outputFile);
             try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
@@ -344,32 +357,42 @@ public class TestDiscoveryInvoker {
                                 Joiner.on(" ").join(subprocessArgs), res.getStderr()),
                         null);
             }
-            String stdout = res.getStdout();
-            CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
+            try (CloseableTraceScope discoResults =
+                    new CloseableTraceScope("parse_discovery_results")) {
+                String stdout = res.getStdout();
+                CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
 
-            String result = FileUtil.readStringFromFile(outputFile);
+                String result = FileUtil.readStringFromFile(outputFile);
 
-            boolean noDiscovery = hasNoPossibleDiscovery(result);
-            if (noDiscovery) {
-                dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
-            }
-            List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
-            if (!noDiscovery) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
-            }
-            if (!testModules.isEmpty()) {
-                dependencies.put(TEST_MODULES_LIST_KEY, testModules);
-            } else {
-                if (!noDiscovery) {
-                    mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                boolean noDiscovery = hasNoPossibleDiscovery(result);
+                if (noDiscovery) {
+                    dependencies.put(NO_POSSIBLE_TEST_DISCOVERY_KEY, Arrays.asList("true"));
                 }
+                List<String> testModules = parseTestDiscoveryOutput(result, TEST_MODULES_LIST_KEY);
+                if (!noDiscovery) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.TEST_DISCOVERY_MODULE_COUNT, testModules.size());
+                }
+                if (!testModules.isEmpty()) {
+                    dependencies.put(TEST_MODULES_LIST_KEY, testModules);
+                } else {
+                    if (!noDiscovery) {
+                        mConfiguration.getSkipManager().reportDiscoveryWithNoTests();
+                    }
+                }
+                String partialFallback = parsePartialFallback(result);
+                if (partialFallback != null) {
+                    dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
+                }
+                if (!noDiscovery) {
+                    if (!noDiscovery) {
+                        mConfiguration
+                                .getSkipManager()
+                                .reportDiscoveryDependencies(testModules, new ArrayList<String>());
+                    }
+                }
+                return dependencies;
             }
-            String partialFallback = parsePartialFallback(result);
-            if (partialFallback != null) {
-                dependencies.put(PARTIAL_FALLBACK_KEY, Arrays.asList(partialFallback));
-            }
-            return dependencies;
         } finally {
             FileUtil.deleteFile(outputFile);
             try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
@@ -421,7 +444,7 @@ public class TestDiscoveryInvoker {
      * @throws ConfigurationException
      */
     private List<String> buildJavaCmdForXtsDiscovery(String classpath)
-            throws ConfigurationException {
+            throws ConfigurationException, TestDiscoveryException {
         List<String> fullCommandLineArgs =
                 new ArrayList<String>(
                         Arrays.asList(
@@ -442,12 +465,14 @@ public class TestDiscoveryInvoker {
 
         if (configName == null) {
             if (mDefaultConfigName == null) {
-                throw new ConfigurationException(
+                throw new TestDiscoveryException(
                         String.format(
                                 "Failed to extract config-name from parent test command options,"
                                         + " unable to build args to invoke tradefed observatory."
                                         + " Parent test command options is: %s",
-                                fullCommandLineArgs));
+                                fullCommandLineArgs),
+                        null,
+                        DiscoveryExitCode.ERROR);
             } else {
                 CLog.i(
                         String.format(

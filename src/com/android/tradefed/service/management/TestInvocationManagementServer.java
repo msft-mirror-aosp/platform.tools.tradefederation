@@ -25,6 +25,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.proto.FileProtoResultReporter;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 
 import com.proto.tradefed.invocation.CommandErrorInfo;
@@ -34,6 +35,8 @@ import com.proto.tradefed.invocation.InvocationStatus;
 import com.proto.tradefed.invocation.InvocationStatus.Status;
 import com.proto.tradefed.invocation.NewTestCommandRequest;
 import com.proto.tradefed.invocation.NewTestCommandResponse;
+import com.proto.tradefed.invocation.ShutdownTradefedRequest;
+import com.proto.tradefed.invocation.ShutdownTradefedResponse;
 import com.proto.tradefed.invocation.StopInvocationRequest;
 import com.proto.tradefed.invocation.StopInvocationResponse;
 import com.proto.tradefed.invocation.TestInvocationManagementGrpc.TestInvocationManagementImplBase;
@@ -49,6 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.grpc.stub.StreamObserver;
+import io.grpc.protobuf.services.ProtoReflectionService;
 
 /**
  * GRPC server helping to management test invocation and their lifecycle. This service isn't
@@ -92,7 +96,11 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
             ServerBuilder<?> serverBuilder,
             ICommandScheduler commandScheduler,
             DeviceManagementGrpcServer deviceReservationManager) {
-        mServer = serverBuilder.addService(this).build();
+        mServer =
+                serverBuilder
+                        .addService(this)
+                        .addService(ProtoReflectionService.newInstance())
+                        .build();
         mCommandScheduler = commandScheduler;
         mDeviceReservationManager = deviceReservationManager;
     }
@@ -245,6 +253,29 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
                             CommandErrorInfo.newBuilder()
                                     .setErrorMessage("invocation id is not tracked."));
         }
+        responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void shutdownTradefed(
+            ShutdownTradefedRequest request,
+            StreamObserver<ShutdownTradefedResponse> responseObserver) {
+        ShutdownTradefedResponse.Builder responseBuilder = ShutdownTradefedResponse.newBuilder();
+        int shutdownDelayMs = request.getShutdownDelay();
+        CLog.i(
+                "Received Tradefed Process exit gRPC request with delay %s milliseconds",
+                shutdownDelayMs);
+        new Thread(
+                        () -> {
+                            RunUtil.getDefault().sleep(shutdownDelayMs);
+                            CLog.i(
+                                    "Tradefed shutdown delay reached, exiting the Tradefed java"
+                                            + " process.");
+                            System.exit(0);
+                        })
+                .start();
+        responseBuilder.setStatus(ShutdownTradefedResponse.Status.RECEIVED);
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
     }

@@ -51,6 +51,7 @@ import com.android.tradefed.result.suite.SuiteResultReporter;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.testtype.Abi;
+import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
@@ -630,6 +631,9 @@ public class ITestSuiteIntegrationTest {
             if (test instanceof IInvocationContextReceiver) {
                 ((IInvocationContextReceiver) test).setInvocationContext(mContext);
             }
+            if (test instanceof IDeviceTest) {
+                ((IDeviceTest) test).setDevice(mMockDevice);
+            }
             test.run(mTestInfo, new ResultForwarder(config.getTestInvocationListeners()));
         }
         new ResultForwarder(config.getTestInvocationListeners()).invocationEnded(500);
@@ -737,6 +741,9 @@ public class ITestSuiteIntegrationTest {
             }
             if (test instanceof IInvocationContextReceiver) {
                 ((IInvocationContextReceiver) test).setInvocationContext(mContext);
+            }
+            if (test instanceof IDeviceTest) {
+                ((IDeviceTest) test).setDevice(mMockDevice);
             }
             test.run(mTestInfo, new ResultForwarder(config.getTestInvocationListeners()));
         }

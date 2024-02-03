@@ -54,6 +54,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.PrettyPrintDelimiter;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
@@ -312,7 +313,13 @@ public class TradefedSandbox implements ISandbox {
             mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
             mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
             mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
+            // Handle feature server
             mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+            mRunUtil.unsetEnvVariable(TradefedFeatureServer.TF_SERVICE_PORT);
+            mRunUtil.setEnvVariablePriority(EnvPriority.SET);
+            mRunUtil.setEnvVariable(
+                    TradefedFeatureServer.TF_SERVICE_PORT,
+                    Integer.toString(TradefedFeatureServer.getPort()));
             // Mark subprocess for sandbox
             mRunUtil.setEnvVariable(SANDBOX_ENABLED, "true");
 
@@ -339,6 +346,7 @@ public class TradefedSandbox implements ISandbox {
                         getTradefedSandboxEnvironment(
                                 context,
                                 config,
+                                listener,
                                 QuotationAwareTokenizer.tokenizeLine(
                                         config.getCommandLine(),
                                         /** no logging */
@@ -385,7 +393,10 @@ public class TradefedSandbox implements ISandbox {
 
     @Override
     public File getTradefedSandboxEnvironment(
-            IInvocationContext context, IConfiguration nonVersionedConfig, String[] args)
+            IInvocationContext context,
+            IConfiguration nonVersionedConfig,
+            ITestLogger logger,
+            String[] args)
             throws Exception {
         SandboxOptions options = getSandboxOptions(nonVersionedConfig);
         // Check that we have no args conflicts.

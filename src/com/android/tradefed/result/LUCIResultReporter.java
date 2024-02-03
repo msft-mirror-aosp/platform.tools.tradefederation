@@ -21,6 +21,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.retry.ISupportGranularResults;
 import com.android.tradefed.util.FileUtil;
 
 import com.google.common.collect.ImmutableMap;
@@ -36,6 +37,7 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -47,7 +49,7 @@ import java.util.Map.Entry;
  */
 @OptionClass(alias = "luci-result-reporter")
 public class LUCIResultReporter extends CollectingTestListener
-        implements ILogSaverListener {
+        implements ILogSaverListener, ISupportGranularResults {
 
     /** Separator for class name and method name when encoding test identifier */
     private final static String SEPARATOR = "#";
@@ -60,8 +62,6 @@ public class LUCIResultReporter extends CollectingTestListener
     private final static String KEY_TEST_NAME = "test_name";
     private final static String KEY_STATUS = "status";
     private final static String KEY_EXPECTED = "expected";
-    private final static String KEY_FILENAME = "file_name";
-    private final static String KEY_REPO = "repo";
     private final static String KEY_NAME = "name";
     private final static String KEY_TEST_METADATA = "testMetadata";
     private final static String KEY_RAW_STATUS = "raw_status";
@@ -76,6 +76,13 @@ public class LUCIResultReporter extends CollectingTestListener
             name = "additional-key-value-pairs",
             description = "Map of additional key/value pairs to be added to the results.")
     private Map<String, String> mAdditionalKeyValuePairs = new LinkedHashMap<>();
+
+    @Option(
+        name = "enable-granular-attempts",
+        description =
+                "Whether or not to allow this reporter receiving granular attempts. Feature flag."
+    )
+    private boolean mReportGranularResults = true;
 
     private boolean mHasInvocationFailures = false;
     private LinkedHashMap<String, LogFile> mLoggedFiles = new LinkedHashMap<>();
@@ -92,13 +99,22 @@ public class LUCIResultReporter extends CollectingTestListener
     );
 
     @Override
+    public boolean supportGranularResults() {
+        return mReportGranularResults;
+    }
+
+    public void setGranularResults(boolean granularResults) {
+        mReportGranularResults = granularResults;
+    }
+
+    @Override
     public void invocationStarted(IInvocationContext context) {
         super.invocationStarted(context);
         try {
-          mRootDir = FileUtil.createTempDir(RESULT_DIR);
+            mRootDir = FileUtil.createTempDir(RESULT_DIR);
         } catch(IOException e) {
-          CLog.e("Failed to create tmpdir");
-          CLog.e(e);
+            CLog.e("Failed to create tmpdir");
+            CLog.e(e);
         }
     }
 
@@ -115,8 +131,20 @@ public class LUCIResultReporter extends CollectingTestListener
             CLog.d("Skipping reporting because there are invocation failures.");
         } else {
           try {
-              // Consolidate multiple runs (if applicable) into one run for reporting.
-              JSONObject jsonResults = convertMetricsToJson(getMergedTestRunResults());
+              // Merge all runs across different attempts with the latest test result
+              // overwriting test results of previous runs.
+              Collection<TestRunResult> runResults = getMergedTestRunResults();
+              if (mReportGranularResults) {
+                  // Replace runResults with separate test result for all runs across
+                  // attempts if there are retries.
+                  runResults.clear();
+                  Collection<String> testRunNames = getTestRunNames();
+                  testRunNames.forEach(testRunName -> {
+                      List<TestRunResult> attempts = getTestRunAttempts(testRunName);
+                      attempts.forEach(attempt -> runResults.add(attempt));
+                  });
+              }
+              JSONObject jsonResults = convertMetricsToJson(runResults);
               saveJsonFile(jsonResults);
           } catch (JSONException e) {
               CLog.e("JSONException while converting test metrics.");

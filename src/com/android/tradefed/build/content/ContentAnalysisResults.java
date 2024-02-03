@@ -15,7 +15,9 @@
  */
 package com.android.tradefed.build.content;
 
+
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /** Summary of the content analysis. */
@@ -25,6 +27,8 @@ public class ContentAnalysisResults {
     private long modifiedFiles = 0;
     private long sharedFolderChanges = 0;
     private long modifiedModules = 0;
+    private long buildKeyChanges = 0;
+    private long deviceImageChanges = 0;
     private Set<String> unchangedModules = new HashSet<>();
 
     public ContentAnalysisResults() {}
@@ -54,12 +58,33 @@ public class ContentAnalysisResults {
         return this;
     }
 
+    public ContentAnalysisResults addChangedBuildKey(long count) {
+        buildKeyChanges += count;
+        return this;
+    }
+
+    public ContentAnalysisResults addDeviceImageChanges(long count) {
+        deviceImageChanges += count;
+        return this;
+    }
+
     /** Returns true if any tests artifact was modified between the base build and current build. */
     public boolean hasAnyTestsChange() {
-        if (modifiedFiles > 0 || sharedFolderChanges > 0 || modifiedModules > 0) {
+        if (modifiedFiles > 0
+                || sharedFolderChanges > 0
+                || modifiedModules > 0
+                || buildKeyChanges > 0) {
             return true;
         }
         return false;
+    }
+
+    public boolean hasAnyBuildKeyChanges() {
+        return buildKeyChanges > 0;
+    }
+
+    public boolean hasDeviceImageChanges() {
+        return deviceImageChanges > 0;
     }
 
     @Override
@@ -72,8 +97,28 @@ public class ContentAnalysisResults {
                 + sharedFolderChanges
                 + ", modifiedModules="
                 + modifiedModules
+                + ", buildKeyChanges="
+                + buildKeyChanges
                 + ", unchangedModules="
                 + unchangedModules
                 + "]";
+    }
+
+    /** Merges a list of multiple analysis together. */
+    public static ContentAnalysisResults mergeResults(List<ContentAnalysisResults> results) {
+        if (results.size() == 1) {
+            return results.get(0);
+        }
+        ContentAnalysisResults mergedResults = new ContentAnalysisResults();
+        for (ContentAnalysisResults res : results) {
+            mergedResults.unchangedFiles += res.unchangedFiles;
+            mergedResults.modifiedFiles += res.modifiedFiles;
+            mergedResults.sharedFolderChanges += res.sharedFolderChanges;
+            mergedResults.modifiedModules += res.modifiedModules;
+            mergedResults.buildKeyChanges += res.buildKeyChanges;
+            mergedResults.unchangedModules.addAll(res.unchangedModules);
+            mergedResults.deviceImageChanges += res.deviceImageChanges;
+        }
+        return mergedResults;
     }
 }

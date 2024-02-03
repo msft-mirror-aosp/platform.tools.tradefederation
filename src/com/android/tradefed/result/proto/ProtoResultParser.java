@@ -43,6 +43,7 @@ import com.android.tradefed.result.proto.TestRecordProto.ChildReference;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfo;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfoContext;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.proto.TestRecordProto.SkipReason;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
@@ -399,6 +400,13 @@ public class ProtoResultParser {
             CLog.d("Invocation failed with: %s", failure);
             mListener.invocationFailed(failure);
             mInvocationFailed = true;
+        }
+        if (endInvocationProto.hasSkipReason()) {
+            SkipReason reason = endInvocationProto.getSkipReason();
+            CLog.d("Invocation skipped with: %s", reason);
+            mListener.invocationSkipped(
+                    new com.android.tradefed.result.skipped.SkipReason(
+                            reason.getReason(), reason.getTrigger()));
         }
 
         log("Invocation ended proto");

@@ -18,7 +18,6 @@ package com.android.tradefed.invoker.sandbox;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.config.Configuration;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
@@ -48,7 +47,6 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -115,7 +113,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                         InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
             }
             if (res && e == null) {
-                getSandbox(config).discoverTests(testInfo.getContext(), config);
+                getSandbox(config).discoverTests(testInfo.getContext(), config, listener);
             }
         }
         return res;
@@ -235,8 +233,8 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     @Override
     public void reportLogs(ITestDevice device, ITestLogger logger, Stage stage) {
-        // If it's not a major error we do not report it if no setup or teardown ran.
-        if (!Stage.ERROR.equals(stage)) {
+        // If it's a test logcat do not report it, the subprocess will take care of it.
+        if (Stage.TEST.equals(stage)) {
             return;
         }
         super.reportLogs(device, logger, stage);
@@ -335,7 +333,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                                         config.getCommandLine(),
                                         /** no logging */
                                         false));
-            } catch (BuildRetrievalError | IOException | ConfigurationException e) {
+            } catch (Throwable e) {
                 error = e;
             }
         }

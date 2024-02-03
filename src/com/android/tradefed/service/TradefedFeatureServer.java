@@ -25,6 +25,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.internal.IRemoteScheduledListenersFeature;
 import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SystemUtil;
 
 import com.proto.tradefed.feature.ErrorInfo;
 import com.proto.tradefed.feature.FeatureRequest;
@@ -49,7 +50,8 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
     public static final String TEST_INFORMATION_OBJECT = "TEST_INFORMATION";
     public static final String TF_SERVICE_PORT = "TF_SERVICE_PORT";
 
-    private static final int DEFAULT_PORT = 8889;
+    private static final int DEFAULT_PORT = 0;
+    private static Integer sInternalPort = null;
 
     private Server mServer;
 
@@ -61,6 +63,9 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
 
     /** Returns the port used by the server. */
     public static int getPort() {
+        if (sInternalPort != null) {
+            return sInternalPort;
+        }
         return System.getenv(TF_SERVICE_PORT) != null
                 ? Integer.parseInt(System.getenv(TF_SERVICE_PORT))
                 : DEFAULT_PORT;
@@ -80,8 +85,13 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
         try {
             CLog.d("Starting feature server.");
             mServer.start();
+            sInternalPort = mServer.getPort();
         } catch (IOException e) {
-            CLog.w("TradefedFeatureServer already started: %s", e.getMessage());
+            if (SystemUtil.isLocalMode()) {
+                CLog.w("TradefedFeatureServer already started: %s", e.getMessage());
+            } else {
+                throw new RuntimeException(e);
+            }
         }
     }
 

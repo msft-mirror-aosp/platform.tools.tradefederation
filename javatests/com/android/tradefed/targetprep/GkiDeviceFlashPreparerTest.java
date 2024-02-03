@@ -397,20 +397,24 @@ public class GkiDeviceFlashPreparerTest {
         verify(mMockDevice).postBootSetup();
     }
 
-    /* Verifies that preparer can flash GKI boot image and vendor_boot, vendor_dlkm, dtbo images */
+    /* Verifies that preparer can flash GKI boot image and vendor_boot,
+     * vendor_kernel_boot, vendor_dlkm, and dtbo images */
     @Test
     public void testSetup_vendor_img_Success() throws Exception {
         File imgDir = FileUtil.createTempDir("img_folder", mTmpDir);
         File bootImg = new File(imgDir, "boot-5.4.img");
         File vendorBootImg = new File(imgDir, "vendor_boot.img");
+        File vendorKernelBootImg = new File(imgDir, "vendor_kernel_boot.img");
         File dtboImg = new File(imgDir, "dtbo.img");
         File vendorDlkmImg = new File(imgDir, "vendor_dlkm.img");
         FileUtil.writeToFile("ddd", bootImg);
         FileUtil.writeToFile("123", vendorBootImg);
+        FileUtil.writeToFile("321", vendorKernelBootImg);
         FileUtil.writeToFile("456", dtboImg);
         FileUtil.writeToFile("789", vendorDlkmImg);
         mBuildInfo.setFile("gki_boot.img", bootImg, "0");
         mBuildInfo.setFile("vendor_boot.img", vendorBootImg, "0");
+        mBuildInfo.setFile("vendor_kernel_boot.img", vendorKernelBootImg, "0");
         mBuildInfo.setFile("vendor_dlkm.img", vendorDlkmImg, "0");
         mBuildInfo.setFile("dtbo.img", dtboImg, "0");
 
@@ -421,6 +425,11 @@ public class GkiDeviceFlashPreparerTest {
                         "flash",
                         "vendor_boot",
                         mBuildInfo.getFile("vendor_boot.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand(
+                        "flash",
+                        "vendor_kernel_boot",
+                        mBuildInfo.getFile("vendor_kernel_boot.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash",
@@ -455,12 +464,14 @@ public class GkiDeviceFlashPreparerTest {
         File imgDir = FileUtil.createTempDir("img_folder", mTmpDir);
         File bootImg = new File(imgDir, "boot-5.4.img");
         File vendorBootImg = new File(imgDir, "vendor_boot.img");
+        File vendorKernelBootImg = new File(imgDir, "vendor_kernel_boot.img");
         File dtboImg = new File(imgDir, "dtbo.img");
         FileUtil.writeToFile("ddd", bootImg);
         FileUtil.writeToFile("aaa", vendorBootImg);
+        FileUtil.writeToFile("ccc", vendorKernelBootImg);
         FileUtil.writeToFile("bbb", dtboImg);
         File imgZip = FileUtil.createTempFile("gki_image", ".zip", mTmpDir);
-        ZipUtil.createZip(List.of(bootImg, vendorBootImg, dtboImg), imgZip);
+        ZipUtil.createZip(List.of(bootImg, vendorBootImg, vendorKernelBootImg, dtboImg), imgZip);
         mBuildInfo.setFile("gki_boot.img", imgZip, "0");
         mBuildInfo.setFile("vendor_boot.img", imgZip, "0");
         mBuildInfo.setFile("dtbo.img", imgZip, "0");
@@ -470,6 +481,9 @@ public class GkiDeviceFlashPreparerTest {
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         eq("flash"), eq("vendor_boot"), matches(".*vendor_boot.img")))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand(
+                        eq("flash"), eq("vendor_kernel_boot"), matches(".*vendor_kernel_boot.img")))
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(eq("flash"), eq("dtbo"), matches(".*dtbo.img")))
                 .thenReturn(mSuccessResult);

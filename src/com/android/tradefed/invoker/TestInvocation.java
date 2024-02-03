@@ -88,6 +88,7 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.ResultAggregator;
 import com.android.tradefed.retry.RetryStrategy;
@@ -167,6 +168,7 @@ public class TestInvocation implements ITestInvocation {
     public static final String INVOCATION_EXTERNAL_DEPENDENCIES =
             "invocation-external-dependencies";
     public static final long AVAILABILITY_CHECK_TIMEOUT = 180000L; // 3 minutes
+    static final String GOOGLE_USB_VENDOR_ID = "0x18d1";
 
     public enum Stage {
         ERROR("error"),
@@ -1123,6 +1125,9 @@ public class TestInvocation implements ITestInvocation {
             if (decision instanceof ITestInformationReceiver) {
                 ((ITestInformationReceiver) decision).setTestInformation(info);
             }
+            updateInvocationContext(context, config);
+            CurrentInvocation.setInvocationContext(context);
+            config.getLogSaver().init(context);
             // We don't need the aggregator in the subprocess because the parent will take care of
             // it.
             if (!config.getCommandOptions()
@@ -1177,8 +1182,6 @@ public class TestInvocation implements ITestInvocation {
             }
         }
         IInvocationExecution invocationPath = createInvocationExec(mode);
-        updateInvocationContext(context, config);
-        CurrentInvocation.setInvocationContext(context);
 
         boolean sharding = false;
         try {
@@ -1241,9 +1244,12 @@ public class TestInvocation implements ITestInvocation {
             if (!providerSuccess) {
                 return;
             }
-            // Skip invocation can only happen in the parent process
-            if (!config.getCommandOptions().getInvocationData()
-                        .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
+            // Skip invocation can only happen in the parent process and not in the parent
+            // delegator.
+            if (!config.getCommandOptions()
+                            .getInvocationData()
+                            .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
+                    && !RunMode.DELEGATED_INVOCATION.equals(mode)) {
                 if (config.getSkipManager().shouldSkipInvocation(info)) {
                     CLog.d("Skipping invocation early.");
                     startInvocation(config, info.getContext(), listener);
@@ -1264,6 +1270,8 @@ public class TestInvocation implements ITestInvocation {
                             InvocationMetricKey.TEARDOWN_PAIR, timestamp, timestamp);
                     InvocationMetricLogger.addInvocationPairMetrics(
                             InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
+                    listener.invocationSkipped(
+                            new SkipReason(config.getSkipManager().getInvocationSkipReason(), ""));
                     reportHostLog(listener, config);
                     reportInvocationEnded(config, info.getContext(), listener, 0L);
                     return;
@@ -1683,6 +1691,12 @@ public class TestInvocation implements ITestInvocation {
                                                 .getFastbootPath(),
                                         "devices");
                 CLog.d("'fastboot devices' output:\n%s", fastbootResult.getStdout());
+
+                CommandResult lsusbResult =
+                        getRunUtil()
+                                .runTimedCmdSilently(
+                                        60000L, "lsusb", "-d", GOOGLE_USB_VENDOR_ID + ":");
+                CLog.d("'lsusb -d %s:' output:\n%s", GOOGLE_USB_VENDOR_ID, lsusbResult.getStdout());
             }
         } else if (countVirtualLost > 0) {
             CLog.e("Counting as virtual_device_lost.");

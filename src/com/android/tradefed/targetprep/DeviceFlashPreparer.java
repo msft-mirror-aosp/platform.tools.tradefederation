@@ -152,6 +152,16 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             description = "Override the create_snapshot binary for incremental flashing.")
     private File mCreateSnapshotBinary = null;
 
+    @Option(
+            name = "allow-incremental-same-build",
+            description = "Allow doing incremental update on same build.")
+    private boolean mAllowIncrementalOnSameBuild = false;
+
+    @Option(
+            name = "allow-incremental-cross-release",
+            description = "Allow doing incremental update across release build configs.")
+    private boolean mAllowIncrementalCrossRelease = false;
+
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
 
@@ -210,6 +220,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mUserDataFlashOption = flashOption;
     }
 
+    /** Wrap the getBuildInfo so we have a change to override it for specific scenarios. */
+    public IBuildInfo getBuild(TestInformation testInfo) {
+        return testInfo.getBuildInfo();
+    }
+
     /** {@inheritDoc} */
     @Override
     public void setUp(TestInformation testInfo)
@@ -219,7 +234,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             return;
         }
         ITestDevice device = testInfo.getDevice();
-        IBuildInfo buildInfo = testInfo.getBuildInfo();
+        IBuildInfo buildInfo = getBuild(testInfo);
         CLog.i("Performing setup on %s", device.getSerialNumber());
         if (!(buildInfo instanceof IDeviceBuildInfo)) {
             throw new IllegalArgumentException("Provided buildInfo is not a IDeviceBuildInfo");
@@ -251,6 +266,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             // The local option disable the feature, and skip tracking baseline
             // for this run to avoid tracking a potentially bad baseline.
             mUseIncrementalFlashing = false;
+            // Do not keep a cache when we are about to override it
+            DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
         }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
         if (useIncrementalFlashing) {
@@ -263,13 +280,22 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             }
             mIncrementalImageUtil =
                     IncrementalImageUtil.initialize(
-                            device, deviceBuild, mCreateSnapshotBinary, isIsolated);
+                            device,
+                            deviceBuild,
+                            mCreateSnapshotBinary,
+                            isIsolated,
+                            mAllowIncrementalCrossRelease);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
-            } else if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
-                // No need to reboot yet, it will happen later in the sequence
-                String verityOutput = device.executeAdbCommand("enable-verity");
-                CLog.d("%s", verityOutput);
+            } else {
+                if (mAllowIncrementalOnSameBuild) {
+                    mIncrementalImageUtil.allowSameBuildFlashing();
+                }
+                if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                    // No need to reboot yet, it will happen later in the sequence
+                    String verityOutput = device.executeAdbCommand("enable-verity");
+                    CLog.d("%s", verityOutput);
+                }
             }
         }
         try {
@@ -349,8 +375,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             flashingTime, status);
                 }
             }
-            // only want logcat captured for current build, delete any accumulated log data
-            device.clearLogcat();
+            if (mIncrementalImageUtil == null) {
+                // only want logcat captured for current build, delete any accumulated log data
+                device.clearLogcat();
+            }
             if (mSkipPostFlashingSetup) {
                 return;
             }
@@ -516,5 +544,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     public boolean isIncrementalFlashingForceDisabled() {
         return mForceDisableIncrementalFlashing;
+    }
+
+    public void setAllowCrossReleaseFlashing(boolean allowCrossReleaseFlashing) {
+        mAllowIncrementalCrossRelease = allowCrossReleaseFlashing;
     }
 }

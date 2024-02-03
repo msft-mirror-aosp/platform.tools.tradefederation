@@ -37,6 +37,7 @@ import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
+import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
@@ -124,6 +125,8 @@ public class InvocationExecution implements IInvocationExecution {
     private Set<IMultiTargetPreparer> mTrackMultiPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackLabPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackTargetPreparers = null;
+    // GceManager for multi-device leasing. It's needed for releasing the devices.
+    private GceManager mMultiDeviceRequester = null;
 
     /** Timer to make sure Test Phase does not run for too long. */
     private class TestPhaseMonitor extends TimerTask {
@@ -207,6 +210,9 @@ public class InvocationExecution implements IInvocationExecution {
                 if (provider instanceof IInvocationContextReceiver) {
                     ((IInvocationContextReceiver) provider)
                             .setInvocationContext(testInfo.getContext());
+                }
+                if (provider instanceof ITestLoggerReceiver) {
+                    ((ITestLoggerReceiver) provider).setTestLogger(listener);
                 }
                 // Get the build
                 if (provider instanceof IDeviceBuildProvider) {
@@ -654,6 +660,10 @@ public class InvocationExecution implements IInvocationExecution {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
                 runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            } catch (TargetSetupError e) {
+                OxygenUtil util = new OxygenUtil();
+                util.downloadLaunchFailureLogs(e, logger);
+                throw e;
             }
         } else {
             try (CloseableTraceScope ignore =
@@ -723,7 +733,7 @@ public class InvocationExecution implements IInvocationExecution {
         // One GceManager is needed to lease the whole device group
         String firstDeviceName = context.getDeviceConfigNames().get(0);
         ITestDevice firstDevice = context.getDevice(firstDeviceName);
-        GceManager multiDeviceRequester =
+        mMultiDeviceRequester =
                 new GceManager(
                         firstDevice.getDeviceDescriptor(),
                         firstDevice.getOptions(),
@@ -740,7 +750,7 @@ public class InvocationExecution implements IInvocationExecution {
 
         // Start multiple devices in a group
         List<GceAvdInfo> gceAvdInfoList =
-                multiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
+                mMultiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
         for (int i = 0; i < devices.size(); i++) {
             // For each device, do setup with its GceAvdInfo
             CLog.d(
@@ -813,6 +823,8 @@ public class InvocationExecution implements IInvocationExecution {
             CLog.i("--disable-invocation-setup-and-teardown, skipping post-invocation teardown.");
             return;
         }
+        // Check if device tear down is needed for multi-device tests.
+        boolean shouldTearDown = false;
         for (String deviceName : context.getDeviceConfigNames()) {
             ITestDevice device = context.getDevice(deviceName);
             IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
@@ -820,7 +832,12 @@ public class InvocationExecution implements IInvocationExecution {
                 CLog.d("Skip postInvocationTearDown on fake device %s", device);
                 continue;
             }
+            // For multi-device tests, only the last device is flagged to be tear down if needed.
+            shouldTearDown |= !device.getOptions().shouldSkipTearDown();
             device.postInvocationTearDown(exception);
+        }
+        if (mMultiDeviceRequester != null && shouldTearDown) {
+            mMultiDeviceRequester.shutdownGce();
         }
     }
 
@@ -1699,16 +1716,25 @@ public class InvocationExecution implements IInvocationExecution {
             CommandResult kernelInfoResult = device.executeShellV2Command("uname -a");
             if (kernelInfoResult != null
                     && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
+                CLog.i(
+                        "Device %s kernel information: '%s'",
+                        device.getSerialNumber(), kernelInfoResult.getStdout().trim());
                 info.getBuildInfo()
                         .addBuildAttribute(
                                 "device_kernel_info", kernelInfoResult.getStdout().trim());
             }
             String system_img_info = device.getProperty("ro.system.build.fingerprint");
             if (system_img_info != null) {
+                CLog.i(
+                        "Device %s system image build information: '%s'",
+                        device.getSerialNumber(), system_img_info);
                 info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
             }
             String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
             if (vendor_img_info != null) {
+                CLog.i(
+                        "Device %s vendor image build information: '%s'",
+                        device.getSerialNumber(), vendor_img_info);
                 info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
             }
         }

@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.TestInformation;
@@ -96,6 +97,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private String mVendorBootImageName = "vendor_boot.img";
 
     @Option(
+            name = "vendor-kernel-boot-image-name",
+            description = "The file name in BuildInfo that provides vendor kernel boot image.")
+    private String mVendorKernelBootImageName = "vendor_kernel_boot.img";
+
+    @Option(
             name = "dtbo-image-name",
             description = "The file name in BuildInfo that provides dtbo image.")
     private String mDtboImageName = "dtbo.img";
@@ -129,6 +135,14 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                     "The vendor boot image file name to search for if vendor-boot-image-name in "
                             + "BuildInfo is a zip file or directory, for example vendor_boot.img.")
     private String mVendorBootImageFileName = "vendor_boot.img";
+
+    @Option(
+            name = "vendor-kernel-boot-image-file-name",
+            description =
+                    "The vendor kernel boot image file name to search for if "
+                            + "vendor-kernel-boot-image-name in BuildInfo is a zip file or "
+                            + "directory, for example vendor_kernel_boot.img.")
+    private String mVendorKernelBootImageFileName = "vendor_kernel_boot.img";
 
     @Option(
             name = "dtbo-image-file-name",
@@ -277,6 +291,16 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 tmpDir);
                 executeFastbootCmd(device, "flash", "vendor_boot", vendorBootImg.getAbsolutePath());
             }
+            if (buildInfo.getFile(mVendorKernelBootImageName) != null) {
+                File vendorKernelBootImg =
+                        getRequestedFile(
+                                device,
+                                mVendorKernelBootImageFileName,
+                                buildInfo.getFile(mVendorKernelBootImageName),
+                                tmpDir);
+                executeFastbootCmd(device, "flash", "vendor_kernel_boot",
+                                vendorKernelBootImg.getAbsolutePath());
+            }
             if (buildInfo.getFile(mDtboImageName) != null) {
                 File dtboImg =
                         getRequestedFile(
@@ -296,7 +320,9 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mVendorDlkmImageFileName,
                                 buildInfo.getFile(mVendorDlkmImageName),
                                 tmpDir);
-                device.rebootIntoFastbootd();
+                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                    device.rebootIntoFastbootd();
+                }
                 executeFastbootCmd(device, "flash", "vendor_dlkm", vendorDlkmImg.getAbsolutePath());
             }
 
@@ -307,7 +333,9 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mSystemDlkmImageFileName,
                                 buildInfo.getFile(mSystemDlkmImageName),
                                 tmpDir);
-                device.rebootIntoFastbootd();
+                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                    device.rebootIntoFastbootd();
+                }
                 executeFastbootCmd(device, "flash", "system_dlkm", systemDlkmImg.getAbsolutePath());
             }
 

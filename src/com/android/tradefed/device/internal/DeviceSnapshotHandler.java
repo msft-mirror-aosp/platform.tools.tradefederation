@@ -49,8 +49,8 @@ public class DeviceSnapshotHandler {
     private final TradefedFeatureClient mClient;
     private final IInvocationContext mContext;
 
-    public DeviceSnapshotHandler(IInvocationContext context) {
-        this(new TradefedFeatureClient(), context);
+    public DeviceSnapshotHandler() {
+        this(new TradefedFeatureClient(), CurrentInvocation.getInvocationContext());
     }
 
     @VisibleForTesting

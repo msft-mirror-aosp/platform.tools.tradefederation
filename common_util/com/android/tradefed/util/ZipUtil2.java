@@ -82,6 +82,7 @@ public class ZipUtil2 {
         while (entries.hasMoreElements()) {
             ZipArchiveEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
+            ZipUtil.validateDestinationDir(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (entry.isDirectory()) {
                 childFile.mkdirs();

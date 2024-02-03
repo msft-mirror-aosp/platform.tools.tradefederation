@@ -36,14 +36,16 @@ import com.android.tradefed.testtype.suite.ITestSuite.MultiDeviceModuleStrategy;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
-import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -108,6 +110,9 @@ public class TestDiscoveryExecutor {
             } else {
                 exitCode = DiscoveryExitCode.ERROR;
             }
+        } catch (ConfigurationException e) {
+            System.err.print(e.getMessage());
+            exitCode = DiscoveryExitCode.CONFIGURATION_EXCEPTION;
         } catch (Exception e) {
             System.err.print(e.getMessage());
             exitCode = DiscoveryExitCode.ERROR;
@@ -135,7 +140,7 @@ public class TestDiscoveryExecutor {
      * @return A JSON string with one test module names array and one other test dependency array.
      */
     public String discoverDependencies(String[] args)
-            throws TestDiscoveryException, ConfigurationException {
+            throws TestDiscoveryException, ConfigurationException, JSONException {
         // Create IConfiguration base on command line args.
         IConfiguration config = getConfiguration(args);
 
@@ -164,19 +169,20 @@ public class TestDiscoveryExecutor {
             Collections.sort(testModules);
             Collections.sort(testDependencies);
 
-            JsonObject jsonObject = new JsonObject();
-            Gson gson = new Gson();
-            JsonArray testModulesArray = gson.toJsonTree(testModules).getAsJsonArray();
-            JsonArray testDependenciesArray = gson.toJsonTree(testDependencies).getAsJsonArray();
-            jsonObject.add(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, testModulesArray);
-            jsonObject.add(TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY, testDependenciesArray);
-            if (mReportPartialFallback) {
-                jsonObject.addProperty(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+            try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {
+                JSONObject j = new JSONObject();
+                j.put(TestDiscoveryInvoker.TEST_MODULES_LIST_KEY, new JSONArray(testModules));
+                j.put(
+                        TestDiscoveryInvoker.TEST_DEPENDENCIES_LIST_KEY,
+                        new JSONArray(testDependencies));
+                if (mReportPartialFallback) {
+                    j.put(TestDiscoveryInvoker.PARTIAL_FALLBACK_KEY, "true");
+                }
+                if (mReportNoPossibleDiscovery) {
+                    j.put(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
+                }
+                return j.toString();
             }
-            if (mReportNoPossibleDiscovery) {
-                jsonObject.addProperty(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
-            }
-            return jsonObject.toString();
         } finally {
             if (hasOutputResultFile()) {
                 LogRegistry.getLogRegistry().unregisterLogger();
@@ -191,8 +197,14 @@ public class TestDiscoveryExecutor {
      * @return A {@link IConfiguration} which constructed based on command line args.
      */
     private IConfiguration getConfiguration(String[] args) throws ConfigurationException {
-        IConfigurationFactory configurationFactory = getConfigurationFactory();
-        return configurationFactory.createConfigurationFromArgs(args, null, new DryRunKeyStore());
+        try (CloseableTraceScope ignored = new CloseableTraceScope("create_configuration")) {
+            IConfigurationFactory configurationFactory = getConfigurationFactory();
+            return configurationFactory.createPartialConfigurationFromArgs(
+                    args,
+                    new DryRunKeyStore(),
+                    Set.of(Configuration.TEST_TYPE_NAME, Configuration.TARGET_PREPARER_TYPE_NAME),
+                    null);
+        }
     }
 
     /**
@@ -203,117 +215,123 @@ public class TestDiscoveryExecutor {
      */
     private Set<String> discoverTestModulesFromTests(List<IRemoteTest> testList)
             throws IllegalStateException, TestDiscoveryException {
-        Set<String> testModules = new LinkedHashSet<String>();
-        Set<String> includeFilters = new LinkedHashSet<String>();
-        Set<String> excludeFilters = new LinkedHashSet<String>();
-        // Collect include filters from every test.
-        boolean discoveredLogic = true;
-        for (IRemoteTest test : testList) {
-            if (!(test instanceof BaseTestSuite)) {
-                throw new TestDiscoveryException(
-                        "Tradefed Observatory can't do test discovery on non suite-based test"
-                                + " runner.",
-                        null,
-                        DiscoveryExitCode.ERROR);
-            }
-            if (test instanceof TestMappingSuiteRunner) {
-                ((TestMappingSuiteRunner) test).loadTestInfos();
-            }
-            Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
-            excludeFilters.addAll(((BaseTestSuite) test).getExcludeFilter());
-            MultiMap<String, String> moduleMetadataIncludeFilters =
-                    ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
-            // Include/Exclude filters in suites are evaluated first,
-            // then metadata are applied on top, so having metadata filters
-            // and include-filters can actually be resolved to a super-set
-            // which is better than falling back.
-            if (!suiteIncludeFilters.isEmpty()) {
-                includeFilters.addAll(suiteIncludeFilters);
-            } else if (!moduleMetadataIncludeFilters.isEmpty()) {
-                String rootDirPath =
-                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
-                boolean throwException = true;
-                if (rootDirPath != null) {
-                    File rootDir = new File(rootDirPath);
-                    if (rootDir.exists() && rootDir.isDirectory()) {
-                        Set<String> configs =
-                                searchConfigsForMetadata(rootDir, moduleMetadataIncludeFilters);
-                        if (configs != null) {
-                            testModules.addAll(configs);
-                            throwException = false;
-                            mReportPartialFallback = true;
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("discoverTestModulesFromTests")) {
+            Set<String> testModules = new LinkedHashSet<String>();
+            Set<String> includeFilters = new LinkedHashSet<String>();
+            Set<String> excludeFilters = new LinkedHashSet<String>();
+            // Collect include filters from every test.
+            boolean discoveredLogic = true;
+            for (IRemoteTest test : testList) {
+                if (!(test instanceof BaseTestSuite)) {
+                    throw new TestDiscoveryException(
+                            "Tradefed Observatory can't do test discovery on non suite-based test"
+                                    + " runner.",
+                            null,
+                            DiscoveryExitCode.ERROR);
+                }
+                if (test instanceof TestMappingSuiteRunner) {
+                    ((TestMappingSuiteRunner) test).loadTestInfos();
+                }
+                Set<String> suiteIncludeFilters = ((BaseTestSuite) test).getIncludeFilter();
+                excludeFilters.addAll(((BaseTestSuite) test).getExcludeFilter());
+                MultiMap<String, String> moduleMetadataIncludeFilters =
+                        ((BaseTestSuite) test).getModuleMetadataIncludeFilters();
+                // Include/Exclude filters in suites are evaluated first,
+                // then metadata are applied on top, so having metadata filters
+                // and include-filters can actually be resolved to a super-set
+                // which is better than falling back.
+                if (!excludeFilters.isEmpty() && ((BaseTestSuite) test).reverseExcludeFilters()) {
+                    includeFilters.addAll(excludeFilters);
+                    excludeFilters.clear();
+                } else if (!suiteIncludeFilters.isEmpty()) {
+                    includeFilters.addAll(suiteIncludeFilters);
+                } else if (!moduleMetadataIncludeFilters.isEmpty()) {
+                    String rootDirPath =
+                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                    boolean throwException = true;
+                    if (rootDirPath != null) {
+                        File rootDir = new File(rootDirPath);
+                        if (rootDir.exists() && rootDir.isDirectory()) {
+                            Set<String> configs =
+                                    searchConfigsForMetadata(rootDir, moduleMetadataIncludeFilters);
+                            if (configs != null) {
+                                testModules.addAll(configs);
+                                throwException = false;
+                                mReportPartialFallback = true;
+                            }
                         }
                     }
-                }
-                if (throwException) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " metadata include filter option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                }
-            } else if (MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES.equals(
-                    ((BaseTestSuite) test).getMultiDeviceStrategy())) {
-                String rootDirPath =
-                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
-                boolean throwException = true;
-                if (rootDirPath != null) {
-                    File rootDir = new File(rootDirPath);
-                    if (rootDir.exists() && rootDir.isDirectory()) {
-                        Set<String> configs = searchForMultiDevicesConfig(rootDir);
-                        if (configs != null) {
-                            testModules.addAll(configs);
-                            throwException = false;
-                            mReportPartialFallback = true;
+                    if (throwException) {
+                        throw new TestDiscoveryException(
+                                "Tradefed Observatory can't do test discovery because the existence"
+                                        + " of metadata include filter option.",
+                                null,
+                                DiscoveryExitCode.COMPONENT_METADATA);
+                    }
+                } else if (MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES.equals(
+                        ((BaseTestSuite) test).getMultiDeviceStrategy())) {
+                    String rootDirPath =
+                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                    boolean throwException = true;
+                    if (rootDirPath != null) {
+                        File rootDir = new File(rootDirPath);
+                        if (rootDir.exists() && rootDir.isDirectory()) {
+                            Set<String> configs = searchForMultiDevicesConfig(rootDir);
+                            if (configs != null) {
+                                testModules.addAll(configs);
+                                throwException = false;
+                                mReportPartialFallback = true;
+                            }
                         }
                     }
-                }
-                if (throwException) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " multi-devices option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                }
-            } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
-                String rootDirPath =
-                        getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
-                boolean throwException = true;
-                if (rootDirPath != null) {
-                    File rootDir = new File(rootDirPath);
-                    if (rootDir.exists() && rootDir.isDirectory()) {
-                        Set<String> configs =
-                                searchConfigsForSuiteTag(
-                                        rootDir, ((BaseTestSuite) test).getRunSuiteTag());
-                        if (configs != null) {
-                            testModules.addAll(configs);
-                            throwException = false;
-                            mReportPartialFallback = true;
+                    if (throwException) {
+                        throw new TestDiscoveryException(
+                                "Tradefed Observatory can't do test discovery because the existence"
+                                        + " of multi-devices option.",
+                                null,
+                                DiscoveryExitCode.COMPONENT_METADATA);
+                    }
+                } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
+                    String rootDirPath =
+                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                    boolean throwException = true;
+                    if (rootDirPath != null) {
+                        File rootDir = new File(rootDirPath);
+                        if (rootDir.exists() && rootDir.isDirectory()) {
+                            Set<String> configs =
+                                    searchConfigsForSuiteTag(
+                                            rootDir, ((BaseTestSuite) test).getRunSuiteTag());
+                            if (configs != null) {
+                                testModules.addAll(configs);
+                                throwException = false;
+                                mReportPartialFallback = true;
+                            }
                         }
                     }
+                    if (throwException) {
+                        throw new TestDiscoveryException(
+                                "Tradefed Observatory can't do test discovery because the existence"
+                                        + " of run-suite-tag option.",
+                                null,
+                                DiscoveryExitCode.COMPONENT_METADATA);
+                    }
+                } else {
+                    discoveredLogic = false;
                 }
-                if (throwException) {
-                    throw new TestDiscoveryException(
-                            "Tradefed Observatory can't do test discovery because the existence of"
-                                    + " run-suite-tag option.",
-                            null,
-                            DiscoveryExitCode.COMPONENT_METADATA);
-                }
-            } else {
-                discoveredLogic = false;
             }
+            if (!discoveredLogic) {
+                mReportNoPossibleDiscovery = true;
+            }
+            // Extract test module names from included filters.
+            if (hasOutputResultFile()) {
+                System.out.println(String.format("include filters: %s", includeFilters));
+            }
+            testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
+            // Any directly excluded won't be discovered since it shouldn't run
+            testModules.removeAll(excludeFilters);
+            return testModules;
         }
-        if (!discoveredLogic) {
-            mReportNoPossibleDiscovery = true;
-        }
-        // Extract test module names from included filters.
-        if (hasOutputResultFile()) {
-            System.out.println(String.format("include filters: %s", includeFilters));
-        }
-        testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
-        // Any directly excluded won't be discovered since it shouldn't run
-        testModules.removeAll(excludeFilters);
-        return testModules;
     }
 
     /**
@@ -344,13 +362,21 @@ public class TestDiscoveryExecutor {
 
     private Set<String> discoverDependencies(IConfiguration config) {
         Set<String> dependencies = new HashSet<>();
-        for (Object o :
-                config.getAllConfigurationObjectsOfType(Configuration.TARGET_PREPARER_TYPE_NAME)) {
-            if (o instanceof IDiscoverDependencies) {
-                dependencies.addAll(((IDiscoverDependencies) o).reportDependencies());
+        try (CloseableTraceScope ignored = new CloseableTraceScope("discoverDependencies")) {
+            for (Object o :
+                    config.getAllConfigurationObjectsOfType(
+                            Configuration.TARGET_PREPARER_TYPE_NAME)) {
+                if (o instanceof IDisableable) {
+                    if (((IDisableable) o).isDisabled()) {
+                        continue;
+                    }
+                }
+                if (o instanceof IDiscoverDependencies) {
+                    dependencies.addAll(((IDiscoverDependencies) o).reportDependencies());
+                }
             }
+            return dependencies;
         }
-        return dependencies;
     }
 
     private Set<String> searchForMultiDevicesConfig(File rootDir) {

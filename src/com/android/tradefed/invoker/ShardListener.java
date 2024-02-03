@@ -30,6 +30,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.retry.ISupportGranularResults;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.TimeUtil;
 
@@ -112,6 +113,14 @@ public class ShardListener extends CollectingTestListener implements ISupportGra
         super.invocationFailed(failure);
         synchronized (mMainListener) {
             mMainListener.invocationFailed(failure);
+        }
+    }
+
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        super.invocationSkipped(reason);
+        synchronized (mMainListener) {
+            mMainListener.invocationSkipped(reason);
         }
     }
 

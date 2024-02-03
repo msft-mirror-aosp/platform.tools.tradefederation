@@ -22,6 +22,7 @@ import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
@@ -31,6 +32,7 @@ import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -41,11 +43,22 @@ import java.util.stream.Stream;
 public class TestContentAnalyzer {
 
     private final TestInformation information;
-    private final ContentAnalysisContext context;
+    private final boolean presubmitMode;
+    private final List<ContentAnalysisContext> contexts;
+    private final List<String> discoveredModules;
+    private final List<String> dependencyFiles;
 
-    public TestContentAnalyzer(TestInformation information, ContentAnalysisContext context) {
+    public TestContentAnalyzer(
+            TestInformation information,
+            boolean presubmitMode,
+            List<ContentAnalysisContext> contexts,
+            List<String> discoveredModules,
+            List<String> dependencyFiles) {
         this.information = information;
-        this.context = context;
+        this.presubmitMode = presubmitMode;
+        this.contexts = contexts;
+        this.discoveredModules = discoveredModules;
+        this.dependencyFiles = dependencyFiles;
     }
 
     public ContentAnalysisResults evaluate() {
@@ -53,17 +66,85 @@ public class TestContentAnalyzer {
             CLog.d("Analysis doesn't currently support multi-builds.");
             return null;
         }
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
-        AnalysisMethod method = context.analysisMethod();
-        switch (method) {
-            case MODULE_XTS:
-                return xtsAnalysis(information.getBuildInfo(), context);
-            case FILE:
-                return fileAnalysis(information.getBuildInfo(), context);
-            default:
-                // do nothing for the rest for now.
-                return null;
+        List<ContentAnalysisContext> activeContexts = new ArrayList<>(contexts);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("content_analysis")) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CONTENT_BASED_ANALYSIS_ATTEMPT, 1);
+            if (presubmitMode) {
+                for (ContentAnalysisContext context : contexts) {
+                    if (context.contentInformation() != null
+                            && !context.contentInformation().currentBuildId.startsWith("P")) {
+                        activeContexts.remove(context);
+                        CLog.d(
+                                "Removing context '%s' from content analysis in presubmit as it's"
+                                        + " not a moving head.",
+                                context);
+                    }
+                }
+            }
+            // Handle invalidation should it be set.
+            for (ContentAnalysisContext context : activeContexts) {
+                if (context.abortAnalysis()) {
+                    CLog.w("Analysis was aborted: %s", context.abortReason());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
+                    return null;
+                }
+            }
+
+            List<ContentAnalysisContext> buildKeyAnalysis =
+                    activeContexts.stream()
+                            .filter(c -> AnalysisMethod.BUILD_KEY.equals(c.analysisMethod()))
+                            .collect(Collectors.toList());
+            // Analyze separately the BUILD_KEY files
+            int countBuildKeyDiff = 0;
+            for (ContentAnalysisContext context : buildKeyAnalysis) {
+                if (AnalysisMethod.BUILD_KEY.equals(context.analysisMethod())) {
+                    boolean hasChanged = buildKeyAnalysis(context);
+                    if (hasChanged) {
+                        CLog.d(
+                                "build key '%s' has changed or couldn't be evaluated.",
+                                context.contentEntry());
+                        countBuildKeyDiff++;
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
+                    }
+                }
+            }
+            activeContexts.removeAll(buildKeyAnalysis);
+            if (activeContexts.isEmpty()) {
+                CLog.d("No context to analyze.");
+                return new ContentAnalysisResults();
+            }
+            List<ContentAnalysisResults> allResults = new ArrayList<>();
+            for (ContentAnalysisContext ac : activeContexts) {
+                ContentAnalysisResults results;
+                AnalysisMethod method = ac.analysisMethod();
+                switch (method) {
+                    case MODULE_XTS:
+                        results = xtsAnalysis(information.getBuildInfo(), ac);
+                        break;
+                    case FILE:
+                        results = fileAnalysis(information.getBuildInfo(), ac);
+                        break;
+                    case SANDBOX_WORKDIR:
+                        results = workdirAnalysis(information.getBuildInfo(), ac);
+                        break;
+                    default:
+                        // do nothing for the rest for now.
+                        return null;
+                }
+                if (results == null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
+                    return null;
+                }
+                CLog.d("content analysis results for %s: %s", ac.contentEntry(), results);
+                allResults.add(results);
+            }
+            ContentAnalysisResults finalResults = ContentAnalysisResults.mergeResults(allResults);
+            finalResults.addChangedBuildKey(countBuildKeyDiff);
+            return finalResults;
         }
     }
 
@@ -78,6 +159,7 @@ public class TestContentAnalyzer {
             CLog.d("Analysis failed.");
             return null;
         }
+        diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
         return mapDiffsToModule(
                 context.contentEntry(), diffs, build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
     }
@@ -93,7 +175,7 @@ public class TestContentAnalyzer {
                         .filter(p -> p.startsWith(rootPackage + "/tools/"))
                         .collect(Collectors.toSet());
         // Exclude version.txt has it always change
-        commonDiff.remove(rootPackage + "tools/version.txt");
+        commonDiff.remove(rootPackage + "/tools/version.txt");
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.XTS_DIFFS_IN_COMMON, commonDiff.size());
         results.addModifiedSharedFolder(commonDiff.size());
@@ -105,10 +187,31 @@ public class TestContentAnalyzer {
             CLog.e("Could find a testcases directory, something went wrong.");
             return null;
         }
+        for (String depFile : dependencyFiles) {
+            File dep = FileUtil.findFile(rootDir, depFile);
+            if (dep == null) {
+                continue;
+            }
+            Path relativeRootFilePath = rootDir.toPath().relativize(dep.toPath());
+            if (diffPaths.contains(relativeRootFilePath.toString())) {
+                results.addModifiedFile();
+            } else {
+                results.addUnchangedFile();
+            }
+        }
         // Then check changes in modules
         for (File rootFile : testcasesRoot.listFiles()) {
             if (rootFile.isDirectory()) {
                 File moduleDir = rootFile;
+                if (!discoveredModules.isEmpty()
+                        && !discoveredModules.contains(moduleDir.getName())) {
+                    // Only consider modules that are going to execute
+                    continue;
+                }
+                if (moduleDir.list().length == 0) {
+                    // Skip empty directories
+                    continue;
+                }
                 String relativeModulePath =
                         String.format("%s/testcases/%s/", rootPackage, moduleDir.getName());
                 Set<String> moduleDiff =
@@ -160,6 +263,7 @@ public class TestContentAnalyzer {
             CLog.w("Analysis failed.");
             return null;
         }
+        diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
         Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
         File rootDir = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
         Set<Path> files = new HashSet<>();
@@ -193,10 +297,106 @@ public class TestContentAnalyzer {
         return results;
     }
 
-    private List<ArtifactFileDescriptor> analyzeContentDiff(
-            ContentInformation information, String entry) {
+    private ContentAnalysisResults workdirAnalysis(
+            IBuildInfo build, ContentAnalysisContext context) {
+        if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
+            CLog.w("Mismatch: we would expect a testsdir directory for workdir analysis");
+            return null;
+        }
+        File testsDirRoot = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        ContentAnalysisResults results = new ContentAnalysisResults();
+        List<ArtifactFileDescriptor> diffs = new ArrayList<>();
+        Set<String> AllCommonDirs = new HashSet<>();
+        List<ArtifactFileDescriptor> diff =
+                analyzeContentDiff(context.contentInformation(), context.contentEntry());
+        if (diff == null) {
+            CLog.w("Analysis failed.");
+            return null;
+        }
+        diffs.addAll(diff);
+        diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
+        AllCommonDirs.addAll(context.commonLocations());
+
+        Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
+        // Check common dirs
+        Set<String> commonDiff =
+                diffPaths.parallelStream()
+                        .filter(
+                                p -> {
+                                    for (String common : AllCommonDirs) {
+                                        if (p.startsWith(common)) {
+                                            return true;
+                                        }
+                                    }
+                                    return false;
+                                })
+                        .collect(Collectors.toSet());
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.WORKDIR_DIFFS_IN_COMMON, commonDiff.size());
+        results.addModifiedSharedFolder(commonDiff.size());
+        if (!commonDiff.isEmpty()) {
+            CLog.d("Common folder has diffs: %s", commonDiff);
+        }
+        // check diffs against modules
         try {
-            ArtifactDetails base = ArtifactDetails.parseFile(information.baseContent, entry);
+            Set<File> testCasesDirs = FileUtil.findFilesObject(testsDirRoot, "testcases");
+            for (File testCasesDir : testCasesDirs) {
+                if (!testCasesDir.isDirectory()) {
+                    CLog.w("Found a non directory testcases directory: %s", testCasesDir);
+                    continue;
+                }
+                Path relativeRootFilePath = testsDirRoot.toPath().relativize(testCasesDir.toPath());
+                for (File moduleDir : testCasesDir.listFiles()) {
+                    if (!discoveredModules.isEmpty()
+                            && !discoveredModules.contains(moduleDir.getName())) {
+                        // Only consider modules that are going to execute
+                        continue;
+                    }
+                    if (moduleDir.list().length == 0) {
+                        // Skip empty directories
+                        continue;
+                    }
+                    String relativeModulePath =
+                            String.format(
+                                    "%s/%s/", relativeRootFilePath.toString(), moduleDir.getName());
+                    if (AllCommonDirs.contains(relativeModulePath)) {
+                        continue;
+                    }
+                    Set<String> moduleDiff =
+                            diffPaths.parallelStream()
+                                    .filter(p -> p.startsWith(relativeModulePath))
+                                    .collect(Collectors.toSet());
+                    if (moduleDiff.isEmpty()) {
+                        CLog.d("Module %s directory is unchanged.", moduleDir.getName());
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.WORKDIR_UNCHANGED_MODULES, 1);
+                        results.addUnchangedModule(moduleDir.getName());
+                    } else {
+                        CLog.d(
+                                "Module %s directory has changed: %s",
+                                moduleDir.getName(), moduleDiff);
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.WOKRDIR_MODULE_WITH_DIFFS, 1);
+                        results.addModifiedModule();
+                    }
+                }
+            }
+        } catch (IOException e) {
+            CLog.e(e);
+            return null;
+        }
+        return results;
+    }
+
+    public static List<ArtifactFileDescriptor> analyzeContentDiff(
+            ContentInformation information, String entry) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("analyze_content_diff")) {
+            ArtifactDetails base =
+                    ArtifactDetails.parseFile(
+                            information.baseContent,
+                            entry,
+                            information.baseBuildId,
+                            information.currentBuildId);
             ArtifactDetails presubmit =
                     ArtifactDetails.parseFile(information.currentContent, entry);
             List<ArtifactFileDescriptor> diffs = ArtifactDetails.diffContents(base, presubmit);
@@ -206,5 +406,17 @@ public class TestContentAnalyzer {
             CLog.e(e);
         }
         return null;
+    }
+
+    /** Returns true if the analysis has differences */
+    private boolean buildKeyAnalysis(ContentAnalysisContext context) {
+        try {
+            List<ArtifactFileDescriptor> diffs =
+                    analyzeContentDiff(context.contentInformation(), context.contentEntry());
+            return !diffs.isEmpty();
+        } catch (RuntimeException e) {
+            CLog.e(e);
+        }
+        return true;
     }
 }

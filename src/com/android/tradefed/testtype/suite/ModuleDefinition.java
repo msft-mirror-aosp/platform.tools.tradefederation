@@ -32,6 +32,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.connection.AdbTcpConnection;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.LogcatOnFailureCollector;
 import com.android.tradefed.device.metric.ScreenshotOnFailureCollector;
@@ -339,7 +340,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      */
     protected boolean hasTests() {
         synchronized (mTests) {
-            return mTests.isEmpty();
+            return !mTests.isEmpty();
         }
     }
 
@@ -1167,7 +1168,14 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                 DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
                     }
                     CLog.d(error_msg);
-                    device.getConnection().recoverVirtualDevice(device, e);
+                    String snapshotId = null;
+                    if (device.getConnection() instanceof AdbTcpConnection) {
+                        snapshotId =
+                                ((AdbTcpConnection) device.getConnection())
+                                        .getSuiteSnapshots()
+                                        .get(device);
+                    }
+                    device.getConnection().recoverVirtualDevice(device, snapshotId, e);
                 }
             }
         }
@@ -1188,7 +1196,14 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 if (device.getIDevice() instanceof StubDevice) {
                     continue;
                 }
-                device.getConnection().recoverVirtualDevice(device, e);
+                String snapshotId = null;
+                if (device.getConnection() instanceof AdbTcpConnection) {
+                    snapshotId =
+                            ((AdbTcpConnection) device.getConnection())
+                                    .getSuiteSnapshots()
+                                    .get(device);
+                }
+                device.getConnection().recoverVirtualDevice(device, snapshotId, e);
             }
         }
     }

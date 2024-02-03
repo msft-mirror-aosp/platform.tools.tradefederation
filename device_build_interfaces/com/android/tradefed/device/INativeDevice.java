@@ -1650,4 +1650,26 @@ public interface INativeDevice {
 
     /** Returns the connection associated with the device. */
     public AbstractConnection getConnection();
+
+    /**
+     * Check if debugfs is mounted.
+     *
+     * @return {@code true} if debugfs is mounted
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isDebugfsMounted() throws DeviceNotAvailableException;
+
+    /**
+     * Mount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void mountDebugfs() throws DeviceNotAvailableException;
+
+    /**
+     * Unmount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void unmountDebugfs() throws DeviceNotAvailableException;
 }

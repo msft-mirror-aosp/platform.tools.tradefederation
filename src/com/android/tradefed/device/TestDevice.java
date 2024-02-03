@@ -197,6 +197,9 @@ public class TestDevice extends NativeDevice {
     private static final String BUGREPORTZ_CMD = "bugreportz";
     private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
 
+    /** Number of attempts made to get user info. */
+    private static final int NUM_USER_INFO_ATTEMPTS = 3;
+
     /** Track microdroid and its resources */
     private class MicrodroidTracker {
         ExecutorService executor;
@@ -1562,7 +1565,25 @@ public class TestDevice extends NativeDevice {
 
     private ArrayList<String[]> tokenizeListUserPostT() throws DeviceNotAvailableException {
         String command = "cmd user list -v";
-        String commandOutput = executeShellCommand(command);
+        String commandOutput = null;
+        for (int i = 0; i < NUM_USER_INFO_ATTEMPTS; i++) {
+            commandOutput = executeShellCommand(command);
+            if (commandOutput == null || commandOutput.trim().isEmpty()) {
+                CLog.d("Command `%s` executed with no output. (attempt %d)", command, i);
+                // Throw exception if the last attempt failed too.
+                if (i == NUM_USER_INFO_ATTEMPTS - 1) {
+                    throw new DeviceRuntimeException(
+                            String.format(
+                                    "Command `%s` executed with no output. Attempts made = %d.",
+                                    command, NUM_USER_INFO_ATTEMPTS),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                }
+            } else {
+                break;
+            }
+            // wait before retrying
+            RunUtil.getDefault().sleep(1000);
+        }
         // Extract the id of all existing users.
         List<String> lines =
                 Arrays.stream(commandOutput.split("\\r?\\n"))
@@ -1622,7 +1643,25 @@ public class TestDevice extends NativeDevice {
 
     private ArrayList<String[]> tokenizeListUsersPreT() throws DeviceNotAvailableException {
         String command = "pm list users";
-        String commandOutput = executeShellCommand(command);
+        String commandOutput = null;
+        for (int i = 0; i < NUM_USER_INFO_ATTEMPTS; i++) {
+            commandOutput = executeShellCommand(command);
+            if (commandOutput == null || commandOutput.trim().isEmpty()) {
+                CLog.d("Command `%s` executed with no output. (attempt %d)", command, i);
+                // Throw exception if the last attempt failed too.
+                if (i == NUM_USER_INFO_ATTEMPTS - 1) {
+                    throw new DeviceRuntimeException(
+                            String.format(
+                                    "Command `%s` executed with no output. Attempts made = %d.",
+                                    command, NUM_USER_INFO_ATTEMPTS),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                }
+            } else {
+                break;
+            }
+            // wait before retrying
+            RunUtil.getDefault().sleep(1000);
+        }
         // Extract the id of all existing users.
         String[] lines = commandOutput.split("\\r?\\n");
         if (!lines[0].equals("Users:")) {
@@ -2321,7 +2360,18 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
-        return createWifiHelper(true);
+        return createWifiHelper(false);
+    }
+
+    @Override
+    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+        if (useV2) {
+            CLog.d("Using WifiHelper V2. WifiUtil apk installation skipped.");
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_HELPER_V2, "true");
+            return createWifiHelper(useV2, false);
+        } else {
+            return createWifiHelper(useV2, true);
+        }
     }
 
     /**
@@ -2329,13 +2379,14 @@ public class TestDevice extends NativeDevice {
      * setup or not.
      */
     @VisibleForTesting
-    IWifiHelper createWifiHelper(boolean doSetup) throws DeviceNotAvailableException {
+    IWifiHelper createWifiHelper(boolean useV2, boolean doSetup)
+            throws DeviceNotAvailableException {
         if (doSetup) {
             mWasWifiHelperInstalled = true;
             // Ensure device is ready before attempting wifi setup
             waitForDeviceAvailable();
         }
-        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup);
+        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup, useV2);
     }
 
     /** {@inheritDoc} */
@@ -2357,7 +2408,7 @@ public class TestDevice extends NativeDevice {
             }
             try {
                 // Uninstall the wifi utility if it was installed.
-                IWifiHelper wifi = createWifiHelper(false);
+                IWifiHelper wifi = createWifiHelper(false, false);
                 wifi.cleanUp();
             } catch (DeviceNotAvailableException e) {
                 CLog.e("Device became unavailable while uninstalling wifi util.");
@@ -2769,6 +2820,7 @@ public class TestDevice extends NativeDevice {
                 Strings.isNullOrEmpty(builder.mCpuTopology)
                         ? ""
                         : "--cpu-topology " + builder.mCpuTopology;
+        final String gkiFlag = Strings.isNullOrEmpty(builder.mGki) ? "" : "--gki " + builder.mGki;
 
         List<String> args =
                 new ArrayList<>(
@@ -2786,6 +2838,7 @@ public class TestDevice extends NativeDevice {
                                 cpuFlag,
                                 cpuAffinityFlag,
                                 cpuTopologyFlag,
+                                gkiFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
                                 instanceImg,
@@ -3103,6 +3156,7 @@ public class TestDevice extends NativeDevice {
         private Map<File, String> mBootFiles;
         private long mAdbConnectTimeoutMs;
         private List<String> mAssignedDevices;
+        private String mGki;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3242,6 +3296,16 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder setAdbConnectTimeoutMs(long timeoutMs) {
             mAdbConnectTimeoutMs = timeoutMs;
+            return this;
+        }
+
+        /**
+         * Uses GKI kernel instead of microdroid kernel
+         *
+         * @param version The GKI version to use
+         */
+        public MicrodroidBuilder gki(String version) {
+            mGki = version;
             return this;
         }
 

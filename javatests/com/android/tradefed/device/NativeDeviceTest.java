@@ -156,6 +156,11 @@ public class NativeDeviceTest {
                     IWifiHelper createWifiHelper() {
                         return mMockWifi;
                     }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) {
+                        return mMockWifi;
+                    }
                 };
         mTestDevice.setRecovery(mMockRecovery);
         mTestDevice.setCommandTimeout(100);
@@ -2800,7 +2805,8 @@ public class NativeDeviceTest {
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq(String.format("logcat -v threadtime -t '%s'", dateFormatted)),
+                        Mockito.eq(String.format(
+                            "logcat -b all -v threadtime -t '%s'", dateFormatted)),
                         Mockito.any());
     }
 
@@ -2818,7 +2824,8 @@ public class NativeDeviceTest {
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq("logcat -v threadtime,uid -t '1512990942.012'"), Mockito.any());
+                        Mockito.eq("logcat -b all -v threadtime,uid -t '1512990942.012'"),
+                        Mockito.any());
     }
 
     @Test

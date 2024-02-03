@@ -56,6 +56,8 @@ public class LUCIResultReporterTest {
     private final static String KEY_DURATION = "duration";
     private final static String KEY_TAGS = "tags";
     private final static String KEY_FAILURE_REASON = "failureReason";
+    private final static String VALUE_FAIL = "FAIL";
+    private final static String VALUE_PASS = "PASS";
 
     private LUCIResultReporter mReporter;
     private IInvocationContext mContext;
@@ -113,6 +115,26 @@ public class LUCIResultReporterTest {
         }
     }
 
+    /** Test separate test results for each attempt exist in JSONObject
+     *  if test failed and retried. */
+    @Test
+    public void shouldReportSeparateTestResults_failedThenPassedTest() throws JSONException {
+        mReporter.invocationStarted(mContext);
+        // Inject a random valid metric and run 3 attempts (2 fail and 1 pass)
+        injectTestRun(mReporter, "run2", "testClass1", "test1", "1.99", 1, true);
+        injectTestRun(mReporter, "run2", "testClass1", "test1", "2.99", 2, true);
+        injectTestRun(mReporter, "run2", "testClass1", "test1", "3.99", 3, false);
+        mReporter.invocationEnded(0);
+        ArgumentCaptor<JSONObject> jsonCaptor = ArgumentCaptor.forClass(JSONObject.class);
+        verify(mReporter).saveJsonFile(jsonCaptor.capture());
+        JSONArray tr = jsonCaptor.getValue().getJSONArray(KEY_TEST_RESULTS);
+        // 3 test results should exist corresponding to the 3 attempts.
+        Assert.assertEquals(3, tr.length(), 0);
+        Assert.assertEquals("Status is wrong.", VALUE_FAIL, tr.getJSONObject(0).get(KEY_STATUS));
+        Assert.assertEquals("Status is wrong.", VALUE_FAIL, tr.getJSONObject(1).get(KEY_STATUS));
+        Assert.assertEquals("Status is wrong.", VALUE_PASS, tr.getJSONObject(2).get(KEY_STATUS));
+    }
+
     /** Test JSONObject values are valid. */
     @Test
     public void shouldSetValidJsonValues() throws JSONException {
@@ -139,7 +161,7 @@ public class LUCIResultReporterTest {
             String testName,
             String metricValue,
             int attempt,
-            boolean failtest) {
+            boolean failTest) {
         Map<String, String> runMetrics = new HashMap<String, String>(1);
         runMetrics.put("run_metric", metricValue);
         Map<String, String> testMetrics = new HashMap<String, String>(1);
@@ -148,7 +170,7 @@ public class LUCIResultReporterTest {
         listener.testRunStarted(runName, 1, attempt);
         final TestDescription test = new TestDescription(className, testName);
         listener.testStarted(test);
-        if (failtest) {
+        if (failTest) {
             FailureDescription failure = FailureDescription.create("fake stacktrace");
             Throwable fakeThrowable = new Throwable("fake detailed message of throwable");
             failure.setOrigin(className + ".java");

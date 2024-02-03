@@ -34,6 +34,8 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
+import com.android.tradefed.device.connection.AdbTcpConnection;
+import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -350,6 +352,11 @@ public abstract class ITestSuite
             name = "multi-devices-modules",
             description = "Running strategy for modules that require multiple devices.")
     private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
+
+    @Option(
+            name = "use-snapshot-for-reset",
+            description = "Feature flag to use snapshot/restore instead of powerwash.")
+    private boolean mUseSnapshotForReset = false;
 
     public enum MultiDeviceModuleStrategy {
         EXCLUDE_ALL,
@@ -757,6 +764,22 @@ public abstract class ITestSuite
         /** Create the list of listeners applicable at the module level. */
         List<ITestInvocationListener> moduleListeners = createModuleListeners();
 
+        if (mUseSnapshotForReset) {
+            AbstractConnection connection = mDevice.getConnection();
+            if (connection instanceof AdbTcpConnection) {
+                // Capture a snapshot once at the beginning of the suite
+                if (((AdbTcpConnection) connection).getSuiteSnapshots().containsKey(mDevice)) {
+                    CLog.d("Suite snapshot already taken for '%s'", mDevice.getSerialNumber());
+                } else {
+                    ((AdbTcpConnection) connection)
+                            .snapshotDevice(mDevice, mContext.getInvocationId());
+                    ((AdbTcpConnection) connection)
+                            .getSuiteSnapshots()
+                            .put(mDevice, mContext.getInvocationId());
+                }
+            }
+        }
+
         // Only print the running log if we are going to run something.
         if (mRunModules.get(0).hasTests()) {
             CLog.logAndDisplay(
@@ -777,7 +800,7 @@ public abstract class ITestSuite
                 }
                 // Before running the module we ensure it has tests at this point or skip completely
                 // to avoid running SystemCheckers and preparation for nothing.
-                if (module.hasTests()) {
+                if (!module.hasTests()) {
                     continue;
                 }
 
@@ -912,9 +935,12 @@ public abstract class ITestSuite
      */
     private void moduleIsolation(IInvocationContext context, ITestLogger logger)
             throws DeviceNotAvailableException {
+        if (!mIsolatedModule) {
+            return;
+        }
         // TODO: we can probably make it smarter: Did any test ran for example?
         ITestDevice device = context.getDevices().get(0);
-        if (mIsolatedModule && (device instanceof NestedRemoteDevice)) {
+        if (device instanceof NestedRemoteDevice) {
             boolean res = ((NestedRemoteDevice) device).resetVirtualDevice();
             if (!res) {
                 String serial = device.getSerialNumber();
@@ -922,6 +948,13 @@ public abstract class ITestSuite
                         String.format(
                                 "Failed to reset the AVD '%s' during module isolation.", serial),
                         serial);
+            }
+        } else if (mUseSnapshotForReset) {
+            AbstractConnection connection = device.getConnection();
+            if (connection instanceof AdbTcpConnection) {
+                String snapshot = ((AdbTcpConnection) connection).getSuiteSnapshots().get(device);
+                // snapshot should not be null, otherwise the device would have crashed.
+                ((AdbTcpConnection) connection).recoverVirtualDevice(device, snapshot, null);
             }
         }
     }
@@ -1679,5 +1712,9 @@ public abstract class ITestSuite
 
     public void setIntraModuleSharding(boolean intraModuleSharding) {
         mIntraModuleSharding = intraModuleSharding;
+    }
+
+    public boolean getIntraModuleSharding() {
+        return mIntraModuleSharding;
     }
 }

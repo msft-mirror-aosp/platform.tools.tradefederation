@@ -38,9 +38,13 @@ public class KernelTargetTest extends ExecutableTargetTest {
     private Integer mCurrKver = null;
     private Pattern mKverPattern = Pattern.compile("(\\d+)\\.(\\d+)(?:\\.(\\d+))?");
 
+    /**
+     * @deprecated use skip-binary-check instead. Left for backwards compatibility.
+     */
+    @Deprecated
     @Option(
             name = "ignore-binary-check",
-            description = "Deprecated: use skip-binary-check instead.")
+            description = "Deprecated - use skip-binary-check instead.")
     private boolean mIgnoreBinaryCheck = false;
 
     @Option(name = "exit-code-skip", description = "Exit code for skipped tests.")

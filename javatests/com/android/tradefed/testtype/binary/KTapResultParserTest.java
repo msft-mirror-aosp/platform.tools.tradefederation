@@ -25,16 +25,32 @@ import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.TestDescription;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
-@RunWith(JUnit4.class)
+@RunWith(Parameterized.class)
 public class KTapResultParserTest {
+
+    @Parameters
+    public static Collection<Object[]> data() {
+        return Arrays.asList(
+                new Object[][] {
+                    {KTapResultParser.ParseResolution.INDIVIDUAL_LEAVES},
+                    {KTapResultParser.ParseResolution.AGGREGATED_TOP_LEVEL}
+                });
+    }
+
+    @Parameter public KTapResultParser.ParseResolution mParseResolution;
 
     @Test
     public void test_doc_example_tap() {
@@ -63,16 +79,205 @@ public class KTapResultParserTest {
                         + "  not ok 3 example_test_3\n"
                         + "not ok 1 main_test\n";
 
-        String[][] expectedResults = {
-            {"main_test.example_test_1.test_1", "PASSED", null},
-            {"main_test.example_test_2.test_1", "IGNORED", null},
-            {"main_test.example_test_2.test_2", "PASSED", null},
-            {"main_test.example_test_3.test_1", "PASSED", null},
+        String[][] expectedLeafResults = {
+            {"main_test.example_test_1.test_1", "PASSED", ""},
+            {"main_test.example_test_2.test_1", "IGNORED", ""},
+            {"main_test.example_test_2.test_2", "PASSED", ""},
+            {"main_test.example_test_3.test_1", "PASSED", ""},
             {"main_test.example_test_3.test_2", "FAILURE", "# test_2: FAIL"},
-            {"main_test.example_test_3.test_3", "IGNORED", null}
+            {"main_test.example_test_3.test_3", "IGNORED", ""}
+        };
+        String[] expectedRootResults = {"main_test", "FAILURE", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
+    }
+
+    @Test
+    public void test_partial_tap() {
+        String[] ktapResultsByLine = {
+            "KTAP version 1\n",
+            "1..1\n",
+            "  KTAP version 1\n",
+            "  1..3\n",
+            "    KTAP version 1\n",
+            "    1..1\n",
+            "    # test_1: initializing test_1\n",
+            "    ok 1 test_1\n",
+            "  ok 1 example_test_1\n",
+            "    KTAP version 1\n",
+            "    1..2\n",
+            "    ok 1 test_1 # SKIP test_1 skipped\n",
+            "    ok 2 test_2\n",
+            "  ok 2 example_test_2\n",
+            "    KTAP version 1\n",
+            "    1..3\n",
+            "    ok 1 test_1\n",
+            "    # test_2: FAIL\n",
+            "    not ok 2 test_2\n",
+            "    ok 3 test_3 # SKIP test_3 skipped\n",
+            "  not ok 3 example_test_3\n",
+            "not ok 1 main_test\n"
         };
 
-        checkKTap(ktapResults, expectedResults);
+        String[][] expectedLeafResults = {
+            {"main_test.example_test_1.test_1", "PASSED", ""},
+            {"main_test.example_test_2.test_1", "IGNORED", ""},
+            {"main_test.example_test_2.test_2", "PASSED", ""},
+            {"main_test.example_test_3.test_1", "PASSED", ""},
+            {"main_test.example_test_3.test_2", "FAILURE", "# test_2: FAIL"},
+            {"main_test.example_test_3.test_3", "IGNORED", ""}
+        };
+
+        // The full KTAP should pass with no error.
+        Optional<String> ktapResults =
+                Arrays.stream(ktapResultsByLine).reduce((str1, str2) -> str1 + str2);
+        String[] expectedRootResults = {"main_test", "FAILURE", ""};
+        checkKTap(ktapResults.get(), expectedLeafResults, expectedRootResults);
+
+        // Loop through the good KTAP with an additional line removed for each iteration.
+        // An exception should be thrown for each partial result.
+        for (int i = ktapResultsByLine.length - 2; i > 0; --i) {
+            Optional<String> ktapResults2 =
+                    Arrays.stream(ktapResultsByLine).limit(i).reduce((str1, str2) -> str1 + str2);
+
+            assertThrows(
+                    String.format(
+                            "The following partial ktap results with the last '%d' lines omitted"
+                                    + " didn't report an error as expected: %s",
+                            ktapResultsByLine.length - i - 1, ktapResults2.get()),
+                    RuntimeException.class,
+                    () -> checkKTap(ktapResults2.get(), expectedLeafResults, expectedRootResults));
+        }
+    }
+
+    @Test
+    public void test_too_many_results() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 2 test_2\n"
+                        + "    ok 3 test_2\n" // <-- This is the error
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    not ok 2 test_2\n"
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        assertThrows(RuntimeException.class, () -> checkKTap(ktapResults, null, null));
+    }
+
+    @Test
+    public void test_duplicate_test_num() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 1 test_2\n" // <-- This is the error
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    not ok 2 test_2\n"
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        assertThrows(RuntimeException.class, () -> checkKTap(ktapResults, null, null));
+    }
+
+    @Test
+    public void test_skipped_test_num() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 2 test_2\n"
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    # not ok 2 test_2\n" // <-- This is the error.
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        assertThrows(RuntimeException.class, () -> checkKTap(ktapResults, null, null));
+    }
+
+    @Test
+    public void test_toStringWithSubtests() {
+        String ktapResults =
+                "KTAP version 1\n"
+                        + "1..1\n"
+                        + "  KTAP version 1\n"
+                        + "  1..3\n"
+                        + "    KTAP version 1\n"
+                        + "    1..1\n"
+                        + "    # test_1: initializing test_1\n"
+                        + "    ok 1 test_1\n"
+                        + "  ok 1 example_test_1\n"
+                        + "    KTAP version 1\n"
+                        + "    1..2\n"
+                        + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                        + "    ok 2 test_2\n"
+                        + "  ok 2 example_test_2\n"
+                        + "    KTAP version 1\n"
+                        + "    1..3\n"
+                        + "    ok 1 test_1\n"
+                        + "    # test_2: FAIL\n"
+                        + "    not ok 2 test_2\n"
+                        + "    ok 3 test_3 # SKIP test_3 skipped\n"
+                        + "  not ok 3 example_test_3\n"
+                        + "not ok 1 main_test\n";
+
+        KTapResultParser parser = new KTapResultParser();
+        String actual = parser.processResultsFileContent(ktapResults).toStringWithSubtests("");
+        String expected =
+                "null\n"
+                        + "   main_test\n"
+                        + "      example_test_1\n"
+                        + "         test_1\n"
+                        + "      example_test_2\n"
+                        + "         test_1\n"
+                        + "         test_2\n"
+                        + "      example_test_3\n"
+                        + "         test_1\n"
+                        + "         test_2\n"
+                        + "         test_3\n";
+        assertEquals(expected, actual);
     }
 
     @Test
@@ -120,89 +325,90 @@ public class KTapResultParserTest {
                     + "# Totals: pass:16 fail:0 skip:0 total:16\n"
                     + "ok 1 ext4_inode_test\n";
 
-        String[][] expectedResults = {
+        String[][] expectedLeafResults = {
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.1901-12-13_Lower_bound_of_32bit_<_0_timestamp,_no_extra_bits",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.1969-12-31_Upper_bound_of_32bit_<_0_timestamp,_no_extra_bits",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.1970-01-01_Lower_bound_of_32bit_>=0_timestamp,_no_extra_bits",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2038-01-19_Upper_bound_of_32bit_>=0_timestamp,_no_extra_bits",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2038-01-19_Lower_bound_of_32bit_<0_timestamp,_lo_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2106-02-07_Upper_bound_of_32bit_<0_timestamp,_lo_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2106-02-07_Lower_bound_of_32bit_>=0_timestamp,_lo_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2174-02-25_Upper_bound_of_32bit_>=0_timestamp,_lo_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2174-02-25_Lower_bound_of_32bit_<0_timestamp,_hi_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2242-03-16_Upper_bound_of_32bit_<0_timestamp,_hi_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2242-03-16_Lower_bound_of_32bit_>=0_timestamp,_hi_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2310-04-04_Upper_bound_of_32bit_>=0_timestamp,_hi_extra_sec_bit_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2310-04-04_Upper_bound_of_32bit>=0_timestamp,_hi_extra_sec_bit_1._1_ns",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2378-04-22_Lower_bound_of_32bit>=_timestamp._Extra_sec_bits_1._Max_ns",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2378-04-22_Lower_bound_of_32bit_>=0_timestamp._All_extra_sec_bits_on",
                 "PASSED",
-                null
+                ""
             },
             {
                 "ext4_inode_test.inode_test_xtimestamp_decoding.2446-05-10_Upper_bound_of_32bit_>=0_timestamp._All_extra_sec_bits_on",
                 "PASSED",
-                null
+                ""
             },
         };
-        checkKTap(ktapResults, expectedResults);
+        String[] expectedRootResults = {"ext4_inode_test", "PASSED", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
     @Test
@@ -250,128 +456,124 @@ public class KTapResultParserTest {
                         + "# Totals: pass:23 fail:0 skip:0 total:23\n"
                         + "ok 1 fat_test\n";
 
-        String[][] expectedResults = {
-            {"fat_test.fat_checksum_test", "PASSED", null},
+        String[][] expectedLeafResults = {
+            {"fat_test.fat_checksum_test", "PASSED", ""},
             {
                 "fat_test.fat_time_fat2unix_test.Earliest_possible_UTC_(1980-01-01_00:00:00)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.Latest_possible_UTC_(2107-12-31_23:59:58)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.Earliest_possible_(UTC-11)_(==_1979-12-31_13:00:00_UTC)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.Latest_possible_(UTC+11)_(==_2108-01-01_10:59:58_UTC)",
                 "PASSED",
-                null
+                ""
             },
-            {
-                "fat_test.fat_time_fat2unix_test.Leap_Day_/_Year_(1996-02-29_00:00:00)",
-                "PASSED",
-                null
-            },
+            {"fat_test.fat_time_fat2unix_test.Leap_Day_/_Year_(1996-02-29_00:00:00)", "PASSED", ""},
             {
                 "fat_test.fat_time_fat2unix_test.Year_2000_is_leap_year_(2000-02-29_00:00:00)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.Year_2100_not_leap_year_(2100-03-01_00:00:00)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.Leap_year_+_timezone_UTC+1_(==_2004-02-29_00:30:00_UTC)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.Leap_year_+_timezone_UTC-1_(==_2004-02-29_23:30:00_UTC)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.VFAT_odd-second_resolution_(1999-12-31_23:59:59)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_fat2unix_test.VFAT_10ms_resolution_(1980-01-01_00:00:00:0010)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.Earliest_possible_UTC_(1980-01-01_00:00:00)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.Latest_possible_UTC_(2107-12-31_23:59:58)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.Earliest_possible_(UTC-11)_(==_1979-12-31_13:00:00_UTC)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.Latest_possible_(UTC+11)_(==_2108-01-01_10:59:58_UTC)",
                 "PASSED",
-                null
+                ""
             },
-            {
-                "fat_test.fat_time_unix2fat_test.Leap_Day_/_Year_(1996-02-29_00:00:00)",
-                "PASSED",
-                null
-            },
+            {"fat_test.fat_time_unix2fat_test.Leap_Day_/_Year_(1996-02-29_00:00:00)", "PASSED", ""},
             {
                 "fat_test.fat_time_unix2fat_test.Year_2000_is_leap_year_(2000-02-29_00:00:00)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.Year_2100_not_leap_year_(2100-03-01_00:00:00)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.Leap_year_+_timezone_UTC+1_(==_2004-02-29_00:30:00_UTC)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.Leap_year_+_timezone_UTC-1_(==_2004-02-29_23:30:00_UTC)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.VFAT_odd-second_resolution_(1999-12-31_23:59:59)",
                 "PASSED",
-                null
+                ""
             },
             {
                 "fat_test.fat_time_unix2fat_test.VFAT_10ms_resolution_(1980-01-01_00:00:00:0010)",
                 "PASSED",
-                null
+                ""
             },
         };
-        checkKTap(ktapResults, expectedResults);
+        String[] expectedRootResults = {"fat_test", "PASSED", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
     @Test
     public void test_no_tests_run_with_header_ktap() {
         // Example taken from KUnits: test_data/test_is_test_passed-no_tests_run_with_header.log
         String ktapResults = "TAP version 14\n" + "1..0\n";
-        String[][] expectedResults = {};
-        assertThrows(IllegalArgumentException.class, () -> checkKTap(ktapResults, expectedResults));
+        String[][] expectedLeafResults = {};
+        String[] expectedRootResults = {};
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> checkKTap(ktapResults, expectedLeafResults, expectedRootResults));
     }
 
     @Test
@@ -386,8 +588,9 @@ public class KTapResultParserTest {
                         + "  ok 1 - case\n"
                         + "ok 1 - suite\n";
 
-        String[][] expectedResults = {{"suite.case", "PASSED", null}};
-        checkKTap(ktapResults, expectedResults);
+        String[][] expectedLeafResults = {{"suite.case", "PASSED", ""}};
+        String[] expectedRootResults = {"suite", "PASSED", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
     @Test
@@ -434,19 +637,20 @@ public class KTapResultParserTest {
                     + "kunit example: all tests passed\n"
                     + "ok 2 - example\n";
 
-        String[][] expectedResults = {
-            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_maxlen_unset", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_happy_single_positive", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_happy_single_negative", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_single_less_int_min", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_single_greater_int_max", "PASSED", null},
-            {"example.example_simple_test", "PASSED", null},
-            {"example.example_mock_test", "PASSED", null},
+        String[][] expectedLeafResults = {
+            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_maxlen_unset", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_happy_single_positive", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_happy_single_negative", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_single_less_int_min", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_single_greater_int_max", "PASSED", ""},
+            {"example.example_simple_test", "PASSED", ""},
+            {"example.example_mock_test", "PASSED", ""},
         };
-        checkKTap(ktapResults, expectedResults);
+        String[] expectedRootResults = {"sysctl_test.example", "PASSED", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
     @Test
@@ -470,11 +674,16 @@ public class KTapResultParserTest {
                     + " 22. Failed as expected\n"
                     + "ok 2 selftests: membarrier: membarrier_test_multi_thread\n";
 
-        String[][] expectedResults = {
-            {"selftests:_membarrier:_membarrier_test_single_thread", "PASSED", null},
-            {"selftests:_membarrier:_membarrier_test_multi_thread", "PASSED", null}
+        String[][] expectedLeafResults = {
+            {"selftests:_membarrier:_membarrier_test_single_thread", "PASSED", ""},
+            {"selftests:_membarrier:_membarrier_test_multi_thread", "PASSED", ""}
         };
-        checkKTap(ktapResults, expectedResults);
+        String[] expectedRootResults = {
+            "selftests:_membarrier:_membarrier_test_single_thread.selftests:_membarrier:_membarrier_test_multi_thread",
+            "PASSED",
+            ""
+        };
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
     @Test
@@ -527,15 +736,15 @@ public class KTapResultParserTest {
                     + "kunit example: one or more tests failed\n"
                     + "not ok 2 - example\n";
 
-        String[][] expectedResults = {
-            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_maxlen_unset", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_happy_single_positive", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_happy_single_negative", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_single_less_int_min", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_single_greater_int_max", "PASSED", null},
+        String[][] expectedLeafResults = {
+            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_maxlen_unset", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_happy_single_positive", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_happy_single_negative", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_single_less_int_min", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_single_greater_int_max", "PASSED", ""},
             {
                 "example.example_simple_test",
                 "FAILURE",
@@ -547,9 +756,10 @@ public class KTapResultParserTest {
                     + "3 == 3\n"
                     + "# example_simple_test: example_simple_test failed"
             },
-            {"example.example_mock_test", "PASSED", null},
+            {"example.example_mock_test", "PASSED", ""},
         };
-        checkKTap(ktapResults, expectedResults);
+        String[] expectedRootResults = {"sysctl_test.example", "FAILURE", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
     @Test
@@ -594,16 +804,17 @@ public class KTapResultParserTest {
                     + "kunit example: all tests passed\n"
                     + "ok 2 - example\n";
 
-        String[][] expectedResults = {
-            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", null},
-            {"sysctl_test.example.example_simple_test", "PASSED", null},
-            {"sysctl_test.example.example_mock_test", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", null},
-            {"example.example_simple_test", "PASSED", null},
-            {"example.example_mock_test", "PASSED", null}
+        String[][] expectedLeafResults = {
+            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", ""},
+            {"sysctl_test.example.example_simple_test", "PASSED", ""},
+            {"sysctl_test.example.example_mock_test", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", ""},
+            {"example.example_simple_test", "PASSED", ""},
+            {"example.example_mock_test", "PASSED", ""}
         };
-        checkKTap(ktapResults, expectedResults);
+        String[] expectedRootResults = {"sysctl_test.example", "PASSED", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
     @Test
@@ -651,28 +862,35 @@ public class KTapResultParserTest {
                     + "	ok 2 - example_mock_test\n"
                     + "kunit example: all tests passed\n"
                     + "ok 2 - example\n";
-        String[][] expectedResults = {
-            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_maxlen_unset", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_happy_single_positive", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_happy_single_negative", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_single_less_int_min", "PASSED", null},
-            {"sysctl_test.sysctl_test_dointvec_single_greater_int_max", "PASSED", null},
-            {"example.example_simple_test", "PASSED", null},
-            {"example.example_mock_test", "PASSED", null},
+        String[][] expectedLeafResults = {
+            {"sysctl_test.sysctl_test_dointvec_null_tbl_data", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_maxlen_unset", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_len_is_zero", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_table_read_but_position_set", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_happy_single_positive", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_happy_single_negative", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_single_less_int_min", "PASSED", ""},
+            {"sysctl_test.sysctl_test_dointvec_single_greater_int_max", "PASSED", ""},
+            {"example.example_simple_test", "PASSED", ""},
+            {"example.example_mock_test", "PASSED", ""},
         };
-        checkKTap(ktapResults, expectedResults);
+        String[] expectedRootResults = {"sysctl_test.example", "PASSED", ""};
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
-    private void checkKTap(String ktapResults, String[][] expectedResults) {
+    private void checkKTap(
+            String ktapResults, String[][] expectedLeafResults, String[] expectedRootResults) {
         // Setup
+        String[][] expectedResults =
+                mParseResolution == KTapResultParser.ParseResolution.INDIVIDUAL_LEAVES
+                        ? expectedLeafResults
+                        : new String[][] {expectedRootResults};
         CollectingTestListener listener = new CollectingTestListener();
         String moduleName = "kunit_test_module.ko";
         listener.testRunStarted(moduleName, 1);
 
-        KTapResultParser.applyKTapResultToListener(listener, moduleName, ktapResults);
+        KTapResultParser.applyKTapResultToListener(
+                listener, moduleName, ktapResults, mParseResolution);
 
         listener.testRunEnded(0, new HashMap<String, Metric>());
         List<TestRunResult> testRunResults = listener.getMergedTestRunResults();
@@ -687,6 +905,9 @@ public class KTapResultParserTest {
             testResult[0] = entry.getKey().getTestName();
             testResult[1] = entry.getValue().getStatus().toString();
             testResult[2] = entry.getValue().getStackTrace();
+            if (testResult[2] == null) {
+                testResult[2] = "";
+            }
             assertArrayEquals(expectedResults[i++], testResult);
         }
 
