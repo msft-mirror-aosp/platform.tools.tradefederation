@@ -168,12 +168,8 @@ public class KUnitModuleTestTest {
         mKUnitModuleTest.run(mTestInfo, mListener);
 
         TestDescription[] testDescriptions = {
-            new TestDescription(MODULE_01, "main_test_01.example_test_1.test_1"),
-            new TestDescription(MODULE_01, "main_test_01.example_test_2.test_1"),
-            new TestDescription(MODULE_01, "main_test_01.example_test_2.test_2"),
-            new TestDescription(MODULE_02, "main_test_02.example_test_1.test_1"),
-            new TestDescription(MODULE_02, "main_test_02.example_test_2.test_1"),
-            new TestDescription(MODULE_02, "main_test_02.example_test_2.test_2")
+            new TestDescription(MODULE_01, "main_test_01"),
+            new TestDescription(MODULE_02, "main_test_02"),
         };
 
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
@@ -213,21 +209,7 @@ public class KUnitModuleTestTest {
         ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
                 new ArrayList<>() {
                     {
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_1.test_1"),
-                                        true));
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_2.test_1"),
-                                        true));
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_2.test_2"),
-                                        true));
+                        add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
                         add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
                     }
                 };
@@ -265,21 +247,7 @@ public class KUnitModuleTestTest {
         ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
                 new ArrayList<>() {
                     {
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_1.test_1"),
-                                        true));
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_2.test_1"),
-                                        true));
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_2.test_2"),
-                                        true));
+                        add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
                         add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
                     }
                 };
@@ -319,21 +287,7 @@ public class KUnitModuleTestTest {
         ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
                 new ArrayList<>() {
                     {
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_1.test_1"),
-                                        true));
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_2.test_1"),
-                                        true));
-                        add(
-                                Pair.create(
-                                        new TestDescription(
-                                                MODULE_01, "main_test_01.example_test_2.test_2"),
-                                        true));
+                        add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
                         add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
                     }
                 };

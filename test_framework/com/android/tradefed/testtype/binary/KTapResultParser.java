@@ -54,6 +54,11 @@ import java.util.regex.Pattern;
  */
 public class KTapResultParser {
 
+    public enum ParseResolution {
+        INDIVIDUAL_LEAVES,
+        AGGREGATED_TOP_LEVEL,
+    }
+
     enum ResultDirective {
         NOTSET,
         SKIP,
@@ -140,10 +145,13 @@ public class KTapResultParser {
     static final Predicate<String> IS_TEST_CASE_RESULT = TEST_CASE_RESULT_PATTERN.asPredicate();
 
     public static void applyKTapResultToListener(
-            ITestInvocationListener listener, String testRunName, String ktapFileContent) {
+            ITestInvocationListener listener,
+            String testRunName,
+            String ktapFileContent,
+            ParseResolution resolution) {
         KTapResultParser parser = new KTapResultParser();
         TestResult root = parser.processResultsFileContent(ktapFileContent);
-        parser.applyToListener(listener, testRunName, root, "");
+        parser.applyToListener(listener, testRunName, root, resolution);
     }
 
     @VisibleForTesting
@@ -267,40 +275,89 @@ public class KTapResultParser {
     }
 
     private void applyToListener(
+            ITestInvocationListener listener,
+            String testRunName,
+            TestResult root,
+            ParseResolution resolution) {
+        if (resolution == ParseResolution.INDIVIDUAL_LEAVES) {
+            applySubtestLeavesToListener(listener, testRunName, root, "");
+        } else if (resolution == ParseResolution.AGGREGATED_TOP_LEVEL) {
+            applyAggregatedTopLevelToListener(listener, testRunName, root, "");
+        }
+    }
+
+    private void applySubtestLeavesToListener(
             ITestInvocationListener listener, String testRunName, TestResult test, String prefix) {
         String testName = prefix == null || prefix.isEmpty() ? test.name : prefix + "." + test.name;
         if (test.subtests.size() > 0) {
             for (TestResult subtest : test.subtests) {
-                applyToListener(listener, testRunName, subtest, testName);
+                applySubtestLeavesToListener(listener, testRunName, subtest, testName);
             }
         } else {
-            TestDescription testDescription = new TestDescription(testRunName, testName);
-            listener.testStarted(testDescription);
-            switch (test.directive) {
-                case NOTSET:
-                    if (!test.isOk) {
-                        listener.testFailed(testDescription, test.createDiagnosticTrace());
-                    }
-                    break;
-                case TIMEOUT:
-                    // fall through
-                case ERROR:
-                    listener.testFailed(testDescription, test.createDiagnosticTrace());
-                    if (!test.isOk) {
-                        CLog.w(
-                                "%s has directive '%s' but also shows 'ok', forcing 'not ok'",
-                                testName, test.directive);
-                    }
-                    break;
-                case SKIP:
-                    // fall through
-                case TODO:
-                    // fall through
-                case XFAIL:
-                    listener.testIgnored(testDescription);
-                    break;
-            }
-            listener.testEnded(testDescription, new HashMap<String, Metric>());
+            applyTestResultToListener(listener, testRunName, testName, test);
         }
+    }
+
+    private void applyAggregatedTopLevelToListener(
+            ITestInvocationListener listener,
+            String testRunName,
+            TestResult root,
+            String fullKTapResult) {
+        // Here we want to apply a single test result based on the one or more top level KTAP
+        // results. If there are more than one top level result, their names are concatenated
+        // and pass/fail results are AND'd into a final value.
+
+        if (root.subtests.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "No valid test results in KTAP results. " + fullKTapResult);
+        }
+
+        String testName = root.subtests.get(0).name;
+        boolean isOk = root.subtests.get(0).isOk;
+        for (int i = 1; i < root.subtests.size(); ++i) {
+            testName += "." + root.subtests.get(i).name;
+            isOk &= root.subtests.get(i).isOk;
+        }
+
+        TestDescription testDescription = new TestDescription(testRunName, testName);
+        listener.testStarted(testDescription);
+        if (!isOk) {
+            listener.testFailed(testDescription, fullKTapResult);
+        }
+        listener.testEnded(testDescription, new HashMap<String, Metric>());
+    }
+
+    private void applyTestResultToListener(
+            ITestInvocationListener listener,
+            String testRunName,
+            String testName,
+            TestResult test) {
+        TestDescription testDescription = new TestDescription(testRunName, testName);
+        listener.testStarted(testDescription);
+        switch (test.directive) {
+            case NOTSET:
+                if (!test.isOk) {
+                    listener.testFailed(testDescription, test.createDiagnosticTrace());
+                }
+                break;
+            case TIMEOUT:
+                // fall through
+            case ERROR:
+                listener.testFailed(testDescription, test.createDiagnosticTrace());
+                if (!test.isOk) {
+                    CLog.w(
+                            "%s has directive '%s' but also shows 'ok', forcing 'not ok'",
+                            testName, test.directive);
+                }
+                break;
+            case SKIP:
+                // fall through
+            case TODO:
+                // fall through
+            case XFAIL:
+                listener.testIgnored(testDescription);
+                break;
+        }
+        listener.testEnded(testDescription, new HashMap<String, Metric>());
     }
 }

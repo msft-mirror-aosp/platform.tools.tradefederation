@@ -62,6 +62,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -466,7 +467,10 @@ public class IsolatedHostTest
      * @return a string specifying the colon separated classpath.
      */
     public String compileClassPath() {
-        List<String> paths = new ArrayList<>();
+        // Use LinkedHashSet because we don't want duplicates, but we still
+        // want to preserve the insertion order. e.g. mIsolationJar should always be the
+        // first one.
+        Set<String> paths = new LinkedHashSet<>();
         File testDir = findTestDirectory();
 
         try {
@@ -490,22 +494,19 @@ public class IsolatedHostTest
                 paths.add(androidAllJar.getAbsolutePath());
             } else if (mRavenwoodResources) {
                 File ravenwoodRuntime = FileUtil.findFile(testDir, "ravenwood-runtime");
-                if (ravenwoodRuntime == null) {
+                if (ravenwoodRuntime == null || !ravenwoodRuntime.isDirectory()) {
                     throw new HarnessRuntimeException(
                             "Could not find Ravenwood runtime needed for execution. " + testDir,
                             InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
                 }
-                paths.add(ravenwoodRuntime.getAbsolutePath() + "/*");
+                addAllFilesUnder(paths, ravenwoodRuntime);
             }
 
             for (String jar : mJars) {
                 File f = FileUtil.findFile(testDir, jar);
                 if (f != null && f.exists()) {
                     paths.add(f.getAbsolutePath());
-                    String parentPath = f.getParentFile().getAbsolutePath() + "/*";
-                    if (!paths.contains(parentPath)) {
-                        paths.add(parentPath);
-                    }
+                    addAllFilesUnder(paths, f.getParentFile());
                 }
             }
         }
@@ -513,6 +514,16 @@ public class IsolatedHostTest
         String jarClasspath = String.join(java.io.File.pathSeparator, paths);
 
         return jarClasspath;
+    }
+
+    /** Add all files under {@code File} sorted by filename to {@code paths}. */
+    private static void addAllFilesUnder(Set<String> paths, File parentDirectory) {
+        var files = parentDirectory.listFiles((f) -> f.isFile());
+        Arrays.sort(files, Comparator.comparing(File::getName));
+
+        for (File file : files) {
+            paths.add(file.getAbsolutePath());
+        }
     }
 
     @VisibleForTesting
