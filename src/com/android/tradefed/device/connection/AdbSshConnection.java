@@ -77,6 +77,7 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     private static final long CHECK_WAIT_DEVICE_AVAIL_MS = 30 * 1000;
     private static final int WAIT_TIME_DIVISION = 4;
+    private static final long WAIT_FOR_DEVICE_ONLINE = 1 * 60 * 1000;
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
     private static final long FETCH_TOMBSTONES_TIMEOUT_MS = 5 * 60 * 1000;
@@ -847,6 +848,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             try {
                 waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+                getDevice().waitForDeviceOnline(WAIT_FOR_DEVICE_ONLINE);
             } catch (DeviceNotAvailableException e) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
