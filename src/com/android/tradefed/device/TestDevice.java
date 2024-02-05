@@ -93,7 +93,7 @@ public class TestDevice extends NativeDevice {
     /** the command used to dismiss a error dialog. Currently sends a DPAD_CENTER key event */
     static final String DISMISS_DIALOG_CMD = "input keyevent 23";
 
-    private static final String DISMISS_DIALOG_BROADCAST =
+    static final String DISMISS_DIALOG_BROADCAST =
             "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOG";
     // Collapse notifications
     private static final String COLLAPSE_STATUS_BAR = "cmd statusbar collapse";
@@ -1083,7 +1083,12 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     public boolean clearErrorDialogs() throws DeviceNotAvailableException {
-        executeShellCommand(DISMISS_DIALOG_BROADCAST);
+        CommandResult dismissResult =
+                executeShellV2Command(
+                        DISMISS_DIALOG_BROADCAST, 60000L, TimeUnit.MILLISECONDS, 0 /*retry*/);
+        if (!CommandStatus.SUCCESS.equals(dismissResult.getStatus())) {
+            CLog.w("Issue with dimissing dialog broadcast. %s", dismissResult);
+        }
         executeShellCommand(COLLAPSE_STATUS_BAR);
         // attempt to clear error dialogs multiple times
         for (int i = 0; i < NUM_CLEAR_ATTEMPTS; i++) {
@@ -2941,13 +2946,10 @@ public class TestDevice extends NativeDevice {
     /** Find an unused port and forward microdroid's adb connection. Returns the port number. */
     private int forwardMicrodroidAdbPort(String cid) {
         IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
-        boolean forwarded = false;
         for (int trial = 0; trial < 10; trial++) {
             int vmAdbPort;
-            String microdroidSerial;
             try (ServerSocket serverSocket = new ServerSocket(0)) {
                 vmAdbPort = serverSocket.getLocalPort();
-                microdroidSerial = "localhost:" + vmAdbPort;
             } catch (IOException e) {
                 throw new DeviceRuntimeException(
                         "Unable to get an unused port for Microdroid.",
