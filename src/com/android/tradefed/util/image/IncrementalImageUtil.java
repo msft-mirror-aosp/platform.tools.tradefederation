@@ -283,6 +283,7 @@ public class IncrementalImageUtil {
         try {
             mParallelSetup.join();
         } catch (InterruptedException e) {
+            mParallelSetup.cleanUpFiles();
             throw new RuntimeException(e);
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
@@ -290,10 +291,12 @@ public class IncrementalImageUtil {
                     System.currentTimeMillis() - startWait);
         }
         if (mParallelSetup.getError() != null) {
+            mParallelSetup.cleanUpFiles();
             throw mParallelSetup.getError();
         }
         boolean bootComplete = mDevice.waitForBootComplete(mDevice.getOptions().getOnlineTimeout());
         if (!bootComplete) {
+            mParallelSetup.cleanUpFiles();
             throw new TargetSetupError(
                     "Failed to boot within timeout.",
                     InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
@@ -545,30 +548,32 @@ public class IncrementalImageUtil {
         @Override
         public void run() {
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
-                Future<File> futureSrcDir =
+                mSrcDirectory = FileUtil.createTempDir("incremental_src");
+                mTargetDirectory = FileUtil.createTempDir("incremental_target");
+                Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
                                     try {
-                                        return ZipUtil2.extractZipToTemp(
-                                                mSetupSrcImage, "incremental_src");
+                                        ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
+                                        return true;
                                     } catch (IOException ioe) {
                                         throw new RuntimeException(ioe);
                                     }
                                 });
-                Future<File> futureTargetDir =
+                Future<Boolean> futureTargetDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
                                     try {
-                                        return ZipUtil2.extractZipToTemp(
-                                                mSetupTargetImage, "incremental_target");
+                                        ZipUtil2.extractZip(mSetupTargetImage, mTargetDirectory);
+                                        return true;
                                     } catch (IOException ioe) {
                                         throw new RuntimeException(ioe);
                                     }
                                 });
-
-                mSrcDirectory = futureSrcDir.get();
-                mTargetDirectory = futureTargetDir.get();
-            } catch (InterruptedException | ExecutionException e) {
+                // Join the unzipping
+                futureSrcDir.get();
+                futureTargetDir.get();
+            } catch (InterruptedException | IOException | ExecutionException e) {
                 FileUtil.recursiveDelete(mSrcDirectory);
                 FileUtil.recursiveDelete(mTargetDirectory);
                 mSrcDirectory = null;
@@ -636,6 +641,12 @@ public class IncrementalImageUtil {
 
         public TargetSetupError getError() {
             return mError;
+        }
+
+        public void cleanUpFiles() {
+            FileUtil.recursiveDelete(mSrcDirectory);
+            FileUtil.recursiveDelete(mTargetDirectory);
+            FileUtil.recursiveDelete(mWorkDir);
         }
     }
 }
