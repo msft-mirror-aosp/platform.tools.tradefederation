@@ -621,9 +621,10 @@ public class WifiHelper implements IWifiHelper {
     /** Returns a list of scan result using the `wifi list-scan-results` command. */
     private List<WifiCommandUtil.ScanResult> getScanResults(long timeout)
             throws DeviceNotAvailableException {
+        // start a new scan
+        mDevice.executeShellV2Command("cmd -w wifi start-scan");
         // we might need to wait for scan results to be available.
         long startTime = System.currentTimeMillis();
-
         while (System.currentTimeMillis() < (startTime + timeout)) {
             CommandResult listOutput =
                     mDevice.executeShellV2Command(String.format("cmd -w wifi list-scan-results"));
