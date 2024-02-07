@@ -189,6 +189,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getSerialNumber(),
                     DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE);
         }
+        verifyKernel();
         getDevice().enableAdbRoot();
         // For virtual device we only start logcat collection after we are sure it's online.
         if (getDevice().getOptions().isLogcatCaptureEnabled()) {
@@ -1017,5 +1018,39 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public GceAvdInfo getAvdInfo() {
         return mGceAvd;
+    }
+
+    /**
+     * Verify device kernel build ID
+     *
+     * <p>Throw TargetSetupError if kernel build ID doesn't match
+     *
+     * @throws DeviceNotAvailableException, TargetSetupError
+     */
+    @VisibleForTesting
+    void verifyKernel() throws DeviceNotAvailableException, TargetSetupError {
+        List<String> gceDriverParams = getDevice().getOptions().getGceDriverParams();
+        if (gceDriverParams.contains("--kernel-build-id")) {
+            String kernelBuildId =
+                    gceDriverParams.get(gceDriverParams.indexOf("--kernel-build-id") + 1);
+            String output = getDevice().executeShellCommand("uname -r");
+            if (!Strings.isNullOrEmpty(output)) {
+                if (output.contains(kernelBuildId)) {
+                    CLog.i(
+                            "Device has the expected kernel build ID %s in %s",
+                            kernelBuildId, output);
+                } else {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Device booted up with wrong kernel %s, expecting kernel build"
+                                            + " ID %s",
+                                    output, kernelBuildId),
+                            getDevice().getDeviceDescriptor(),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                }
+            } else {
+                CLog.w("Failed to get kernel information by `uname -r` from device");
+            }
+        }
     }
 }
