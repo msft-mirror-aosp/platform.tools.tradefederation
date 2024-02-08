@@ -461,6 +461,16 @@ public class IsolatedHostTest
         }
     }
 
+    private File getRavenwoodRuntimeDir(File testDir) {
+        File ravenwoodRuntime = FileUtil.findFile(testDir, "ravenwood-runtime");
+        if (ravenwoodRuntime == null || !ravenwoodRuntime.isDirectory()) {
+            throw new HarnessRuntimeException(
+                    "Could not find Ravenwood runtime needed for execution. " + testDir,
+                    InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
+        }
+        return ravenwoodRuntime;
+    }
+
     /**
      * Creates a classpath for the subprocess that includes the needed jars to run the tests
      *
@@ -493,13 +503,7 @@ public class IsolatedHostTest
                 }
                 paths.add(androidAllJar.getAbsolutePath());
             } else if (mRavenwoodResources) {
-                File ravenwoodRuntime = FileUtil.findFile(testDir, "ravenwood-runtime");
-                if (ravenwoodRuntime == null || !ravenwoodRuntime.isDirectory()) {
-                    throw new HarnessRuntimeException(
-                            "Could not find Ravenwood runtime needed for execution. " + testDir,
-                            InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-                }
-                addAllFilesUnder(paths, ravenwoodRuntime);
+                addAllFilesUnder(paths, getRavenwoodRuntimeDir(testDir));
             }
 
             for (String jar : mJars) {
@@ -536,46 +540,77 @@ public class IsolatedHostTest
      *
      * @return a string specifying the colon separated library path.
      */
+    private String compileLdLibraryPath() {
+        return compileLdLibraryPathInner(getEnvironment("ANDROID_HOST_OUT"));
+    }
+
+    /**
+     * We call this version from the unit test, and directly pass ANDROID_HOST_OUT. We need it
+     * because Java has no API to set environmental variables.
+     */
     @VisibleForTesting
-    protected String compileLdLibraryPath() {
+    protected String compileLdLibraryPathInner(String androidHostOut) {
         if (mClasspathOverride != null) {
             return null;
         }
-        File testDir = findTestDirectory();
-        List<String> paths = new ArrayList<>();
+        // TODO(b/324134773) Unify with TestRunnerUtil.getLdLibraryPath().
 
+        File testDir = findTestDirectory();
+        // Collect all the directories that may contain `lib` or `lib64` for the test.
+        Set<String> dirs = new LinkedHashSet<>();
+
+        // Search the directories containing the test jars.
         for (String jar : mJars) {
             File f = FileUtil.findFile(testDir, jar);
             if (f == null || !f.exists()) {
                 continue;
             }
-            String libs[] = {"lib", "lib64"};
-            for (String lib : libs) {
-                File libFile = new File(f.getParentFile().getAbsolutePath(), lib);
-                // If the test module has no lib directory packaged, we assume the test does not
-                // require any external native library.
-                if (!libFile.exists()) {
-                    continue;
-                }
-                paths.add(libFile.getAbsolutePath());
-                // Include `testcases` directory for running tests based on test zip.
-                libFile = new File(f.getParentFile().getParentFile().getAbsolutePath(), lib);
-                if (libFile.exists()) {
-                    paths.add(libFile.getAbsolutePath());
-                }
-                // Include ANDROID_HOST_OUT/lib to support local case.
-                if (getEnvironment("ANDROID_HOST_OUT") != null) {
-                    libFile = new File(getEnvironment("ANDROID_HOST_OUT"), lib);
-                    if (libFile.exists()) {
-                        paths.add(libFile.getAbsolutePath());
-                    }
+            // Include the directory containing the test jar.
+            File parent = f.getParentFile();
+            if (parent != null) {
+                dirs.add(parent.getAbsolutePath());
+
+                // Also include the parent directory -- which is typically (?) "testcases" --
+                // for running tests based on test zip.
+                File grandParent = parent.getParentFile();
+                if (grandParent != null) {
+                    dirs.add(grandParent.getAbsolutePath());
                 }
             }
         }
-        if (paths.isEmpty()) {
+        // Optionally search the ravenwood runtime dir.
+        if (mRavenwoodResources) {
+            dirs.add(getRavenwoodRuntimeDir(testDir).getAbsolutePath());
+        }
+        // Search ANDROID_HOST_OUT.
+        if (androidHostOut != null) {
+            dirs.add(androidHostOut);
+        }
+
+        // Look into all the above directories, and if there are any 'lib' or 'lib64', then
+        // add it to LD_LIBRARY_PATH.
+        String libs[] = {"lib", "lib64"};
+
+        Set<String> result = new LinkedHashSet<>();
+
+        for (String dir : dirs) {
+            File path = new File(dir);
+            if (!path.isDirectory()) {
+                continue;
+            }
+
+            for (String lib : libs) {
+                File libFile = new File(path, lib);
+
+                if (libFile.isDirectory()) {
+                    result.add(libFile.getAbsolutePath());
+                }
+            }
+        }
+        if (result.isEmpty()) {
             return null;
         }
-        return String.join(java.io.File.pathSeparator, paths);
+        return String.join(java.io.File.pathSeparator, result);
     }
 
     private List<String> compileRobolectricOptions(File artifactsDir) {
