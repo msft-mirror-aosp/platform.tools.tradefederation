@@ -253,9 +253,14 @@ public class TestContentAnalyzer {
     }
 
     private ContentAnalysisResults fileAnalysis(IBuildInfo build, ContentAnalysisContext context) {
-        if (build.getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
-            CLog.w("Mismatch: we would expect a testsdir directory for FILE analysis");
-            return null;
+        File rootDir = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        if (rootDir == null) {
+            if (build.getFile(BuildInfoFileKey.ROOT_DIRECTORY) != null) {
+                rootDir = build.getFile(BuildInfoFileKey.ROOT_DIRECTORY);
+            } else {
+                CLog.w("Mismatch: we would expect a testsdir directory for FILE analysis");
+                return null;
+            }
         }
         List<ArtifactFileDescriptor> diffs =
                 analyzeContentDiff(context.contentInformation(), context.contentEntry());
@@ -265,7 +270,6 @@ public class TestContentAnalyzer {
         }
         diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
         Set<String> diffPaths = diffs.parallelStream().map(d -> d.path).collect(Collectors.toSet());
-        File rootDir = build.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
         Set<Path> files = new HashSet<>();
         try (Stream<Path> stream =
                 Files.walk(Paths.get(rootDir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
