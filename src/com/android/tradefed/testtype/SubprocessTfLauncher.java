@@ -156,7 +156,6 @@ public abstract class SubprocessTfLauncher
                             "loganalysis-tests.jar",
                             // Aosp Tf jars
                             "tradefed.jar",
-                            "tradefed-test-framework.jar",
                             "tradefed-tests.jar",
                             // libs
                             "tools-common-prebuilt.jar",
