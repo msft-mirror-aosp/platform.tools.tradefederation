@@ -71,42 +71,51 @@ public final class IsolationRunner {
 
         // Process messages by receiving and looping
         mainLoop:
-        while (true) {
-            RunnerMessage message = RunnerMessage.parseDelimitedFrom(mSocket.getInputStream());
-            RunnerReply reply;
-            switch (message.getCommand()) {
-                case RUNNER_OP_STOP:
-                    System.out.println("Received Stop Message");
-                    reply =
+        try {
+            while (true) {
+                RunnerMessage message = RunnerMessage.parseDelimitedFrom(mSocket.getInputStream());
+                RunnerReply reply;
+                switch (message.getCommand()) {
+                    case RUNNER_OP_STOP:
+                        System.out.println("Received Stop Message");
+                        reply =
+                                RunnerReply.newBuilder()
+                                        .setRunnerStatus(RunnerStatus.RUNNER_STATUS_FINISHED_OK)
+                                        .build();
+                        reply.writeDelimitedTo(output);
+                        output.flush();
+                        break mainLoop;
+                    case RUNNER_OP_RUN_TEST:
+                        try {
+                            this.runTests(output, message.getParams());
+                        } catch (IOException e) {
                             RunnerReply.newBuilder()
-                                    .setRunnerStatus(RunnerStatus.RUNNER_STATUS_FINISHED_OK)
-                                    .build();
-                    reply.writeDelimitedTo(output);
-                    output.flush();
-                    break mainLoop;
-                case RUNNER_OP_RUN_TEST:
-                    try {
-                        this.runTests(output, message.getParams());
-                    } catch (IOException e) {
-                        RunnerReply.newBuilder()
-                                .setRunnerStatus(RunnerStatus.RUNNER_STATUS_FINISHED_ERROR)
-                                .setMessage(e.toString())
-                                .build()
-                                .writeDelimitedTo(output);
-                    }
-                    output.flush();
-                    break;
-                default:
-                    System.out.println("Received unrecognized message");
+                                    .setRunnerStatus(RunnerStatus.RUNNER_STATUS_FINISHED_ERROR)
+                                    .setMessage(e.toString())
+                                    .build()
+                                    .writeDelimitedTo(output);
+                        }
+                        output.flush();
+                        break;
+                    default:
+                        System.out.println("Received unrecognized message");
+                }
+            }
+        } finally {
+
+            if (mSocket != null) {
+                try {
+                    mSocket.close();
+                } finally {
+                }
+                mSocket = null;
             }
         }
-
-        if (mSocket != null) {
-            mSocket.close();
-            mSocket = null;
-        }
         if (mServer != null) {
-            mServer.close();
+            try {
+                mServer.close();
+            } finally {
+            }
             mServer = null;
         }
     }
