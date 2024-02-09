@@ -214,7 +214,9 @@ public class IsolatedHostTest
 
         try {
             mServer = new ServerSocket(0);
-            mServer.setSoTimeout(mSocketTimeout);
+            if (!this.debug) {
+                mServer.setSoTimeout(mSocketTimeout);
+            }
             artifactsDir = FileUtil.createTempDir("robolectric-screenshot-artifacts");
             String classpath = this.compileClassPath();
             List<String> cmdArgs = this.compileCommandArgs(classpath, artifactsDir);
@@ -239,6 +241,12 @@ public class IsolatedHostTest
 
             isolationRunner = runner.runCmdInBackground(Redirect.to(mSubprocessLog), cmdArgs);
             CLog.v("Started subprocess.");
+
+            if (this.debug) {
+                CLog.v(
+                        "JVM subprocess is waiting for a debugger to connect, will now wait"
+                                + " indefinitely for connection.");
+            }
 
             Socket socket = mServer.accept();
             if (!this.debug) {
@@ -631,7 +639,6 @@ public class IsolatedHostTest
         options.add("-Drobolectric.offline=true");
         options.add("-Drobolectric.logging=stdout");
         options.add("-Drobolectric.resourcesMode=binary");
-        // TODO(rexhoffman) We should turn this on when only using one version of robolectric
         options.add("-Drobolectric.usePreinstrumentedJars=false");
         // TODO(rexhoffman) figure out how to get the local conscrypt working - shared objects and
         // such.
