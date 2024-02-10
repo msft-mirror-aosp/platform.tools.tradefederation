@@ -238,11 +238,7 @@ public abstract class ProtoResultReporter
             mInvocationRecordBuilder.setStatus(TestStatus.PASS);
         }
         if (mInvocationSkipReason != null) {
-            com.android.tradefed.result.proto.TestRecordProto.SkipReason.Builder reason =
-                    com.android.tradefed.result.proto.TestRecordProto.SkipReason.newBuilder();
-            reason.setReason(mInvocationSkipReason.getReason())
-                    .setTrigger(mInvocationSkipReason.getTrigger());
-            mInvocationRecordBuilder.setSkipReason(reason);
+            mInvocationRecordBuilder.setSkipReason(convertSkipReason(mInvocationSkipReason));
         }
 
         // Finalize the protobuf handling: where to put the results.
@@ -470,6 +466,13 @@ public abstract class ProtoResultReporter
     }
 
     @Override
+    public final void testSkipped(TestDescription test, SkipReason reason) {
+        TestRecord.Builder testBuilder = mLatestChild.peek();
+
+        testBuilder.setSkipReason(convertSkipReason(reason));
+    }
+
+    @Override
     public final void testFailed(TestDescription test, String trace) {
         TestRecord.Builder testBuilder = mLatestChild.peek();
 
@@ -657,5 +660,13 @@ public abstract class ProtoResultReporter
         debugBuilder.setDebugInfoContext(debugContext);
 
         return debugBuilder.build();
+    }
+
+    private com.android.tradefed.result.proto.TestRecordProto.SkipReason convertSkipReason(
+            SkipReason skip) {
+        com.android.tradefed.result.proto.TestRecordProto.SkipReason.Builder reason =
+                com.android.tradefed.result.proto.TestRecordProto.SkipReason.newBuilder();
+        reason.setReason(skip.getReason()).setTrigger(skip.getTrigger());
+        return reason.build();
     }
 }
