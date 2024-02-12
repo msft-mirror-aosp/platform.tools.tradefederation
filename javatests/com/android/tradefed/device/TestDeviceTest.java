@@ -6332,6 +6332,7 @@ public class TestDeviceTest {
         assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isFalse();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(10000)).isFalse();
     }
 
     @Test
@@ -6341,6 +6342,8 @@ public class TestDeviceTest {
         assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(44)).isFalse();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(10000)).isTrue();
     }
 
     /** Unit test for {@link TestDevice#getBugreportz()}. */
