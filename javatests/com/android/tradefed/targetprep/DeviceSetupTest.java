@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -105,7 +106,7 @@ public class DeviceSetupTest {
 
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
 
         String setProp = setPropCapture.getValue();
         assertTrue(
@@ -132,7 +133,7 @@ public class DeviceSetupTest {
         verify(mMockDevice)
                 .executeShellCommand(
                         "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -147,7 +148,7 @@ public class DeviceSetupTest {
         verify(mMockDevice)
                 .executeShellCommand(
                         "am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -160,7 +161,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "mobile_data", "1");
         verify(mMockDevice).executeShellCommand("svc data enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -173,7 +174,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "mobile_data", "0");
         verify(mMockDevice).executeShellCommand("svc data disable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -185,7 +186,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "cell_on", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -197,7 +198,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "cell_on", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -209,7 +210,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "clockwork_cell_auto_setting", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -221,7 +222,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "clockwork_cell_auto_setting", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -234,7 +235,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
         verify(mMockDevice).executeShellCommand("svc wifi enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -247,7 +248,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "wifi_on", "0");
         verify(mMockDevice).executeShellCommand("svc wifi disable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -266,7 +267,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
         verify(mMockDevice).executeShellCommand("svc wifi enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -285,7 +286,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
         verify(mMockDevice).executeShellCommand("svc wifi enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -301,7 +302,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
         verify(mMockDevice).executeShellCommand("svc wifi enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -326,7 +327,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
         verify(mMockDevice).executeShellCommand("svc wifi enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -351,7 +352,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "wifi_on", "1");
         verify(mMockDevice).executeShellCommand("svc wifi enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -363,7 +364,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_watchdog", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -375,7 +376,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_watchdog", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -387,7 +388,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "cw_disable_wifimediator", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -399,7 +400,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "cw_disable_wifimediator", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -411,7 +412,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_scan_always_enabled", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -423,7 +424,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "wifi_scan_always_enabled", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -435,7 +436,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("ifconfig eth0 up");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -447,7 +448,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("ifconfig eth0 down");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -462,7 +463,7 @@ public class DeviceSetupTest {
                 .executeShellCommand(
                         "cmd bluetooth_manager enable && cmd bluetooth_manager"
                                 + " wait-for-state:STATE_ON");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -477,7 +478,7 @@ public class DeviceSetupTest {
                 .executeShellCommand(
                         "cmd bluetooth_manager disable && cmd bluetooth_manager"
                                 + " wait-for-state:STATE_OFF");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -489,7 +490,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("svc nfc enable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -501,7 +502,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("svc nfc disable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -513,7 +514,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "screen_brightness_mode", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -525,7 +526,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "screen_brightness_mode", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -537,7 +538,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "screen_brightness", "50");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -549,7 +550,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setScreenAlwaysOn(BinaryState.IGNORE);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -562,7 +563,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("svc power stayon false");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -576,7 +577,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "screen_off_timeout", "5000");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -588,7 +589,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "doze_enabled", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -600,7 +601,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "doze_enabled", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -612,7 +613,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "wake_gesture_enabled", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -624,7 +625,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "wake_gesture_enabled", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -636,7 +637,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "screensaver_enabled", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -648,7 +649,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "screensaver_enabled", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -660,7 +661,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "notification_light_pulse", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -672,7 +673,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "notification_light_pulse", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -684,7 +685,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "install_non_market_apps", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -696,7 +697,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "install_non_market_apps", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -711,7 +712,7 @@ public class DeviceSetupTest {
                 .executeShellCommand(
                         "am broadcast -a android.intent.action.MEDIA_MOUNTED "
                                 + "-d file://${EXTERNAL_STORAGE} --receiver-include-background");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -723,7 +724,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "location_providers_allowed", "+gps");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -735,7 +736,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "location_providers_allowed", "-gps");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -747,7 +748,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "location_providers_allowed", "+network");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -759,7 +760,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("secure", "location_providers_allowed", "-network");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -771,7 +772,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "accelerometer_rotation", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -783,7 +784,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("system", "accelerometer_rotation", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -796,7 +797,7 @@ public class DeviceSetupTest {
 
         verify(mMockDevice).setSetting("global", "low_power", "1");
         verify(mMockDevice).executeShellCommand("dumpsys battery unplug");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -810,7 +811,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("dumpsys battery set usb 0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -822,7 +823,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "low_power", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -834,7 +835,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "low_power_trigger_level", "50");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -846,7 +847,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("dumpsys batterystats --enable full-history");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -858,7 +859,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).executeShellCommand("dumpsys deviceidle disable");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -870,7 +871,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "auto_time", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -882,7 +883,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "auto_time", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -894,7 +895,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "auto_timezone", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -906,7 +907,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "auto_timezone", "0");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -920,7 +921,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setTimezone("America/Los_Angeles");
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -932,7 +933,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setDisableDialing(false);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
 
         assertFalse(
                 "Set prop contains ro.telephony.disable-call=true",
@@ -948,7 +949,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "multi_sim_data_call", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -960,7 +961,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "multi_sim_voice_call", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -972,7 +973,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
 
         verify(mMockDevice).setSetting("global", "multi_sim_sms", "1");
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -984,7 +985,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setDisableAudio(false);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
 
         assertFalse(
                 "Set prop contains ro.audio.silent=1",
@@ -1006,7 +1007,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setTestHarness(false);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
 
         String setProp = setPropCapture.getValue();
         assertFalse("Set prop contains ro.test_harness=1", setProp.contains("ro.test_harness=1\n"));
@@ -1023,7 +1024,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setDisableDalvikVerifier(true);
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
 
         String setProp = setPropCapture.getValue();
         assertTrue(
@@ -1118,7 +1119,7 @@ public class DeviceSetupTest {
         doSyncDataExpectations(true);
 
         mDeviceSetup.setUp(mTestInfo);
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     /** Test case {@link DeviceSetup#setUp(TestInformation)} when local data fails to be synced. */
@@ -1148,7 +1149,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setDeprecatedSetProp("key=value");
         mDeviceSetup.setUp(mTestInfo);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
 
         String setProp = setPropCapture.getValue();
         assertTrue(
@@ -1221,7 +1222,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
         mDeviceSetup.tearDown(mTestInfo, null);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
         // tearDown
         verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
@@ -1241,7 +1242,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
         mDeviceSetup.tearDown(mTestInfo, null);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
         // tearDown
         verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
@@ -1266,7 +1267,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
         mDeviceSetup.tearDown(mTestInfo, null);
 
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
         verify(mMockDevice, times(1)).setSetting("system", "key", "value");
         verify(mMockDevice, times(1)).setSetting("global", "key2", "value2");
         verify(mMockDevice, times(1)).setSetting("secure", "key3", "value3");
@@ -1303,11 +1304,13 @@ public class DeviceSetupTest {
 
     @Test
     public void testSetup_rootDisabled_withoutChangeSystemProp() throws Exception {
+        OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("set-property", "fooProperty", "1");
         doSetupExpectations(
                 true /* screenOn */,
-                false /* root enabled */,
-                false /* root response */,
-                false /* test harness */,
+                true /* root enabled */,
+                true /* root response */,
+                true /* test harness */,
                 DEFAULT_API_LEVEL,
                 ArgumentCaptor.forClass(String.class));
         doCheckExternalStoreSpaceExpectations();
@@ -1316,7 +1319,7 @@ public class DeviceSetupTest {
         mDeviceSetup.setDisableAudio(false);
         mDeviceSetup.setTestHarness(false);
         mDeviceSetup.setUp(mTestInfo);
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
@@ -1332,7 +1335,7 @@ public class DeviceSetupTest {
 
         mDeviceSetup.setForceSkipSystemProps(true);
         mDeviceSetup.setUp(mTestInfo);
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, never()).enableAdbRoot();
     }
 
     @Test
@@ -1389,7 +1392,7 @@ public class DeviceSetupTest {
         setter.setOptionValue("optimized-property-setting", "true");
         setter.setOptionValue("set-property", "fooProperty", "1");
         mDeviceSetup.setUp(mTestInfo);
-        verify(mMockDevice, atLeastOnce()).getOptions();
+        verify(mMockDevice, atLeastOnce()).enableAdbRoot();
     }
 
     @Test
