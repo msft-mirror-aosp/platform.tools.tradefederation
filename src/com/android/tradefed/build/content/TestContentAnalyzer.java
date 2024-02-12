@@ -289,7 +289,6 @@ public class TestContentAnalyzer {
                             .filter(diffPath -> diffPath.equals(relativeRootFilePath.toString()))
                             .collect(Collectors.toSet());
             if (fileDiff.isEmpty()) {
-                CLog.d("File %s is unchanged.", p);
                 InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.UNCHANGED_FILE, 1);
                 results.addUnchangedFile();
             } else {
@@ -404,7 +403,6 @@ public class TestContentAnalyzer {
             ArtifactDetails presubmit =
                     ArtifactDetails.parseFile(information.currentContent, entry);
             List<ArtifactFileDescriptor> diffs = ArtifactDetails.diffContents(base, presubmit);
-            CLog.d("Analysis of '%s' shows %s diffs with base", entry, diffs.size());
             return diffs;
         } catch (IOException | RuntimeException e) {
             CLog.e(e);
