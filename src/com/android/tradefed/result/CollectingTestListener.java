@@ -335,6 +335,12 @@ public class CollectingTestListener
         mCurrentTestRunResult.testIgnored(test);
     }
 
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        setCountDirty();
+        mCurrentTestRunResult.testSkipped(test, reason);
+    }
+
     /** {@inheritDoc} */
     @Override
     public void logAssociation(String dataName, LogFile logFile) {
