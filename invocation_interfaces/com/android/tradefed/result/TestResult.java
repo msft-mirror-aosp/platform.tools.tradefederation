@@ -15,9 +15,9 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.MergeStrategy;
 
 import java.util.ArrayList;
@@ -35,6 +35,7 @@ public class TestResult {
 
     private TestStatus mStatus;
     private FailureDescription mFailureDescription;
+    private SkipReason mSkipReason;
     private Map<String, String> mMetrics;
     private HashMap<String, Metric> mProtoMetrics;
     private Map<String, LogFile> mLoggedFiles;
@@ -51,8 +52,8 @@ public class TestResult {
     }
 
     /** Get the {@link TestStatus} result of the test. */
-    public TestStatus getStatus() {
-        return mStatus;
+    public com.android.ddmlib.testrunner.TestResult.TestStatus getStatus() {
+        return TestStatus.convertToDdmlibType(mStatus);
     }
 
     /**
@@ -72,6 +73,10 @@ public class TestResult {
      */
     public FailureDescription getFailure() {
         return mFailureDescription;
+    }
+
+    public SkipReason getSkipReason() {
+        return mSkipReason;
     }
 
     /** Get the associated test metrics. */
@@ -128,6 +133,11 @@ public class TestResult {
         return mEndTime;
     }
 
+    public TestResult setStatus(com.android.ddmlib.testrunner.TestResult.TestStatus ddmlibStatus) {
+        mStatus = TestStatus.convertFromDdmlibType(ddmlibStatus);
+        return this;
+    }
+
     /** Set the {@link TestStatus}. */
     public TestResult setStatus(TestStatus status) {
         mStatus = status;
@@ -142,6 +152,10 @@ public class TestResult {
     /** Set the stack trace. */
     public void setFailure(FailureDescription failureDescription) {
         mFailureDescription = failureDescription;
+    }
+
+    public void setSkipReason(SkipReason reason) {
+        mSkipReason = reason;
     }
 
     /** Sets the end time */
@@ -239,7 +253,7 @@ public class TestResult {
                     ignored++;
                     break;
             }
-            lastStatus = attempt.getStatus();
+            lastStatus = attempt.mStatus;
         }
 
         switch (strategy) {
