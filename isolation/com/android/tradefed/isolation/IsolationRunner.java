@@ -165,7 +165,7 @@ public final class IsolationRunner {
                     System.out.println("Done executing class: " + klass);
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PrintStream bytePrintStream = new PrintStream(outputStream);
             e.printStackTrace(bytePrintStream);
