@@ -928,7 +928,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             Map<TestDescription, TestResult> testResults, ITestInvocationListener listener) {
         for (Map.Entry<TestDescription, TestResult> testEntry : testResults.entrySet()) {
             listener.testStarted(testEntry.getKey(), testEntry.getValue().getStartTime());
-            switch (testEntry.getValue().getStatus()) {
+            switch (testEntry.getValue().getResultStatus()) {
                 case FAILURE:
                     listener.testFailed(testEntry.getKey(), testEntry.getValue().getFailure());
                     break;
@@ -938,6 +938,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     break;
                 case IGNORED:
                     listener.testIgnored(testEntry.getKey());
+                    break;
+                case SKIPPED:
+                    listener.testSkipped(testEntry.getKey(), testEntry.getValue().getSkipReason());
                     break;
                 case INCOMPLETE:
                     listener.testFailed(

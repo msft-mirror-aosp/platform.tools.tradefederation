@@ -17,11 +17,11 @@ package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.TestSummary;
 import com.android.tradefed.result.TestSummary.Type;
 import com.android.tradefed.result.TestSummary.TypedString;
@@ -137,6 +137,8 @@ public class SuiteResultReporter extends CollectingTestListener {
             mPassedTests += moduleResult.getNumTestsInState(TestStatus.PASSED);
             mFailedTests += moduleResult.getNumAllFailedTests();
             mSkippedTests += moduleResult.getNumTestsInState(TestStatus.IGNORED);
+            // TODO(b/322204420): differentiate SKIPPED and IGNORED
+            mSkippedTests += moduleResult.getNumTestsInState(TestStatus.SKIPPED);
             mAssumeFailureTests += moduleResult.getNumTestsInState(TestStatus.ASSUMPTION_FAILURE);
 
             // Get the module metrics for target preparation
