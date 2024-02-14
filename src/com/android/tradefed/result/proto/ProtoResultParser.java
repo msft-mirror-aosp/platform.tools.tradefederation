@@ -585,6 +585,16 @@ public class ProtoResultParser {
                 log("Test case ignored proto: %s", description.toString());
                 break;
             case PASS:
+                if (testcaseProto.hasSkipReason()) {
+                    log(
+                            "Test case skipped proto: %s",
+                            description.toString(), testcaseProto.getSkipReason());
+                    mListener.testSkipped(
+                            description,
+                            new com.android.tradefed.result.skipped.SkipReason(
+                                    testcaseProto.getSkipReason().getReason(),
+                                    testcaseProto.getSkipReason().getTrigger()));
+                }
                 break;
             default:
                 throw new RuntimeException(

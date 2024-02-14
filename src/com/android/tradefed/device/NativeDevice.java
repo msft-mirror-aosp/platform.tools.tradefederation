@@ -202,6 +202,9 @@ public class NativeDevice
             String.format("mount -t debugfs debugfs %s", DEBUGFS_PATH);
     private static final String UNMOUNT_DEBUGFS_COMMAND = String.format("umount %s", DEBUGFS_PATH);
 
+    /** Version number for a current development build */
+    private static final int CUR_DEVELOPMENT_VERSION = 10000;
+
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
@@ -4674,6 +4677,10 @@ public class NativeDevice
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
         }
         codeName = codeName.trim();
+        // CUR_DEVELOPMENT_VERSION is the code used by Android for a pre-finalized SDK
+        if (strictMinLevel == CUR_DEVELOPMENT_VERSION && !"REL".equals(codeName)) {
+            return true;
+        }
         apiLevel = apiLevel + ("REL".equals(codeName) ? 0 : 1);
         if (strictMinLevel > apiLevel) {
             return false;

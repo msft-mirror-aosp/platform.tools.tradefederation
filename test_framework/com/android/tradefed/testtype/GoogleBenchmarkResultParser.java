@@ -15,13 +15,14 @@
  */
 package com.android.tradefed.testtype;
 
-import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.common.base.Strings;
@@ -53,11 +54,11 @@ public class GoogleBenchmarkResultParser {
      * Parse an individual output line.
      * name,iterations,real_time,cpu_time,bytes_per_second,items_per_second,label
      *
-     * @param output  contains the test output
+     * @param cmd_result device command result that contains the test output
      * @return a map containing the number of tests that ran.
      */
-    public Map<String, String> parse(CollectingOutputReceiver output) {
-        String outputLogs = output.getOutput();
+    public Map<String, String> parse(CommandResult cmd_result) {
+        String outputLogs = cmd_result.getStdout();
         Map<String, String> results = new HashMap<String, String>();
         JSONObject res = null;
         outputLogs = sanitizeOutput(outputLogs);
@@ -76,6 +77,18 @@ public class GoogleBenchmarkResultParser {
                 FailureDescription failure =
                         FailureDescription.create(errorMessage)
                                 .setErrorIdentifier(TestErrorIdentifier.TEST_ABORTED);
+                mTestListener.testRunFailed(failure);
+            } else if (!CommandStatus.SUCCESS.equals(cmd_result.getStatus())) {
+                FailureDescription failure;
+                if (CommandStatus.TIMED_OUT.equals(cmd_result.getStatus())) {
+                    failure =
+                            FailureDescription.create("Test timed out.")
+                                    .setErrorIdentifier(TestErrorIdentifier.TEST_TIMEOUT);
+                } else {
+                    failure =
+                            FailureDescription.create(cmd_result.getStderr())
+                                    .setErrorIdentifier(TestErrorIdentifier.HOST_COMMAND_FAILED);
+                }
                 mTestListener.testRunFailed(failure);
             } else {
                 String parserFailedMessage = "Failed to Parse context:";
