@@ -355,6 +355,11 @@ public abstract class BasePostProcessor implements IPostProcessor {
         mForwarder.testIgnored(test);
     }
 
+    @Override
+    public final void testSkipped(TestDescription test, SkipReason reason) {
+        mForwarder.testSkipped(test, reason);
+    }
+
     /**
      * Override this method in the child post processors to initialize before the test runs.
      */
