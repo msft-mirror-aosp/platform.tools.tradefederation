@@ -323,6 +323,18 @@ public class ResultForwarder implements ITestInvocationListener {
         }
     }
 
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        for (ITestInvocationListener listener : mListeners) {
+            try {
+                listener.testSkipped(test, reason);
+            } catch (RuntimeException e) {
+                CLog.e("Exception while invoking %s#testSkipped", listener.getClass().getName());
+                CLog.e(e);
+            }
+        }
+    }
+
     /** {@inheritDoc} */
     @Override
     public void testEnded(TestDescription test, HashMap<String, Metric> testMetrics) {

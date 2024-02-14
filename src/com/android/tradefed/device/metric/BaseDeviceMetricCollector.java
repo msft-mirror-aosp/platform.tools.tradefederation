@@ -539,6 +539,11 @@ public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActio
     }
 
     @Override
+    public final void testSkipped(TestDescription test, SkipReason reason) {
+        mForwarder.testSkipped(test, reason);
+    }
+
+    @Override
     public final void testAssumptionFailure(TestDescription test, String trace) {
         if (!mSkipTestCase && !mDeviceNoAvailable) {
             long start = System.currentTimeMillis();

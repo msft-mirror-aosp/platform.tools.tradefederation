@@ -333,6 +333,14 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             "system property options will be ignored")
     protected boolean mForceSkipSystemProps = false;
 
+    @Option(
+            name = "force-root-setup",
+            description =
+                    "Force switching to root before the setup.Root should only be need for system"
+                        + " props, but adding this flag while transitioning in case someone reports"
+                        + " issues.")
+    private boolean mForceRoot = false;
+
     @Option(name = "force-skip-settings",
             description = "Force setup to not modify any device settings. All other setting " +
             "options will be ignored.")
@@ -526,11 +534,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         ITestDevice device = getDevice(testInfo);
         CLog.i("Performing setup on %s", device.getSerialNumber());
 
-        if (device.getOptions().isEnableAdbRoot() && !device.enableAdbRoot()) {
-            throw new TargetSetupError(
-                    String.format("Failed to enable adb root on %s", device.getSerialNumber()),
-                    device.getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        if (mForceRoot) {
+            if (!device.enableAdbRoot()) {
+                throw new TargetSetupError(
+                        String.format("Failed to enable adb root on %s", device.getSerialNumber()),
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
         }
 
         // Convert deprecated options into current options
@@ -903,7 +913,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             return;
         }
 
-        if (mSetProps.size() > 0 && !device.getOptions().isEnableAdbRoot()) {
+        if (mSetProps.size() > 0 && !device.enableAdbRoot()) {
             throw new TargetSetupError(
                     String.format(
                             "Cannot set system props %s on %s without adb root. Setting "
