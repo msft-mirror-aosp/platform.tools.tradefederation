@@ -16,7 +16,6 @@
 package com.android.tradefed.retry;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
@@ -37,6 +36,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -376,7 +376,10 @@ public class BaseRetryDecision
         for (TestRunResult run : previousResults) {
             if (run != null) {
                 for (Entry<TestDescription, TestResult> entry : run.getTestResults().entrySet()) {
-                    if (TestStatus.FAILURE.equals(entry.getValue().getStatus())) {
+                    if (TestStatus.FAILURE.equals(entry.getValue().getResultStatus())) {
+                        failedTestCases.put(entry.getKey(), entry.getValue());
+                    } else if (TestStatus.SKIPPED.equals(entry.getValue().getResultStatus())) {
+                        // Retry skipped test as well
                         failedTestCases.put(entry.getKey(), entry.getValue());
                     }
                 }
@@ -405,7 +408,8 @@ public class BaseRetryDecision
         for (TestRunResult run : previousResults) {
             if (run != null) {
                 for (Entry<TestDescription, TestResult> entry : run.getTestResults().entrySet()) {
-                    if (!TestStatus.FAILURE.equals(entry.getValue().getStatus())) {
+                    if (!TestStatus.FAILURE.equals(entry.getValue().getResultStatus())
+                            && !TestStatus.SKIPPED.equals(entry.getValue().getResultStatus())) {
                         previousPassed.add(entry.getKey());
                     }
                 }
