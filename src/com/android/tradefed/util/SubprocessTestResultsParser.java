@@ -556,7 +556,7 @@ public class SubprocessTestResultsParser implements Closeable {
                             assosInfo.mDataName);
                     return;
                 }
-                try (InputStreamSource source = new FileInputStreamSource(path, true)) {
+                try (InputStreamSource source = new FileInputStreamSource(path)) {
                     LogDataType type = file.getType();
                     CLog.d("Logging %s from subprocess: %s ", assosInfo.mDataName, file.getPath());
                     if (ActiveTrace.TRACE_KEY.equals(assosInfo.mDataName)
