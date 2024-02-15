@@ -16,7 +16,6 @@
 package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -28,6 +27,7 @@ import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
@@ -361,7 +361,11 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             serializer.startTag(NS, CASE_TAG);
             serializer.attribute(NS, NAME_ATTR, className);
             for (Entry<String, TestResult> individualResult : format.get(className).entrySet()) {
-                TestStatus status = individualResult.getValue().getStatus();
+                TestStatus status = individualResult.getValue().getResultStatus();
+                // TODO(b/322204420): Report skipped to XML and support parsing it
+                if (TestStatus.SKIPPED.equals(status)) {
+                    continue;
+                }
                 if (status == null) {
                     continue; // test was not executed, don't report
                 }

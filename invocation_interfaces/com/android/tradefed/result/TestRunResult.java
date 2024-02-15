@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.skipped.SkipReason;
@@ -58,7 +57,7 @@ public class TestRunResult {
     private TestResult mCurrentTestResult;
 
     /** represents sums of tests in each TestStatus state. Indexed by TestStatus.ordinal() */
-    private int[] mStatusCounts = new int[TestStatus.values().length];
+    private int[] mStatusCounts = new int[com.android.tradefed.result.TestStatus.values().length];
     /** tracks if mStatusCounts is accurate, or if it needs to be recalculated */
     private boolean mIsCountDirty = true;
 
@@ -123,7 +122,7 @@ public class TestRunResult {
     public Set<TestDescription> getTestsInState(List<TestStatus> statuses) {
         Set<TestDescription> tests = new LinkedHashSet<>();
         for (Map.Entry<TestDescription, TestResult> testEntry : getTestResults().entrySet()) {
-            TestStatus status = testEntry.getValue().getStatus();
+            TestStatus status = testEntry.getValue().getResultStatus();
             if (statuses.contains(status)) {
                 tests.add(testEntry.getKey());
             }
@@ -168,6 +167,12 @@ public class TestRunResult {
         return mExpectedTestCount;
     }
 
+    /** FOR COMPATIBILITY with older status. Use {@link #getNumTestsInState(TestStatus)} instead. */
+    public int getNumTestsInState(
+            com.android.ddmlib.testrunner.TestResult.TestStatus ddmlibStatus) {
+        return getNumTestsInState(TestStatus.convertFromDdmlibType(ddmlibStatus));
+    }
+
     /** Gets the number of tests in given state for this run. */
     public int getNumTestsInState(TestStatus status) {
         if (mIsCountDirty) {
@@ -177,7 +182,7 @@ public class TestRunResult {
             }
             // now recalculate
             for (TestResult r : mTestResults.values()) {
-                mStatusCounts[r.getStatus().ordinal()]++;
+                mStatusCounts[r.getResultStatus().ordinal()]++;
             }
             mIsCountDirty = false;
         }
@@ -188,7 +193,7 @@ public class TestRunResult {
     public List<TestResult> getTestsResultsInState(TestStatus status) {
         List<TestResult> results = new ArrayList<>();
         for (TestResult r : mTestResults.values()) {
-            if (r.getStatus().equals(status)) {
+            if (r.getResultStatus().equals(status)) {
                 results.add(r);
             }
         }
@@ -367,7 +372,7 @@ public class TestRunResult {
         if (result == null) {
             result = new TestResult();
         }
-        if (result.getStatus().equals(TestStatus.INCOMPLETE)) {
+        if (result.getResultStatus().equals(TestStatus.INCOMPLETE)) {
             result.setStatus(com.android.tradefed.result.TestStatus.PASSED);
         }
         result.setEndTime(endTime);
