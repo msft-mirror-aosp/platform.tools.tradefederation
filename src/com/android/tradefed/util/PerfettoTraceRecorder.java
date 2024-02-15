@@ -200,7 +200,13 @@ public class PerfettoTraceRecorder {
             // wait for the recorder to finish and pull the trace file
             try {
                 // 10 second wait is arbitrary. Should be enough time to pull big trace files.
-                metadata.getProcess().waitFor(10 * 1000, TimeUnit.MILLISECONDS);
+                boolean terminated =
+                        metadata.getProcess().waitFor(10 * 1000, TimeUnit.MILLISECONDS);
+                if (!terminated) {
+                    CLog.d(
+                            "Perfetto process did not finish collection within 10 seconds. Trace"
+                                    + " file may be empty.");
+                }
             } catch (InterruptedException e) {
                 CLog.w(e);
             }

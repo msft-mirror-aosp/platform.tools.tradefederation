@@ -134,4 +134,7 @@ public interface IDeviceSelection extends IMatcher<IDevice> {
 
     /** Sets the device type we should use. */
     public void setBaseDeviceTypeRequested(BaseDeviceType type);
+
+    /** Sets whether or not we want to do the battery check. */
+    public void setRequireBatteryCheck(boolean requireCheck);
 }

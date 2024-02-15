@@ -21,6 +21,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.MergeStrategy;
 import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
@@ -150,6 +151,11 @@ public class CollectingTestListener
     /** {@inheritDoc} */
     @Override
     public void invocationEnded(long elapsedTime) {
+        // ignore
+    }
+
+    @Override
+    public void invocationSkipped(SkipReason reason) {
         // ignore
     }
 
@@ -327,6 +333,12 @@ public class CollectingTestListener
     public void testIgnored(TestDescription test) {
         setCountDirty();
         mCurrentTestRunResult.testIgnored(test);
+    }
+
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        setCountDirty();
+        mCurrentTestRunResult.testSkipped(test, reason);
     }
 
     /** {@inheritDoc} */

@@ -128,6 +128,23 @@ public class AndroidJUnitTestTest {
         verifyRunTestExpectations();
     }
 
+    /** Test list of tests to run is filtered by include filters by input sequence order. */
+    @Test
+    public void testRun_MultipleIncludeFilterClassByOrder() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c.Class3");
+        mAndroidJUnitTest.addIncludeFilter("a.b.c.Class1");
+        mAndroidJUnitTest.addIncludeFilter("a.b.c.Class2");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner)
+                .addInstrumentationArg("class", "a.b.c.Class3,a.b.c.Class1,a.b.c.Class2");
+        verifyRunTestExpectations();
+    }
+
     /** Test list of tests to run is filtered by exclude filters. */
     @Test
     public void testRun_excludeFilterClass() throws Exception {
@@ -139,6 +156,23 @@ public class AndroidJUnitTestTest {
         mAndroidJUnitTest.run(mTestInfo, mMockListener);
 
         verify(mMockRemoteRunner).addInstrumentationArg("notClass", TEST1.toString());
+        verifyRunTestExpectations();
+    }
+
+    /** Test list of tests to run is filtered by exclude filters by input sequence order. */
+    @Test
+    public void testRun_MultipleExcludeFilterClassByOrder() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addExcludeFilter("a.b.c.Class3");
+        mAndroidJUnitTest.addExcludeFilter("a.b.c.Class1");
+        mAndroidJUnitTest.addExcludeFilter("a.b.c.Class2");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner)
+                .addInstrumentationArg("notClass", "a.b.c.Class3,a.b.c.Class1,a.b.c.Class2");
         verifyRunTestExpectations();
     }
 
@@ -227,6 +261,48 @@ public class AndroidJUnitTestTest {
         mAndroidJUnitTest.run(mTestInfo, mMockListener);
 
         verify(mMockRemoteRunner).addInstrumentationArg("tests_regex", "\"(.*test2|.*testName$)\"");
+        verifyRunTestExpectations();
+    }
+
+    /** Test list of parameterized tests to run is filtered by include filters. */
+    @Test
+    public void testRun_includeFilterParameterizedTestWithBrackets() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[a-b_c(1)]");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner).addInstrumentationArg("class", "a.b.c#myTestClass[a-b_c(1)]");
+        verifyRunTestExpectations();
+    }
+
+    /** Test list of parameterized tests to run is filtered by include filters. */
+    @Test
+    public void testRun_includeFilterParameterizedTestWithList() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[[2,3],3.14]");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner).addInstrumentationArg("class", "a.b.c#myTestClass[[2,3],3.14]");
+        verifyRunTestExpectations();
+    }
+
+    /** Test list of tests to run is filtered by using regex due to not end with ]. */
+    @Test
+    public void testRun_includeFilterEndWithStarNotParameterizedTest() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[a-b]*");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner).addInstrumentationArg("tests_regex", "a.b.c#myTestClass[a-b]*");
         verifyRunTestExpectations();
     }
 

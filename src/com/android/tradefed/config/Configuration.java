@@ -27,6 +27,7 @@ import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.IDeviceSelection;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.log.StdoutLogger;
@@ -36,9 +37,11 @@ import com.android.tradefed.result.FileSystemLogSaver;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TextResultReporter;
+import com.android.tradefed.result.skipped.SkipManager;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.sandbox.SandboxOptions;
+import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.targetprep.ILabPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
@@ -104,6 +107,7 @@ public class Configuration implements IConfiguration {
     public static final String RETRY_DECISION_TYPE_NAME = "retry_decision";
     public static final String COVERAGE_OPTIONS_TYPE_NAME = "coverage";
     public static final String GLOBAL_FILTERS_TYPE_NAME = "global_filters";
+    public static final String SKIP_MANAGER_TYPE_NAME = "skip_manager";
 
     private static Map<String, ObjTypeInfo> sObjTypeMap = null;
     private static Set<String> sMultiDeviceSupportedTag =
@@ -202,6 +206,7 @@ public class Configuration implements IConfiguration {
                     COVERAGE_OPTIONS_TYPE_NAME, new ObjTypeInfo(CoverageOptions.class, false));
             sObjTypeMap.put(
                     GLOBAL_FILTERS_TYPE_NAME, new ObjTypeInfo(GlobalTestFilter.class, false));
+            sObjTypeMap.put(SKIP_MANAGER_TYPE_NAME, new ObjTypeInfo(SkipManager.class, false));
         }
         return sObjTypeMap;
     }
@@ -253,6 +258,7 @@ public class Configuration implements IConfiguration {
         setConfigurationObjectNoThrow(SANBOX_OPTIONS_TYPE_NAME, new SandboxOptions());
         setConfigurationObjectNoThrow(RETRY_DECISION_TYPE_NAME, new BaseRetryDecision());
         setConfigurationObjectNoThrow(GLOBAL_FILTERS_TYPE_NAME, new GlobalTestFilter());
+        setConfigurationObjectNoThrow(SKIP_MANAGER_TYPE_NAME, new SkipManager());
     }
 
     /**
@@ -508,6 +514,13 @@ public class Configuration implements IConfiguration {
         return (GlobalTestFilter) getConfigurationObject(GLOBAL_FILTERS_TYPE_NAME);
     }
 
+    /** {@inheritDoc} */
+    @SuppressWarnings("unchecked")
+    @Override
+    public SkipManager getSkipManager() {
+        return (SkipManager) getConfigurationObject(SKIP_MANAGER_TYPE_NAME);
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -584,7 +597,12 @@ public class Configuration implements IConfiguration {
 
     /** Return a copy of all config objects that are not disabled via {@link IDisableable}. */
     private Collection<Object> getAllNonDisabledConfigurationObjects() {
-        return getAllConfigurationObjects(null, false);
+        String excluded = null;
+        // Inside the sandbox disable lab preparers
+        if (System.getenv(TradefedSandbox.SANDBOX_ENABLED) != null) {
+            excluded = LAB_PREPARER_TYPE_NAME;
+        }
+        return getAllConfigurationObjects(excluded, false);
     }
 
     /**
@@ -705,6 +723,9 @@ public class Configuration implements IConfiguration {
      */
     @Override
     public void injectOptionValues(List<OptionDef> optionDefs) throws ConfigurationException {
+        if (optionDefs.isEmpty()) {
+            return;
+        }
         OptionSetter optionSetter = createOptionSetter();
         for (OptionDef optionDef : optionDefs) {
             internalInjectOptionValue(optionSetter, optionDef.name, optionDef.key, optionDef.value,
@@ -715,6 +736,9 @@ public class Configuration implements IConfiguration {
     /** {@inheritDoc} */
     @Override
     public void safeInjectOptionValues(List<OptionDef> optionDefs) throws ConfigurationException {
+        if (optionDefs.isEmpty()) {
+            return;
+        }
         OptionSetter optionSetter = createOptionSetter();
         for (OptionDef optionDef : optionDefs) {
             try {
@@ -1164,38 +1188,43 @@ public class Configuration implements IConfiguration {
     public List<String> setOptionsFromCommandLineArgs(List<String> listArgs,
             IKeyStoreClient keyStoreClient)
             throws ConfigurationException {
-        // We get all the objects except the one describing the Configuration itself which does not
-        // allow passing its option via command line.
-        ArgsOptionParser parser =
-                new ArgsOptionParser(
-                        getAllConfigurationObjects(CONFIGURATION_DESCRIPTION_TYPE_NAME, true));
-        if (keyStoreClient != null) {
-            parser.setKeyStore(keyStoreClient);
-        }
-        try {
-            List<String> leftOver = parser.parse(listArgs);
-            mInopOptions.addAll(parser.getInopOptions());
-            return leftOver;
-        } catch (ConfigurationException e) {
-            Matcher m = CONFIG_EXCEPTION_PATTERN.matcher(e.getMessage());
-            if (!m.matches()) {
-                throw e;
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("setOptionsFromCommandLineArgs")) {
+            // We get all the objects except the one describing the Configuration itself which does
+            // not
+            // allow passing its option via command line.
+            ArgsOptionParser parser =
+                    new ArgsOptionParser(
+                            getAllConfigurationObjects(CONFIGURATION_DESCRIPTION_TYPE_NAME, true));
+            if (keyStoreClient != null) {
+                parser.setKeyStore(keyStoreClient);
             }
-            String optionName = m.group(1);
             try {
-                // In case the option exists in the config descriptor, we change the error message
-                // to be more specific about why the option is rejected.
-                OptionSetter setter = new OptionSetter(getConfigurationDescription());
-                setter.getTypeForOption(optionName);
-            } catch (ConfigurationException stillThrowing) {
-                // Throw the original exception since it cannot be found at all.
-                throw e;
+                List<String> leftOver = parser.parse(listArgs);
+                mInopOptions.addAll(parser.getInopOptions());
+                return leftOver;
+            } catch (ConfigurationException e) {
+                Matcher m = CONFIG_EXCEPTION_PATTERN.matcher(e.getMessage());
+                if (!m.matches()) {
+                    throw e;
+                }
+                String optionName = m.group(1);
+                try {
+                    // In case the option exists in the config descriptor, we change the error
+                    // message
+                    // to be more specific about why the option is rejected.
+                    OptionSetter setter = new OptionSetter(getConfigurationDescription());
+                    setter.getTypeForOption(optionName);
+                } catch (ConfigurationException stillThrowing) {
+                    // Throw the original exception since it cannot be found at all.
+                    throw e;
+                }
+                throw new OptionNotAllowedException(
+                        String.format(
+                                "Option '%s' cannot be specified via "
+                                        + "command line. Only in the configuration xml.",
+                                optionName));
             }
-            throw new OptionNotAllowedException(
-                    String.format(
-                            "Option '%s' cannot be specified via "
-                                    + "command line. Only in the configuration xml.",
-                            optionName));
         }
     }
 
@@ -1303,7 +1332,7 @@ public class Configuration implements IConfiguration {
     @Override
     public void resolveDynamicOptions(DynamicRemoteFileResolver resolver)
             throws ConfigurationException, BuildRetrievalError {
-        List<Object> configObjects = new ArrayList<>(getAllConfigurationObjects());
+        List<Object> configObjects = new ArrayList<>(getAllNonDisabledConfigurationObjects());
         // Resolve regardless of sharding if we are in remote environment because we know that's
         // where the execution will occur.
         if (!isRemoteEnvironment()) {
@@ -1615,6 +1644,13 @@ public class Configuration implements IConfiguration {
                 serializer,
                 GLOBAL_FILTERS_TYPE_NAME,
                 getGlobalFilters(),
+                excludeFilters,
+                printDeprecatedOptions,
+                printUnchangedOptions);
+        ConfigurationUtil.dumpClassToXml(
+                serializer,
+                SKIP_MANAGER_TYPE_NAME,
+                getSkipManager(),
                 excludeFilters,
                 printDeprecatedOptions,
                 printUnchangedOptions);

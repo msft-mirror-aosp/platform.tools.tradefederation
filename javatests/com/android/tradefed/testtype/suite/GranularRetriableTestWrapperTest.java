@@ -37,6 +37,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
@@ -350,8 +351,12 @@ public class GranularRetriableTestWrapperTest {
         Mockito.doThrow(new DeviceNotAvailableException("fake message", "serial"))
                 .when(mockTest)
                 .run(Mockito.any(), Mockito.any(ITestInvocationListener.class));
+        ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module.shouldRecoverVirtualDevice()).thenReturn(false);
+        Mockito.when(module.getModuleInvocationContext()).thenReturn(mModuleInvocationContext);
 
-        GranularRetriableTestWrapper granularTestWrapper = createGranularTestWrapper(mockTest, 1);
+        GranularRetriableTestWrapper granularTestWrapper =
+                createGranularTestWrapper(mockTest, 1, new ArrayList<>(), module);
         try {
             granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
             fail("Should have thrown an exception.");
@@ -1025,7 +1030,8 @@ public class GranularRetriableTestWrapperTest {
         test.setRunFailure("I failed!");
 
         RemoteAndroidVirtualDevice avdDevice = Mockito.mock(RemoteAndroidVirtualDevice.class);
-        Mockito.when(avdDevice.powerwashGce()).thenReturn(true);
+        AdbSshConnection avdConnection = Mockito.mock(AdbSshConnection.class);
+        Mockito.when(avdDevice.getConnection()).thenReturn(avdConnection);
 
         ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
         // Suite level preparers failed.
@@ -1073,7 +1079,8 @@ public class GranularRetriableTestWrapperTest {
         test.setRunFailure("I failed!");
 
         RemoteAndroidVirtualDevice device = Mockito.mock(RemoteAndroidVirtualDevice.class);
-        Mockito.when(device.powerwashGce()).thenReturn(false);
+        AdbSshConnection avdConnection = Mockito.mock(AdbSshConnection.class);
+        Mockito.when(device.getConnection()).thenReturn(avdConnection);
         Mockito.when(device.getSerialNumber()).thenReturn("device1");
 
         test.setDevice(device);

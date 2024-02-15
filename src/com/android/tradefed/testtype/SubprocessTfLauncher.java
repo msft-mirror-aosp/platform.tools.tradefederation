@@ -39,6 +39,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.StreamProtoReceiver;
 import com.android.tradefed.result.proto.StreamProtoResultReporter;
+import com.android.tradefed.service.TradefedFeatureServer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -105,7 +106,7 @@ public abstract class SubprocessTfLauncher
     @Option(
             name = "use-proto-reporting",
             description = "Use a proto result reporter for the results from the subprocess.")
-    private boolean mUseProtoReporting = false;
+    private boolean mUseProtoReporting = true;
 
     @Option(name = "sub-global-config", description = "The global config name to pass to the"
             + "sub process, can be local or from jar resources. Be careful of conflicts with "
@@ -155,7 +156,6 @@ public abstract class SubprocessTfLauncher
                             "loganalysis-tests.jar",
                             // Aosp Tf jars
                             "tradefed.jar",
-                            "tradefed-test-framework.jar",
                             "tradefed-tests.jar",
                             // libs
                             "tools-common-prebuilt.jar",
@@ -201,6 +201,10 @@ public abstract class SubprocessTfLauncher
         mConfig = configuration;
     }
 
+    protected void setProtoReporting(boolean protoReporting) {
+        mUseProtoReporting = protoReporting;
+    }
+
     /**
      * Set use-event-streaming.
      *
@@ -244,7 +248,7 @@ public abstract class SubprocessTfLauncher
         jarClasspath = String.join(":", paths);
 
         mCmdArgs = new ArrayList<String>();
-        mCmdArgs.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+        mCmdArgs.add(getJava());
 
         try {
             mTmpDir = FileUtil.createTempDir("subprocess-" + tfBuild.getBuildId());
@@ -285,11 +289,18 @@ public abstract class SubprocessTfLauncher
         mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
         mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
         mRunUtil.unsetEnvVariable(ANDROID_SERIAL_VAR);
-        mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
         mRunUtil.unsetEnvVariable(DelegatedInvocationExecution.DELEGATED_MODE_VAR);
         for (String variable : AutomatedReporters.REPORTER_MAPPING) {
             mRunUtil.unsetEnvVariable(variable);
         }
+        // Handle feature server
+        getRunUtil().unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+        getRunUtil().unsetEnvVariable(TradefedFeatureServer.TF_SERVICE_PORT);
+        getRunUtil().setEnvVariablePriority(EnvPriority.SET);
+        getRunUtil()
+                .setEnvVariable(
+                        TradefedFeatureServer.TF_SERVICE_PORT,
+                        Integer.toString(TradefedFeatureServer.getPort()));
 
         if (mGlobalConfig == null) {
             // If the global configuration is not set in option, create a filtered global
@@ -306,7 +317,6 @@ public abstract class SubprocessTfLauncher
         }
         if (mGlobalConfig != null) {
             // We allow overriding this global config and then set it for the subprocess.
-            mRunUtil.setEnvVariablePriority(EnvPriority.SET);
             mRunUtil.setEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE, mGlobalConfig);
         }
     }
@@ -371,9 +381,11 @@ public abstract class SubprocessTfLauncher
             stderrFile = FileUtil.createTempFile("stderr_subprocess_", ".log");
             stderr = new FileOutputStream(stderrFile);
             stdout = new FileOutputStream(stdoutFile);
-
             if (mUseProtoReporting) {
-                protoReceiver = new StreamProtoReceiver(listener, mContext, false, false);
+                // Skip merging properties to avoid contaminating metrics with unit tests
+                protoReceiver =
+                        new StreamProtoReceiver(
+                                listener, mContext, false, false, true, "subprocess-", false);
                 mCmdArgs.add("--" + StreamProtoResultReporter.PROTO_REPORT_PORT_OPTION);
                 mCmdArgs.add(Integer.toString(protoReceiver.getSocketServerPort()));
             } else {
@@ -518,5 +530,9 @@ public abstract class SubprocessTfLauncher
         }
         listener.testEnded(tid, new HashMap<String, Metric>());
         listener.testRunEnded(0, new HashMap<String, Metric>());
+    }
+
+    protected String getJava() {
+        return SystemUtil.getRunningJavaBinaryPath().getAbsolutePath();
     }
 }

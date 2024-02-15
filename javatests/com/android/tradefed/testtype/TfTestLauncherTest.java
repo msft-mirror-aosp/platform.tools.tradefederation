@@ -75,11 +75,18 @@ public class TfTestLauncherTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        mTfTestLauncher = new TfTestLauncher();
+        mTfTestLauncher =
+                new TfTestLauncher() {
+                    @Override
+                    protected String getJava() {
+                        return "java";
+                    }
+                };
         mTfTestLauncher.setRunUtil(mMockRunUtil);
         mTfTestLauncher.setBuild(mMockBuildInfo);
         mTfTestLauncher.setEventStreaming(false);
         mTfTestLauncher.setConfiguration(mMockConfig);
+        mTfTestLauncher.setProtoReporting(false);
 
         IInvocationContext context = new InvocationContext();
         context.addDeviceBuildInfo("device", mMockBuildInfo);
@@ -100,7 +107,7 @@ public class TfTestLauncherTest {
                         Mockito.anyLong(),
                         (FileOutputStream) Mockito.any(),
                         (FileOutputStream) Mockito.any(),
-                        Mockito.endsWith("/java"),
+                        Mockito.contains("java"),
                         (String) Mockito.any(),
                         Mockito.eq("--add-opens=java.base/java.nio=ALL-UNNAMED"),
                         Mockito.eq("--add-opens=java.base/sun.reflect.annotation=ALL-UNNAMED"),

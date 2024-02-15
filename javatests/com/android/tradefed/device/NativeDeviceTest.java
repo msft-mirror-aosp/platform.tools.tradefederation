@@ -82,7 +82,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-
 /** Unit tests for {@link NativeDevice}. */
 @RunWith(JUnit4.class)
 public class NativeDeviceTest {
@@ -155,6 +154,11 @@ public class NativeDeviceTest {
 
                     @Override
                     IWifiHelper createWifiHelper() {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) {
                         return mMockWifi;
                     }
                 };
@@ -2179,9 +2183,9 @@ public class NativeDeviceTest {
             doReturn(fakeCreationTime)
                     .when(spy)
                     .executeShellCommand(
-                            "date -d \"$(date +%Y:%m:%e):"
+                            "date -d \"$(date +%Y:%m:%d):"
                                     + "12:07:32"
-                                    + "\" +%s -D \"%Y:%m:%e:%H:%M:%S\"");
+                                    + "\" +%s -D \"%Y:%m:%d:%H:%M:%S\"");
         } else {
             doReturn(fakeCreationTime).when(spy).executeShellCommand("date -d\"12:07:32\" +%s");
         }
@@ -2790,10 +2794,10 @@ public class NativeDeviceTest {
      */
     @Test
     public void testGetLogcatSinceOnSdk23() throws Exception {
-        long date = 1512990942000L; // 2017-12-11 03:15:42.015
+        long date = 1512990942000L; // 2017-12-11 11:15:42.000 UTC
         setGetPropertyExpectation("ro.build.version.sdk", "23");
 
-        SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.mmm");
+        SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.SSS");
         String dateFormatted = format.format(new Date(date));
 
         InputStreamSource res = mTestDevice.getLogcatSince(date);
@@ -2801,7 +2805,8 @@ public class NativeDeviceTest {
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq(String.format("logcat -v threadtime -t '%s'", dateFormatted)),
+                        Mockito.eq(String.format(
+                            "logcat -b all -v threadtime -t '%s'", dateFormatted)),
                         Mockito.any());
     }
 
@@ -2811,19 +2816,15 @@ public class NativeDeviceTest {
      */
     @Test
     public void testGetLogcatSinceOnSdkOver24() throws Exception {
-        long date = 1512990942000L; // 2017-12-11 03:15:42.015
+        long date = 1512990942012L;
         setGetPropertyExpectation("ro.build.version.sdk", "24");
-
-        SimpleDateFormat format = new SimpleDateFormat("MM-dd HH:mm:ss.mmm");
-        String dateFormatted = format.format(new Date(date));
 
         InputStreamSource res = mTestDevice.getLogcatSince(date);
         StreamUtil.close(res);
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq(
-                                String.format("logcat -v threadtime,uid -t '%s'", dateFormatted)),
+                        Mockito.eq("logcat -b all -v threadtime,uid -t '1512990942.012'"),
                         Mockito.any());
     }
 
@@ -3325,5 +3326,47 @@ public class NativeDeviceTest {
                 };
         assertEquals(
                 "tcp:fe80:0:0:0:230:1bff:feba:8128%en0", mTestDevice.getFastbootSerialNumber());
+    }
+
+    @Test
+    public void testBatchPrefetch() throws Exception {
+        NativeDevice device =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(
+                            String cmd,
+                            final long maxTimeoutForCommand,
+                            final TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        if (cmd.equals("getprop")) {
+                            result.setStdout(
+                                    String.join(
+                                            "\n",
+                                            "[prop1]: [value1]",
+                                            "[ro.product.cpu.abi]: [x86_64]",
+                                            "[ro.system.product.cpu.abilist]:"
+                                                    + " [x86_64,x86,arm64-v8a,armeabi-v7a,armeabi]",
+                                            "[open error",
+                                            "[open error]: [no val",
+                                            "build.ro: foo",
+                                            "build.ro.",
+                                            "[ro.build.version.sdk]: [99]",
+                                            "[ro.build.version.codename]: [CremeBrule]",
+                                            "[ro.build.id]: [AOSP.MASTER.hash]"));
+                        } else if (cmd.equals("getprop ro.product.cpu.abi")) {
+                            result.setStdout("");
+                        }
+                        return result;
+                    }
+                };
+
+        // We don't have access to the cache, but we can call getProperty which will read
+        // from the cache if the key is there.
+        device.batchPrefetchStartupBuildProps();
+        assertEquals("AOSP.MASTER.hash", device.getProperty("ro.build.id"));
+        // And getProperty will issue more calls that we stub out with "" if we haven't cached.
+        assertNull(device.getProperty("ro.product.cpu.abi"));
     }
 }

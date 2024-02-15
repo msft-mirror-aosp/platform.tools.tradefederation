@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.sandbox;
 
+import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.build.IFolderBuildInfo;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -26,6 +28,9 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 
 /** Interface defining a sandbox that can be used to run an invocation. */
 public interface ISandbox {
@@ -43,6 +48,43 @@ public interface ISandbox {
             IInvocationContext context,
             IConfiguration configuration,
             ITestInvocationListener listener);
+
+    /**
+     * Sub-step of {@link #prepareEnvironment(IInvocationContext, IConfiguration,
+     * ITestInvocationListener)} which fetch additional files needed for the sandbox.
+     *
+     * @param context the current invocation {@link IInvocationContext}.
+     * @param configuration the {@link IConfiguration} for the command to run.
+     * @param args the command line arguments.
+     * @return the fetched build for the additional sandboxed files.
+     * @throws BuildRetrievalError
+     * @throws ConfigurationException
+     * @throws IOException
+     */
+    public default IFolderBuildInfo fetchSandboxExtraArtifacts(
+            IInvocationContext context, IConfiguration configuration, String[] args)
+            throws BuildRetrievalError, ConfigurationException, IOException {
+        return null;
+    }
+
+    /**
+     * A sub-step of {@link #prepareEnvironment(IInvocationContext, IConfiguration,
+     * ITestInvocationListener)} which discovers tests if {@link
+     * SandboxOptions#shouldUseTestDiscovery()} is enabled.
+     *
+     * @param context the current invocation {@link IInvocationContext}.
+     * @param configuration the {@link IConfiguration} for the command to run.
+     * @return The map of discovered tests or null if unsupported or failed.
+     */
+    public default Map<String, List<String>> discoverTests(
+            IInvocationContext context, IConfiguration configuration) {
+        return null;
+    }
+
+    public default Map<String, List<String>> discoverTests(
+            IInvocationContext context, IConfiguration configuration, ITestLogger logger) {
+        return discoverTests(context, configuration);
+    }
 
     /**
      * Run the sandbox with the environment that was set.
@@ -63,12 +105,24 @@ public interface ISandbox {
      *
      * @param context the {@link IInvocationContext} of the parent.
      * @param nonVersionedConfig the {@link IConfiguration} representing the non versioned objects.
+     * @param logger the {@link ITestLogger} to log additional files.
      * @param args the command line arguments.
      * @return a {@link File} directory containing the TF sandbox environment jars.
      */
-    public File getTradefedSandboxEnvironment(
+    public default File getTradefedSandboxEnvironment(
             IInvocationContext context, IConfiguration nonVersionedConfig, String[] args)
-            throws Exception;
+            throws Exception {
+        return null;
+    }
+
+    public default File getTradefedSandboxEnvironment(
+            IInvocationContext context,
+            IConfiguration nonVersionedConfig,
+            ITestLogger logger,
+            String[] args)
+            throws Exception {
+        return getTradefedSandboxEnvironment(context, nonVersionedConfig, args);
+    }
 
     /**
      * Create a classpath based on the environment and the working directory returned by {@link

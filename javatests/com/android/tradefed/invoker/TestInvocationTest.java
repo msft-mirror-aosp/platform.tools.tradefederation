@@ -16,6 +16,7 @@
 package com.android.tradefed.invoker;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.atLeast;
@@ -24,6 +25,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -57,10 +59,12 @@ import com.android.tradefed.device.IDeviceRecovery;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.shard.IShardHelper;
 import com.android.tradefed.invoker.shard.ShardHelper;
@@ -265,6 +269,9 @@ public class TestInvocationTest {
                 ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
         mStubInvocationMetadata.addDeviceBuildInfo(
                 ConfigurationDef.DEFAULT_DEVICE_NAME, mMockBuildInfo);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(mMockDevice.getOptions()).thenReturn(options);
 
         // create the BaseTestInvocation to test
         mTestInvocation =
@@ -1100,6 +1107,46 @@ public class TestInvocationTest {
         stubBuild.cleanUp();
     }
 
+    /** Ensure that we do not take a bugreport if the build throws a runtime exception */
+    @Test
+    public void testInvoke_skipBugreport_buildFailed() throws Throwable {
+        RuntimeException runtimeException = new RuntimeException("failed to get build.");
+        when(mMockBuildProvider.getBuild()).thenThrow(runtimeException);
+
+        BuildRetrievalError error =
+                new BuildRetrievalError("fake", InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+        stubMockFailureListenersAny(error, true);
+
+        when(mMockLogger.getLog()).thenReturn(mHostLogSource);
+        when(mMockDevice.getLogcat())
+                .thenReturn(mLogcatSetupSource)
+                .thenReturn(mLogcatTeardownSource);
+        ArgumentCaptor<IBuildInfo> captured = ArgumentCaptor.forClass(IBuildInfo.class);
+
+        mStubConfiguration.setCommandLine(new String[] {"empty", "--build-id", "5"});
+
+        try {
+            mTestInvocation.invoke(mStubInvocationMetadata, mStubConfiguration, mockRescheduler);
+            fail("Should have thrown an exception.");
+        } catch (RuntimeException expected) {
+            // Expected
+        }
+
+        verify(mMockBuildProvider).cleanUp(captured.capture());
+        verify(mMockLogRegistry, times(3)).registerLogger(mMockLogger);
+        verify(mMockLogRegistry, times(2)).unregisterLogger();
+        verify(mMockLogger, times(3)).init();
+        verify(mMockLogger, times(2)).closeLog();
+        verify(mMockDevice, times(0))
+                .logBugreport(Mockito.anyString(), (ITestInvocationListener) Mockito.any());
+
+        verifyMockFailureListenersAny(error, true);
+
+        IBuildInfo stubBuild = captured.getValue();
+        assertEquals("5", stubBuild.getBuildId());
+        stubBuild.cleanUp();
+    }
+
     /**
      * Test the{@link TestInvocation#invoke(IInvocationContext, IConfiguration, IRescheduler,
      * ITestInvocationListener[])} scenario where the test is a {@link IDeviceTest}
@@ -1512,6 +1559,39 @@ public class TestInvocationTest {
 
         assertEquals(2, mUriCapture.getValue().size());
     }
+
+    @Test
+    public void testShouldSkipBugreportError_buildError() throws Throwable {
+        Throwable e =
+                new BuildError(
+                        "error", mFakeDescriptor, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
+        assertTrue(mTestInvocation.shouldSkipBugreportError(e));
+    }
+
+    @Test
+    public void testShouldSkipBugreportError_wifiOptionError() throws Throwable {
+        Throwable e =
+                new TargetSetupError(
+                        "wifi-network not specified",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        assertTrue(mTestInvocation.shouldSkipBugreportError(e));
+    }
+
+    @Test
+    public void testShouldSkipBugreportError_wifiConnectionError() throws Throwable {
+        Throwable e =
+                new TargetSetupError("wifi-network not specified", InfraErrorIdentifier.NO_WIFI);
+        assertFalse(mTestInvocation.shouldSkipBugreportError(e));
+    }
+
+    @Test
+    public void testShouldSkipBugreportError_internalConfigError() throws Throwable {
+        Throwable e =
+                new HarnessRuntimeException(
+                        "Invalid Configuration", InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
+        assertFalse(mTestInvocation.shouldSkipBugreportError(e));
+    }
+
     /** Test the test-tag is set when the IBuildInfo's test-tag is not. */
     @Ignore
     @Test

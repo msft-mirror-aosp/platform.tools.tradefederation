@@ -190,9 +190,8 @@ public class ClangCodeCoverageCollectorTest {
         mListener.testRunEnded(ELAPSED_TIME, mMetrics);
         mListener.invocationEnded(ELAPSED_TIME);
 
-        // Verify the flush-coverage command was called twice - once on init() and once during
-        // the end of the test run.
-        verify(mMockDevice, times(2)).executeShellCommand("kill -37 123");
+        // Verify flush-coverage command was called at the end of the test run.
+        verify(mMockDevice).executeShellCommand("kill -37 123");
     }
 
     @Test
@@ -488,9 +487,6 @@ public class ClangCodeCoverageCollectorTest {
         InOrder inOrder = Mockito.inOrder(mMockDevice);
         inOrder.verify(mMockDevice).isAdbRoot();
         inOrder.verify(mMockDevice).enableAdbRoot();
-        inOrder.verify(mMockDevice).executeShellCommand("ps -e");
-        inOrder.verify(mMockDevice).executeShellV2Command(anyString());
-        inOrder.verify(mMockDevice).executeShellCommand("kill -37 123");
         inOrder.verify(mMockDevice, times(2)).executeShellCommand(anyString());
         inOrder.verify(mMockDevice).disableAdbRoot();
     }

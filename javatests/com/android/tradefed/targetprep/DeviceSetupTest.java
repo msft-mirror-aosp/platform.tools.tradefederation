@@ -34,6 +34,7 @@ import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
@@ -42,6 +43,8 @@ import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BinaryState;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.After;
@@ -70,7 +73,7 @@ public class DeviceSetupTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockDevice = mock(ITestDevice.class);
+        mMockDevice = mock(TestDevice.class);
         mMockIDevice = mock(IDevice.class);
         when(mMockDevice.getSerialNumber()).thenReturn("foo");
         when(mMockDevice.getDeviceDescriptor()).thenReturn(null);
@@ -1219,8 +1222,8 @@ public class DeviceSetupTest {
         mDeviceSetup.tearDown(mTestInfo, null);
 
         verify(mMockDevice, atLeastOnce()).getOptions();
-        // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        // tearDown
+        verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice, times(1)).pushFile(f, "/data/local.prop");
     }
@@ -1239,8 +1242,8 @@ public class DeviceSetupTest {
         mDeviceSetup.tearDown(mTestInfo, null);
 
         verify(mMockDevice, atLeastOnce()).getOptions();
-        // doSetupExpectations, changeSystemProps, tearDown
-        verify(mMockDevice, times(3)).reboot();
+        // tearDown
+        verify(mMockDevice, times(1)).reboot();
         verify(mMockDevice, times(1)).pullFile("/data/local.prop");
         verify(mMockDevice).deleteFile("/data/local.prop");
     }
@@ -1382,6 +1385,7 @@ public class DeviceSetupTest {
         when(mMockDevice.getProperty("fooProperty")).thenReturn("1");
 
         OptionSetter setter = new OptionSetter(mDeviceSetup);
+        setter.setOptionValue("optimized-non-persistent-setup", "false");
         setter.setOptionValue("optimized-property-setting", "true");
         setter.setOptionValue("set-property", "fooProperty", "1");
         mDeviceSetup.setUp(mTestInfo);
@@ -1398,6 +1402,39 @@ public class DeviceSetupTest {
         mDeviceSetup.setUp(mTestInfo);
         verify(mMockDevice)
                 .executeShellCommand("device_config set_sync_disabled_for_tests persistent");
+    }
+
+    @Test
+    public void testSetup_no_reboot_on_generic_persist_property() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("persist.key", "value");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice, times(0)).reboot();
+    }
+
+    @Test
+    public void testSetup_reboot_on_memtag() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("arm64.memtag.bootctl", "memtag");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice).reboot();
+    }
+
+    @Test
+    public void testSetup_reboot_on_enable_jdwp() throws Exception {
+        doSetupExpectations();
+        doCheckExternalStoreSpaceExpectations();
+
+        mDeviceSetup.setProperty("persist.debug.dalvik.vm.jdwp.enabled", "1");
+        mDeviceSetup.setUp(mTestInfo);
+
+        verify(mMockDevice).reboot();
     }
 
     /** Set EasyMock expectations for a normal setup call */
@@ -1497,7 +1534,6 @@ public class DeviceSetupTest {
                     .thenReturn(Boolean.TRUE);
             when(mMockDevice.executeShellCommand(Mockito.matches("chmod 644 .*local.prop")))
                     .thenReturn("");
-            mMockDevice.reboot();
         }
         if (screenOn) {
             when(mMockDevice.executeShellCommand("svc power stayon true")).thenReturn("");
@@ -1513,6 +1549,16 @@ public class DeviceSetupTest {
         when(mMockDevice.getProperty("ro.audio.silent")).thenReturn("1");
         when(mMockDevice.getProperty("ro.test_harness")).thenReturn("1");
         when(mMockDevice.getProperty("ro.monkey")).thenReturn("1");
+        CommandResult successResult = new CommandResult();
+        successResult.setStatus(CommandStatus.SUCCESS);
+        successResult.setStdout("");
+        when(mMockDevice.executeShellV2Command(
+                        "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"))
+                .thenReturn(successResult);
+        when(mMockDevice.executeShellV2Command("am start -a com.android.setupwizard.EXIT"))
+                .thenReturn(successResult);
+        when(mMockDevice.executeShellV2Command("dumpsys window displays | grep mCurrentFocus"))
+                .thenReturn(successResult);
     }
 
     /** Perform common EasyMock expect operations for a setUp call which syncs local data */

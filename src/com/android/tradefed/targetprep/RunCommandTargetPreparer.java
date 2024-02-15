@@ -74,6 +74,11 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
     private boolean mThrowIfFailed = false;
 
     @Option(
+            name = "log-command-output",
+            description = "Whether or not to always log the commands output")
+    private boolean mLogOutput = false;
+
+    @Option(
             name = "test-user-token",
             description =
                     "When set, that token will be replaced by the id of the user running the test."
@@ -138,6 +143,10 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
                             "cmd: '%s' failed, returned:\nstdout:%s\nstderr:%s",
                             cmd, result.getStdout(), result.getStderr());
                 }
+            } else if (mLogOutput) {
+                CLog.d(
+                        "cmd: '%s', returned:\nstdout:%s\nstderr:%s",
+                        cmd, result.getStdout(), result.getStderr());
             }
         }
 
@@ -175,6 +184,10 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
                 if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                     CLog.d(
                             "tearDown cmd: '%s' failed, returned:\nstdout:%s\nstderr:%s",
+                            cmd, result.getStdout(), result.getStderr());
+                } else if (mLogOutput) {
+                    CLog.d(
+                            "tearDown cmd: '%s', returned:\nstdout:%s\nstderr:%s",
                             cmd, result.getStdout(), result.getStderr());
                 }
             } catch (TargetSetupError tse) {

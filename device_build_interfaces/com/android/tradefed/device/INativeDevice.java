@@ -1446,6 +1446,20 @@ public interface INativeDevice {
     public void remountVendorWritable() throws DeviceNotAvailableException;
 
     /**
+     * Make the system partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountSystemReadOnly() throws DeviceNotAvailableException;
+
+    /**
+     * Make the vendor partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountVendorReadOnly() throws DeviceNotAvailableException;
+
+    /**
      * Returns the key type used to sign the device image
      * <p>
      * Typically Android devices may be signed with test-keys (like in AOSP) or release-keys
@@ -1636,4 +1650,26 @@ public interface INativeDevice {
 
     /** Returns the connection associated with the device. */
     public AbstractConnection getConnection();
+
+    /**
+     * Check if debugfs is mounted.
+     *
+     * @return {@code true} if debugfs is mounted
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isDebugfsMounted() throws DeviceNotAvailableException;
+
+    /**
+     * Mount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void mountDebugfs() throws DeviceNotAvailableException;
+
+    /**
+     * Unmount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void unmountDebugfs() throws DeviceNotAvailableException;
 }

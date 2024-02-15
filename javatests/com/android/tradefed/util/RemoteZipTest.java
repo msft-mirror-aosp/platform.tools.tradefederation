@@ -99,7 +99,8 @@ public class RemoteZipTest {
         try {
             destDir = FileUtil.createTempDir("test");
 
-            RemoteZip remoteZip = new RemoteZip(REMOTE_FILE, mZipFileSize, mDownloader);
+            RemoteZip remoteZip =
+                    new RemoteZip(REMOTE_FILE, mZipFileSize, mDownloader, false, false);
 
             List<CentralDirectoryInfo> entries = remoteZip.getZipEntries();
 
@@ -120,7 +121,8 @@ public class RemoteZipTest {
         File destDir = null;
         try {
             destDir = FileUtil.createTempDir("test");
-            RemoteZip remoteZip = new RemoteZip(REMOTE_FILE, mZipFileSize, mDownloader, true);
+            RemoteZip remoteZip =
+                    new RemoteZip(REMOTE_FILE, mZipFileSize, mDownloader, true, false);
             List<CentralDirectoryInfo> entries = remoteZip.getZipEntries();
             assertEquals(8, entries.size());
             assertTrue(mExpectedEntries.containsAll(entries));
@@ -143,7 +145,8 @@ public class RemoteZipTest {
                 }
             }
 
-            RemoteZip remoteZip = new RemoteZip(REMOTE_FILE, mZipFileSize, mDownloader);
+            RemoteZip remoteZip =
+                    new RemoteZip(REMOTE_FILE, mZipFileSize, mDownloader, false, false);
             remoteZip.downloadFiles(destDir, files);
 
             File targetFile = Paths.get(destDir.getPath(), "large_text", "file.txt").toFile();

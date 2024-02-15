@@ -94,6 +94,7 @@ public class SandboxConfigDump {
         NON_TEST_ELEMENTS.add(Configuration.CMD_OPTIONS_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.GLOBAL_FILTERS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.SKIP_MANAGER_TYPE_NAME);
     }
 
     /**
@@ -211,6 +212,10 @@ public class SandboxConfigDump {
                 // Reset serials, ensure any null/tcp/gce-device can be selected.
                 requirements.setSerial();
             }
+            // Reset device requested type, we don't need it in the sandbox
+            requirements.setBaseDeviceTypeRequested(null);
+            // In sandbox it's pointless to check again for battery for allocation
+            requirements.setRequireBatteryCheck(false);
         }
     }
 }

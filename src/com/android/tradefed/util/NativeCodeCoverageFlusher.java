@@ -63,6 +63,15 @@ public final class NativeCodeCoverageFlusher {
      */
     public void resetCoverage() throws DeviceNotAvailableException {
         forceCoverageFlush();
+        deleteCoverageMeasurements();
+    }
+
+    /**
+     * Deletes coverage measurements from the device. Device must be in adb root.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void deleteCoverageMeasurements() throws DeviceNotAvailableException {
         mDevice.executeShellCommand(CLEAR_CLANG_COVERAGE_FILES);
         mDevice.executeShellCommand(CLEAR_GCOV_COVERAGE_FILES);
     }

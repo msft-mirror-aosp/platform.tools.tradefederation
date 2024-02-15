@@ -24,6 +24,7 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationExecution;
@@ -35,12 +36,15 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.sandbox.ISandbox;
 import com.android.tradefed.sandbox.SandboxInvocationRunner;
 import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 
 import java.util.ArrayList;
@@ -70,7 +74,49 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                     testInfo.getContext().getBuildInfos());
             return true;
         }
-        return super.fetchBuild(testInfo, config, rescheduler, listener);
+
+        SandboxFetchThread fetchThread = null;
+        if (getSandboxOptions(config).shouldUseSplitDiscovery()) {
+            fetchThread =
+                    new SandboxFetchThread(
+                            Thread.currentThread().getThreadGroup(), testInfo, config);
+            fetchThread.start();
+        }
+        boolean res = false;
+        try {
+            res = super.fetchBuild(testInfo, config, rescheduler, listener);
+        } catch (DeviceNotAvailableException | BuildRetrievalError | RuntimeException e) {
+            if (fetchThread != null) {
+                fetchThread.interrupt();
+            }
+            SandboxInvocationRunner.teardownSandbox(config);
+            throw e;
+        }
+        if (getSandboxOptions(config).shouldUseSplitDiscovery()) {
+            Throwable e = null;
+            try {
+                fetchThread.join();
+                e = fetchThread.error;
+                if (e != null) {
+                    if (e instanceof BuildRetrievalError) {
+                        throw (BuildRetrievalError) e;
+                    } else {
+                        throw new HarnessRuntimeException(
+                                e.getMessage(), e, InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
+                    }
+                }
+            } catch (InterruptedException execError) {
+                SandboxInvocationRunner.teardownSandbox(config);
+                throw new BuildRetrievalError(
+                        execError.getMessage(),
+                        execError,
+                        InfraErrorIdentifier.SANDBOX_SETUP_ERROR);
+            }
+            if (res && e == null) {
+                getSandbox(config).discoverTests(testInfo.getContext(), config, listener);
+            }
+        }
+        return res;
     }
 
     /** {@inheritDoc} */
@@ -93,7 +139,22 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         // TODO address the situation where multi-target preparers are configured
         // (they will be run by both the parent and sandbox if configured)
-        super.doSetup(testInfo, config, listener);
+        boolean parallelSetup = getSandboxOptions(config).shouldParallelSetup();
+        try {
+            super.doSetup(testInfo, config, listener);
+        } catch (DeviceNotAvailableException | TargetSetupError | BuildError | RuntimeException e) {
+            if (parallelSetup) {
+                // Join and clean up since run won't be called.
+                try {
+                    setupThread.join();
+                } catch (InterruptedException ie) {
+                    // Ignore
+                    CLog.e(ie);
+                }
+                SandboxInvocationRunner.teardownSandbox(config);
+            }
+            throw e;
+        }
     }
 
     @Override
@@ -110,7 +171,12 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     @Override
     public void doCleanUp(IInvocationContext context, IConfiguration config, Throwable exception) {
+        try {
         super.doCleanUp(context, config, exception);
+        } finally {
+            // Always clean up sandbox when we get to the end.
+            SandboxInvocationRunner.teardownSandbox(config);
+        }
     }
 
     /** {@inheritDoc} */
@@ -122,7 +188,11 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
             boolean parallelSetup = getSandboxOptions(config).shouldParallelSetup();
             if (parallelSetup) {
                 setupThread =
-                        new SandboxSetupThread(mTestInfo, config, (ITestInvocationListener) logger);
+                        new SandboxSetupThread(
+                                Thread.currentThread().getThreadGroup(),
+                                mTestInfo,
+                                config,
+                                (ITestInvocationListener) logger);
                 setupThread.start();
             }
             try {
@@ -134,7 +204,7 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                         setupThread.join();
                     } catch (InterruptedException ie) {
                         // Ignore
-                        CLog.e(e);
+                        CLog.e(ie);
                     }
                     SandboxInvocationRunner.teardownSandbox(config);
                 }
@@ -163,8 +233,8 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
 
     @Override
     public void reportLogs(ITestDevice device, ITestLogger logger, Stage stage) {
-        // If it's not a major error we do not report it if no setup or teardown ran.
-        if (!Stage.ERROR.equals(stage)) {
+        // If it's a test logcat do not report it, the subprocess will take care of it.
+        if (Stage.TEST.equals(stage)) {
             return;
         }
         super.reportLogs(device, logger, stage);
@@ -233,6 +303,42 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
                 config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
     }
 
+    private ISandbox getSandbox(IConfiguration config) {
+        return (ISandbox) config.getConfigurationObject(Configuration.SANDBOX_TYPE_NAME);
+    }
+
+    private class SandboxFetchThread extends Thread {
+        private final TestInformation info;
+        private final IConfiguration config;
+
+        // The error that might be returned by the setup
+        public Throwable error;
+
+        public SandboxFetchThread(
+                ThreadGroup currentGroup, TestInformation info, IConfiguration config) {
+            super(currentGroup, "SandboxFetchThread");
+            setDaemon(true);
+            this.info = info;
+            this.config = config;
+        }
+
+        @Override
+        public void run() {
+            try {
+                getSandbox(config)
+                        .fetchSandboxExtraArtifacts(
+                                info.getContext(),
+                                config,
+                                QuotationAwareTokenizer.tokenizeLine(
+                                        config.getCommandLine(),
+                                        /** no logging */
+                                        false));
+            } catch (Throwable e) {
+                error = e;
+            }
+        }
+    }
+
     private class SandboxSetupThread extends Thread {
 
         private final TestInformation info;
@@ -242,9 +348,12 @@ public class ParentSandboxInvocationExecution extends InvocationExecution {
         public Throwable error;
 
         public SandboxSetupThread(
-                TestInformation info, IConfiguration config, ITestInvocationListener listener) {
+                ThreadGroup currentGroup,
+                TestInformation info,
+                IConfiguration config,
+                ITestInvocationListener listener) {
+            super(currentGroup, "SandboxSetupThread");
             setDaemon(true);
-            setName("SandboxSetupThread");
             this.info = info;
             this.config = config;
             this.listener = listener;

@@ -39,6 +39,8 @@ import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.truth.Truth;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -252,13 +254,11 @@ public class JarHostTestTest {
         verify(mListener).testRunStarted(HostTest.class.getName(), 0);
         verify(mListener).testRunFailed(captured.capture());
         verify(mListener).testRunEnded(0L, new HashMap<String, Metric>());
-        assertTrue(
-                captured.getValue()
-                        .getErrorMessage()
-                        .contains(
-                                "java.io.FileNotFoundException: "
-                                        + "Could not find an artifact file associated with "
-                                        + "thisjardoesnotexistatall.jar"));
+        Truth.assertThat(captured.getValue().getErrorMessage())
+                .contains(
+                        "java.io.FileNotFoundException: "
+                                + "Could not find an artifact file associated with "
+                                + "thisjardoesnotexistatall.jar");
     }
 
     /** Test that metrics from tests in JarHost are reported and accounted for. */

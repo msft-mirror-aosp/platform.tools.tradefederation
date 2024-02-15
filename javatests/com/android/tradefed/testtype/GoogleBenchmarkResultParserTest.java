@@ -21,13 +21,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -62,32 +63,29 @@ public class GoogleBenchmarkResultParserTest {
     private static final String TEST_RUN = "test_run";
 
     /**
-     * Helper to read a file from the res/testtype directory and return its contents as a String[]
+     * Helper to read a file from the res/testtype directory and return its contents as a String
      *
      * @param filename the name of the file (without the extension) in the res/testtype directory
      * @return a String[] of the
      */
-    private CollectingOutputReceiver readInFile(String filename) {
-        CollectingOutputReceiver output = null;
+    private String readInFile(String filename) {
+        String retString = "";
         try {
-            output = new CollectingOutputReceiver();
             InputStream gtestResultStream1 =
                     getClass()
                             .getResourceAsStream(
                                     File.separator + TEST_TYPE_DIR + File.separator + filename);
             BufferedReader reader = new BufferedReader(new InputStreamReader(gtestResultStream1));
-            String line = null;
-            byte[] lineReturn = "\n".getBytes();
+            String line;
             while ((line = reader.readLine()) != null) {
-                output.addOutput(line.getBytes(), 0, line.length());
-                output.addOutput(lineReturn, 0, 1); // '\n' is not included in line.
+                retString += line + "\n";
             }
         } catch (NullPointerException e) {
             CLog.e("GTest output file does not exist: " + filename);
         } catch (IOException e) {
             CLog.e("Unable to read contents of gtest output file: " + filename);
         }
-        return output;
+        return retString;
     }
 
     /** Tests the parser for a simple test output for 2 tests. */
@@ -97,10 +95,12 @@ public class GoogleBenchmarkResultParserTest {
 
         ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_1);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_1));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        Map<String, String> results = resultParser.parse(contents);
+        Map<String, String> results = resultParser.parse(cmd_result);
         Map<String, String> expectedRes = new HashMap<String, String>();
         expectedRes.put("date", "2016-03-07 10:59:01");
         expectedRes.put("num_cpus", "48");
@@ -151,10 +151,12 @@ public class GoogleBenchmarkResultParserTest {
 
         ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_2);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_2));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        resultParser.parse(contents);
+        resultParser.parse(cmd_result);
         verify(mMockInvocationListener, times(2)).testStarted((TestDescription) Mockito.any());
         verify(mMockInvocationListener, times(2))
                 .testEnded((TestDescription) Mockito.any(), capture.capture());
@@ -175,10 +177,12 @@ public class GoogleBenchmarkResultParserTest {
     public void testParse_contextError() throws Exception {
         ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_3);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_3));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        resultParser.parse(contents);
+        resultParser.parse(cmd_result);
 
         verify(mMockInvocationListener).testRunFailed((FailureDescription) Mockito.any());
     }
@@ -188,10 +192,12 @@ public class GoogleBenchmarkResultParserTest {
     public void testParse_noBenchmarkResults() throws Exception {
         ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_4);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_4));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        resultParser.parse(contents);
+        resultParser.parse(cmd_result);
 
         verify(mMockInvocationListener).testRunFailed((String) Mockito.any());
     }
@@ -203,10 +209,12 @@ public class GoogleBenchmarkResultParserTest {
 
         ArgumentCaptor<String> capture = ArgumentCaptor.forClass(String.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_7);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_7));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        resultParser.parse(contents);
+        resultParser.parse(cmd_result);
         verify(mMockInvocationListener, times(4)).testStarted((TestDescription) Mockito.any());
         verify(mMockInvocationListener, times(4))
                 .testEnded(Mockito.any(), Mockito.<HashMap<String, Metric>>any());
@@ -241,10 +249,12 @@ public class GoogleBenchmarkResultParserTest {
 
         ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_5);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_5));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        resultParser.parse(contents);
+        resultParser.parse(cmd_result);
 
         verify(mMockInvocationListener).testStarted((TestDescription) Mockito.any());
         verify(mMockInvocationListener)
@@ -266,10 +276,12 @@ public class GoogleBenchmarkResultParserTest {
 
         ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_6);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_6));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        resultParser.parse(contents);
+        resultParser.parse(cmd_result);
 
         verify(mMockInvocationListener).testStarted((TestDescription) Mockito.any());
         verify(mMockInvocationListener).testIgnored(Mockito.any());
@@ -296,14 +308,38 @@ public class GoogleBenchmarkResultParserTest {
         ArgumentCaptor<FailureDescription> capture =
                 ArgumentCaptor.forClass(FailureDescription.class);
 
-        CollectingOutputReceiver contents = readInFile(GBENCH_OUTPUT_FILE_8);
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.SUCCESS);
+        cmd_result.setStdout(readInFile(GBENCH_OUTPUT_FILE_8));
         GoogleBenchmarkResultParser resultParser =
                 new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
-        resultParser.parse(contents);
+        resultParser.parse(cmd_result);
 
         verify(mMockInvocationListener).testRunFailed(capture.capture());
         FailureDescription failure = capture.getValue();
         assertTrue(FailureStatus.TEST_FAILURE.equals(failure.getFailureStatus()));
+        assertEquals(failure.getErrorMessage(), errorMessage);
+    }
+
+    /** Test proper failure is reported when test is timed out. */
+    @Test
+    public void testParse_timedout() throws Exception {
+        String errorMessage = "Test timed out.";
+
+        ITestInvocationListener mMockInvocationListener = mock(ITestInvocationListener.class);
+        ArgumentCaptor<FailureDescription> capture =
+                ArgumentCaptor.forClass(FailureDescription.class);
+
+        CommandResult cmd_result = new CommandResult();
+        cmd_result.setStatus(CommandStatus.TIMED_OUT);
+        cmd_result.setStdout("Random text.");
+        GoogleBenchmarkResultParser resultParser =
+                new GoogleBenchmarkResultParser(TEST_RUN, mMockInvocationListener);
+        resultParser.parse(cmd_result);
+
+        verify(mMockInvocationListener).testRunFailed(capture.capture());
+        FailureDescription failure = capture.getValue();
+        assertEquals(FailureStatus.TIMED_OUT, failure.getFailureStatus());
         assertEquals(failure.getErrorMessage(), errorMessage);
     }
 }

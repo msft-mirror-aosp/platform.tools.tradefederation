@@ -16,11 +16,7 @@
 package com.android.tradefed.device;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.IDevice.DeviceState;
-import com.android.ddmlib.ShellCommandUnresponsiveException;
-import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.device.DeviceManager.FastbootDevice;
 import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
@@ -28,13 +24,13 @@ import com.android.tradefed.device.cloud.NestedDeviceStateMonitor;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
-import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SystemUtil;
 
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,6 +39,7 @@ import java.util.regex.Pattern;
  */
 public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
 
+    public static final String NOTIFY_AS_NATIVE = "NOTIFY_AS_NATIVE";
     public static final String IPADDRESS_PATTERN =
             "((^([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\."
                     + "([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\."
@@ -130,21 +127,28 @@ public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
                                         mDeviceManager, idevice, mFastbootEnabled),
                                 mAllocationMonitor);
             } else {
-                // Handle device connected via 'adb connect'
-                testDevice =
-                        new RemoteAndroidDevice(
-                                idevice,
-                                new DeviceStateMonitor(mDeviceManager, idevice, mFastbootEnabled),
-                                mAllocationMonitor);
-                testDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+                Set<String> nativeSerials = new HashSet<>();
+                if (System.getenv(NOTIFY_AS_NATIVE) != null) {
+                    nativeSerials.addAll(Arrays.asList(System.getenv(NOTIFY_AS_NATIVE).split(",")));
+                }
+                if (nativeSerials.contains(idevice.getSerialNumber())) {
+                    testDevice =
+                            new NativeDevice(
+                                    idevice,
+                                    new NativeDeviceStateMonitor(
+                                            mDeviceManager, idevice, mFastbootEnabled),
+                                    mAllocationMonitor);
+                } else {
+                    // Handle device connected via 'adb connect'
+                    testDevice =
+                            new RemoteAndroidDevice(
+                                    idevice,
+                                    new DeviceStateMonitor(
+                                            mDeviceManager, idevice, mFastbootEnabled),
+                                    mAllocationMonitor);
+                    testDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+                }
             }
-        } else if (!checkFrameworkSupport(idevice)) {
-            // Iot device instance tier 1 (no framework support)
-            testDevice =
-                    new NativeDevice(
-                            idevice,
-                            new NativeDeviceStateMonitor(mDeviceManager, idevice, mFastbootEnabled),
-                            mAllocationMonitor);
         } else {
             // Default to-go device is Android full stack device.
             testDevice = new TestDevice(idevice,
@@ -164,52 +168,6 @@ public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
         testDevice.setFastbootEnabled(mFastbootEnabled);
         testDevice.setFastbootPath(mDeviceManager.getFastbootPath());
         return testDevice;
-    }
-
-    /**
-     * Helper that return true if device has framework support.
-     */
-    protected boolean checkFrameworkSupport(IDevice idevice) {
-        if (idevice instanceof StubDevice) {
-            // Assume stub device should go to the default full framework support for
-            // backward compatibility
-            return true;
-        }
-        final long timeout = 60 * 1000;
-        try {
-            for (int i = 0; i < FRAMEWORK_CHECK_MAX_RETRY; i++) {
-                CollectingOutputReceiver receiver = createOutputReceiver();
-                if (!DeviceState.ONLINE.equals(idevice.getState())) {
-                    // Device will be 'unavailable' and recreated in DeviceManager so no need to
-                    // check.
-                    CLog.w("Device state is not Online, assuming Framework support for now.");
-                    return true;
-                }
-                String cmd = String.format(CHECK_PM_CMD, EXPECTED_RES);
-                idevice.executeShellCommand(cmd, receiver, timeout, TimeUnit.MILLISECONDS);
-                String output = receiver.getOutput().trim();
-                // It can only be one of the expected output or an exception if device offline
-                // otherwise we retry
-                if (EXPECTED_RES.equals(output)) {
-                    return true;
-                }
-                if (output.contains(EXPECTED_ERROR)) {
-                    CLog.i("No support for Framework, creating a native device. "
-                            + "output: %s", receiver.getOutput());
-                    return false;
-                }
-                getRunUtil().sleep(FRAMEWORK_CHECK_SLEEP_MS);
-            }
-            CLog.w("Could not determine the framework support for '%s' after retries, assuming "
-                    + "framework support.", idevice.getSerialNumber());
-        } catch (TimeoutException | AdbCommandRejectedException | ShellCommandUnresponsiveException
-                | IOException e) {
-            CLog.w("Exception during checkFrameworkSupport, assuming True: '%s' with device: %s",
-                    e.getMessage(), idevice.getSerialNumber());
-            CLog.e(e);
-        }
-        // We default to support for framework to get same behavior as before.
-        return true;
     }
 
     /** Return the default {@link IRunUtil} instance. */

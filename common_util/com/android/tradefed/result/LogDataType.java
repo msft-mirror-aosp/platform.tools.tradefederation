@@ -38,6 +38,11 @@ public enum LogDataType {
             "text/plain",
             true /* do not compress */,
             false), // LLVM indexed profile data
+    GCOV_KERNEL_COVERAGE(
+            "tar.gz",
+            "application/gzip",
+            true /* do not compress */,
+            false), // GCOV debugfs coverage archive
     PB("pb", "application/octet-stream", true, false), // Binary proto file
     TEXTPB("textproto", "text/plain", false, true), // Text proto file
     JSON("json", "application/json", false, true),

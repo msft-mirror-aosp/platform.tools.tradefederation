@@ -213,7 +213,11 @@ java_library_host {
         "auto_value_annotations",
         "google-api-services-compute",
         "google-api-services-storage",
+        "google-auth-library-credentials-0.13.0",
+        "google-auth-library-oauth2-http-0.13.0",
+        "google-http-client-jackson2-1.28.0",
         "gson",
+        "jackson-core",
         "jacoco-cli",
         "jline",
         "junit-params",
@@ -248,9 +252,15 @@ java_library_host {
 // feed to metalava when generating the stubs.
 tradefed_docs_only_args = " -hide 101 -hide 111 -hide 113 -hide 125 -hide 126 -hide 127 -hide 128 "
 
-tradefed_doc_stubs_args = " -hide UnresolvedLink -hide HiddenSuperclass " +
-  "-hide DeprecationMismatch -hide RequiresPermission " +
-  "-hide BroadcastBehavior -hide SdkConstant -hide Todo "
+tradefed_doc_stubs_args = " --hide UnresolvedLink " +
+  "--hide HiddenSuperclass " +
+  "--hide DeprecationMismatch " +
+  "--hide RequiresPermission " +
+  "--hide BroadcastBehavior " +
+  "--hide SdkConstant " +
+  "--hide Todo " +
+  "--hide ReferencesHidden " +
+  "--hide HiddenTypeParameter "
 
 droidstubs_host {
     name: "tradefed-doc-stubs",
@@ -270,7 +280,7 @@ droidstubs_host {
         "loganalysis",
         "tradefed",
     ],
-    args: tradefed_doc_stubs_args + "--package",
+    args: tradefed_doc_stubs_args,
     create_doc_stubs: true,
 }
 
@@ -298,7 +308,6 @@ droiddoc_host {
           "-yaml _book.yaml " +
           "-apidocsdir reference/tradefed/ " +
           "-werror " +
-          "-package " +
           "-devsite ",
 }
 

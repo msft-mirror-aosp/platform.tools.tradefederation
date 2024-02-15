@@ -16,6 +16,10 @@
 
 package com.android.tradefed.util.zip;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+
+import com.google.common.collect.Lists;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -34,6 +38,8 @@ public class MergedZipEntryCollection {
 
     // Best guess of header size. 2k Should be more than enough for file path and extra attributes.
     public static final int HEADER_SIZE = LocalFileHeader.LOCAL_FILE_HEADER_SIZE + 2048;
+    // Avoid overly large grouping of files that create hotspotting in download and unzip
+    private static final int MAX_SIZE_GROUPS = 20;
 
     private List<CentralDirectoryInfo> mZipEntries;
 
@@ -68,40 +74,56 @@ public class MergedZipEntryCollection {
             return new ArrayList<MergedZipEntryCollection>();
         }
 
-        // Sort the entries by start offset.
-        List<CentralDirectoryInfo> entries =
-                zipEntries
-                        .stream()
-                        .sorted(Comparator.comparing(CentralDirectoryInfo::getLocalHeaderOffset))
-                        .collect(Collectors.toList());
-        long endOffset = -1;
-        long totalGap = 0;
-        List<MergedZipEntryCollection> collections = new ArrayList<>();
-        List<CentralDirectoryInfo> group = new ArrayList<>();
-        for (CentralDirectoryInfo entry : entries) {
-            if (endOffset >= 0) {
-                long newGap = entry.getLocalHeaderOffset() - endOffset + totalGap;
-                long totalSize =
-                        entry.getLocalHeaderOffset()
-                                + HEADER_SIZE
-                                + entry.getCompressedSize()
-                                - group.get(0).getLocalHeaderOffset();
-                double gapPercentage = (double) newGap / totalSize;
-                if (endOffset < entry.getLocalHeaderOffset() - MAX_GAP
-                        && MAX_GAP_PERCENTAGE < gapPercentage) {
-                    collections.add(new MergedZipEntryCollection(group));
-                    group = new ArrayList<>();
-                    totalGap = 0;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("merge_collections")) {
+            // Sort the entries by start offset.
+            List<CentralDirectoryInfo> entries =
+                    zipEntries.stream()
+                            .sorted(
+                                    Comparator.comparing(
+                                            CentralDirectoryInfo::getLocalHeaderOffset))
+                            .collect(Collectors.toList());
+            long endOffset = -1;
+            long totalGap = 0;
+            List<MergedZipEntryCollection> collections = new ArrayList<>();
+            List<CentralDirectoryInfo> group = new ArrayList<>();
+            for (CentralDirectoryInfo entry : entries) {
+                if (endOffset >= 0) {
+                    long newGap = entry.getLocalHeaderOffset() - endOffset + totalGap;
+                    long totalSize =
+                            entry.getLocalHeaderOffset()
+                                    + HEADER_SIZE
+                                    + entry.getCompressedSize()
+                                    - group.get(0).getLocalHeaderOffset();
+                    double gapPercentage = (double) newGap / totalSize;
+                    if (endOffset < entry.getLocalHeaderOffset() - MAX_GAP
+                            && MAX_GAP_PERCENTAGE < gapPercentage) {
+                        collections.addAll(splitLargeGroups(group));
+                        group = new ArrayList<>();
+                        totalGap = 0;
+                    }
                 }
+                group.add(entry);
+                if (group.size() > 1 && entry.getLocalHeaderOffset() > endOffset) {
+                    totalGap += entry.getLocalHeaderOffset() - endOffset;
+                }
+                endOffset = entry.getLocalHeaderOffset() + HEADER_SIZE + entry.getCompressedSize();
             }
-            group.add(entry);
-            if (group.size() > 1 && entry.getLocalHeaderOffset() > endOffset) {
-                totalGap += entry.getLocalHeaderOffset() - endOffset;
-            }
-            endOffset = entry.getLocalHeaderOffset() + HEADER_SIZE + entry.getCompressedSize();
+            collections.addAll(splitLargeGroups(group));
+            return collections;
         }
-        collections.add(new MergedZipEntryCollection(group));
+    }
 
+    private static List<MergedZipEntryCollection> splitLargeGroups(
+            List<CentralDirectoryInfo> group) {
+        List<MergedZipEntryCollection> collections = new ArrayList<>();
+        if (group.size() < MAX_SIZE_GROUPS) {
+            collections.add(new MergedZipEntryCollection(group));
+            return collections;
+        }
+        List<List<CentralDirectoryInfo>> subSets = Lists.partition(group, MAX_SIZE_GROUPS);
+        for (List<CentralDirectoryInfo> set : subSets) {
+            collections.add(new MergedZipEntryCollection(set));
+        }
         return collections;
     }
 }

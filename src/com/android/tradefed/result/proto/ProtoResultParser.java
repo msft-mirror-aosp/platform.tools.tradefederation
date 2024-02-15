@@ -37,11 +37,13 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.LogFileProto.LogFileInfo;
 import com.android.tradefed.result.proto.TestRecordProto.ChildReference;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfo;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfoContext;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.proto.TestRecordProto.SkipReason;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
@@ -97,6 +99,10 @@ public class ProtoResultParser {
     /** Track the name of the module in progress. */
     private String mModuleInProgress = null;
 
+    private IInvocationContext mModuleContext = null;
+
+    private boolean mMergeInvocationContext = true;
+
     /** Ctor. */
     public ProtoResultParser(
             ITestInvocationListener listener,
@@ -137,6 +143,25 @@ public class ProtoResultParser {
     /** Sets whether or not we should report the logs. */
     public void setReportLogs(boolean reportLogs) {
         mReportLogs = reportLogs;
+    }
+
+    /**
+     * Enable or disable merging the serialized invocation context with the main context that this
+     * object is initialized with.
+     *
+     * <p>Note that disabling invocation-level reporting via the {@code reportInvocation}
+     * constructor parameter still merges context information and requires explicitly using this
+     * method to disable the behavior.
+     *
+     * <p>TODO(b/288001953): Revisit the proper API for accomplishing this.
+     *
+     * @return the previous state
+     * @see #ProtoResultParser
+     */
+    public boolean setMergeInvocationContext(boolean enabled) {
+        boolean previousContext = mMergeInvocationContext;
+        mMergeInvocationContext = enabled;
+        return previousContext;
     }
 
     /**
@@ -362,6 +387,9 @@ public class ProtoResultParser {
                         Throwable invocationError =
                                 (Throwable) SerializationUtil.deserialize(errorType);
                         failure.setCause(invocationError);
+                        if (invocationError instanceof OutOfMemoryError) {
+                            failure.setErrorIdentifier(InfraErrorIdentifier.OUT_OF_MEMORY_ERROR);
+                        }
                     } catch (IOException e) {
                         CLog.e("Failed to deserialize the invocation exception:");
                         CLog.e(e);
@@ -369,8 +397,16 @@ public class ProtoResultParser {
                     }
                 }
             }
+            CLog.d("Invocation failed with: %s", failure);
             mListener.invocationFailed(failure);
             mInvocationFailed = true;
+        }
+        if (endInvocationProto.hasSkipReason()) {
+            SkipReason reason = endInvocationProto.getSkipReason();
+            CLog.d("Invocation skipped with: %s", reason);
+            mListener.invocationSkipped(
+                    new com.android.tradefed.result.skipped.SkipReason(
+                            reason.getReason(), reason.getTrigger()));
         }
 
         log("Invocation ended proto");
@@ -414,6 +450,7 @@ public class ProtoResultParser {
                 mModuleInProgress = moduleId;
             }
             log(message);
+            mModuleContext = moduleContext;
             mListener.testModuleStarted(moduleContext);
             if (mFirstModule) {
                 mFirstModule = false;
@@ -428,8 +465,18 @@ public class ProtoResultParser {
     private void handleModuleEnded(TestRecord moduleProto) {
         handleLogs(moduleProto);
         log("Test module ended proto");
+        try {
+            Any anyDescription = moduleProto.getDescription();
+            IInvocationContext moduleContext =
+                    InvocationContext.fromProto(anyDescription.unpack(Context.class));
+            // Merge attributes
+            mModuleContext.addInvocationAttributes(moduleContext.getAttributes());
+        } catch (InvalidProtocolBufferException e) {
+            throw new RuntimeException(e);
+        }
         mListener.testModuleEnded();
         mModuleInProgress = null;
+        mModuleContext = null;
     }
 
     /** Handles the test run level of the invocation. */
@@ -486,9 +533,9 @@ public class ProtoResultParser {
         String[] info = testcaseProto.getTestRecordId().split("#");
         TestDescription description = new TestDescription(info[0], info[1]);
         if (testcaseProto.hasEndTime()) {
-            // Allow end event that also report start in one go. When using StreamProtoResultReporter
-            // we can save some socket communication by reporting test cases start and end at the
-            // same time in some instances.
+            // Allow end event that also report start in one go. When using
+            // StreamProtoResultReporter we can save some socket communication
+            // by reporting test cases start and end at the same time in some instances.
             if (mCurrentTestCase == null) {
                 log("Test case started proto: %s", description.toString());
                 mListener.testStarted(description, timeStampToMillis(testcaseProto.getStartTime()));
@@ -538,6 +585,16 @@ public class ProtoResultParser {
                 log("Test case ignored proto: %s", description.toString());
                 break;
             case PASS:
+                if (testcaseProto.hasSkipReason()) {
+                    log(
+                            "Test case skipped proto: %s",
+                            description.toString(), testcaseProto.getSkipReason());
+                    mListener.testSkipped(
+                            description,
+                            new com.android.tradefed.result.skipped.SkipReason(
+                                    testcaseProto.getSkipReason().getReason(),
+                                    testcaseProto.getSkipReason().getTrigger()));
+                }
                 break;
             default:
                 throw new RuntimeException(
@@ -648,6 +705,10 @@ public class ProtoResultParser {
      */
     private void mergeInvocationContext(
             IInvocationContext receiverContext, IInvocationContext endInvocationContext) {
+        if (!mMergeInvocationContext) {
+            CLog.d("Skipping merging invocation context");
+            return;
+        }
         if (receiverContext == null) {
             return;
         }

@@ -127,4 +127,13 @@ public interface IHostOptions {
 
     /** Returns the remote cl_flashstation script file. */
     public File getClFlashstation();
+
+    /** Returns whether or not incremental flashing is enabled. */
+    public boolean isIncrementalFlashingEnabled();
+
+    /** Returns whether the host is opt-out of incremental flashing. */
+    public boolean isOptOutOfIncrementalFlashing();
+
+    /** Returns whether host metric reporting should be disabled. */
+    public boolean isHostMetricReportingDisabled();
 }

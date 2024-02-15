@@ -20,10 +20,12 @@ import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListen
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.internal.IRemoteScheduledListenersFeature;
 import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.SystemUtil;
 
 import com.proto.tradefed.feature.ErrorInfo;
 import com.proto.tradefed.feature.FeatureRequest;
@@ -31,11 +33,11 @@ import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.TradefedInformationGrpc.TradefedInformationImplBase;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
@@ -46,18 +48,24 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
 
     public static final String SERVER_REFERENCE = "SERVER_REFERENCE";
     public static final String TEST_INFORMATION_OBJECT = "TEST_INFORMATION";
+    public static final String TF_SERVICE_PORT = "TF_SERVICE_PORT";
 
-    private static final int DEFAULT_PORT = 8889;
-    private static final String TF_SERVICE_PORT = "TF_SERVICE_PORT";
+    private static final int DEFAULT_PORT = 0;
+    private static Integer sInternalPort = null;
 
     private Server mServer;
 
-    private Map<String, IConfiguration> mRegisteredInvocation = new HashMap<>();
+    private Map<String, IConfiguration> mRegisteredInvocation = new ConcurrentHashMap<>();
+    private Map<String, ThreadGroup> mRegisteredGroup =
+            new ConcurrentHashMap<String, ThreadGroup>();
     private Map<String, List<IScheduledInvocationListener>>
-            mRegisteredScheduledInvocationListeners = new HashMap<>();
+            mRegisteredScheduledInvocationListeners = new ConcurrentHashMap<>();
 
     /** Returns the port used by the server. */
     public static int getPort() {
+        if (sInternalPort != null) {
+            return sInternalPort;
+        }
         return System.getenv(TF_SERVICE_PORT) != null
                 ? Integer.parseInt(System.getenv(TF_SERVICE_PORT))
                 : DEFAULT_PORT;
@@ -77,8 +85,13 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
         try {
             CLog.d("Starting feature server.");
             mServer.start();
+            sInternalPort = mServer.getPort();
         } catch (IOException e) {
-            CLog.w("TradefedFeatureServer already started: %s", e.getMessage());
+            if (SystemUtil.isLocalMode()) {
+                CLog.w("TradefedFeatureServer already started: %s", e.getMessage());
+            } else {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -111,9 +124,10 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
 
     /** Register an invocation with a unique reference that can be queried */
     public String registerInvocation(
-            IConfiguration config, List<IScheduledInvocationListener> listeners) {
+            IConfiguration config, ThreadGroup tg, List<IScheduledInvocationListener> listeners) {
         String referenceId = UUID.randomUUID().toString();
         mRegisteredInvocation.put(referenceId, config);
+        mRegisteredGroup.put(referenceId, tg);
         mRegisteredScheduledInvocationListeners.put(referenceId, listeners);
         config.getConfigurationDescription().addMetadata(SERVER_REFERENCE, referenceId);
         return referenceId;
@@ -127,14 +141,19 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                         .getAllMetaData()
                         .getUniqueMap()
                         .get(SERVER_REFERENCE);
-        mRegisteredInvocation.remove(referenceId);
-        mRegisteredScheduledInvocationListeners.remove(referenceId);
+        if (referenceId != null) {
+            mRegisteredInvocation.remove(referenceId);
+            mRegisteredGroup.remove(referenceId);
+            mRegisteredScheduledInvocationListeners.remove(referenceId);
+        }
     }
 
     private FeatureResponse createResponse(FeatureRequest request) {
         ServiceLoader<IRemoteFeature> serviceLoader = ServiceLoader.load(IRemoteFeature.class);
         for (IRemoteFeature feature : serviceLoader) {
             if (feature.getName().equals(request.getName())) {
+                InvocationMetricLogger.setLocalGroup(
+                        mRegisteredGroup.get(request.getReferenceId()));
                 if (feature instanceof IConfigurationReceiver) {
                     ((IConfigurationReceiver) feature)
                             .setConfiguration(mRegisteredInvocation.get(request.getReferenceId()));
@@ -173,6 +192,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                     if (feature instanceof IConfigurationReceiver) {
                         ((IConfigurationReceiver) feature).setConfiguration(null);
                     }
+                    InvocationMetricLogger.resetLocalGroup();
                 }
             }
         }

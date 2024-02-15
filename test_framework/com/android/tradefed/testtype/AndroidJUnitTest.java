@@ -25,6 +25,7 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -37,6 +38,7 @@ import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.targetprep.TestAppInstallSetup;
 import com.android.tradefed.testtype.suite.params.InstantAppHandler;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
 import com.android.tradefed.util.ResourceUtil;
@@ -54,6 +56,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -117,13 +120,13 @@ public class AndroidJUnitTest extends InstrumentationTest
             name = "include-filter",
             description = "The include filters of the test name to run.",
             requiredForRerun = true)
-    private Set<String> mIncludeFilters = new HashSet<>();
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = "exclude-filter",
             description = "The exclude filters of the test name to run.",
             requiredForRerun = true)
-    private Set<String> mExcludeFilters = new HashSet<>();
+    private Set<String> mExcludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = "include-annotation",
@@ -359,6 +362,10 @@ public class AndroidJUnitTest extends InstrumentationTest
             if (params != null && params.contains(InstantAppHandler.INSTANT_APP_ID)) {
                 mUseTestStorage = false;
                 CLog.d("Disable test storage on instant app module.");
+            } else if (mInstrumentSdkSandbox || mInstrumentSdkInSandbox) {
+                // SDK sandboxes don't have access to the test ContentProvider.
+                mUseTestStorage = false;
+                CLog.d("Disable test storage for SDK sandbox instrumentation tests.");
             } else {
                 mUseTestStorage = getDevice().checkApiLevelAgainstNextRelease(34);
                 if (!mUseTestStorage) {
@@ -368,33 +375,40 @@ public class AndroidJUnitTest extends InstrumentationTest
         }
 
         boolean pushedFile = false;
-        // if mIncludeTestFile is set, perform filtering with this file
-        if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
-            mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
-            pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener);
-            if (mUseTestStorage) {
-                pushTestFile(
-                        mIncludeTestFile, mTestStorageInternalDir + mDeviceIncludeFile, listener);
+        try (CloseableTraceScope filter = new CloseableTraceScope("push_filter_files")) {
+            // if mIncludeTestFile is set, perform filtering with this file
+            if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
+                mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
+                pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener);
+                if (mUseTestStorage) {
+                    pushTestFile(
+                            mIncludeTestFile,
+                            mTestStorageInternalDir + mDeviceIncludeFile,
+                            listener);
+                }
+                pushedFile = true;
+                // If an explicit include file filter is provided, do not use the package
+                setTestPackageName(null);
             }
-            pushedFile = true;
-            // If an explicit include file filter is provided, do not use the package
-            setTestPackageName(null);
-        }
 
-        // if mExcludeTestFile is set, perform filtering with this file
-        if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
-            mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
-            pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener);
-            if (mUseTestStorage) {
-                pushTestFile(
-                        mExcludeTestFile, mTestStorageInternalDir + mDeviceExcludeFile, listener);
+            // if mExcludeTestFile is set, perform filtering with this file
+            if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
+                mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
+                pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener);
+                if (mUseTestStorage) {
+                    pushTestFile(
+                            mExcludeTestFile,
+                            mTestStorageInternalDir + mDeviceExcludeFile,
+                            listener);
+                }
+                pushedFile = true;
             }
-            pushedFile = true;
         }
         TestAppInstallSetup serviceInstaller = null;
         if (mUseTestStorage) {
             File testServices = null;
-            try {
+            try (CloseableTraceScope serviceInstall =
+                    new CloseableTraceScope("install_service_apk")) {
                 testServices = FileUtil.createTempFile("services", ".apk");
                 boolean extracted =
                         ResourceUtil.extractResourceAsFile(
@@ -410,6 +424,12 @@ public class AndroidJUnitTest extends InstrumentationTest
                                 Integer.parseInt(testInfo.properties().get(RUN_TESTS_AS_USER_KEY)));
                     }
                     serviceInstaller.setUp(testInfo);
+                    // Turn off battery optimization for androidx.test.services
+                    CommandResult dumpsys =
+                            getDevice()
+                                    .executeShellV2Command(
+                                            "dumpsys deviceidle whitelist +androidx.test.services");
+                    CLog.d("stdout: %s\nstderr: %s", dumpsys.getStdout(), dumpsys.getStderr());
                 } else {
                     throw new IOException("Failed to extract test-services.apk");
                 }
@@ -427,7 +447,10 @@ public class AndroidJUnitTest extends InstrumentationTest
         }
         super.run(testInfo, listener);
         if (serviceInstaller != null) {
-            serviceInstaller.tearDown(testInfo, null);
+            try (CloseableTraceScope serviceTeardown =
+                    new CloseableTraceScope("service_teardown")) {
+                serviceInstaller.tearDown(testInfo, null);
+            }
         }
         if (pushedFile) {
             // Remove the directory where the files where pushed
@@ -605,6 +628,10 @@ public class AndroidJUnitTest extends InstrumentationTest
     /** Return if a string is a regex for filter. */
     @VisibleForTesting
     public boolean isRegex(String filter) {
+        if (isParameterizedTest(filter)) {
+            return false;
+        }
+
         // If filter contains any special regex character, return true.
         // Throw RuntimeException if the regex is invalid.
         if (Pattern.matches(".*[\\?\\*\\^\\$\\(\\)\\[\\]\\{\\}\\|\\\\].*", filter)) {
@@ -617,6 +644,18 @@ public class AndroidJUnitTest extends InstrumentationTest
             return true;
         }
 
+        return false;
+    }
+
+    /** Return if a string is a parameterized test. */
+    @VisibleForTesting
+    public boolean isParameterizedTest(String filter) {
+        // If filter contains '#', '[', ']' and must ends with ']'. Only numbers, a-Z, -, _,
+        // [, ], (, ), and . are allowed between [].
+        if (Pattern.matches(".*#.*\\[[0-9a-zA-Z,\\-_.\\[\\]\\(\\)]*\\]$", filter)) {
+            CLog.i("Filter %s is a parameterized string.", filter);
+            return true;
+        }
         return false;
     }
 

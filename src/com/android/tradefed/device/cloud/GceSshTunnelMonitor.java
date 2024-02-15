@@ -18,7 +18,6 @@ package com.android.tradefed.device.cloud;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
@@ -156,20 +155,9 @@ public class GceSshTunnelMonitor extends Thread {
         // shutdown adb connection first, if we reached where there could be a connection
         CLog.d("closeConnection is triggered.");
         if (mLocalHostAndPort != null) {
-            if (mDevice.getOptions().shouldUseConnection()) {
-                AbstractConnection conn = mDevice.getConnection();
-                if (conn instanceof AdbTcpConnection) {
-                    if (!((AdbTcpConnection) conn)
-                            .adbTcpDisconnect(
-                                    mLocalHostAndPort.getHost(),
-                                    Integer.toString(mLocalHostAndPort.getPort()))) {
-                        CLog.d(
-                                "Failed to disconnect from local host %s",
-                                mLocalHostAndPort.toString());
-                    }
-                }
-            } else if (mDevice instanceof RemoteAndroidDevice) {
-                if (!((RemoteAndroidDevice) mDevice)
+            AbstractConnection conn = mDevice.getConnection();
+            if (conn instanceof AdbTcpConnection) {
+                if (!((AdbTcpConnection) conn)
                         .adbTcpDisconnect(
                                 mLocalHostAndPort.getHost(),
                                 Integer.toString(mLocalHostAndPort.getPort()))) {
@@ -289,8 +277,8 @@ public class GceSshTunnelMonitor extends Thread {
                 }
             }
             if (mAdbConnectionLogs != null) {
-                if (mDevice instanceof RemoteAndroidDevice) {
-                    ((RemoteAndroidDevice) mDevice).setAdbLogFile(mAdbConnectionLogs);
+                if (mDevice.getConnection() instanceof AdbTcpConnection) {
+                    ((AdbTcpConnection) mDevice.getConnection()).setAdbLogFile(mAdbConnectionLogs);
                 }
             }
 
@@ -308,25 +296,16 @@ public class GceSshTunnelMonitor extends Thread {
             // Checking if it is actually running.
             if (isTunnelAlive()) {
                 mLocalHostAndPort = HostAndPort.fromString(mDevice.getSerialNumber());
-                if (mDevice.getOptions().shouldUseConnection()) {
-                    AbstractConnection conn = mDevice.getConnection();
-                    if (conn instanceof AdbTcpConnection) {
-                        if (!((AdbTcpConnection) conn)
-                                .adbTcpConnect(
-                                        mLocalHostAndPort.getHost(),
-                                        Integer.toString(mLocalHostAndPort.getPort()))) {
-                            CLog.e("Adb connect failed, re-init GCE connection.");
-                            closeConnection();
-                            continue;
-                        }
+                AbstractConnection conn = mDevice.getConnection();
+                if (conn instanceof AdbTcpConnection) {
+                    if (!((AdbTcpConnection) conn)
+                            .adbTcpConnect(
+                                    mLocalHostAndPort.getHost(),
+                                    Integer.toString(mLocalHostAndPort.getPort()))) {
+                        CLog.e("Adb connect failed, re-init GCE connection.");
+                        closeConnection();
+                        continue;
                     }
-                } else if (!((RemoteAndroidDevice) mDevice)
-                        .adbTcpConnect(
-                                mLocalHostAndPort.getHost(),
-                                Integer.toString(mLocalHostAndPort.getPort()))) {
-                    CLog.e("Adb connect failed, re-init GCE connection.");
-                    closeConnection();
-                    continue;
                 }
                 try {
                     mSshTunnelProcess.waitFor();
@@ -380,7 +359,7 @@ public class GceSshTunnelMonitor extends Thread {
             }
             CLog.d("Setting device %s serial to %s", device.getSerialNumber(), serial);
             ((IManagedTestDevice) device).setIDevice(new RemoteAvdIDevice(serial));
-            ((IManagedTestDevice) device).setFastbootEnabled(false);
+
             // Do not set setDeviceSerial to keep track of it consistently with the placeholder
             // serial
             mBuildInfo.addBuildAttribute(VIRTUAL_DEVICE_SERIAL, serial);
@@ -419,8 +398,8 @@ public class GceSshTunnelMonitor extends Thread {
 
     /** Log all the interesting log files generated from the ssh tunnel. */
     public void logSshTunnelLogs(ITestLogger logger) {
-        if (mDevice instanceof RemoteAndroidDevice) {
-            ((RemoteAndroidDevice) mDevice).setAdbLogFile(null);
+        if (mDevice.getConnection() instanceof AdbTcpConnection) {
+            ((AdbTcpConnection) mDevice.getConnection()).setAdbLogFile(null);
         }
         if (mSshTunnelLogs != null) {
             try (InputStreamSource sshBridge = new FileInputStreamSource(mSshTunnelLogs, true)) {

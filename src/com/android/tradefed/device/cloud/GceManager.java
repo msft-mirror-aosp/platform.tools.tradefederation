@@ -58,6 +58,7 @@ import java.io.IOException;
 import java.lang.ProcessBuilder.Redirect;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -71,12 +72,24 @@ public class GceManager {
     public static final String GCE_INSTANCE_CLEANED_KEY = "gce-instance-clean-called";
     public static final String GCE_IP_PRECONFIGURED_KEY = "gce-ip-pre-configured";
 
-    private static final long BUGREPORT_TIMEOUT = 15 * 60 * 1000L;
+    // Align default value of bugreport timeout with option bugreportz-timeout
+    private static final long BUGREPORT_TIMEOUT = 5 * 60 * 1000L;
     private static final long REMOTE_FILE_OP_TIMEOUT = 10 * 60 * 1000L;
     private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
     private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
     private static final List<String> SCOPES = Arrays.asList(ComputeScopes.COMPUTE_READONLY);
 
+    // Create list of error codes that warrant a lease retry
+    private static final List<InfraErrorIdentifier> RETRIABLE_LEASE_ERRORS =
+            new ArrayList<>(
+                    Arrays.asList(
+                            InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
+                            InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_ERROR,
+                            InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE,
+                            InfraErrorIdentifier.OXYGEN_SERVER_LB_CONNECTION_ERROR,
+                            InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN));
+
+    private static final int MAX_LEASE_RETRIES = 3;
     private DeviceDescriptor mDeviceDescriptor;
     private TestDeviceOptions mDeviceOptions;
     private IBuildInfo mBuildInfo;
@@ -215,7 +228,7 @@ public class GceManager {
         // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
         mSkipSerialLogCollection =
                 (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
-        if (getTestDeviceOptions().useOxygenProxy()) {
+        if (getTestDeviceOptions().useOxygen()) {
             return startGceWithOxygenClient(logger, attributes);
         } else {
             return startGceWithAcloud(ipDevice, user, offset, attributes);
@@ -243,7 +256,7 @@ public class GceManager {
             throws TargetSetupError {
         List<GceAvdInfo> gceAvdInfos;
         long startTime = System.currentTimeMillis();
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("startMultiDevicesGce")) {
             OxygenClient oxygenClient =
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
@@ -265,74 +278,112 @@ public class GceManager {
     /**
      * Attempt to start a gce instance with Oxygen.
      *
-     * @param loggger The {@link ITestLogger} where to log the device launch logs.
+     * @param logger The {@link ITestLogger} where to log the device launch logs.
      * @param attributes attributes associated with current invocation
      * @return a {@link GceAvdInfo} describing the GCE instance.
      */
     private GceAvdInfo startGceWithOxygenClient(
             ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
+        long fetchTime = 0;
         try {
             OxygenClient oxygenClient =
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
                     oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
-            GceAvdInfo oxygenDeviceInfo =
+
+            // Retry lease up to 2x if error code is in list of error codes
+            int iteration = 1;
+            while (res.getStatus() != CommandStatus.SUCCESS && iteration < MAX_LEASE_RETRIES) {
+                InfraErrorIdentifier identifier = GceAvdInfo.refineOxygenErrorType(res.getStderr());
+                if (!RETRIABLE_LEASE_ERRORS.contains(identifier)) {
+                    break;
+                }
+                CLog.d("Retrying lease call due to earlier failure of %s", identifier);
+                res = oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
+                // Update Oxygen lease attempt metrics
+                if (res.getStatus() == CommandStatus.SUCCESS) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.LEASE_RETRY_COUNT_SUCCESS, iteration);
+                } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.LEASE_RETRY_COUNT_FAILURE, iteration);
+                }
+                iteration++;
+            }
+
+            mGceAvdInfo =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                                     res, mDeviceOptions.getRemoteAdbPort())
                             .get(0);
-            mGceAvdInfo = oxygenDeviceInfo;
+            // Lease may time out, skip remaining logic if lease failed.
+            if (mGceAvdInfo.hostAndPort() == null) {
+                CLog.w("Failed to lease a device: %s", mGceAvdInfo);
+                return mGceAvdInfo;
+            }
             if (oxygenClient.noWaitForBootSpecified(getTestDeviceOptions())) {
                 CLog.d(
                         "Device leased without waiting for boot to finish. Poll emulator_stderr.txt"
                                 + " for flag `VIRTUAL_DEVICE_BOOT_COMPLETED`");
+                // When leasing without wait for boot to finish, use the time spent so far as the
+                // best estimate of cf_fetch_artifact_time_ms.
+                fetchTime = System.currentTimeMillis() - startTime;
                 Boolean bootSuccess = false;
-                long endTime = startTime + getTestDeviceOptions().getGceCmdTimeout();
+                long timeout =
+                        startTime
+                                + getTestDeviceOptions().getGceCmdTimeout()
+                                - System.currentTimeMillis();
+                startTime = System.currentTimeMillis();
                 final String remoteFile =
                         CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR + "3/emulator_stderr.txt";
-                while (System.currentTimeMillis() < endTime) {
-                    res =
-                            remoteSshCommandExecution(
-                                    mGceAvdInfo,
-                                    getTestDeviceOptions(),
-                                    RunUtil.getDefault(),
-                                    10000L,
-                                    "grep",
-                                    "VIRTUAL_DEVICE_BOOT_COMPLETED",
-                                    remoteFile);
-                    if (CommandStatus.SUCCESS.equals(res.getStatus())) {
-                        bootSuccess = true;
-                        CLog.d(
-                                "Device boot completed after %sms, flag located: %s",
-                                System.currentTimeMillis() - startTime, res.getStdout().trim());
-                        break;
-                    }
-                    RunUtil.getDefault().sleep(10000);
+                // Continuously scan cf boot status and exit immediately when the magic string
+                // VIRTUAL_DEVICE_BOOT_COMPLETED is found
+                String cfBootStatusSshCmd =
+                        "tail -F -n +1 "
+                                + remoteFile
+                                + " | grep -m 1 VIRTUAL_DEVICE_BOOT_COMPLETED";
+                String[] cfBootStatusSshCommand = cfBootStatusSshCmd.split(" ");
+
+                res =
+                        remoteSshCommandExecution(
+                                mGceAvdInfo,
+                                getTestDeviceOptions(),
+                                RunUtil.getDefault(),
+                                timeout,
+                                cfBootStatusSshCommand);
+                if (CommandStatus.SUCCESS.equals(res.getStatus())) {
+                    bootSuccess = true;
+                    CLog.d(
+                            "Device boot completed after %sms, flag located: %s",
+                            System.currentTimeMillis() - startTime, res.getStdout().trim());
                 }
+
                 if (!bootSuccess) {
                     if (logger != null) {
                         CommonLogRemoteFileUtil.fetchCommonFiles(
                                 logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
                     }
-                    throw new TargetSetupError(
-                            "Timed out waiting for device to boot.",
-                            InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE);
+                    mGceAvdInfo.setErrorType(InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT);
+                    mGceAvdInfo.setStatus(GceStatus.BOOT_FAIL);
+                    // Align the error message raised when Oxygen lease timed out.
+                    mGceAvdInfo.setErrors("Timed out waiting for virtual device to start.");
                 }
             }
-            // Lease may timeout and skip logging metrics if host is not set.
-            if (oxygenDeviceInfo.hostAndPort() != null) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.CF_OXYGEN_SESSION_ID, oxygenDeviceInfo.instanceName());
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.CF_OXYGEN_SERVER_URL,
-                        oxygenDeviceInfo.hostAndPort().getHost());
-            }
-            return oxygenDeviceInfo;
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_SESSION_ID, mGceAvdInfo.instanceName());
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_OXYGEN_SERVER_URL, mGceAvdInfo.hostAndPort().getHost());
+            return mGceAvdInfo;
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.OXYGEN_DEVICE_DIRECT_LEASE_COUNT, 1);
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_LAUNCH_CVD_TIME, System.currentTimeMillis() - startTime);
+            if (mGceAvdInfo != null && GceStatus.SUCCESS.equals(mGceAvdInfo.getStatus())) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_FETCH_ARTIFACT_TIME, fetchTime);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_LAUNCH_CVD_TIME,
+                        System.currentTimeMillis() - startTime);
+            }
         }
     }
 
@@ -396,14 +447,11 @@ public class GceManager {
                                     getTestDeviceOptions().getGceCmdTimeout(),
                                     gceArgs.toArray(new String[gceArgs.size()]));
             CLog.i("GCE driver stderr: %s", cmd.getStderr());
-            String instanceName = null;
-            if (!getTestDeviceOptions().useOxygen()) {
-                instanceName = extractInstanceName(cmd.getStderr());
-                if (instanceName != null) {
-                    mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, instanceName);
-                } else {
-                    CLog.w("Could not extract an instance name for the gce device.");
-                }
+            String instanceName = extractInstanceName(cmd.getStderr());
+            if (instanceName != null) {
+                mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, instanceName);
+            } else {
+                CLog.w("Could not extract an instance name for the gce device.");
             }
             if (CommandStatus.TIMED_OUT.equals(cmd.getStatus())) {
                 String errors =
@@ -439,24 +487,23 @@ public class GceManager {
                     errors =
                             "Could not get a valid instance name, check the gce driver's output."
                                     + "The instance may not have booted up at all.";
+                    InfraErrorIdentifier errorId = InfraErrorIdentifier.NO_ACLOUD_REPORT;
                     CLog.e(errors);
+                    if (cmd.getStderr() != null
+                            && cmd.getStderr().contains("Invalid JWT Signature")) {
+                        errorId = InfraErrorIdentifier.ACLOUD_INVALID_SERVICE_ACCOUNT_KEY;
+                    }
                     throw new TargetSetupError(
                             String.format(
                                     "acloud errors: %s\nGCE driver stderr: %s",
                                     errors, cmd.getStderr()),
                             mDeviceDescriptor,
-                            InfraErrorIdentifier.NO_ACLOUD_REPORT);
+                            errorId);
                 }
             }
             mGceAvdInfo =
                     GceAvdInfo.parseGceInfoFromFile(
                             reportFile, mDeviceDescriptor, mDeviceOptions.getRemoteAdbPort());
-            if (getTestDeviceOptions().useOxygen()) {
-                mBuildInfo.addBuildAttribute(GCE_INSTANCE_NAME_KEY, mGceAvdInfo.instanceName());
-                // Save GCE hostname to build info for releasing Oxygen cuttlefish in the parent
-                // process if needed.
-                mBuildInfo.addBuildAttribute(GCE_HOSTNAME_KEY, mGceAvdInfo.hostAndPort().getHost());
-            }
             mGceAvdInfo.setIpPreconfigured(ipDevice != null);
             mGceAvdInfo.setDeviceOffset(offset);
             mGceAvdInfo.setInstanceUser(user);
@@ -607,7 +654,6 @@ public class GceManager {
             getTestDeviceOptions().setRemoteAdbPort(6520 + offset);
             gceArgs.add("--base-instance-num");
             gceArgs.add(String.valueOf(offset + 1));
-            gceArgs.add("--launch-args=\"" + "--base_instance_num=" + (offset + 1) + "\"");
         }
         switch (getTestDeviceOptions().getGceDriverLogLevel()) {
             case DEBUG:
@@ -625,11 +671,6 @@ public class GceManager {
         }
         // Do not pass flags --logcat_file and --serial_log_file to collect logcat and serial logs.
 
-        if (getTestDeviceOptions().useOxygen()) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT, 1);
-            gceArgs.add("--oxygen");
-        }
         return gceArgs;
     }
 
@@ -639,7 +680,7 @@ public class GceManager {
      * @return returns true if gce shutdown was requested as non-blocking.
      */
     public boolean shutdownGce() {
-        if (getTestDeviceOptions().useOxygenProxy()) {
+        if (getTestDeviceOptions().useOxygen()) {
             return shutdownGceWithOxygen();
         } else {
             return shutdownGceWithAcloud();
@@ -726,17 +767,6 @@ public class GceManager {
             boolean isIpPreconfigured) {
         List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
         gceArgs.add("delete");
-        if (options.useOxygen()) {
-            if (Strings.isNullOrEmpty(hostname)) {
-                CLog.w("`hostname` is needed for releasing Oxygen cuttlefish.");
-                return null;
-            }
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT, 1);
-            gceArgs.add("--oxygen");
-            gceArgs.add("--ip");
-            gceArgs.add(hostname);
-        }
         if (options.getServiceAccountJsonKeyFile() != null) {
             gceArgs.add("--service-account-json-private-key-path");
             gceArgs.add(options.getServiceAccountJsonKeyFile().getAbsolutePath());
@@ -748,7 +778,7 @@ public class GceManager {
             gceArgs.add(options.getInstanceUser());
             gceArgs.add("--host-ssh-private-key-path");
             gceArgs.add(options.getSshPrivateKeyPath().getAbsolutePath());
-        } else {
+        } else if (config != null) {
             gceArgs.add("--config_file");
             gceArgs.add(config.getAbsolutePath());
         }
@@ -776,10 +806,13 @@ public class GceManager {
         // Add extra args.
         File config = null;
         try {
-            config = FileUtil.createTempFile(options.getAvdConfigFile().getName(), "config");
-            // Copy the config in case it comes from a dynamic file. In order to ensure Acloud has
-            // the file until it's done with it.
-            FileUtil.copyFile(options.getAvdConfigFile(), config);
+            File originalConfig = options.getAvdConfigFile();
+            if (originalConfig != null) {
+                config = FileUtil.createTempFile(originalConfig.getName(), "config");
+                // Copy the config in case it comes from a dynamic file. In order to ensure Acloud
+                // has the file until it's done with it.
+                FileUtil.copyFile(originalConfig, config);
+            }
             List<String> gceArgs =
                     buildShutdownCommand(
                             config, options, instanceName, hostname, isIpPreconfigured);
@@ -807,8 +840,9 @@ public class GceManager {
                 // Discard the output so the process is not linked to the parent and doesn't die
                 // if the JVM exit.
                 Process p = runUtil.runCmdInBackground(Redirect.DISCARD, gceArgs);
-                AcloudDeleteCleaner cleaner = new AcloudDeleteCleaner(p, config);
-                cleaner.start();
+                if (config != null) {
+                    new AcloudDeleteCleaner(p, config).start();
+                }
             }
         } catch (IOException ioe) {
             CLog.e("failed to create log file for GCE Teardown");
@@ -864,28 +898,65 @@ public class GceManager {
             return null;
         }
         String adbTool = "./bin/adb";
+        String output;
         if (options.useOxygen()) {
             adbTool = "./tools/dynamic_adb_tool";
             // Make sure the Oxygen device is connected.
-            remoteSshCommandExec(gceAvd, options, runUtil, adbTool, "connect", "localhost:6520");
+            output =
+                    remoteSshCommandExec(
+                            gceAvd, options, runUtil, adbTool, "connect", "localhost:6520");
+            if (output.contains("failed to connect to")) {
+                CLog.e("Bugreport collection skipped due to device can't be connected: %s", output);
+                return null;
+            }
         }
-        String output =
-                remoteSshCommandExec(
-                        gceAvd,
-                        options,
-                        runUtil,
-                        adbTool,
-                        "wait-for-device",
-                        "shell",
-                        "bugreportz");
+
+        // TODO(b/280177749): Remove the special logic after Oxygen side is cleaned up.
+        if (options.useOxygen()) {
+            output =
+                    remoteSshCommandExec(
+                            gceAvd,
+                            options,
+                            runUtil,
+                            adbTool,
+                            "-s",
+                            "localhost:6520",
+                            "wait-for-device",
+                            "shell",
+                            "bugreportz");
+        } else {
+            output =
+                    remoteSshCommandExec(
+                            gceAvd,
+                            options,
+                            runUtil,
+                            adbTool,
+                            "wait-for-device",
+                            "shell",
+                            "bugreportz");
+        }
         Matcher match = BUGREPORTZ_RESPONSE_PATTERN.matcher(output);
         if (!match.find()) {
             CLog.e("Something went wrong during bugreportz collection: '%s'", output);
             return null;
         }
         String deviceFilePath = match.group(2);
-        String pullOutput =
-                remoteSshCommandExec(gceAvd, options, runUtil, adbTool, "pull", deviceFilePath);
+        String pullOutput;
+        if (options.useOxygen()) {
+            pullOutput =
+                    remoteSshCommandExec(
+                            gceAvd,
+                            options,
+                            runUtil,
+                            adbTool,
+                            "-s",
+                            "localhost:6520",
+                            "pull",
+                            deviceFilePath);
+        } else {
+            pullOutput =
+                    remoteSshCommandExec(gceAvd, options, runUtil, adbTool, "pull", deviceFilePath);
+        }
         CLog.d(pullOutput);
         String remoteFilePath = "./" + new File(deviceFilePath).getName();
         File localTmpFile = FileUtil.createTempFile("bugreport-ssh", ".zip");
@@ -947,8 +1018,13 @@ public class GceManager {
                     RemoteFileUtil.fetchRemoteDir(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
 
+            if (remoteFile != null && remoteFile.listFiles().length == 0) {
+                // If the retrieved directory is empty, delete it as there is no file to log anyway
+                FileUtil.recursiveDelete(remoteFile);
+                return false;
+            }
             // Search log files for known failures for devices hosted by Oxygen
-            if (options.useOxygenProxy()) {
+            if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
                     List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);

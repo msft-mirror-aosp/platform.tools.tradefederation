@@ -18,6 +18,7 @@ package com.android.tradefed.result;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.MergeStrategy;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -301,7 +302,17 @@ public class TestRunResult {
     }
 
     private void updateTestResult(
-            TestDescription test, TestStatus status, FailureDescription failure) {
+            TestDescription test,
+            com.android.tradefed.result.TestStatus status,
+            FailureDescription failure) {
+        updateTestResult(test, status, failure, null);
+    }
+
+    private void updateTestResult(
+            TestDescription test,
+            com.android.tradefed.result.TestStatus status,
+            FailureDescription failure,
+            SkipReason reason) {
         TestResult r = mTestResults.get(test);
         if (r == null) {
             CLog.d("received test event without test start for %s", test);
@@ -311,27 +322,40 @@ public class TestRunResult {
         if (failure != null) {
             r.setFailure(failure);
         }
+        if (reason != null) {
+            r.setSkipReason(reason);
+        }
         addTestResult(test, r);
     }
 
     public void testFailed(TestDescription test, String trace) {
-        updateTestResult(test, TestStatus.FAILURE, FailureDescription.create(trace));
+        updateTestResult(
+                test,
+                com.android.tradefed.result.TestStatus.FAILURE,
+                FailureDescription.create(trace));
     }
 
     public void testFailed(TestDescription test, FailureDescription failure) {
-        updateTestResult(test, TestStatus.FAILURE, failure);
+        updateTestResult(test, com.android.tradefed.result.TestStatus.FAILURE, failure);
     }
 
     public void testAssumptionFailure(TestDescription test, String trace) {
-        updateTestResult(test, TestStatus.ASSUMPTION_FAILURE, FailureDescription.create(trace));
+        updateTestResult(
+                test,
+                com.android.tradefed.result.TestStatus.ASSUMPTION_FAILURE,
+                FailureDescription.create(trace));
     }
 
     public void testAssumptionFailure(TestDescription test, FailureDescription failure) {
-        updateTestResult(test, TestStatus.ASSUMPTION_FAILURE, failure);
+        updateTestResult(test, com.android.tradefed.result.TestStatus.ASSUMPTION_FAILURE, failure);
     }
 
     public void testIgnored(TestDescription test) {
-        updateTestResult(test, TestStatus.IGNORED, null);
+        updateTestResult(test, com.android.tradefed.result.TestStatus.IGNORED, null);
+    }
+
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        updateTestResult(test, com.android.tradefed.result.TestStatus.SKIPPED, null, reason);
     }
 
     public void testEnded(TestDescription test, HashMap<String, Metric> testMetrics) {
@@ -344,7 +368,7 @@ public class TestRunResult {
             result = new TestResult();
         }
         if (result.getStatus().equals(TestStatus.INCOMPLETE)) {
-            result.setStatus(TestStatus.PASSED);
+            result.setStatus(com.android.tradefed.result.TestStatus.PASSED);
         }
         result.setEndTime(endTime);
         result.setMetrics(TfMetricProtoUtil.compatibleConvert(testMetrics));

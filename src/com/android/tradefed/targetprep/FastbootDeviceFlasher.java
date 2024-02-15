@@ -27,6 +27,7 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -38,6 +39,9 @@ import com.android.tradefed.util.FuseUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
+import com.android.tradefed.util.image.DeviceImageTracker;
+import com.android.tradefed.util.image.IncrementalImageUtil;
+import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
@@ -95,6 +99,8 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
 
     private String mSystemBuildId = null;
     private String mSystemBuildFlavor = null;
+
+    private IncrementalImageUtil mIncrementalFlashing = null;
 
     @VisibleForTesting
     protected FuseUtil getFuseUtil() {
@@ -158,6 +164,10 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         // HACK: To workaround TF's command line parsing, options starting with a dash
         // needs to be prepended with a whitespace and trimmed before they are used.
         mFlashOptions = flashOptions.stream().map(String::trim).collect(Collectors.toList());
+    }
+
+    public void setIncrementalFlashing(IncrementalImageUtil incrementalUtil) {
+        mIncrementalFlashing = incrementalUtil;
     }
 
     /** {@inheritDoc} */
@@ -337,6 +347,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         // only set bootloader image if this build doesn't have one already
         // TODO: move this logic to the BuildProvider step
         if (bootloaderVersion != null && localBuild.getBootloaderImageFile() == null) {
+            CLog.v("Bootloader image was not included in the build artifacts (%s, %s), "
+                + "fetching from blob service instead.",
+                localBuild.getDeviceBuildId(), localBuild.getDeviceBuildFlavor());
             localBuild.setBootloaderImageFile(
                     getFlashingResourcesRetriever()
                             .retrieveFile(getBootloaderFilePrefix(device), bootloaderVersion),
@@ -345,6 +358,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         String basebandVersion = resourceParser.getRequiredBasebandVersion();
         // only set baseband image if this build doesn't have one already
         if (basebandVersion != null && localBuild.getBasebandImageFile() == null) {
+            CLog.v("Baseband image was not included in the build artifacts (%s, %s), "
+                + "fetching from blob service instead.",
+                localBuild.getDeviceBuildId(), localBuild.getDeviceBuildFlavor());
             localBuild.setBasebandImage(getFlashingResourcesRetriever().retrieveFile(
                     BASEBAND_IMAGE_NAME, basebandVersion), basebandVersion);
         }
@@ -437,6 +453,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 !deviceBuild.getBootloaderVersion().equals(currentBootloaderVersion)) {
             CLog.i("Flashing bootloader %s", deviceBuild.getBootloaderVersion());
             flashBootloader(device, deviceBuild.getBootloaderImageFile());
+            if (mIncrementalFlashing != null) {
+                mIncrementalFlashing.notifyBootloaderNeedsRevert();
+            }
             return true;
         } else {
             CLog.i("Bootloader is already version %s, skipping flashing", currentBootloaderVersion);
@@ -499,12 +518,12 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
      */
     protected void checkAndFlashBaseband(ITestDevice device, IDeviceBuildInfo deviceBuild)
             throws DeviceNotAvailableException, TargetSetupError {
-        String currentBasebandVersion = getImageVersion(device, "baseband");
         if (checkShouldFlashBaseband(device, deviceBuild)) {
             CLog.i("Flashing baseband %s", deviceBuild.getBasebandVersion());
             flashBaseband(device, deviceBuild.getBasebandImageFile());
-        } else {
-            CLog.i("Baseband is already version %s, skipping flashing", currentBasebandVersion);
+            if (mIncrementalFlashing != null) {
+                mIncrementalFlashing.notifyBasebadNeedsRevert();
+            }
         }
     }
 
@@ -519,8 +538,13 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     protected boolean checkShouldFlashBaseband(ITestDevice device, IDeviceBuildInfo deviceBuild)
             throws DeviceNotAvailableException, TargetSetupError {
         String currentBasebandVersion = getImageVersion(device, "baseband");
-        return (deviceBuild.getBasebandVersion() != null &&
-                !deviceBuild.getBasebandVersion().equals(currentBasebandVersion));
+        boolean shouldFlash =
+                (deviceBuild.getBasebandVersion() != null
+                        && !deviceBuild.getBasebandVersion().equals(currentBasebandVersion));
+        if (!shouldFlash) {
+            CLog.i("Baseband is already version %s, skipping flashing", currentBasebandVersion);
+        }
+        return shouldFlash;
     }
 
     /**
@@ -703,9 +727,23 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             return true;
         }
         // If we have the same build id and build flavor we don't need to flash it.
-        if (systemBuildId.equals(deviceBuild.getDeviceBuildId()) &&
-                systemBuildFlavor.equalsIgnoreCase(deviceBuild.getBuildFlavor())) {
-            return false;
+        if (systemBuildId.equals(deviceBuild.getDeviceBuildId())) {
+            FileCacheTracker tracker =
+                    DeviceImageTracker.getDefaultCache()
+                            .getBaselineDeviceImage(deviceBuild.getDeviceSerial());
+            if (tracker != null
+                    && tracker.buildId.equals(systemBuildId)
+                    && tracker.flavor.equals(deviceBuild.getBuildFlavor())) {
+                if (mIncrementalFlashing != null
+                        && mIncrementalFlashing.isSameBuildFlashingAllowed()) {
+                    CLog.d("Same build incremental flashing is allowed");
+                    return true;
+                }
+                return false;
+            }
+            if (systemBuildFlavor.equalsIgnoreCase(deviceBuild.getBuildFlavor())) {
+                return false;
+            }
         }
         return true;
     }
@@ -724,18 +762,36 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 "Flashing device %s with image %s",
                 device.getSerialNumber(), deviceBuild.getDeviceImageFile().getAbsolutePath());
         // give extra time to the update cmd
-        try {
-            if (getHostOptions().shouldFlashWithFuseZip()
-                && getFuseUtil().canMountZip()) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_METHOD,
-                        FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
-                flashWithFuseZip(device, deviceBuild);
-            } else {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.FLASHING_METHOD,
-                        FlashingMethod.FASTBOOT_UPDATE.toString());
-                flashWithUpdateCommand(device, deviceBuild);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("flash_system")) {
+            boolean shouldFlash = true;
+            if (mIncrementalFlashing != null) {
+                try {
+                    mIncrementalFlashing.updateDevice();
+                    shouldFlash = false;
+                } catch (TargetSetupError e) {
+                    // In case of TargetSetupError for incremental flashing,
+                    // fallback to full flashing.
+                    CLog.e(e);
+                    DeviceImageTracker.getDefaultCache()
+                            .invalidateTracking(device.getSerialNumber());
+                    if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                        device.rebootIntoBootloader();
+                    }
+                }
+            }
+
+            if (shouldFlash) {
+                if (getHostOptions().shouldFlashWithFuseZip() && getFuseUtil().canMountZip()) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_METHOD,
+                            FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
+                    flashWithFuseZip(device, deviceBuild);
+                } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_METHOD,
+                            FlashingMethod.FASTBOOT_UPDATE.toString());
+                    flashWithUpdateCommand(device, deviceBuild);
+                }
             }
             flashRamdiskIfNeeded(device, deviceBuild);
             // only transfer last fastboot command status over to system flash status after having
@@ -761,6 +817,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             throws DeviceNotAvailableException, TargetSetupError {
         FuseUtil fuseUtil = getFuseUtil();
         File mountPoint = null;
+        Throwable exception = null;
         try {
             mountPoint = FileUtil.createTempDir("FlashAllMountPoint");
             fuseUtil.mountZip(deviceBuild.getDeviceImageFile().getAbsoluteFile(), mountPoint);
@@ -770,12 +827,14 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             executeLongFastbootCmd(device, systemVarMap, fastbootArgs);
         } catch (DeviceNotAvailableException e) {
             // We wrap the exception from recovery if it fails to provide a clear message
+            exception = e;
             throw new DeviceNotAvailableException(
                     "Device became unavailable during fastboot 'flashall'. Please verify that "
                             + "the image you are flashing can boot properly.",
                     e,
                     device.getSerialNumber());
         } catch (IOException e) {
+            exception = e;
             throw new TargetSetupError(
                     String.format(
                             "Unable to create a temp dir for fuse zip to mount on, error: %s",
@@ -788,11 +847,17 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             }
             // In case the unmount operation fails, deleting the mount point will fail as well.
             if (mountPoint.exists()) {
-                throw new HarnessRuntimeException(
+                String mountErrorMsg =
                         String.format(
                                 "Failed to delete mount point %s, unmount operation might failed.",
-                                mountPoint),
-                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+                                mountPoint);
+                if (exception != null) {
+                    // If a previous exception happened, surface the previous exception only
+                    CLog.e(mountErrorMsg);
+                } else {
+                    throw new HarnessRuntimeException(
+                            mountErrorMsg, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
+                }
             }
         }
     }

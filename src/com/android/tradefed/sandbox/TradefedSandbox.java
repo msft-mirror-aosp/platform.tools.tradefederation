@@ -29,6 +29,8 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.IGlobalConfiguration;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.device.DeviceSelectionOptions;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
+import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.RemoteInvocationExecution;
@@ -52,6 +54,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.PrettyPrintDelimiter;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
@@ -60,6 +63,8 @@ import com.android.tradefed.util.SubprocessExceptionParser;
 import com.android.tradefed.util.SubprocessTestResultsParser;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
+
+import com.google.common.base.Joiner;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -70,6 +75,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -83,6 +89,8 @@ public class TradefedSandbox implements ISandbox {
 
     private static final String SANDBOX_PREFIX = "sandbox-";
     public static final String SANDBOX_ENABLED = "SANDBOX_ENABLED";
+
+    private static final String SANDBOX_JVM_OPTIONS_ENV_VAR_KEY = "TF_SANDBOX_JVM_OPTIONS";
 
     private File mStdoutFile = null;
     private File mStderrFile = null;
@@ -122,6 +130,10 @@ public class TradefedSandbox implements ISandbox {
         }
         SandboxOptions sandboxOptions = getSandboxOptions(config);
         mCmdArgs.addAll(sandboxOptions.getJavaOptions());
+        if (System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY) != null) {
+            mCmdArgs.addAll(
+                    Arrays.asList(System.getenv(SANDBOX_JVM_OPTIONS_ENV_VAR_KEY).split(",")));
+        }
         mCmdArgs.add("-cp");
         mCmdArgs.add(createClasspath(mRootFolder));
         mCmdArgs.add(TradefedSandboxRunner.class.getCanonicalName());
@@ -139,6 +151,7 @@ public class TradefedSandbox implements ISandbox {
             mCmdArgs.add("--" + CommandOptions.USE_SANDBOX);
         }
         if (sandboxOptions.startAvdInParent()) {
+            Set<String> notifyAsNative = new LinkedHashSet<String>();
             for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
                 if (deviceConfig.getDeviceRequirements().gceDeviceRequested()) {
                     // Turn off the gce-device option and force the serial instead to use the
@@ -161,7 +174,19 @@ public class TradefedSandbox implements ISandbox {
                         mCmdArgs.add(
                                 DeviceSelectionOptions.DeviceRequestedType.EXISTING_DEVICE.name());
                     }
+                    if (BaseDeviceType.NATIVE_DEVICE.equals(
+                            deviceConfig.getDeviceRequirements().getBaseDeviceTypeRequested())) {
+                        notifyAsNative.add(
+                                info.getContext()
+                                        .getDevice(deviceConfig.getDeviceName())
+                                        .getSerialNumber());
+                    }
                 }
+            }
+            if (!notifyAsNative.isEmpty()) {
+                mRunUtil.setEnvVariable(
+                        ManagedTestDeviceFactory.NOTIFY_AS_NATIVE,
+                        Joiner.on(",").join(notifyAsNative));
             }
         }
 
@@ -219,7 +244,9 @@ public class TradefedSandbox implements ISandbox {
                     result.setStatus(CommandStatus.EXCEPTION);
                 }
                 result.setStderr(
-                        String.format("Event receiver thread did not complete.:\n%s", stderrText));
+                        String.format(
+                                "%s:\n%s",
+                                SubprocessExceptionParser.EVENT_THREAD_JOIN, stderrText));
             }
             PrettyPrintDelimiter.printStageDelimiter(
                     String.format(
@@ -286,7 +313,13 @@ public class TradefedSandbox implements ISandbox {
             mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE);
             mRunUtil.unsetEnvVariable(GlobalConfiguration.GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE);
             mRunUtil.unsetEnvVariable(AutomatedReporters.PROTO_REPORTING_PORT);
+            // Handle feature server
             mRunUtil.unsetEnvVariable(RemoteInvocationExecution.START_FEATURE_SERVER);
+            mRunUtil.unsetEnvVariable(TradefedFeatureServer.TF_SERVICE_PORT);
+            mRunUtil.setEnvVariablePriority(EnvPriority.SET);
+            mRunUtil.setEnvVariable(
+                    TradefedFeatureServer.TF_SERVICE_PORT,
+                    Integer.toString(TradefedFeatureServer.getPort()));
             // Mark subprocess for sandbox
             mRunUtil.setEnvVariable(SANDBOX_ENABLED, "true");
 
@@ -313,6 +346,7 @@ public class TradefedSandbox implements ISandbox {
                         getTradefedSandboxEnvironment(
                                 context,
                                 config,
+                                listener,
                                 QuotationAwareTokenizer.tokenizeLine(
                                         config.getCommandLine(),
                                         /** no logging */
@@ -328,7 +362,7 @@ public class TradefedSandbox implements ISandbox {
                 return res;
             }
             // Prepare the context
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("prepareContext")) {
                 mSerializedContext = prepareContext(context, config);
             } catch (IOException e) {
                 return e;
@@ -359,7 +393,10 @@ public class TradefedSandbox implements ISandbox {
 
     @Override
     public File getTradefedSandboxEnvironment(
-            IInvocationContext context, IConfiguration nonVersionedConfig, String[] args)
+            IInvocationContext context,
+            IConfiguration nonVersionedConfig,
+            ITestLogger logger,
+            String[] args)
             throws Exception {
         SandboxOptions options = getSandboxOptions(nonVersionedConfig);
         // Check that we have no args conflicts.
@@ -432,10 +469,15 @@ public class TradefedSandbox implements ISandbox {
             if (config.getCommandOptions().shouldUseSandboxTestMode()) {
                 mode = DumpCmd.TEST_MODE;
             }
-            try {
+            try (CloseableTraceScope ignored = new CloseableTraceScope("serialize_test_config")) {
                 mSerializedConfiguration =
                         SandboxConfigUtil.dumpConfigForVersion(
-                                createClasspath(mRootFolder), mRunUtil, args, mode, mGlobalConfig);
+                                createClasspath(mRootFolder),
+                                mRunUtil,
+                                args,
+                                mode,
+                                mGlobalConfig,
+                                false);
             } catch (SandboxConfigurationException e) {
                 // TODO: Improve our detection of that scenario
                 CLog.e(e);
@@ -469,7 +511,8 @@ public class TradefedSandbox implements ISandbox {
                                             mRunUtil,
                                             new String[] {parentConfig.getAbsolutePath()},
                                             mode,
-                                            mGlobalConfig);
+                                            mGlobalConfig,
+                                            false);
                         } finally {
                             FileUtil.deleteFile(parentConfig);
                         }
@@ -613,7 +656,8 @@ public class TradefedSandbox implements ISandbox {
                         mRunUtil,
                         new String[] {uniqueTemplates.get("test")},
                         DumpCmd.STRICT_TEST,
-                        mGlobalConfig);
+                        mGlobalConfig,
+                        false);
         leftOverCommandLine.add("--template:map");
         leftOverCommandLine.add("test=" + mSerializedTestConfig.getAbsolutePath());
         leftOverCommandLine.add(0, configArg);

@@ -282,11 +282,11 @@ public class FeatureFlagTargetPreparerTest {
         mPreparer.setUp(mTestInfo);
     }
 
-    @Test(expected = TargetSetupError.class)
-    public void testSetUp_commandError() throws Exception {
-        mCommandResult.setStatus(CommandStatus.FAILED);
-        // Throws a TargetSetupError if any command fails.
+    @Test
+    public void testSetUp_commandWithoutOptions() throws Exception {
+        // Preparer should succeed when no options given in the command.
         mPreparer.setUp(mTestInfo);
+        verify(mDevice, never()).reboot();
     }
 
     @Test

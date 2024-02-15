@@ -426,9 +426,8 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return mMaxBatteryTemperature;
     }
 
-    /**
-     * Sets whether battery check is required for devices with unknown battery level
-     */
+    /** Sets whether battery check is required for devices with unknown battery level */
+    @Override
     public void setRequireBatteryCheck(boolean requireCheck) {
         mRequireBatteryCheck = requireCheck;
     }

@@ -70,6 +70,10 @@ public class TradefedFeatureClient implements AutoCloseable {
      */
     private FeatureResponse triggerFeature(
             String featureName, String invocationReference, Map<String, String> args) {
+        if (mChannel == null) {
+            throw new IllegalStateException(
+                    "Tradefed feature channel is null due to being uninitialized or closed.");
+        }
         FeatureResponse response;
         try (CloseableTraceScope ignore =
                 new CloseableTraceScope("triggerFeature:" + featureName)) {
@@ -84,6 +88,7 @@ public class TradefedFeatureClient implements AutoCloseable {
             } else {
                 CLog.w("Reference id is null.");
             }
+            CLog.d("%s", request);
             response = mBlockingStub.triggerFeature(request.build());
         } catch (StatusRuntimeException e) {
             response =

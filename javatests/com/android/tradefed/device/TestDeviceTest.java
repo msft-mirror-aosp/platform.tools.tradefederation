@@ -28,6 +28,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -605,15 +606,20 @@ public class TestDeviceTest {
                         + " notResponding=false null bad=falseblah \n";
         // construct a string with 2 error dialogs of each type to ensure proper detection
         final String fourErrors = anrOutput + anrOutput + crashOutput + crashOutput;
+        mTestDevice =
+                newTestDeviceForDevelopmentApiLevel(32)
+                        .injectShellV2Command(TestDevice.DISMISS_DIALOG_BROADCAST, "completed=0");
         mMockShellResponse = mock(IShellResponse.class);
-        when(mMockShellResponse.getResponse()).thenReturn(fourErrors, "");
+        when(mMockShellResponse.getResponse())
+                .thenReturn("")
+                .thenReturn(fourErrors, "");
         injectShellResponse(null, mMockShellResponse);
 
         mTestDevice.clearErrorDialogs();
-
+        // expect 1 dismisses
         // expect 4 key events to be sent - one for each dialog
         // and expect another dialog query - but return nothing
-        verify(mMockIDevice, times(1 + 4 + 1))
+        verify(mMockIDevice, times(1 + 1 + 4 + 1))
                 .executeShellCommand(
                         (String) Mockito.any(),
                         (IShellOutputReceiver) Mockito.any(),
@@ -867,6 +873,12 @@ public class TestDeviceTest {
                         (IShellOutputReceiver) Mockito.any(),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
+        verify(mMockIDevice, times(times))
+                .executeShellCommand(
+                        Mockito.eq(TestDevice.KEYGUARD_CONTROLLER_CMD),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
     }
 
     private void assertRecoverySuccess()
@@ -996,7 +1008,7 @@ public class TestDeviceTest {
         }
 
         assertRecoverySuccess(TestDevice.MAX_RETRY_ATTEMPTS + 1);
-        verifySystemProperty(SDK_VERSION, "23", 3);
+        verifySystemProperty(SDK_VERSION, "23", 1);
         verify(mMockStateMonitor, times(3)).waitForDeviceOnline();
         verify(mMockIDevice, times(TestDevice.MAX_RETRY_ATTEMPTS + 1))
                 .executeShellCommand(
@@ -2032,7 +2044,7 @@ public class TestDeviceTest {
 
         assertNull(mTestDevice.installPackages(mLocalApks, true));
 
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         verifyMockIDeviceAppOpsToPersist();
         ArgumentCaptor<List<File>> filesCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<String>> optionsCapture = ArgumentCaptor.forClass(List.class);
@@ -2114,7 +2126,7 @@ public class TestDeviceTest {
             assertTrue(optionsCapture.getValue().contains("--user"));
             assertTrue(optionsCapture.getValue().contains("1"));
             assertTrue(optionsCapture.getValue().contains("-g"));
-            verifyMockIDeviceRuntimePermissionSupported(2);
+            verifyMockIDeviceRuntimePermissionSupported(1);
             verifyMockIDeviceAppOpsToPersist();
         } finally {
             for (File apkFile : mLocalApks) {
@@ -2159,7 +2171,7 @@ public class TestDeviceTest {
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_MINUTES),
                         Mockito.eq(TimeUnit.MINUTES));
         assertTrue(optionsCapture.getValue().contains("-g"));
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         verifyMockIDeviceAppOpsToPersist();
         for (File apkFile : mLocalApks) {
             assertTrue(filesCapture.getValue().contains(apkFile));
@@ -2211,7 +2223,7 @@ public class TestDeviceTest {
 
         assertNull(mTestDevice.installRemotePackages(mRemoteApkPaths, true));
 
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         ArgumentCaptor<List<String>> filePathsCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<String>> optionsCapture = ArgumentCaptor.forClass(List.class);
         verify(mMockIDevice, times(1))
@@ -2263,7 +2275,7 @@ public class TestDeviceTest {
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_MINUTES),
                         Mockito.eq(TimeUnit.MINUTES));
         assertTrue(optionsCapture.getValue().contains("-g"));
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         for (String apkPath : mRemoteApkPaths) {
             assertTrue(filePathsCapture.getValue().contains(apkPath));
         }
@@ -4860,11 +4872,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("feature:com.google.android.feature.EXCHANGE_6_2"));
@@ -4875,11 +4890,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("com.google.android.feature.EXCHANGE_6_2"));
@@ -4891,11 +4909,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:test"));
@@ -4907,11 +4928,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
@@ -4929,12 +4953,15 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
-                                + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_EXT";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
+                                    + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_EXT");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
@@ -5154,7 +5181,7 @@ public class TestDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "Error: unable to open database"
-                                + "\"/data/0/com.google.android.gsf/databases/gservices.db\": "
+                                + "\"/data/0/*/databases/gservices.db\": "
                                 + "unable to open database file";
                     }
 
@@ -5462,13 +5489,14 @@ public class TestDeviceTest {
                             throws DeviceNotAvailableException {
                         return "KeyguardController:\n"
                                 + "  mKeyguardShowing=true\n"
-                                + "  mKeyguardGoingAway=false\n"
+                                + "  mKeyguardGoingAway=true\n"
                                 + "  mOccluded=false\n";
                     }
                 };
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertTrue(state.isKeyguardGoingAway());
     }
 
     /** New output of dumpsys is not as clean and has stuff in front. */
@@ -5488,6 +5516,7 @@ public class TestDeviceTest {
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertFalse(state.isKeyguardGoingAway());
     }
 
     /** Test for {@link TestDevice#getKeyguardState()} when the device does not support it. */
@@ -5771,12 +5800,17 @@ public class TestDeviceTest {
 
                     @Override
                     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
-                        super.createWifiHelper(true);
+                        super.createWifiHelper(false, true);
                         return mMockWifi;
                     }
 
                     @Override
-                    IWifiHelper createWifiHelper(boolean doSetup)
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2, boolean doSetup)
                             throws DeviceNotAvailableException {
                         return mMockWifi;
                     }
@@ -6157,6 +6191,37 @@ public class TestDeviceTest {
     }
 
     @Test
+    public void testGetFoldableStatesVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Supported states: [\n"
+                                        + " DeviceState{identifier=0, name='CLOSED',"
+                                        + " app_accessible=false,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=1, name='HALF_OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=2, name='OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=3, name='CANCEL_WHEN_NOT_TOP',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=true},\n"
+                                        + "]\n");
+                        return result;
+                    }
+                };
+
+        Set<DeviceFoldableState> states = mTestDevice.getFoldableStates();
+        assertEquals(2, states.size());
+    }
+
+    @Test
     public void testGetCurrentFoldableState() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
@@ -6185,6 +6250,26 @@ public class TestDeviceTest {
                         result.setStdout(
                                 "Committed state: DeviceState{identifier=2, name='DEFAULT',"
                                         + " app_accessible=true}\n");
+                        return result;
+                    }
+                };
+
+        DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
+        assertEquals(2, state.getIdentifier());
+    }
+
+    @Test
+    public void testGetCurrentFoldableStateVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Committed state: DeviceState{identifier=2, name='DEFAULT',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false}\n");
                         return result;
                     }
                 };
@@ -6227,7 +6312,10 @@ public class TestDeviceTest {
 
     @Test
     public void testCheckApiLevelAgainstNextRelease_propertyNotSet() throws Exception {
-        TestDevice testDevice = new TestableTestDeviceV2().injectSystemProperty(BUILD_CODENAME, "");
+        TestDevice testDevice =
+                new TestableTestDeviceV2()
+                        .injectSystemProperty(BUILD_CODENAME, "")
+                        .setApiLevel(40, null);
         DeviceRuntimeException e =
                 assertThrows(
                         DeviceRuntimeException.class,
@@ -6244,6 +6332,7 @@ public class TestDeviceTest {
         assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isFalse();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(10000)).isFalse();
     }
 
     @Test
@@ -6253,6 +6342,8 @@ public class TestDeviceTest {
         assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
         assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(44)).isFalse();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(10000)).isTrue();
     }
 
     /** Unit test for {@link TestDevice#getBugreportz()}. */
@@ -6356,37 +6447,6 @@ public class TestDeviceTest {
         assertTrue(mTestDevice.logBugreport(dataName, listener));
 
         verify(listener).testLog(dataName, LogDataType.BUGREPORTZ, stream);
-    }
-
-    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
-    @Test
-    public void testTestLogBugreport_oldDevice() {
-        final String dataName = "test";
-        final InputStreamSource stream = new ByteArrayInputStreamSource("bugreport".getBytes());
-        mTestDevice =
-                new TestableTestDevice() {
-                    @Override
-                    public InputStreamSource getBugreportz() {
-                        // Older device do not support bugreportz and return null
-                        return null;
-                    }
-
-                    @Override
-                    public InputStreamSource getBugreportInternal() {
-                        return stream;
-                    }
-
-                    @Override
-                    public int getApiLevel() throws DeviceNotAvailableException {
-                        // no bugreportz support
-                        return 23;
-                    }
-                };
-        ITestLogger listener = mock(ITestLogger.class);
-
-        assertTrue(mTestDevice.logBugreport(dataName, listener));
-
-        verify(listener).testLog(dataName, LogDataType.BUGREPORT, stream);
     }
 
     /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
@@ -6658,7 +6718,8 @@ public class TestDeviceTest {
     }
 
     private void verifyGetPropertyExpectation(String property, String value, int times) {
-        verify(mMockRunUtil, times(times))
+        // Use atLeast due to property caching
+        verify(mMockRunUtil, atLeast(times))
                 .runTimedCmd(
                         Mockito.anyLong(),
                         (OutputStream) Mockito.isNull(),

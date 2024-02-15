@@ -19,6 +19,7 @@ import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.TimeoutException;
 import com.android.helper.aoa.UsbDevice;
+import com.android.helper.aoa.UsbException;
 import com.android.helper.aoa.UsbHelper;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -488,8 +489,11 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
     @Override
     public void recoverDeviceRecovery(IDeviceStateMonitor monitor)
             throws DeviceNotAvailableException {
-        throw new DeviceNotAvailableException("device recovery not implemented",
-                monitor.getSerialNumber());
+        // TODO(b/305735893): Root and capture logs
+        throw new DeviceNotAvailableException(
+                "device unexpectedly went into recovery mode.",
+                monitor.getSerialNumber(),
+                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
     }
 
     /** Recovery routine for device unavailable errors. */
@@ -497,17 +501,24 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
             IDeviceStateMonitor monitor, boolean recoverTillOnline)
             throws DeviceNotAvailableException {
         TestDeviceState state = monitor.getDeviceState();
-        if (TestDeviceState.FASTBOOT.equals(state)
-                || TestDeviceState.FASTBOOTD.equals(state)
-                || TestDeviceState.RECOVERY.equals(state)) {
+        if (TestDeviceState.RECOVERY.equals(state)) {
+            CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
+            recoverDeviceRecovery(monitor);
+            return false;
+        }
+        if (TestDeviceState.FASTBOOT.equals(state) || TestDeviceState.FASTBOOTD.equals(state)) {
             CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
             return false;
         }
-        String serial = monitor.getSerialNumber();
+        if (monitor.isAdbTcp()) {
+            CLog.d("Device is connected via TCP, skipping USB reset attempt.");
+            return false;
+        }
         boolean recoveryAttempted = false;
         if (!mDisableUsbReset) {
             // First try to do a USB reset to get the device back
             try (UsbHelper usb = getUsbHelper()) {
+                String serial = monitor.getSerialNumber();
                 try (UsbDevice usbDevice = usb.getDevice(serial)) {
                     if (usbDevice != null) {
                         CLog.d("Resetting USB port for device '%s'", serial);
@@ -526,6 +537,9 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
                 CLog.w("Problem initializing USB helper, skipping USB reset and disabling it.");
                 CLog.w(e);
                 mDisableUsbReset = true;
+            } catch (UsbException e) {
+                CLog.w("Problem initializing USB helper, skipping USB reset.");
+                CLog.w(e);
             }
         }
         if (recoveryAttempted) {

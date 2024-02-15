@@ -49,6 +49,10 @@ public final class SandboxOptions {
     private static final String SANDBOX_USE_TEST_DISCOVERY = "sandbox-use-test-discovery";
     private static final String SANDBOX_FORCE_PARTIAL_DOWNLOAD_FILE_REGEX =
             "sandbox-force-partial-download-file-regex";
+    private static final String SANDBOX_PARTIAL_DOWNLOAD_CACHE =
+            "sandbox-use-partial-download-cache";
+    private static final String SANDBOX_SPLIT_DISCOVERY = "sandbox-split-discovery";
+    private static final String SANDBOX_PARALLEL_DOWNLOAD = "sandbox-parallel-download";
 
     @Option(
         name = TF_LOCATION,
@@ -154,6 +158,21 @@ public final class SandboxOptions {
                             + " that match any of the regex in the list")
     private Set<String> mSandboxForcePartialDownloadFileRegexList = new HashSet<>();
 
+    @Option(
+            name = SANDBOX_PARTIAL_DOWNLOAD_CACHE,
+            description = "Feature flag to use partial download cache")
+    private boolean mUsePartialDownloadCache = true;
+
+    @Option(
+            name = SANDBOX_SPLIT_DISCOVERY,
+            description = "Enable setup where discovery is done independently.")
+    private boolean mUseSandboxSplitDiscovery = true;
+
+    @Option(
+            name = SANDBOX_PARALLEL_DOWNLOAD,
+            description = "Enable parallel download during sandbox setup.")
+    private boolean mUseSandboxParallelDownload = true;
+
     /**
      * Returns the provided directories containing the Trade Federation version to use for
      * sandboxing the run.
@@ -239,11 +258,26 @@ public final class SandboxOptions {
         return mUseTestDiscovery;
     }
 
+    /** Returns whether or not to use partial download caching */
+    public boolean shouldUsePartialDownload() {
+        return mUsePartialDownloadCache;
+    }
+
     /**
      * Returns a set of regex, sandbox partial download will always download those files that match
      * the regex
      */
     public Set<String> getForcePartialDownloadFileRegexList() {
         return mSandboxForcePartialDownloadFileRegexList;
+    }
+
+    /** Returns whether to use setup with independent discovery. */
+    public boolean shouldUseSplitDiscovery() {
+        return mUseSandboxSplitDiscovery;
+    }
+
+    /** Returns whether or not to use parallel download during setup. */
+    public boolean shouldUseParallelDownload() {
+        return mUseSandboxParallelDownload;
     }
 }

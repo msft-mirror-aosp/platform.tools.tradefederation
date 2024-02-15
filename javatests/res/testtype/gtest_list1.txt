@@ -22,4 +22,5 @@ RecordingCanvas.
   firstClipWillReplace
   insertReorderBarrier
   refPaint
+  3dInput
 Leak check took 77ms

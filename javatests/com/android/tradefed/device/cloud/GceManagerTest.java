@@ -435,7 +435,6 @@ public class GceManagerTest {
                             reportFile.getAbsolutePath(),
                             "--base-instance-num",
                             "3",
-                            "--launch-args=\"--base_instance_num=3\"",
                             "-v");
             assertEquals(expected, result);
         } finally {

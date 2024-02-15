@@ -286,10 +286,17 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
         mMainGranularRunListener.setCollectTestsOnly(mCollectTestsOnly);
         ITestInvocationListener allListeners = initializeListeners();
         // First do the regular run, not retried.
-        intraModuleRun(testInfo, allListeners, 0);
+        DeviceNotAvailableException dnae = intraModuleRun(testInfo, allListeners, 0);
 
         if (mMaxRunLimit <= 1) {
-            return;
+            // TODO: If module is the last one and there is no retry quota, it won't need to do
+            //  device recovery.
+            if (dnae == null || !mModule.shouldRecoverVirtualDevice()) {
+                if (dnae != null) {
+                    throw dnae;
+                }
+                return;
+            }
         }
 
         if (mRetryDecision == null) {
@@ -299,9 +306,10 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
 
         // Bail out early if there is no need to retry at all.
         if (!mRetryDecision.shouldRetry(
-                mTest, mModule, 0, mMainGranularRunListener.getTestRunForAttempts(0))) {
+                mTest, mModule, 0, mMainGranularRunListener.getTestRunForAttempts(0), dnae)) {
             return;
         }
+
         // Avoid rechecking the shouldRetry below the first time as it could retrigger reboot.
         boolean firstCheck = true;
 
@@ -317,7 +325,8 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                                     mModule,
                                     attemptNumber - 1,
                                     mMainGranularRunListener.getTestRunForAttempts(
-                                            attemptNumber - 1));
+                                            attemptNumber - 1),
+                                    dnae);
                     if (!retry) {
                         return;
                     }
@@ -326,7 +335,7 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
                 mCountRetryUsed++;
                 CLog.d("Intra-module retry attempt number %s", attemptNumber);
                 // Run the tests again
-                intraModuleRun(testInfo, allListeners, attemptNumber);
+                dnae = intraModuleRun(testInfo, allListeners, attemptNumber);
             }
             // Feed the last attempt if we reached here.
             mRetryDecision.addLastAttempt(
@@ -338,10 +347,14 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
         }
     }
 
-    /** The workflow for each individual {@link IRemoteTest} run. */
-    private final void intraModuleRun(
-            TestInformation testInfo, ITestInvocationListener runListener, int attempt)
-            throws DeviceNotAvailableException {
+    /**
+     * The workflow for each individual {@link IRemoteTest} run.
+     *
+     * @return DeviceNotAvailableException while DNAE happened, null otherwise.
+     */
+    private final DeviceNotAvailableException intraModuleRun(
+            TestInformation testInfo, ITestInvocationListener runListener, int attempt) {
+        DeviceNotAvailableException exception = null;
         mMainGranularRunListener.setAttemptIsolation(CurrentInvocation.runCurrentIsolation());
         StartEndCollector startEndCollector = new StartEndCollector(runListener);
         runListener = startEndCollector;
@@ -411,13 +424,13 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             if (!mMainGranularRunListener.hasLastAttemptFailed()) {
                 runListener.testRunFailed(createFromException(dnae));
             }
-            // Device Not Available Exception are rethrown.
-            throw dnae;
+            exception = dnae;
         } finally {
             mRetryAttemptForwarder.incrementAttempt();
             // After one run, do not consider follow up isolated without action.
             CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
         }
+        return exception;
     }
 
     /** Get the merged TestRunResults from each {@link IRemoteTest} run. */

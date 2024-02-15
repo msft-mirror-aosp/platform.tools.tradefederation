@@ -94,10 +94,8 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
         if (mFlagFiles.isEmpty() && mFlagValues.isEmpty()) {
-            throw new TargetSetupError(
-                    "Flag files (--flag-file) or values (--flag-value) are required",
-                    device.getDeviceDescriptor(),
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            CLog.i("No flag-file or flag-value option provided, skipping");
+            return;
         }
 
         // Parse input flag files and values.

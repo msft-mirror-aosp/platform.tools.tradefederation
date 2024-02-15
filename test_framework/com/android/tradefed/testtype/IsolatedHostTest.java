@@ -62,6 +62,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -142,6 +143,13 @@ public class IsolatedHostTest
             new HashSet<>(Arrays.asList("org/junit", "com/google/common/collect/testing/google"));
 
     @Option(
+            name = "exclude-robolectric-packages",
+            description =
+                    "Indicates whether to exclude 'org/robolectric' when robolectric resources."
+                            + " Defaults to be true.")
+    private boolean mExcludeRobolectricPackages = true;
+
+    @Option(
             name = "java-folder",
             description = "The JDK to be used. If unset, the JDK on $PATH will be used.")
     private File mJdkFolder = null;
@@ -164,6 +172,13 @@ public class IsolatedHostTest
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
+
+    @Option(
+            name = "use-ravenwood-resources",
+            description =
+                    "Option to put the Ravenwood specific resources directory option on "
+                            + "the Java command line.")
+    private boolean mRavenwoodResources = false;
 
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
     private IBuildInfo mBuildInfo;
@@ -199,7 +214,9 @@ public class IsolatedHostTest
 
         try {
             mServer = new ServerSocket(0);
-            mServer.setSoTimeout(mSocketTimeout);
+            if (!this.debug) {
+                mServer.setSoTimeout(mSocketTimeout);
+            }
             artifactsDir = FileUtil.createTempDir("robolectric-screenshot-artifacts");
             String classpath = this.compileClassPath();
             List<String> cmdArgs = this.compileCommandArgs(classpath, artifactsDir);
@@ -224,6 +241,12 @@ public class IsolatedHostTest
 
             isolationRunner = runner.runCmdInBackground(Redirect.to(mSubprocessLog), cmdArgs);
             CLog.v("Started subprocess.");
+
+            if (this.debug) {
+                CLog.v(
+                        "JVM subprocess is waiting for a debugger to connect, will now wait"
+                                + " indefinitely for connection.");
+            }
 
             Socket socket = mServer.accept();
             if (!this.debug) {
@@ -334,7 +357,10 @@ public class IsolatedHostTest
                     mCoverageExecFile = FileUtil.createTempFile("coverage", ".exec");
                     String javaAgent =
                             String.format(
-                                    "-javaagent:%s=destfile=%s",
+                                    "-javaagent:%s=destfile=%s,"
+                                            + "inclnolocationclasses=true,"
+                                            + "exclclassloader="
+                                            + "jdk.internal.reflect.DelegatingClassLoader",
                                     mConfig.getCoverageOptions().getJaCoCoAgentPath(),
                                     mCoverageExecFile.getAbsolutePath());
                     cmdArgs.add(javaAgent);
@@ -355,7 +381,13 @@ public class IsolatedHostTest
             cmdArgs.addAll(compileRobolectricOptions(artifactsDir));
             // Prevent tradefed from eagerly loading classes, which may not load without shadows
             // applied.
-            mExcludePaths.add("org/robolectric");
+            if (mExcludeRobolectricPackages) {
+                mExcludePaths.add("org/robolectric");
+            }
+        }
+        if (mRavenwoodResources) {
+            // For the moment, swap in the default JUnit upstream runner
+            cmdArgs.add("-Dandroid.junit.runner=org.junit.runners.JUnit4");
         }
 
         if (this.debug) {
@@ -437,13 +469,26 @@ public class IsolatedHostTest
         }
     }
 
+    private File getRavenwoodRuntimeDir(File testDir) {
+        File ravenwoodRuntime = FileUtil.findFile(testDir, "ravenwood-runtime");
+        if (ravenwoodRuntime == null || !ravenwoodRuntime.isDirectory()) {
+            throw new HarnessRuntimeException(
+                    "Could not find Ravenwood runtime needed for execution. " + testDir,
+                    InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
+        }
+        return ravenwoodRuntime;
+    }
+
     /**
      * Creates a classpath for the subprocess that includes the needed jars to run the tests
      *
      * @return a string specifying the colon separated classpath.
      */
-    private String compileClassPath() {
-        List<String> paths = new ArrayList<>();
+    public String compileClassPath() {
+        // Use LinkedHashSet because we don't want duplicates, but we still
+        // want to preserve the insertion order. e.g. mIsolationJar should always be the
+        // first one.
+        Set<String> paths = new LinkedHashSet<>();
         File testDir = findTestDirectory();
 
         try {
@@ -465,16 +510,15 @@ public class IsolatedHostTest
                             InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
                 }
                 paths.add(androidAllJar.getAbsolutePath());
+            } else if (mRavenwoodResources) {
+                addAllFilesUnder(paths, getRavenwoodRuntimeDir(testDir));
             }
 
             for (String jar : mJars) {
                 File f = FileUtil.findFile(testDir, jar);
                 if (f != null && f.exists()) {
                     paths.add(f.getAbsolutePath());
-                    String parentPath = f.getParentFile().getAbsolutePath() + "/*";
-                    if (!paths.contains(parentPath)) {
-                        paths.add(parentPath);
-                    }
+                    addAllFilesUnder(paths, f.getParentFile());
                 }
             }
         }
@@ -482,6 +526,16 @@ public class IsolatedHostTest
         String jarClasspath = String.join(java.io.File.pathSeparator, paths);
 
         return jarClasspath;
+    }
+
+    /** Add all files under {@code File} sorted by filename to {@code paths}. */
+    private static void addAllFilesUnder(Set<String> paths, File parentDirectory) {
+        var files = parentDirectory.listFiles((f) -> f.isFile());
+        Arrays.sort(files, Comparator.comparing(File::getName));
+
+        for (File file : files) {
+            paths.add(file.getAbsolutePath());
+        }
     }
 
     @VisibleForTesting
@@ -494,46 +548,77 @@ public class IsolatedHostTest
      *
      * @return a string specifying the colon separated library path.
      */
+    private String compileLdLibraryPath() {
+        return compileLdLibraryPathInner(getEnvironment("ANDROID_HOST_OUT"));
+    }
+
+    /**
+     * We call this version from the unit test, and directly pass ANDROID_HOST_OUT. We need it
+     * because Java has no API to set environmental variables.
+     */
     @VisibleForTesting
-    protected String compileLdLibraryPath() {
+    protected String compileLdLibraryPathInner(String androidHostOut) {
         if (mClasspathOverride != null) {
             return null;
         }
-        File testDir = findTestDirectory();
-        List<String> paths = new ArrayList<>();
+        // TODO(b/324134773) Unify with TestRunnerUtil.getLdLibraryPath().
 
+        File testDir = findTestDirectory();
+        // Collect all the directories that may contain `lib` or `lib64` for the test.
+        Set<String> dirs = new LinkedHashSet<>();
+
+        // Search the directories containing the test jars.
         for (String jar : mJars) {
             File f = FileUtil.findFile(testDir, jar);
             if (f == null || !f.exists()) {
                 continue;
             }
-            String libs[] = {"lib", "lib64"};
-            for (String lib : libs) {
-                File libFile = new File(f.getParentFile().getAbsolutePath(), lib);
-                // If the test module has no lib directory packaged, we assume the test does not
-                // require any external native library.
-                if (!libFile.exists()) {
-                    continue;
-                }
-                paths.add(libFile.getAbsolutePath());
-                // Include `testcases` directory for running tests based on test zip.
-                libFile = new File(f.getParentFile().getParentFile().getAbsolutePath(), lib);
-                if (libFile.exists()) {
-                    paths.add(libFile.getAbsolutePath());
-                }
-                // Include ANDROID_HOST_OUT/lib to support local case.
-                if (getEnvironment("ANDROID_HOST_OUT") != null) {
-                    libFile = new File(getEnvironment("ANDROID_HOST_OUT"), lib);
-                    if (libFile.exists()) {
-                        paths.add(libFile.getAbsolutePath());
-                    }
+            // Include the directory containing the test jar.
+            File parent = f.getParentFile();
+            if (parent != null) {
+                dirs.add(parent.getAbsolutePath());
+
+                // Also include the parent directory -- which is typically (?) "testcases" --
+                // for running tests based on test zip.
+                File grandParent = parent.getParentFile();
+                if (grandParent != null) {
+                    dirs.add(grandParent.getAbsolutePath());
                 }
             }
         }
-        if (paths.isEmpty()) {
+        // Optionally search the ravenwood runtime dir.
+        if (mRavenwoodResources) {
+            dirs.add(getRavenwoodRuntimeDir(testDir).getAbsolutePath());
+        }
+        // Search ANDROID_HOST_OUT.
+        if (androidHostOut != null) {
+            dirs.add(androidHostOut);
+        }
+
+        // Look into all the above directories, and if there are any 'lib' or 'lib64', then
+        // add it to LD_LIBRARY_PATH.
+        String libs[] = {"lib", "lib64"};
+
+        Set<String> result = new LinkedHashSet<>();
+
+        for (String dir : dirs) {
+            File path = new File(dir);
+            if (!path.isDirectory()) {
+                continue;
+            }
+
+            for (String lib : libs) {
+                File libFile = new File(path, lib);
+
+                if (libFile.isDirectory()) {
+                    result.add(libFile.getAbsolutePath());
+                }
+            }
+        }
+        if (result.isEmpty()) {
             return null;
         }
-        return String.join(java.io.File.pathSeparator, paths);
+        return String.join(java.io.File.pathSeparator, result);
     }
 
     private List<String> compileRobolectricOptions(File artifactsDir) {
@@ -554,7 +639,6 @@ public class IsolatedHostTest
         options.add("-Drobolectric.offline=true");
         options.add("-Drobolectric.logging=stdout");
         options.add("-Drobolectric.resourcesMode=binary");
-        // TODO(rexhoffman) We should turn this on when only using one version of robolectric
         options.add("-Drobolectric.usePreinstrumentedJars=false");
         // TODO(rexhoffman) figure out how to get the local conscrypt working - shared objects and
         // such.
@@ -953,6 +1037,10 @@ public class IsolatedHostTest
         return mRobolectricResources;
     }
 
+    public boolean useRavenwoodResources() {
+        return mRavenwoodResources;
+    }
+
     private ITestInvocationListener wrapListener(ITestInvocationListener listener) {
         if (mTestCaseTimeout.toMillis() > 0L) {
             listener =
@@ -974,5 +1062,11 @@ public class IsolatedHostTest
             throw new RuntimeException("/tradefed-isolation.jar not found.");
         }
         return isolationJar;
+    }
+
+    public void deleteTempFiles() {
+        if (mIsolationJar != null) {
+            FileUtil.deleteFile(mIsolationJar);
+        }
     }
 }

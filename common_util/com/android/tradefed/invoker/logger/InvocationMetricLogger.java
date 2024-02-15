@@ -30,6 +30,7 @@ public class InvocationMetricLogger {
         WIFI_CONNECT_TIME("wifi_connect_time", true),
         WIFI_CONNECT_COUNT("wifi_connect_count", true),
         WIFI_CONNECT_RETRY_COUNT("wifi_connect_retry_count", true),
+        WIFI_HELPER_V2("wifi_helper_v2", false),
         // Bugreport time and count
         BUGREPORT_TIME("bugreport_time", true),
         BUGREPORT_COUNT("bugreport_count", true),
@@ -66,6 +67,7 @@ public class InvocationMetricLogger {
                 "sandbox_jar_staging_partial_download_FEATURE_count", true),
         SANDBOX_JAR_STAGING_PARTIAL_DOWNLOAD_SUCCESS_COUNT(
                 "sandbox_jar_staging_partial_download_SUCCESS_count", true),
+        TEST_DISCOVERY_MODULE_COUNT("test_discovery_module_count", true),
         // -- Disk memory usage --
         // Approximate peak disk space usage of the invocation
         // Represent files that would usually live for the full invocation (min usage)
@@ -137,6 +139,16 @@ public class InvocationMetricLogger {
         RESET_RETRY_ISOLATION_PAIR("reset_isolation_timestamp_pair", true),
         // Capture the time spent isolating a retry with reboot
         REBOOT_RETRY_ISOLATION_PAIR("reboot_isolation_timestamp_pair", true),
+        // Track metrics for skipped retries
+        RETRY_MODULE_SKIPPED_COUNT("retry_module_skipped_count", true),
+        RETRY_TEST_SKIPPED_COUNT("retry_test_skipped_count", true),
+        RETRY_SKIPPED_ALL_FILTERED_COUNT("retry_skipped_all_filtered_count", true),
+
+        // Track dynamic sharding total request latency
+        DYNAMIC_SHARDING_REQUEST_LATENCY("dynamic-sharding-request-latency", true),
+        // Track dynamic sharding total request count
+        DYNAMIC_SHARDING_REQUEST_COUNT("dynamic-sharding-request-count", true),
+
         // The time spent inside metric collectors
         COLLECTOR_TIME("collector_time_ms", true),
         // Track if soft restart is occurring after test module
@@ -159,6 +171,8 @@ public class InvocationMetricLogger {
         // Count the number of time device recovery like usb reset are successful.
         DEVICE_RECOVERY("device_recovery", true),
         DEVICE_RECOVERY_FROM_RECOVERY("device_recovery_from_recovery", true),
+        DEVICE_RECOVERED_FROM_SSH_TUNNEL("device_recovered_from_ssh_tunnel", true),
+        DEVICE_RECOVERED_FROM_DEVICE_RESET("device_recovered_from_device_reset", true),
         DEVICE_RECOVERY_FAIL("device_recovery_fail", true),
         SANDBOX_EXIT_CODE("sandbox_exit_code", false),
         CF_FETCH_ARTIFACT_TIME("cf_fetch_artifact_time_ms", false),
@@ -175,18 +189,35 @@ public class InvocationMetricLogger {
         UNCAUGHT_TEST_CRASH_FAILURES("uncaught_test_crash_failures", true),
         DEVICE_RESET_COUNT("device_reset_count", true),
         DEVICE_RESET_MODULES("device_reset_modules", true),
-        DEVICE_POWREWASH_DURATIONS("device_powerwash_durations", true),
+        DEVICE_POWERWASH_DURATIONS("device_powerwash_durations", true),
         DEVICE_RESET_MODULES_FOR_TARGET_PREPARER("device_reset_modules_for_target_preparer", true),
+        DEVICE_SNAPSHOT_SUCCESS_COUNT("device_snapshot_success_count", true),
+        DEVICE_SNAPSHOT_FAILURE_COUNT("device_snapshot_failure_count", true),
+        DEVICE_SNAPSHOT_DURATIONS("device_snapshot_durations", true),
+        DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT("device_snapshot_restore_success_count", true),
+        DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT("device_snapshot_restore_failure_count", true),
+        DEVICE_SNAPSHOT_RESTORE_DURATIONS("device_snapshot_restore_durations", true),
+        DEVICE_SUSPEND_SUCCESS_COUNT("device_suspend_success_count", true),
+        DEVICE_SUSPEND_FAILURE_COUNT("device_suspend_failure_count", true),
+        DEVICE_SUSPEND_DURATIONS("device_suspend_durations", true),
+        DEVICE_RESUME_SUCCESS_COUNT("device_resume_success_count", true),
+        DEVICE_RESUME_FAILURE_COUNT("device_resume_failure_count", true),
+        DEVICE_RESUME_DURATIONS("device_resume_durations", true),
+        DEVICE_STOP_SUCCESS_COUNT("device_stop_success_count", true),
+        DEVICE_STOP_FAILURE_COUNT("device_stop_failure_count", true),
+        DEVICE_STOP_DURATIONS("device_stop_durations", true),
         NONPERSISTENT_DEVICE_PROPERTIES("nonpersistent_device_properties", true),
         PERSISTENT_DEVICE_PROPERTIES("persistent_device_properties", true),
         INVOCATION_START("tf_invocation_start_timestamp", false),
         LOAD_TEST_CONFIGS_TIME("load_test_configs_time_ms", true),
-        // Track the way of requesting Oxygen device lease/release.
-        OXYGEN_DEVICE_LEASE_THROUGH_ACLOUD_COUNT("oxygen_device_lease_through_acloud_count", true),
-        OXYGEN_DEVICE_RELEASE_THROUGH_ACLOUD_COUNT(
-                "oxygen_device_release_through_acloud_count", true),
         OXYGEN_DEVICE_DIRECT_LEASE_COUNT("oxygen_device_direct_lease_count", true),
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
+        OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
+        OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
+        // Represents the time we spent deleting file on host
+        DELETE_SNAPSHOT_FILES("delete_host_file_time_ms", true),
+        // Represents how many times we call the delete host file method
+        DELETE_SNAPSHOT_FILES_COUNT("delete_host_file_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
@@ -238,9 +269,14 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
+        CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
+        CAS_CACHE_FALLBACK_COUNT("cas_cache_fallback_count", true),
+        CAS_TIMEOUT_COUNT("cas_timeout_count", true),
         // Records cache hit metrics
         CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
+        CAS_DOWNLOAD_HOT_FILES_COUNT("cas_download_hot_files_count", true),
+        CAS_DOWNLOAD_COLD_FILES_COUNT("cas_download_cold_files_count", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
@@ -252,6 +288,15 @@ public class InvocationMetricLogger {
 
         // Ab downloader metrics
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
+        ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
+        DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
+        AB_LIST_API_TIME_PAIR("ab_list_api_time_pair", true),
+
+        // Ants metrics
+        ANTS_MODULE_START_TIME("ants_module_start_time", true),
+        ANTS_MODULE_END_TIME("ants_module_end_time", true),
+        ANTS_RUN_START_TIME("ants_run_start_time", true),
+        ANTS_RUN_END_TIME("ants_run_end_time", true),
 
         DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
 
@@ -262,7 +307,47 @@ public class InvocationMetricLogger {
         DEVICE_ERROR_SIGNATURES("device_failure_signatures", false),
 
         DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
+        IMAGE_CHANGES_IN_KEY_FILE("image_changes_in_key_file", true),
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
+        PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
+        TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
+        WORKDIR_DIFFS_IN_COMMON("workdir_diffs_in_common", true),
+        WOKRDIR_MODULE_WITH_DIFFS("workdir_module_with_diffs", true),
+        WORKDIR_UNCHANGED_MODULES("workdir_unchanged_modules", true),
+        ABORT_CONTENT_ANALYSIS("abort_content_analysis", true),
+        XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
+        XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
+        XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
+        BUILD_KEY_WITH_DIFFS("build_key_with_diffs", true),
+        FILE_WITH_DIFFS("file_with_diffs", true),
+        UNCHANGED_FILE("unchanged_file", true),
+        MULTI_DEVICES_CONTENT_ANALYSIS("multi_devices_content_analysis", true),
+        DEVICELESS_CONTENT_ANALYSIS("deviceless_content_analysis", true),
+
+        POWERWASH_TIME("powerwash_time_ms", true),
+        POWERWASH_SUCCESS_COUNT("powerwash_success_count", true),
+        POWERWASH_FAILURE_COUNT("powerwash_failure_count", true),
+        LEASE_RETRY_COUNT_SUCCESS("lease_retry_count_success", true),
+        LEASE_RETRY_COUNT_FAILURE("lease_retry_count_failure", true),
+
+        TRACE_INTERNAL_ERROR("trace_internal_error", true),
+
+        INCREMENTAL_FLASHING_TIME("incremental_flashing_time", true),
+        INCREMENTAL_FLASHING_WAIT_PARALLEL_SETUP("incremental_flashing_wait_parallel_setup", true),
+        INCREMENTAL_FLASHING_ATTEMPT_COUNT("incremental_flashing_attempt_count", true),
+        INCREMENTAL_ACROSS_RELEASE_COUNT("incremental_across_release_count", true),
+        INCREMENTAL_FLASHING_TEARDOWN_FAILURE("incremental_flashing_teardown_failure", true),
+        INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
+        DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
+        DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
+
+        CONTENT_BASED_ANALYSIS_ATTEMPT("content_based_analysis_attempt", true),
+        SKIP_NO_TESTS_DISCOVERED("skip_no_tests_discovered", true),
+        SKIP_NO_CHANGES("skip_no_changes", true),
+        NO_CHANGES_POSTSUBMIT("no_changes_postsubmit", true),
+        SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
+        DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
+        DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
@@ -285,6 +370,10 @@ public class InvocationMetricLogger {
         stage_suite_test_artifacts("stage_suite_test_artifacts", true),
         wait_for_results_update("wait_for_results_update", true),
         instru_collect_tests("instru_collect_tests", true),
+        TestContentAnalyzer("TestContentAnalyzer", true),
+
+        // Test caching metrics
+        CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
         ;
 
         private final String mKeyName;
@@ -313,7 +402,11 @@ public class InvocationMetricLogger {
         TARGET_PREPARER_TEARDOWN_LATENCY("target-preparer-teardown-latency", true),
         LAB_PREPARER_SETUP_LATENCY("lab-preparer-setup-latency", true),
         LAB_PREPARER_TEARDOWN_LATENCY("lab-preparer-teardown-latency", true),
-        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true);
+        MULTI_TARGET_PREPARER_TEARDOWN_LATENCY("multi-target-preparer-teardown-latency", true),
+
+        INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true),
+        INCREMENTAL_FLASHING_TARGET_SIZE("incremental-flashing-target-size", true);
+
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.
@@ -335,6 +428,18 @@ public class InvocationMetricLogger {
     }
 
     private InvocationMetricLogger() {}
+
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
 
     /**
      * Track metrics per ThreadGroup as a proxy to invocation since an invocation run within one
@@ -396,6 +501,9 @@ public class InvocationMetricLogger {
     private static void addInvocationMetrics(String key, String value) {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupMetrics) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
             if (mPerGroupMetrics.get(group) == null) {
                 mPerGroupMetrics.put(group, new HashMap<>());
             }
@@ -468,6 +576,9 @@ public class InvocationMetricLogger {
     public static Map<String, String> getInvocationMetrics() {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupMetrics) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
             if (mPerGroupMetrics.get(group) == null) {
                 mPerGroupMetrics.put(group, new HashMap<>());
             }

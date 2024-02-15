@@ -162,16 +162,17 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
             throws DeviceNotAvailableException {
         StringBuilder commandBuilder = new StringBuilder();
 
+        commandBuilder.append("cd ");
+        commandBuilder.append(invocation.workingDir);
+        commandBuilder.append(" && ");
+
         for (EnvPair envPair : invocation.env) {
             commandBuilder.append(envPair.key);
             commandBuilder.append("=");
             // TODO quote
             commandBuilder.append(envPair.val);
+            commandBuilder.append(" ");
         }
-
-        commandBuilder.append(" cd ");
-        commandBuilder.append(invocation.workingDir);
-        commandBuilder.append(" && ");
 
         for (String arg : invocation.command) {
             // TODO quote

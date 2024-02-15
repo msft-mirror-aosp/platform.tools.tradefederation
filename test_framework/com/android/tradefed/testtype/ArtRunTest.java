@@ -20,6 +20,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -359,8 +360,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      * @throws IOException If the creation of the temporary directory failed.
      */
     protected File createTestLocalTempDirectory(TestInformation testInfo) throws IOException {
-        return Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
-                .toFile();
+        return FileUtil.createTempDir(mRunTestName, CurrentInvocation.getWorkFolder());
     }
 
     /**
@@ -485,8 +485,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             }
 
             tmpCheckerLocalDir =
-                    Files.createTempDirectory(testInfo.dependenciesFolder().toPath(), mRunTestName)
-                            .toFile();
+                    FileUtil.createTempDir(mRunTestName, CurrentInvocation.getWorkFolder());
             CLog.d("Created temporary local directory `%s` for Checker test", tmpCheckerLocalDir);
 
             File localCfgPath = new File(tmpCheckerLocalDir, "graph.cfg");
