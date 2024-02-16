@@ -438,6 +438,10 @@ public class TestContentAnalyzer {
         try {
             List<ArtifactFileDescriptor> diffs =
                     analyzeContentDiff(context.contentInformation(), context.contentEntry());
+            if (diffs == null) {
+                CLog.w("Analysis failed for %s", context.contentEntry());
+                return false;
+            }
             return !diffs.isEmpty();
         } catch (RuntimeException e) {
             CLog.e(e);
