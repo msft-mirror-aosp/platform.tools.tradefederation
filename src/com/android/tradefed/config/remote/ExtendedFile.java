@@ -27,6 +27,7 @@ public class ExtendedFile extends File {
     private String mBuildId;
     private String mBuildTarget;
     private String mBranch;
+    private String mRemoteFilePath;
 
     private Future<BuildRetrievalError> mParallelDownload;
 
@@ -45,6 +46,12 @@ public class ExtendedFile extends File {
         mBranch = branch;
     }
 
+    public ExtendedFile(
+            File file, String buildId, String buildTarget, String branch, String remoteFilePath) {
+        this(file, buildId, buildTarget, branch);
+        mRemoteFilePath = remoteFilePath;
+    }
+
     /** Returns the buildid metadata. */
     public String getBuildId() {
         return mBuildId;
@@ -58,6 +65,11 @@ public class ExtendedFile extends File {
     /** Returns the branch metadata. */
     public String getBranch() {
         return mBranch;
+    }
+
+    /** Returns the remote file path metadata. */
+    public String getRemoteFilePath() {
+        return mRemoteFilePath;
     }
 
     public void setDownloadFuture(Future<BuildRetrievalError> download) {
