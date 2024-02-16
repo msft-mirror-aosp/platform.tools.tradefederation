@@ -340,53 +340,76 @@ public class TestContentAnalyzer {
         if (!commonDiff.isEmpty()) {
             CLog.d("Common folder has diffs: %s", commonDiff);
         }
-        // check diffs against modules
-        try {
-            Set<File> testCasesDirs = FileUtil.findFilesObject(testsDirRoot, "testcases");
-            for (File testCasesDir : testCasesDirs) {
-                if (!testCasesDir.isDirectory()) {
-                    CLog.w("Found a non directory testcases directory: %s", testCasesDir);
-                    continue;
-                }
-                Path relativeRootFilePath = testsDirRoot.toPath().relativize(testCasesDir.toPath());
-                for (File moduleDir : testCasesDir.listFiles()) {
-                    if (!discoveredModules.isEmpty()
-                            && !discoveredModules.contains(moduleDir.getName())) {
-                        // Only consider modules that are going to execute
-                        continue;
-                    }
-                    if (moduleDir.list().length == 0) {
-                        // Skip empty directories
-                        continue;
-                    }
-                    String relativeModulePath =
-                            String.format(
-                                    "%s/%s/", relativeRootFilePath.toString(), moduleDir.getName());
-                    if (AllCommonDirs.contains(relativeModulePath)) {
-                        continue;
-                    }
-                    Set<String> moduleDiff =
-                            diffPaths.parallelStream()
-                                    .filter(p -> p.startsWith(relativeModulePath))
-                                    .collect(Collectors.toSet());
-                    if (moduleDiff.isEmpty()) {
-                        CLog.d("Module %s directory is unchanged.", moduleDir.getName());
-                        InvocationMetricLogger.addInvocationMetrics(
-                                InvocationMetricKey.WORKDIR_UNCHANGED_MODULES, 1);
-                        results.addUnchangedModule(moduleDir.getName());
-                    } else {
-                        CLog.d(
-                                "Module %s directory has changed: %s",
-                                moduleDir.getName(), moduleDiff);
-                        InvocationMetricLogger.addInvocationMetrics(
-                                InvocationMetricKey.WOKRDIR_MODULE_WITH_DIFFS, 1);
-                        results.addModifiedModule();
-                    }
+
+        if (!discoveredModules.isEmpty()) {
+            for (String module : discoveredModules) {
+                Set<String> moduleDiff =
+                        diffPaths.parallelStream()
+                                .filter(p -> p.contains("/" + module + "/"))
+                                .collect(Collectors.toSet());
+                if (moduleDiff.isEmpty()) {
+                    CLog.d("Module %s directory is unchanged.", module);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.WORKDIR_UNCHANGED_MODULES, 1);
+                    results.addUnchangedModule(module);
+                } else {
+                    CLog.d("Module %s directory has changed: %s", module, moduleDiff);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.WOKRDIR_MODULE_WITH_DIFFS, 1);
+                    results.addModifiedModule();
                 }
             }
-        } catch (IOException e) {
-            CLog.e(e);
-            return null;
+        } else {
+            // check diffs against modules
+            try {
+                Set<File> testCasesDirs = FileUtil.findFilesObject(testsDirRoot, "testcases");
+                for (File testCasesDir : testCasesDirs) {
+                    if (!testCasesDir.isDirectory()) {
+                        CLog.w("Found a non directory testcases directory: %s", testCasesDir);
+                        continue;
+                    }
+                    Path relativeRootFilePath =
+                            testsDirRoot.toPath().relativize(testCasesDir.toPath());
+                    for (File moduleDir : testCasesDir.listFiles()) {
+                        if (!discoveredModules.isEmpty()
+                                && !discoveredModules.contains(moduleDir.getName())) {
+                            // Only consider modules that are going to execute
+                            continue;
+                        }
+                        if (moduleDir.list().length == 0) {
+                            // Skip empty directories
+                            continue;
+                        }
+                        String relativeModulePath =
+                                String.format(
+                                        "%s/%s/",
+                                        relativeRootFilePath.toString(), moduleDir.getName());
+                        if (AllCommonDirs.contains(relativeModulePath)) {
+                            continue;
+                        }
+                        Set<String> moduleDiff =
+                                diffPaths.parallelStream()
+                                        .filter(p -> p.startsWith(relativeModulePath))
+                                        .collect(Collectors.toSet());
+                        if (moduleDiff.isEmpty()) {
+                            CLog.d("Module %s directory is unchanged.", moduleDir.getName());
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.WORKDIR_UNCHANGED_MODULES, 1);
+                            results.addUnchangedModule(moduleDir.getName());
+                        } else {
+                            CLog.d(
+                                    "Module %s directory has changed: %s",
+                                    moduleDir.getName(), moduleDiff);
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.WOKRDIR_MODULE_WITH_DIFFS, 1);
+                            results.addModifiedModule();
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                CLog.e(e);
+                return null;
+            }
         }
         return results;
     }
