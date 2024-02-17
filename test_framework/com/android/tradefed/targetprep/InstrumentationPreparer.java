@@ -16,7 +16,6 @@
 
 package com.android.tradefed.targetprep;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -28,6 +27,7 @@ import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.testtype.InstrumentationTest;
 import com.android.tradefed.util.RunUtil;
@@ -69,13 +69,12 @@ public class InstrumentationPreparer extends BaseTargetPreparer {
     private long mShellTimeout = 10 * 60 * 1000L; // default to 10 minutes
 
     @Option(
-        name = "test-timeout",
-        description =
-                "Sets timeout (in milliseconds) that will be applied to each test. In the "
-                        + "event of a test timeout it will log the results and proceed with executing "
-                        + "the next test. For no timeout, set to 0.",
-        isTimeVal = true
-    )
+            name = "test-timeout",
+            description =
+                    "Sets timeout (in milliseconds) that will be applied to each test. In the event"
+                        + " of a test timeout it will log the results and proceed with executing"
+                        + " the next test. For no timeout, set to 0.",
+            isTimeVal = true)
     private long mTestTimeout = 10 * 60 * 1000L; // default to 10 minutes
 
     @Option(name = "instrumentation-arg",
@@ -152,7 +151,7 @@ public class InstrumentationPreparer extends BaseTargetPreparer {
                 continue;
             }
             for (Entry<TestDescription, TestResult> entry : result.getTestResults().entrySet()) {
-                if (entry.getValue().getStatus().equals(TestStatus.PASSED)) {
+                if (entry.getValue().getResultStatus().equals(TestStatus.PASSED)) {
                     continue;
                 }
 

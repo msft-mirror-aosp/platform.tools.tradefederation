@@ -182,7 +182,7 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
         listener.testRunStarted(module.getName(), testSet.size());
         for (Map.Entry<TestDescription, TestResult> testEntry : testSet) {
             listener.testStarted(testEntry.getKey(), testEntry.getValue().getStartTime());
-            switch (testEntry.getValue().getStatus()) {
+            switch (testEntry.getValue().getResultStatus()) {
                 case FAILURE:
                     listener.testFailed(testEntry.getKey(), testEntry.getValue().getStackTrace());
                     break;
@@ -192,6 +192,9 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
                     break;
                 case IGNORED:
                     listener.testIgnored(testEntry.getKey());
+                    break;
+                case SKIPPED:
+                    listener.testSkipped(testEntry.getKey(), testEntry.getValue().getSkipReason());
                     break;
                 case INCOMPLETE:
                     listener.testFailed(
