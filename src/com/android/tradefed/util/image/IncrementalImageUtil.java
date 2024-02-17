@@ -73,6 +73,7 @@ public class IncrementalImageUtil {
     private final File mTargetImage;
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
+    private final boolean mApplySnapshot;
 
     private boolean mAllowSameBuildFlashing = false;
     private boolean mBootloaderNeedsRevert = false;
@@ -86,7 +87,8 @@ public class IncrementalImageUtil {
             IDeviceBuildInfo build,
             File createSnapshot,
             boolean isIsolatedSetup,
-            boolean allowCrossRelease)
+            boolean allowCrossRelease,
+            boolean applySnapshot)
             throws DeviceNotAvailableException {
         if (isIsolatedSetup) {
             CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
@@ -168,7 +170,8 @@ public class IncrementalImageUtil {
                 bootloader,
                 baseband,
                 build.getDeviceImageFile(),
-                createSnapshot);
+                createSnapshot,
+                applySnapshot);
     }
 
     public IncrementalImageUtil(
@@ -177,11 +180,13 @@ public class IncrementalImageUtil {
             File bootloader,
             File baseband,
             File targetImage,
-            File createSnapshot) {
+            File createSnapshot,
+            boolean applySnapshot) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
+        mApplySnapshot = applySnapshot;
 
         mTargetImage = targetImage;
         if (createSnapshot != null) {
@@ -362,15 +367,28 @@ public class IncrementalImageUtil {
             CommandResult listSnapshots = mDevice.executeShellV2Command("ls -l /data/ndb/");
             CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
 
-            CommandResult mapOutput =
-                    mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
-            CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
-            if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
-                throw new TargetSetupError(
-                        String.format(
-                                "Failed to map the snapshots.\nstdout:%s\nstderr:%s",
-                                mapOutput.getStdout(), mapOutput.getStderr()),
-                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            if (mApplySnapshot) {
+                CommandResult mapOutput =
+                        mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
+                CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
+                if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Failed to apply-update.\nstdout:%s\nstderr:%s",
+                                    mapOutput.getStdout(), mapOutput.getStderr()),
+                            InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+                }
+            } else {
+                CommandResult mapOutput =
+                        mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
+                CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
+                if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Failed to map the snapshots.\nstdout:%s\nstderr:%s",
+                                    mapOutput.getStdout(), mapOutput.getStderr()),
+                            InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+                }
             }
             flashStaticPartition(targetDirectory);
             mSourceDirectory = srcDirectory;
@@ -393,47 +411,52 @@ public class IncrementalImageUtil {
      * Returns the device to its original state.
      */
     public void teardownDevice() throws DeviceNotAvailableException {
-        try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
-            if (mBootloaderNeedsRevert) {
-                mDevice.rebootIntoBootloader();
+        try {
+            if (mApplySnapshot) {
+                return;
+            }
+            try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
+                if (mBootloaderNeedsRevert) {
+                    mDevice.rebootIntoBootloader();
 
-                CommandResult bootloaderFlashTarget =
-                        mDevice.executeFastbootCommand(
-                                "flash", "bootloader", mSrcBootloader.getAbsolutePath());
-                CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
-                CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
-                CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
-            }
-            if (mBasebandNeedsRevert) {
-                mDevice.rebootIntoBootloader();
+                    CommandResult bootloaderFlashTarget =
+                            mDevice.executeFastbootCommand(
+                                    "flash", "bootloader", mSrcBootloader.getAbsolutePath());
+                    CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
+                    CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
+                    CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+                }
+                if (mBasebandNeedsRevert) {
+                    mDevice.rebootIntoBootloader();
 
-                CommandResult radioFlashTarget =
-                        mDevice.executeFastbootCommand(
-                                "flash", "radio", mSrcBaseband.getAbsolutePath());
-                CLog.d("Status: %s", radioFlashTarget.getStatus());
-                CLog.d("stdout: %s", radioFlashTarget.getStdout());
-                CLog.d("stderr: %s", radioFlashTarget.getStderr());
-            }
-            if (mDevice.isStateBootloaderOrFastbootd()) {
-                mDevice.reboot();
-            }
-            mDevice.enableAdbRoot();
-            CommandResult revertOutput =
-                    mDevice.executeShellV2Command("snapshotctl revert-snapshots");
-            if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
-                CLog.d(
-                        "Failed revert-snapshots. stdout: %s, stderr: %s",
-                        revertOutput.getStdout(), revertOutput.getStderr());
+                    CommandResult radioFlashTarget =
+                            mDevice.executeFastbootCommand(
+                                    "flash", "radio", mSrcBaseband.getAbsolutePath());
+                    CLog.d("Status: %s", radioFlashTarget.getStatus());
+                    CLog.d("stdout: %s", radioFlashTarget.getStdout());
+                    CLog.d("stderr: %s", radioFlashTarget.getStderr());
+                }
+                if (mDevice.isStateBootloaderOrFastbootd()) {
+                    mDevice.reboot();
+                }
+                mDevice.enableAdbRoot();
+                CommandResult revertOutput =
+                        mDevice.executeShellV2Command("snapshotctl revert-snapshots");
+                if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
+                    CLog.d(
+                            "Failed revert-snapshots. stdout: %s, stderr: %s",
+                            revertOutput.getStdout(), revertOutput.getStderr());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+                }
+                if (mSourceDirectory != null) {
+                    flashStaticPartition(mSourceDirectory);
+                }
+            } catch (DeviceNotAvailableException e) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+                throw e;
             }
-            if (mSourceDirectory != null) {
-                flashStaticPartition(mSourceDirectory);
-            }
-        } catch (DeviceNotAvailableException e) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
-            throw e;
         } finally {
             // Delete the copy we made to use the incremental update
             FileUtil.recursiveDelete(mSourceDirectory);
