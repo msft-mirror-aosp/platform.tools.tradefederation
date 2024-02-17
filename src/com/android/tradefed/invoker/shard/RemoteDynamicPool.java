@@ -15,11 +15,13 @@
  */
 package com.android.tradefed.invoker.shard;
 
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
 
@@ -91,7 +93,14 @@ public class RemoteDynamicPool implements ITestsPool {
 
             long startTime = mClock.millis();
 
-            RequestTestTargetResponse response = mClient.requestTestTarget(request);
+            RequestTestTargetResponse response;
+
+            try {
+                response = mClient.requestTestTarget(request);
+            } catch (Throwable e) {
+                throw new HarnessRuntimeException(
+                        e.getMessage(), InfraErrorIdentifier.SCHEDULING_ERROR);
+            }
 
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DYNAMIC_SHARDING_REQUEST_LATENCY,
