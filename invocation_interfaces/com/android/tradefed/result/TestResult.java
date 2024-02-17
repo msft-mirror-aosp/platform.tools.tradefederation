@@ -56,6 +56,11 @@ public class TestResult {
         return TestStatus.convertToDdmlibType(mStatus);
     }
 
+    /** Get the {@link TestStatus} result of the test. */
+    public TestStatus getResultStatus() {
+        return mStatus;
+    }
+
     /**
      * Get the associated {@link String} stack trace. Should be <code>null</code> if {@link
      * #getStatus()} is {@link TestStatus#PASSED}.
@@ -216,6 +221,7 @@ public class TestResult {
         long latestEndTime = Long.MIN_VALUE;
 
         List<FailureDescription> errors = new ArrayList<>();
+        List<SkipReason> skipReasons = new ArrayList<>();
         int pass = 0;
         int fail = 0;
         int assumption_failure = 0;
@@ -229,7 +235,7 @@ public class TestResult {
             mergedResult.mLoggedFiles.putAll(attempt.getLoggedFiles());
             earliestStartTime = Math.min(attempt.getStartTime(), earliestStartTime);
             latestEndTime = Math.max(attempt.getEndTime(), latestEndTime);
-            switch (attempt.getStatus()) {
+            switch (attempt.getResultStatus()) {
                 case PASSED:
                     pass++;
                     break;
@@ -252,6 +258,9 @@ public class TestResult {
                 case IGNORED:
                     ignored++;
                     break;
+                case SKIPPED:
+                    skipReasons.add(attempt.getSkipReason());
+                    break;
             }
             lastStatus = attempt.mStatus;
         }
@@ -272,6 +281,9 @@ public class TestResult {
                         mergedResult.setStatus(TestStatus.ASSUMPTION_FAILURE);
                     } else if (incomplete > 0) {
                         mergedResult.setStatus(TestStatus.INCOMPLETE);
+                    } else if (!skipReasons.isEmpty()) {
+                        mergedResult.setStatus(TestStatus.SKIPPED);
+                        mergedResult.setSkipReason(skipReasons.get(0));
                     }
                 } else {
                     if (TestStatus.ASSUMPTION_FAILURE.equals(lastStatus)) {
@@ -294,6 +306,9 @@ public class TestResult {
                         mergedResult.setStatus(TestStatus.ASSUMPTION_FAILURE);
                     } else if (incomplete > 0) {
                         mergedResult.setStatus(TestStatus.INCOMPLETE);
+                    } else if (!skipReasons.isEmpty()) {
+                        mergedResult.setStatus(TestStatus.SKIPPED);
+                        mergedResult.setSkipReason(skipReasons.get(0));
                     } else {
                         mergedResult.setStatus(TestStatus.PASSED);
                     }

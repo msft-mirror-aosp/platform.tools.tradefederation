@@ -20,6 +20,7 @@ import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.DdmPreferences;
 import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
@@ -327,7 +328,10 @@ public class TestDiscoveryExecutor {
             if (hasOutputResultFile()) {
                 System.out.println(String.format("include filters: %s", includeFilters));
             }
-            testModules.addAll(extractTestModulesFromIncludeFilters(includeFilters));
+            Set<String> moduleOnlyIncludeFilters =
+                    extractTestModulesFromIncludeFilters(includeFilters);
+            testModules.addAll(moduleOnlyIncludeFilters);
+            testModules.addAll(findExtraConfigsParents(moduleOnlyIncludeFilters));
             // Any directly excluded won't be discovered since it shouldn't run
             testModules.removeAll(excludeFilters);
             return testModules;
@@ -358,6 +362,30 @@ public class TestDiscoveryExecutor {
             }
         }
         return testModuleNames;
+    }
+
+    /**
+     * When using extra_test_configs in Soong, they end up in the original module named folder, so
+     * search for it to backfill the download
+     */
+    private Set<String> findExtraConfigsParents(Set<String> moduleNames) {
+        Set<String> parentModules = new HashSet<>();
+        String rootDirPath = getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+        if (rootDirPath == null) {
+            CLog.w("root dir env not set.");
+            return parentModules;
+        }
+        for (String name : moduleNames) {
+            File config = FileUtil.findFile(new File(rootDirPath), name + ".config");
+            if (config != null) {
+                CLog.d("Parent: %s being added for the extra configs",
+                        config.getParentFile().getName());
+                if (!config.getParentFile().getName().equals(name)) {
+                    parentModules.add(config.getParentFile().getName());
+                }
+            }
+        }
+        return parentModules;
     }
 
     private Set<String> discoverDependencies(IConfiguration config) {

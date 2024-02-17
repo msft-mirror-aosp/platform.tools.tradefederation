@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.testtype;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -34,6 +33,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;

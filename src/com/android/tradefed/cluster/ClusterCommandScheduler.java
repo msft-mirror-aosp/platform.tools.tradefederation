@@ -16,7 +16,6 @@
 package com.android.tradefed.cluster;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.cluster.ClusterHostEvent.HostEventType;
 import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandScheduler;
@@ -43,6 +42,7 @@ import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestSummaryListener;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.TestSummary;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.ErrorStorageUtil;
