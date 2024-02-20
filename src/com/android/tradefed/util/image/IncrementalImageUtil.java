@@ -464,6 +464,15 @@ public class IncrementalImageUtil {
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
         }
+        // In case of same build flashing, we should clean the setup operation
+        if (mParallelSetup != null) {
+            try {
+                mParallelSetup.join();
+            } catch (InterruptedException e) {
+                CLog.e(e);
+            }
+            mParallelSetup.cleanUpFiles();
+        }
     }
 
     private void blockCompare(File srcImage, File targetImage, File workDir) {
