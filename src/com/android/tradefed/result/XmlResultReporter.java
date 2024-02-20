@@ -16,7 +16,6 @@
 
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.StreamUtil;
@@ -176,15 +175,19 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
         serializer.attribute(NS, ATTR_CLASSNAME, testId.getClassName());
         serializer.attribute(NS, ATTR_TIME, "0");
 
-        if (TestStatus.IGNORED.equals(testResult.getStatus())) {
+        // TODO(b/322204420): Remove status downgrade and support SKIPPED in XML
+        com.android.ddmlib.testrunner.TestResult.TestStatus ddmlibStatus = testResult.getStatus();
+        TestStatus tfStatus = TestStatus.convertFromDdmlibType(ddmlibStatus);
+
+        if (TestStatus.IGNORED.equals(tfStatus)) {
             String result = IGNORED;
             serializer.startTag(NS, result);
             serializer.endTag(NS, result);
-        } else if (!TestStatus.PASSED.equals(testResult.getStatus())) {
+        } else if (!TestStatus.PASSED.equals(tfStatus)) {
             String result = ERROR;
-            if (TestStatus.FAILURE.equals(testResult.getStatus())) {
+            if (TestStatus.FAILURE.equals(tfStatus)) {
                 result = FAILURE;
-            } else if (TestStatus.ASSUMPTION_FAILURE.equals(testResult.getStatus())) {
+            } else if (TestStatus.ASSUMPTION_FAILURE.equals(tfStatus)) {
                 result = ASSUMPTION_FAILURE;
             }
             serializer.startTag(NS, result);

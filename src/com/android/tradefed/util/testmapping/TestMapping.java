@@ -493,7 +493,15 @@ public class TestMapping {
         } else {
             zipFile = buildInfo.getFile(TEST_MAPPINGS_ZIP);
         }
-        File testMappingsDir = extractTestMappingsZip(zipFile);
+        File testMappingsDir = null;
+        boolean delete = false;
+        // Handle already extracted entry
+        if (zipFile.isDirectory()) {
+            testMappingsDir = zipFile;
+        } else {
+            testMappingsDir = extractTestMappingsZip(zipFile);
+            delete = true;
+        }
         Path testMappingsRootPath = Paths.get(testMappingsDir.getAbsolutePath());
         CLog.d("Relative test mapping paths: %s", mTestMappingRelativePaths);
         try (Stream<Path> stream =
@@ -523,7 +531,9 @@ public class TestMapping {
                             "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
                             e.getMessage(), testMappingsDir.getAbsolutePath()), e);
         } finally {
-            FileUtil.recursiveDelete(testMappingsDir);
+            if (delete) {
+                FileUtil.recursiveDelete(testMappingsDir);
+            }
         }
         return tests;
     }
