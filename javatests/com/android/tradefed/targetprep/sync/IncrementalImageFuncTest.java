@@ -60,6 +60,9 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
     @Option(name = "disable-verity")
     private boolean mDisableVerity = true;
 
+    @Option(name = "apply-snapshot")
+    private boolean mApplySnapshot = false;
+
     public static final Set<String> PARTITIONS_TO_DIFF =
             ImmutableSet.of(
                     "product.img",
@@ -104,7 +107,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                         null,
                         null,
                         getBuild().getFile("target-image"),
-                        getBuild().getFile("create_snapshot.zip"));
+                        getBuild().getFile("create_snapshot.zip"),
+                        mApplySnapshot);
         try {
             updateUtil.updateDevice();
 
