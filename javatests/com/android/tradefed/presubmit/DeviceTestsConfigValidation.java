@@ -93,7 +93,7 @@ public class DeviceTestsConfigValidation implements IBuildReceiver {
 
                 for (IDeviceConfiguration dConfig : c.getDeviceConfig()) {
                     GeneralTestsConfigValidation.validatePreparers(
-                            config, dConfig.getTargetPreparers());
+                            c, config, dConfig.getTargetPreparers());
                 }
                 // Check that all the tests runners are well supported.
                 GeneralTestsConfigValidation.checkRunners(c.getTests(), "device-tests");
