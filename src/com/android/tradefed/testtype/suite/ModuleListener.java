@@ -16,7 +16,6 @@
 package com.android.tradefed.testtype.suite;
 
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -30,6 +29,8 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.TestStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
@@ -229,6 +230,13 @@ public class ModuleListener extends CollectingTestListener {
         super.testAssumptionFailure(test, failure);
         mTestStatus = TestStatus.ASSUMPTION_FAILURE;
         mTrace = failure.toString();
+    }
+
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        mTestStatus = TestStatus.SKIPPED;
+        mTrace = reason.toString();
+        super.testSkipped(test, reason);
     }
 
     /** {@inheritDoc} */
