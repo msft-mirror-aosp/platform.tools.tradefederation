@@ -432,7 +432,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             // In case success with full flashing
             if (!getHostOptions().isOptOutOfIncrementalFlashing()) {
                 boolean moveBaseLine = true;
-                if (mUseIncrementalFlashing && !useIncrementalFlashing) {
+                if (!mUseIncrementalFlashing || useIncrementalFlashing) {
+                    // Do not move baseline if using incremental flashing
                     moveBaseLine = false;
                 }
                 if (mApplySnapshot) {
