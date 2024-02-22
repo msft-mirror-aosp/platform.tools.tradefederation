@@ -190,17 +190,18 @@ public class IncrementalImageUtil {
 
         mTargetImage = targetImage;
         if (createSnapshot != null) {
-            File snapshot = null;
+            File snapshot = createSnapshot;
             try {
-                if (ZipUtil.isZipFileValid(createSnapshot, false)) {
+                if (createSnapshot.getName().endsWith(".zip")
+                        && ZipUtil.isZipFileValid(createSnapshot, false)) {
                     File destDir = ZipUtil2.extractZipToTemp(createSnapshot, "create_snapshot");
                     snapshot = FileUtil.findFile(destDir, "create_snapshot");
-                    FileUtil.chmodGroupRWX(snapshot);
                 }
             } catch (IOException e) {
                 CLog.e(e);
             }
             mCreateSnapshotBinary = snapshot;
+            FileUtil.chmodGroupRWX(snapshot);
         } else {
             mCreateSnapshotBinary = null;
         }
