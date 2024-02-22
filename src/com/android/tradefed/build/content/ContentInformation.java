@@ -18,6 +18,7 @@ package com.android.tradefed.build.content;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
+import java.io.IOException;
 
 /** Represents the content for a given build target of its base and current version. */
 public class ContentInformation {
@@ -37,5 +38,28 @@ public class ContentInformation {
     public void clean() {
         FileUtil.deleteFile(baseContent);
         FileUtil.deleteFile(currentContent);
+    }
+
+    /** Deep copy the {@link ContentInformation} and the underlying files if they exists. */
+    public ContentInformation cloneInformation() throws IOException {
+        File baseClone = null;
+        if (baseContent != null) {
+            baseClone =
+                    FileUtil.createTempFile(
+                            FileUtil.getBaseName(baseContent.getName()),
+                            FileUtil.getExtension(baseContent.getName()));
+            baseClone.delete();
+            FileUtil.hardlinkFile(baseContent, baseClone);
+        }
+        File currentClone = null;
+        if (currentContent != null) {
+            currentClone =
+                    FileUtil.createTempFile(
+                            FileUtil.getBaseName(currentContent.getName()),
+                            FileUtil.getExtension(currentContent.getName()));
+            currentClone.delete();
+            FileUtil.hardlinkFile(currentContent, currentClone);
+        }
+        return new ContentInformation(baseClone, baseBuildId, currentClone, currentBuildId);
     }
 }
