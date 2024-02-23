@@ -115,6 +115,7 @@ public class TestMappingsValidation implements IBuildReceiver {
             new HashSet<>(Arrays.asList(".apk", ".apks", ".apex"));
 
     private File testMappingsDir = null;
+    private boolean deleteUnzip = true;
     private IConfigurationFactory mConfigFactory = null;
     private IDeviceBuildInfo deviceBuildInfo = null;
     private IBuildInfo mBuild;
@@ -220,8 +221,14 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(mBuild instanceof IDeviceBuildInfo);
         mConfigFactory = ConfigurationFactory.getInstance();
         deviceBuildInfo = (IDeviceBuildInfo) mBuild;
-        testMappingsDir =
-                TestMapping.extractTestMappingsZip(deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP));
+        if (deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP).isDirectory()) {
+            testMappingsDir = deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP);
+            deleteUnzip = false;
+        } else {
+            testMappingsDir =
+                    TestMapping.extractTestMappingsZip(deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP));
+            deleteUnzip = true;
+        }
         mergeModuleInfo(deviceBuildInfo.getFile(MODULE_INFO));
         for (String fileKey : deviceBuildInfo.getVersionedFileKeys()) {
             if (fileKey.contains("additional-module-info")) {
@@ -235,7 +242,9 @@ public class TestMappingsValidation implements IBuildReceiver {
 
     @After
     public void tearDown() {
-        FileUtil.recursiveDelete(testMappingsDir);
+        if (deleteUnzip) {
+            FileUtil.recursiveDelete(testMappingsDir);
+        }
     }
 
     /**
