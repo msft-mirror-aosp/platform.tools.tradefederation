@@ -15,8 +15,8 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -66,8 +66,14 @@ public abstract class TestResultListener implements ITestLifeCycleReceiver {
     }
 
     @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        mCurrentResult.setStatus(TestStatus.SKIPPED);
+        mCurrentResult.setSkipReason(reason);
+    }
+
+    @Override
     public final void testIgnored(TestDescription test) {
-        mCurrentResult.setStatus(com.android.ddmlib.testrunner.TestResult.TestStatus.IGNORED);
+        mCurrentResult.setStatus(TestStatus.IGNORED);
     }
 
     @Override
@@ -114,7 +120,7 @@ public abstract class TestResultListener implements ITestLifeCycleReceiver {
     private void reportTestFinish(TestDescription test, long endTime) {
         if (mCurrentTest != null
                 && mCurrentTest.equals(test)
-                && mCurrentResult.getStatus() == TestStatus.INCOMPLETE) {
+                && TestStatus.INCOMPLETE.equals(mCurrentResult.getResultStatus())) {
             mCurrentResult.setStatus(TestStatus.PASSED);
         }
         mCurrentResult.setEndTime(endTime);
