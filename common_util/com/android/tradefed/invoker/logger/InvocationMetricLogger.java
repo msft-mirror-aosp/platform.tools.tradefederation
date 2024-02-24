@@ -338,6 +338,7 @@ public class InvocationMetricLogger {
         INCREMENTAL_ACROSS_RELEASE_COUNT("incremental_across_release_count", true),
         INCREMENTAL_FLASHING_TEARDOWN_FAILURE("incremental_flashing_teardown_failure", true),
         INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
+        INCREMENTAL_SNAPUSERD_WRITE_TIME("incremental_snapuserd_write_time", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
