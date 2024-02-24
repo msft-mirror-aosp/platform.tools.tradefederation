@@ -90,7 +90,7 @@ public class TestDiscoveryInvoker {
     public static final String OUTPUT_FILE = "DISCOVERY_OUTPUT_FILE";
     public static final String DISCOVERY_TRACE_FILE = "DISCOVERY_TRACE_FILE";
 
-    private static final long DISCOVERY_TIMEOUT_MS = 120000L;
+    private static final long DISCOVERY_TIMEOUT_MS = 180000L;
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
@@ -194,6 +194,8 @@ public class TestDiscoveryInvoker {
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
             getRunUtil().setEnvVariable(DISCOVERY_TRACE_FILE, traceFile.getAbsolutePath());
             CommandResult res = getRunUtil().runTimedCmd(DISCOVERY_TIMEOUT_MS, subprocessArgs);
+            String stdout = res.getStdout();
+            CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
                 DiscoveryExitCode exitCode = null;
                 if (res.getExitCode() != null) {
@@ -217,8 +219,6 @@ public class TestDiscoveryInvoker {
             }
             try (CloseableTraceScope discoResults =
                     new CloseableTraceScope("parse_discovery_results")) {
-                String stdout = res.getStdout();
-                CLog.i(String.format("Tradefed Observatory returned in stdout: %s", stdout));
 
                 String result = FileUtil.readStringFromFile(outputFile);
                 CLog.i("output file content: %s", result);
@@ -349,6 +349,8 @@ public class TestDiscoveryInvoker {
             getRunUtil().setEnvVariable(DISCOVERY_TRACE_FILE, traceFile.getAbsolutePath());
             getRunUtil().setEnvVariable(OUTPUT_FILE, outputFile.getAbsolutePath());
             CommandResult res = getRunUtil().runTimedCmd(DISCOVERY_TIMEOUT_MS, subprocessArgs);
+            String stdout = res.getStdout();
+            CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
             if (res.getExitCode() != 0 || !res.getStatus().equals(CommandStatus.SUCCESS)) {
                 throw new TestDiscoveryException(
                         String.format(
@@ -359,9 +361,6 @@ public class TestDiscoveryInvoker {
             }
             try (CloseableTraceScope discoResults =
                     new CloseableTraceScope("parse_discovery_results")) {
-                String stdout = res.getStdout();
-                CLog.i(String.format("Tradefed Observatory returned in stdout:\n %s", stdout));
-
                 String result = FileUtil.readStringFromFile(outputFile);
 
                 boolean noDiscovery = hasNoPossibleDiscovery(result);
