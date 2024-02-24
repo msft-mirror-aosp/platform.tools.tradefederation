@@ -534,7 +534,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         ITestDevice device = getDevice(testInfo);
         CLog.i("Performing setup on %s", device.getSerialNumber());
 
-        if (mForceRoot) {
+        if (mForceRoot && device.getOptions().isEnableAdbRoot()) {
             if (!device.enableAdbRoot()) {
                 throw new TargetSetupError(
                         String.format("Failed to enable adb root on %s", device.getSerialNumber()),
