@@ -82,6 +82,7 @@ public class IncrementalImageUtil {
     private File mSourceDirectory;
 
     private ParallelPreparation mParallelSetup;
+    private final IRunUtil mRunUtil;
 
     public static IncrementalImageUtil initialize(
             ITestDevice device,
@@ -190,6 +191,9 @@ public class IncrementalImageUtil {
         mApplySnapshot = applySnapshot;
 
         mTargetImage = targetImage;
+        mRunUtil = new RunUtil();
+        // TODO: clean up when docker image is updated
+        mRunUtil.setEnvVariable("LD_LIBRARY_PATH", "/tradefed/lib64");
         if (createSnapshot != null) {
             File snapshot = createSnapshot;
             try {
@@ -518,15 +522,14 @@ public class IncrementalImageUtil {
     private void blockCompare(File srcImage, File targetImage, File workDir) {
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("block_compare:" + srcImage.getName())) {
-            IRunUtil runUtil = new RunUtil();
-            runUtil.setWorkingDir(workDir);
+            mRunUtil.setWorkingDir(workDir);
 
             String createSnapshot = "create_snapshot"; // Expected to be on PATH
             if (mCreateSnapshotBinary != null && mCreateSnapshotBinary.exists()) {
                 createSnapshot = mCreateSnapshotBinary.getAbsolutePath();
             }
             CommandResult result =
-                    runUtil.runTimedCmd(
+                    mRunUtil.runTimedCmd(
                             0L,
                             createSnapshot,
                             "--source=" + srcImage.getAbsolutePath(),
