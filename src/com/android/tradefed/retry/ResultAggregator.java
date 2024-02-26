@@ -314,6 +314,12 @@ public class ResultAggregator extends CollectingTestListener {
     }
 
     @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        super.testSkipped(test, reason);
+        mDetailedForwarder.testSkipped(test, reason);
+    }
+
+    @Override
     public void testAssumptionFailure(TestDescription test, String trace) {
         super.testAssumptionFailure(test, trace);
         mDetailedForwarder.testAssumptionFailure(test, trace);

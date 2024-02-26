@@ -22,8 +22,6 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 
-import com.google.common.base.Joiner;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -106,6 +104,9 @@ public class ImageContentAnalyzer {
             List<ArtifactFileDescriptor> diffs =
                     TestContentAnalyzer.analyzeContentDiff(
                             context.contentInformation(), context.contentEntry());
+            if (diffs == null) {
+                return true;
+            }
             // Remove paths that are ignored
             diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
             return !diffs.isEmpty();
@@ -131,12 +132,8 @@ public class ImageContentAnalyzer {
             diffs.removeIf(d -> d.path.startsWith("META/"));
             diffs.removeIf(d -> d.path.startsWith("PREBUILT_IMAGES/"));
             diffs.removeIf(d -> d.path.startsWith("RADIO/"));
-            List<String> modifiedPaths =
-                    diffs.stream().map(d -> d.path).collect(Collectors.toList());
             if (diffs.isEmpty()) {
                 CLog.d("Device image from '%s' is unchanged", context.contentEntry());
-            } else {
-                CLog.d("Considered device image diffs: %s", Joiner.on('\n').join(modifiedPaths));
             }
             return diffs.size();
         } catch (RuntimeException e) {

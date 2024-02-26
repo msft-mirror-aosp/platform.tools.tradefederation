@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -179,7 +178,11 @@ public class ReportPassedTests extends CollectingTestListener
             return sb.toString();
         }
         for (Entry<TestDescription, TestResult> res : runResult.getTestResults().entrySet()) {
-            if (TestStatus.FAILURE.equals(res.getValue().getStatus())) {
+            if (TestStatus.FAILURE.equals(res.getValue().getResultStatus())) {
+                continue;
+            }
+            // Consider SKIPPED as failure so it can be retried
+            if (TestStatus.SKIPPED.equals(res.getValue().getResultStatus())) {
                 continue;
             }
             sb.append(baseName + " " + res.getKey().toString());
