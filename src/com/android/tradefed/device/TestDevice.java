@@ -175,6 +175,7 @@ public class TestDevice extends NativeDevice {
 
     private static final String TEST_ROOT = "/data/local/tmp/virt/";
     private static final String VIRT_APEX = "/apex/com.android.virt/";
+    private static final String INSTANCE_ID_FILE = "instance_id";
     private static final String INSTANCE_IMG = "instance.img";
 
     // This is really slow on GCE (2m 40s) but fast on localhost or actual Android phones (< 10s).
@@ -2765,6 +2766,11 @@ public class TestDevice extends NativeDevice {
         }
     }
 
+    private boolean isVirtFeatureEnabled(String feature) throws DeviceNotAvailableException {
+        String result = executeShellCommand(VIRT_APEX + "bin/vm check-feature-enabled " + feature);
+        return result.contains("enabled");
+    }
+
     /**
      * Starts a Microdroid TestDevice.
      *
@@ -2811,6 +2817,7 @@ public class TestDevice extends NativeDevice {
                 TEST_ROOT
                         + (builder.mApkFile != null ? builder.mApkFile.getName() : "NULL")
                         + ".idsig";
+        final String instanceIdFile = TEST_ROOT + INSTANCE_ID_FILE;
         final String instanceImg = TEST_ROOT + INSTANCE_IMG;
         final String consolePath = TEST_ROOT + "console.txt";
         final String logPath = TEST_ROOT + "log.txt";
@@ -2849,6 +2856,10 @@ public class TestDevice extends NativeDevice {
                                 instanceImg,
                                 "--config-path",
                                 builder.mConfigPath));
+        if (isVirtFeatureEnabled("com.android.kvm.LLPVM_CHANGES")) {
+            args.add("--instance-id-file");
+            args.add(instanceIdFile);
+        }
         if (builder.mProtectedVm) {
             args.add("--protected");
         }
