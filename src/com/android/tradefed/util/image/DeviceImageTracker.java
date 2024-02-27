@@ -131,6 +131,14 @@ public class DeviceImageTracker {
             String buildId,
             String branch,
             String flavor) {
+        if (bootloader == null) {
+            CLog.d("Skip tracking image, bootloader is null.");
+            return;
+        }
+        if (deviceImage == null) {
+            CLog.d("Skip tracking image, device image is null.");
+            return;
+        }
         File copyInCacheDeviceImage = new File(mCacheDir, serial + "_device_image");
         FileUtil.deleteFile(copyInCacheDeviceImage);
         File copyInCacheBootloader = new File(mCacheDir, serial + "_bootloader");
