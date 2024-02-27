@@ -79,6 +79,7 @@ public class IncrementalImageUtil {
     private boolean mAllowSameBuildFlashing = false;
     private boolean mBootloaderNeedsFlashing = false;
     private boolean mBasebandNeedsFlashing = false;
+    private boolean mUpdateWasCompleted = false;
     private File mSourceDirectory;
 
     private ParallelPreparation mParallelSetup;
@@ -412,6 +413,7 @@ public class IncrementalImageUtil {
                 CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
                 CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
             }
+            mUpdateWasCompleted = true;
         } catch (DeviceNotAvailableException | RuntimeException e) {
             if (mSourceDirectory == null) {
                 FileUtil.recursiveDelete(srcDirectory);
@@ -421,6 +423,11 @@ public class IncrementalImageUtil {
             FileUtil.recursiveDelete(workDir);
             FileUtil.recursiveDelete(targetDirectory);
         }
+    }
+
+    /** Returns whether update was completed or not. */
+    public boolean updateCompleted() {
+        return mUpdateWasCompleted;
     }
 
     /*
