@@ -16,7 +16,6 @@
 package com.android.tradefed.invoker;
 
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
@@ -29,6 +28,7 @@ import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.retry.ISupportGranularResults;
 import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.MultiMap;
@@ -308,7 +308,7 @@ public class ShardListener extends CollectingTestListener implements ISupportGra
             // Provide a strong association of the test to its logs.
             forwardLogAssociation(testEntry.getValue().getLoggedFiles(), mMainListener);
 
-            if (!testEntry.getValue().getStatus().equals(TestStatus.INCOMPLETE)) {
+            if (!testEntry.getValue().getResultStatus().equals(TestStatus.INCOMPLETE)) {
                 mMainListener.testEnded(
                         testEntry.getKey(),
                         testEntry.getValue().getEndTime(),

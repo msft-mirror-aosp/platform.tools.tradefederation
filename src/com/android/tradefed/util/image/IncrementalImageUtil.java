@@ -20,6 +20,7 @@ import static org.junit.Assert.assertTrue;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -73,22 +74,27 @@ public class IncrementalImageUtil {
     private final File mTargetImage;
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
+    private final boolean mApplySnapshot;
 
     private boolean mAllowSameBuildFlashing = false;
-    private boolean mBootloaderNeedsRevert = false;
-    private boolean mBasebandNeedsRevert = false;
+    private boolean mBootloaderNeedsFlashing = false;
+    private boolean mBasebandNeedsFlashing = false;
+    private boolean mUpdateWasCompleted = false;
     private File mSourceDirectory;
 
     private ParallelPreparation mParallelSetup;
+    private final IRunUtil mRunUtil;
 
     public static IncrementalImageUtil initialize(
             ITestDevice device,
             IDeviceBuildInfo build,
             File createSnapshot,
             boolean isIsolatedSetup,
-            boolean allowCrossRelease)
+            boolean allowCrossRelease,
+            boolean applySnapshot)
             throws DeviceNotAvailableException {
-        if (isIsolatedSetup) {
+        // With apply snapshot, device reset is supported
+        if (isIsolatedSetup && !applySnapshot) {
             CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
             return null;
         }
@@ -168,7 +174,8 @@ public class IncrementalImageUtil {
                 bootloader,
                 baseband,
                 build.getDeviceImageFile(),
-                createSnapshot);
+                createSnapshot,
+                applySnapshot);
     }
 
     public IncrementalImageUtil(
@@ -177,25 +184,31 @@ public class IncrementalImageUtil {
             File bootloader,
             File baseband,
             File targetImage,
-            File createSnapshot) {
+            File createSnapshot,
+            boolean applySnapshot) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
+        mApplySnapshot = applySnapshot;
 
         mTargetImage = targetImage;
+        mRunUtil = new RunUtil();
+        // TODO: clean up when docker image is updated
+        mRunUtil.setEnvVariable("LD_LIBRARY_PATH", "/tradefed/lib64");
         if (createSnapshot != null) {
-            File snapshot = null;
+            File snapshot = createSnapshot;
             try {
-                if (ZipUtil.isZipFileValid(createSnapshot, false)) {
+                if (createSnapshot.getName().endsWith(".zip")
+                        && ZipUtil.isZipFileValid(createSnapshot, false)) {
                     File destDir = ZipUtil2.extractZipToTemp(createSnapshot, "create_snapshot");
                     snapshot = FileUtil.findFile(destDir, "create_snapshot");
-                    FileUtil.chmodGroupRWX(snapshot);
                 }
             } catch (IOException e) {
                 CLog.e(e);
             }
             mCreateSnapshotBinary = snapshot;
+            FileUtil.chmodGroupRWX(snapshot);
         } else {
             mCreateSnapshotBinary = null;
         }
@@ -231,11 +244,11 @@ public class IncrementalImageUtil {
     }
 
     public void notifyBootloaderNeedsRevert() {
-        mBootloaderNeedsRevert = true;
+        mBootloaderNeedsFlashing = true;
     }
 
     public void notifyBasebadNeedsRevert() {
-        mBasebandNeedsRevert = true;
+        mBasebandNeedsFlashing = true;
     }
 
     public void allowSameBuildFlashing() {
@@ -362,22 +375,45 @@ public class IncrementalImageUtil {
             CommandResult listSnapshots = mDevice.executeShellV2Command("ls -l /data/ndb/");
             CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
 
-            CommandResult mapOutput =
-                    mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
-            CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
-            if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
-                throw new TargetSetupError(
-                        String.format(
-                                "Failed to map the snapshots.\nstdout:%s\nstderr:%s",
-                                mapOutput.getStdout(), mapOutput.getStderr()),
-                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            if (mApplySnapshot) {
+                CommandResult mapOutput =
+                        mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
+                CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
+                if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Failed to apply-update.\nstdout:%s\nstderr:%s",
+                                    mapOutput.getStdout(), mapOutput.getStderr()),
+                            InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+                }
+            } else {
+                CommandResult mapOutput =
+                        mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
+                CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
+                if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Failed to map the snapshots.\nstdout:%s\nstderr:%s",
+                                    mapOutput.getStdout(), mapOutput.getStderr()),
+                            InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+                }
+            }
+            if (mApplySnapshot) {
+                attemptBootloaderAndRadioFlashing(true);
             }
             flashStaticPartition(targetDirectory);
             mSourceDirectory = srcDirectory;
 
             mDevice.enableAdbRoot();
-            CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
-            CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+
+            if (mApplySnapshot) {
+                waitForSnapuserd(mDevice);
+            } else {
+                // If patches are mounted, just print snapuserd once
+                CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
+                CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+            }
+            mUpdateWasCompleted = true;
         } catch (DeviceNotAvailableException | RuntimeException e) {
             if (mSourceDirectory == null) {
                 FileUtil.recursiveDelete(srcDirectory);
@@ -389,51 +425,42 @@ public class IncrementalImageUtil {
         }
     }
 
+    /** Returns whether update was completed or not. */
+    public boolean updateCompleted() {
+        return mUpdateWasCompleted;
+    }
+
     /*
      * Returns the device to its original state.
      */
     public void teardownDevice() throws DeviceNotAvailableException {
-        try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
-            if (mBootloaderNeedsRevert) {
-                mDevice.rebootIntoBootloader();
-
-                CommandResult bootloaderFlashTarget =
-                        mDevice.executeFastbootCommand(
-                                "flash", "bootloader", mSrcBootloader.getAbsolutePath());
-                CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
-                CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
-                CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+        try {
+            if (mApplySnapshot) {
+                return;
             }
-            if (mBasebandNeedsRevert) {
-                mDevice.rebootIntoBootloader();
-
-                CommandResult radioFlashTarget =
-                        mDevice.executeFastbootCommand(
-                                "flash", "radio", mSrcBaseband.getAbsolutePath());
-                CLog.d("Status: %s", radioFlashTarget.getStatus());
-                CLog.d("stdout: %s", radioFlashTarget.getStdout());
-                CLog.d("stderr: %s", radioFlashTarget.getStderr());
-            }
-            if (mDevice.isStateBootloaderOrFastbootd()) {
-                mDevice.reboot();
-            }
-            mDevice.enableAdbRoot();
-            CommandResult revertOutput =
-                    mDevice.executeShellV2Command("snapshotctl revert-snapshots");
-            if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
-                CLog.d(
-                        "Failed revert-snapshots. stdout: %s, stderr: %s",
-                        revertOutput.getStdout(), revertOutput.getStderr());
+            try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
+                attemptBootloaderAndRadioFlashing(false);
+                if (mDevice.isStateBootloaderOrFastbootd()) {
+                    mDevice.reboot();
+                }
+                mDevice.enableAdbRoot();
+                CommandResult revertOutput =
+                        mDevice.executeShellV2Command("snapshotctl revert-snapshots");
+                if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
+                    CLog.d(
+                            "Failed revert-snapshots. stdout: %s, stderr: %s",
+                            revertOutput.getStdout(), revertOutput.getStderr());
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+                }
+                if (mSourceDirectory != null) {
+                    flashStaticPartition(mSourceDirectory);
+                }
+            } catch (DeviceNotAvailableException e) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+                throw e;
             }
-            if (mSourceDirectory != null) {
-                flashStaticPartition(mSourceDirectory);
-            }
-        } catch (DeviceNotAvailableException e) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
-            throw e;
         } finally {
             // Delete the copy we made to use the incremental update
             FileUtil.recursiveDelete(mSourceDirectory);
@@ -441,20 +468,76 @@ public class IncrementalImageUtil {
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
         }
+        // In case of same build flashing, we should clean the setup operation
+        if (mParallelSetup != null) {
+            try {
+                mParallelSetup.join();
+            } catch (InterruptedException e) {
+                CLog.e(e);
+            }
+            mParallelSetup.cleanUpFiles();
+        }
+    }
+
+    private static void waitForSnapuserd(ITestDevice device) throws DeviceNotAvailableException {
+        long startTime = System.currentTimeMillis();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_snapuserd")) {
+            long maxTimeout = 300000; // 5 minutes
+            while (System.currentTimeMillis() - startTime < maxTimeout) {
+                CommandResult psOutput = device.executeShellV2Command("ps -ef | grep snapuserd");
+                CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+                if (psOutput.getStdout().contains("snapuserd -")) {
+                    RunUtil.getDefault().sleep(2500);
+                    CLog.d("waiting for snapuserd to complete.");
+                } else {
+                    return;
+                }
+            }
+            throw new DeviceRuntimeException(
+                    "snapuserd didn't complete in the 5 minutes",
+                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_TIME,
+                    System.currentTimeMillis() - startTime);
+        }
+    }
+
+    private void attemptBootloaderAndRadioFlashing(boolean forceFlashing)
+            throws DeviceNotAvailableException {
+        if (mBootloaderNeedsFlashing || forceFlashing) {
+            mDevice.rebootIntoBootloader();
+
+            CommandResult bootloaderFlashTarget =
+                    mDevice.executeFastbootCommand(
+                            "flash", "bootloader", mSrcBootloader.getAbsolutePath());
+            CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
+            CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
+            CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+        }
+        if (mBasebandNeedsFlashing || forceFlashing) {
+            mDevice.rebootIntoBootloader();
+
+            CommandResult radioFlashTarget =
+                    mDevice.executeFastbootCommand(
+                            "flash", "radio", mSrcBaseband.getAbsolutePath());
+            CLog.d("Status: %s", radioFlashTarget.getStatus());
+            CLog.d("stdout: %s", radioFlashTarget.getStdout());
+            CLog.d("stderr: %s", radioFlashTarget.getStderr());
+        }
     }
 
     private void blockCompare(File srcImage, File targetImage, File workDir) {
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("block_compare:" + srcImage.getName())) {
-            IRunUtil runUtil = new RunUtil();
-            runUtil.setWorkingDir(workDir);
+            mRunUtil.setWorkingDir(workDir);
 
             String createSnapshot = "create_snapshot"; // Expected to be on PATH
             if (mCreateSnapshotBinary != null && mCreateSnapshotBinary.exists()) {
                 createSnapshot = mCreateSnapshotBinary.getAbsolutePath();
             }
             CommandResult result =
-                    runUtil.runTimedCmd(
+                    mRunUtil.runTimedCmd(
                             0L,
                             createSnapshot,
                             "--source=" + srcImage.getAbsolutePath(),

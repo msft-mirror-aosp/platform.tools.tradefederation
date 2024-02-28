@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -335,6 +334,12 @@ public class CollectingTestListener
         mCurrentTestRunResult.testIgnored(test);
     }
 
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        setCountDirty();
+        mCurrentTestRunResult.testSkipped(test, reason);
+    }
+
     /** {@inheritDoc} */
     @Override
     public void logAssociation(String dataName, LogFile logFile) {
@@ -386,6 +391,13 @@ public class CollectingTestListener
             mExpectedCount += result.getExpectedTestCount();
         }
         return mExpectedCount;
+    }
+
+    /** For compatibility with older status type */
+    public int getNumTestsInState(
+            com.android.ddmlib.testrunner.TestResult.TestStatus ddmlibStatus) {
+        computeMergedResults();
+        return mStatusCounts[TestStatus.convertFromDdmlibType(ddmlibStatus).ordinal()];
     }
 
     /** Returns the number of tests in given state for this run. */

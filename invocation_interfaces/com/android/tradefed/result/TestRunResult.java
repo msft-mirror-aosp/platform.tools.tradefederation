@@ -15,9 +15,9 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.MergeStrategy;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -57,7 +57,7 @@ public class TestRunResult {
     private TestResult mCurrentTestResult;
 
     /** represents sums of tests in each TestStatus state. Indexed by TestStatus.ordinal() */
-    private int[] mStatusCounts = new int[TestStatus.values().length];
+    private int[] mStatusCounts = new int[com.android.tradefed.result.TestStatus.values().length];
     /** tracks if mStatusCounts is accurate, or if it needs to be recalculated */
     private boolean mIsCountDirty = true;
 
@@ -122,7 +122,7 @@ public class TestRunResult {
     public Set<TestDescription> getTestsInState(List<TestStatus> statuses) {
         Set<TestDescription> tests = new LinkedHashSet<>();
         for (Map.Entry<TestDescription, TestResult> testEntry : getTestResults().entrySet()) {
-            TestStatus status = testEntry.getValue().getStatus();
+            TestStatus status = testEntry.getValue().getResultStatus();
             if (statuses.contains(status)) {
                 tests.add(testEntry.getKey());
             }
@@ -167,6 +167,12 @@ public class TestRunResult {
         return mExpectedTestCount;
     }
 
+    /** FOR COMPATIBILITY with older status. Use {@link #getNumTestsInState(TestStatus)} instead. */
+    public int getNumTestsInState(
+            com.android.ddmlib.testrunner.TestResult.TestStatus ddmlibStatus) {
+        return getNumTestsInState(TestStatus.convertFromDdmlibType(ddmlibStatus));
+    }
+
     /** Gets the number of tests in given state for this run. */
     public int getNumTestsInState(TestStatus status) {
         if (mIsCountDirty) {
@@ -176,7 +182,7 @@ public class TestRunResult {
             }
             // now recalculate
             for (TestResult r : mTestResults.values()) {
-                mStatusCounts[r.getStatus().ordinal()]++;
+                mStatusCounts[r.getResultStatus().ordinal()]++;
             }
             mIsCountDirty = false;
         }
@@ -187,7 +193,7 @@ public class TestRunResult {
     public List<TestResult> getTestsResultsInState(TestStatus status) {
         List<TestResult> results = new ArrayList<>();
         for (TestResult r : mTestResults.values()) {
-            if (r.getStatus().equals(status)) {
+            if (r.getResultStatus().equals(status)) {
                 results.add(r);
             }
         }
@@ -301,7 +307,17 @@ public class TestRunResult {
     }
 
     private void updateTestResult(
-            TestDescription test, TestStatus status, FailureDescription failure) {
+            TestDescription test,
+            com.android.tradefed.result.TestStatus status,
+            FailureDescription failure) {
+        updateTestResult(test, status, failure, null);
+    }
+
+    private void updateTestResult(
+            TestDescription test,
+            com.android.tradefed.result.TestStatus status,
+            FailureDescription failure,
+            SkipReason reason) {
         TestResult r = mTestResults.get(test);
         if (r == null) {
             CLog.d("received test event without test start for %s", test);
@@ -311,27 +327,40 @@ public class TestRunResult {
         if (failure != null) {
             r.setFailure(failure);
         }
+        if (reason != null) {
+            r.setSkipReason(reason);
+        }
         addTestResult(test, r);
     }
 
     public void testFailed(TestDescription test, String trace) {
-        updateTestResult(test, TestStatus.FAILURE, FailureDescription.create(trace));
+        updateTestResult(
+                test,
+                com.android.tradefed.result.TestStatus.FAILURE,
+                FailureDescription.create(trace));
     }
 
     public void testFailed(TestDescription test, FailureDescription failure) {
-        updateTestResult(test, TestStatus.FAILURE, failure);
+        updateTestResult(test, com.android.tradefed.result.TestStatus.FAILURE, failure);
     }
 
     public void testAssumptionFailure(TestDescription test, String trace) {
-        updateTestResult(test, TestStatus.ASSUMPTION_FAILURE, FailureDescription.create(trace));
+        updateTestResult(
+                test,
+                com.android.tradefed.result.TestStatus.ASSUMPTION_FAILURE,
+                FailureDescription.create(trace));
     }
 
     public void testAssumptionFailure(TestDescription test, FailureDescription failure) {
-        updateTestResult(test, TestStatus.ASSUMPTION_FAILURE, failure);
+        updateTestResult(test, com.android.tradefed.result.TestStatus.ASSUMPTION_FAILURE, failure);
     }
 
     public void testIgnored(TestDescription test) {
-        updateTestResult(test, TestStatus.IGNORED, null);
+        updateTestResult(test, com.android.tradefed.result.TestStatus.IGNORED, null);
+    }
+
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        updateTestResult(test, com.android.tradefed.result.TestStatus.SKIPPED, null, reason);
     }
 
     public void testEnded(TestDescription test, HashMap<String, Metric> testMetrics) {
@@ -343,8 +372,8 @@ public class TestRunResult {
         if (result == null) {
             result = new TestResult();
         }
-        if (result.getStatus().equals(TestStatus.INCOMPLETE)) {
-            result.setStatus(TestStatus.PASSED);
+        if (result.getResultStatus().equals(TestStatus.INCOMPLETE)) {
+            result.setStatus(com.android.tradefed.result.TestStatus.PASSED);
         }
         result.setEndTime(endTime);
         result.setMetrics(TfMetricProtoUtil.compatibleConvert(testMetrics));

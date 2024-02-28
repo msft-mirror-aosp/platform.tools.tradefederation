@@ -162,6 +162,18 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             description = "Allow doing incremental update across release build configs.")
     private boolean mAllowIncrementalCrossRelease = false;
 
+    @Option(
+            name = "apply-snapshot",
+            description =
+                    "Whether to apply the snapshot after mounting it. "
+                            + "This changes the baseline and does require reverting.")
+    private boolean mApplySnapshot = false;
+
+    @Option(
+            name = "enforce-snapshot-completed",
+            description = "Test mode was snapshot to ensure the logic was used and throw if not.")
+    private boolean mEnforceSnapshotCompleted = false;
+
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
 
@@ -284,7 +296,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             deviceBuild,
                             mCreateSnapshotBinary,
                             isIsolated,
-                            mAllowIncrementalCrossRelease);
+                            mAllowIncrementalCrossRelease,
+                            mApplySnapshot);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
             } else {
@@ -423,7 +436,16 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             device.postBootSetup();
             // In case success with full flashing
             if (!getHostOptions().isOptOutOfIncrementalFlashing()) {
-                if (mUseIncrementalFlashing && !useIncrementalFlashing) {
+                boolean moveBaseLine = true;
+                if (!mUseIncrementalFlashing || useIncrementalFlashing) {
+                    // Do not move baseline if using incremental flashing
+                    moveBaseLine = false;
+                }
+                if (mApplySnapshot) {
+                    // Move baseline when going with incremental + apply update
+                    moveBaseLine = true;
+                }
+                if (moveBaseLine) {
                     DeviceImageTracker.getDefaultCache()
                             .trackUpdatedDeviceImage(
                                     device.getSerialNumber(),
@@ -501,7 +523,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         if (mIncrementalImageUtil != null) {
             CLog.d("Teardown related to incremental update.");
             mIncrementalImageUtil.teardownDevice();
-            mIncrementalImageUtil = null;
+        }
+        if (mEnforceSnapshotCompleted && e == null) {
+            if (mIncrementalImageUtil == null || !mIncrementalImageUtil.updateCompleted()) {
+                throw new RuntimeException(
+                        "We expected incremental-flashing to be used but wasn't.");
+            }
         }
     }
 

@@ -16,7 +16,6 @@
 package com.android.tradefed.result;
 
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -90,13 +89,14 @@ public class LUCIResultReporter extends CollectingTestListener
 
     // Map from Tradefed TestStatus to LUCI TestStatus in test_result.pb.go.
     // https://pkg.go.dev/go.chromium.org/luci/resultdb/proto/v1#TestStatus
-    private static Map<TestStatus, String> resultMap = ImmutableMap.of(
-        TestStatus.FAILURE, "FAIL",
-        TestStatus.PASSED, "PASS",
-        TestStatus.INCOMPLETE, "CRASH",
-        TestStatus.ASSUMPTION_FAILURE, "SKIP",
-        TestStatus.IGNORED, "SKIP"
-    );
+    private static Map<TestStatus, String> resultMap =
+            ImmutableMap.of(
+                    TestStatus.FAILURE, "FAIL",
+                    TestStatus.PASSED, "PASS",
+                    TestStatus.INCOMPLETE, "CRASH",
+                    TestStatus.ASSUMPTION_FAILURE, "SKIP",
+                    TestStatus.IGNORED, "SKIP",
+                    TestStatus.SKIPPED, "SKIP");
 
     @Override
     public boolean supportGranularResults() {
@@ -192,7 +192,7 @@ public class LUCIResultReporter extends CollectingTestListener
                                             testDescription.getTestName());
                 testResultContainer.put(KEY_TEST_ID, testId);
 
-                TestStatus rawStatus = testResult.getStatus();
+                TestStatus rawStatus = testResult.getResultStatus();
                 String status = resultMap.get(rawStatus);
                 testResultContainer.put(KEY_STATUS, status);
                 boolean expected = ("PASS".equals(status) || "SKIP".equals(status)) ? true : false;

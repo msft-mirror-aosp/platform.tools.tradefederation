@@ -314,6 +314,12 @@ public class ResultAggregator extends CollectingTestListener {
     }
 
     @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        super.testSkipped(test, reason);
+        mDetailedForwarder.testSkipped(test, reason);
+    }
+
+    @Override
     public void testAssumptionFailure(TestDescription test, String trace) {
         super.testAssumptionFailure(test, trace);
         mDetailedForwarder.testAssumptionFailure(test, trace);
@@ -466,7 +472,7 @@ public class ResultAggregator extends CollectingTestListener {
             Map<TestDescription, TestResult> testResults, ITestInvocationListener listener) {
         for (Map.Entry<TestDescription, TestResult> testEntry : testResults.entrySet()) {
             listener.testStarted(testEntry.getKey(), testEntry.getValue().getStartTime());
-            switch (testEntry.getValue().getStatus()) {
+            switch (testEntry.getValue().getResultStatus()) {
                 case FAILURE:
                     listener.testFailed(testEntry.getKey(), testEntry.getValue().getFailure());
                     break;
@@ -481,6 +487,9 @@ public class ResultAggregator extends CollectingTestListener {
                     listener.testFailed(
                             testEntry.getKey(),
                             FailureDescription.create("Test did not complete due to exception."));
+                    break;
+                case SKIPPED:
+                    listener.testSkipped(testEntry.getKey(), testEntry.getValue().getSkipReason());
                     break;
                 default:
                     break;

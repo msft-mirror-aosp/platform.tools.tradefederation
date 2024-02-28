@@ -727,4 +727,78 @@ public class AdbSshConnectionTest {
         // TODO: enable restore when restoreSnapshotGce is implemented
         mConnection.restoreSnapshotGce(instanceUser, null, snapshotId);
     }
+
+    /** Test device launched with right kernel when --kernel-build-id is passed. */
+    @Test
+    public void testVerifyKernel_rightKernel() throws Exception {
+        MockitoAnnotations.initMocks(this);
+        mOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("gce-driver-param", "--kernel-build-id");
+        setter.setOptionValue("gce-driver-param", "10465484");
+        when(mMockDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockDevice.getMonitor()).thenReturn(mMockMonitor);
+
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    public GceSshTunnelMonitor getGceSshMonitor() {
+                        return mGceSshMonitor;
+                    }
+                };
+
+        when(mMockDevice.executeShellCommand(Mockito.eq("uname -r")))
+                .thenReturn("5.15.110-android14-11-00096-g2a75568a6b9d-ab10465484");
+        mConnection.verifyKernel();
+    }
+
+    /** Test that in case of wrong kernel, RemoteAndroidVirtualDevice choose to throw exception. */
+    @Test
+    public void testVerifyKernel_wrongKernel() throws Exception {
+        MockitoAnnotations.initMocks(this);
+        mOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("gce-driver-param", "--kernel-build-id");
+        setter.setOptionValue("gce-driver-param", "1234567");
+        when(mMockDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockDevice.getMonitor()).thenReturn(mMockMonitor);
+
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    public GceSshTunnelMonitor getGceSshMonitor() {
+                        return mGceSshMonitor;
+                    }
+                };
+
+        when(mMockDevice.executeShellCommand(Mockito.eq("uname -r")))
+                .thenReturn("5.15.110-android14-11-00096-g2a75568a6b9d-ab10465484");
+
+        try {
+            mConnection.verifyKernel();
+            fail("A TargetSetupError should have been thrown");
+        } catch (TargetSetupError expected) {
+            // expected
+        }
+    }
 }

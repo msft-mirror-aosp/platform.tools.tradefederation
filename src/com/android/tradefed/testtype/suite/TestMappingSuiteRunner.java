@@ -604,12 +604,19 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                 throw new RuntimeException("Failed to locate allowed test list " + testList);
             }
             File testListFile = null;
+            boolean deleteFile = true;
             try {
-                ZipFile zipFile = new ZipFile(testListZip);
-                testListFile =
-                        ZipUtil2.extractFileFromZip(
-                                zipFile, Files.getNameWithoutExtension(testList));
-                zipFile.close();
+                if (testListZip.isDirectory()) {
+                    // A single file should be under the zip
+                    testListFile = testListZip.listFiles()[0];
+                } else {
+                    try (ZipFile zipFile = new ZipFile(testListZip)) {
+                        testListFile =
+                                ZipUtil2.extractFileFromZip(
+                                        zipFile, Files.getNameWithoutExtension(testList));
+                        deleteFile = true;
+                    }
+                }
                 String content = FileUtil.readStringFromFile(testListFile);
                 final String pattern = "([^//]*).config$";
                 Pattern namePattern = Pattern.compile(pattern);
@@ -626,7 +633,9 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                                 e.getMessage(), testList),
                         e);
             } finally {
+                if (deleteFile) {
                 FileUtil.recursiveDelete(testListFile);
+                }
             }
         }
 

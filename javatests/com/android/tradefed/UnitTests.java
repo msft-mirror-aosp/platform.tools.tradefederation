@@ -30,7 +30,6 @@ import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
-import com.android.tradefed.cache.ModifiedFilesParserTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
 import com.android.tradefed.cluster.ClusterCommandConfigBuilderTest;
@@ -347,8 +346,8 @@ import com.android.tradefed.testtype.UsbResetTestTest;
 import com.android.tradefed.testtype.binary.ExecutableHostTestTest;
 import com.android.tradefed.testtype.binary.ExecutableTargetTestTest;
 import com.android.tradefed.testtype.binary.KTapResultParserTest;
-import com.android.tradefed.testtype.binary.KernelTargetTestTest;
 import com.android.tradefed.testtype.binary.KUnitModuleTestTest;
+import com.android.tradefed.testtype.binary.KernelTargetTestTest;
 import com.android.tradefed.testtype.host.CoverageMeasurementForwarderTest;
 import com.android.tradefed.testtype.junit4.BaseHostJUnit4TestTest;
 import com.android.tradefed.testtype.junit4.DeviceParameterizedRunnerTest;
@@ -520,9 +519,6 @@ import org.junit.runners.Suite.SuiteClasses;
     ArtifactDetailsTest.class,
     ContentAnalysisResultsTest.class,
     TestContentAnalyzerTest.class,
-
-    // cache
-    ModifiedFilesParserTest.class,
 
     // clearcut
     ClearcutClientTest.class,
