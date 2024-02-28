@@ -51,6 +51,7 @@ public class MetricUtilityTest {
     private static final String OUTPUT_6 = "case_6";
     private static final String OUTPUT_7 = "case_7";
     private static final String OUTPUT_8 = "case_8";
+    private static final String OUTPUT_9 = "case_9";
 
     private MetricUtility mMetricUtil;
     private File mResultsFile;
@@ -345,6 +346,55 @@ public class MetricUtilityTest {
         assertTrue(FileUtil.readStringFromFile(mResultsFile).equals(getSampleOutput(OUTPUT_8)));
     }
 
+    @Test
+    public void testAggregateStoredTestMetricsWithStrictFilters() throws IOException {
+        mMetricUtil.setIterationSeparator("$");
+        mMetricUtil.setPercentiles(new HashSet<>());
+        mMetricUtil.buildMetricFilterPatterns(
+                new HashSet<>(Arrays.asList("first_test_metric-min", "second_test_metric-min")));
+
+        // Build first test metric.
+        Map<String, Metric> firstTestMetric = new HashMap<String, Metric>();
+        Metric.Builder metricBuilder1 = Metric.newBuilder();
+        metricBuilder1.getMeasurementsBuilder().setSingleString("2.9");
+        Metric currentTestMetric = metricBuilder1.build();
+        firstTestMetric.put("first_test_metric", currentTestMetric);
+
+        // Build second test metric.
+        HashMap<String, Metric> secondTestMetric = new HashMap<String, Metric>();
+        Metric.Builder metricBuilder2 = Metric.newBuilder();
+        metricBuilder2.getMeasurementsBuilder().setSingleString("1.5");
+        Metric currentTestMetric2 = metricBuilder2.build();
+        secondTestMetric.put("second_test_metric", currentTestMetric2);
+
+        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstTestMetric);
+        mMetricUtil.storeTestMetrics(TEST_2_ITERATION_1, secondTestMetric);
+
+        mResultsFile = mMetricUtil.aggregateStoredTestMetricsAndWriteToFile("run_name");
+
+        assertTrue(FileUtil.readStringFromFile(mResultsFile).equals(getSampleOutput(OUTPUT_9)));
+    }
+
+    @Test
+    public void testAggregateStoredTestMetricsWithStrictFiltersNotMatching() throws IOException {
+        mMetricUtil.setIterationSeparator("$");
+        mMetricUtil.setPercentiles(new HashSet<>());
+        mMetricUtil.buildMetricFilterPatterns(new HashSet<>(Arrays.asList("no_metric")));
+
+        // Build first test metric.
+        Map<String, Metric> firstTestMetric = new HashMap<String, Metric>();
+        Metric.Builder metricBuilder1 = Metric.newBuilder();
+        metricBuilder1.getMeasurementsBuilder().setSingleString("2.9");
+        Metric currentTestMetric = metricBuilder1.build();
+        firstTestMetric.put("first_test_metric", currentTestMetric);
+
+        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstTestMetric);
+
+        mResultsFile = mMetricUtil.aggregateStoredTestMetricsAndWriteToFile("run_name");
+
+        assertTrue(FileUtil.readStringFromFile(mResultsFile).equals(getSampleOutput(OUTPUT_8)));
+    }
+
     /**
      * Method to get the sample output based on the give test cases.
      * @param outputType
@@ -454,6 +504,17 @@ public class MetricUtilityTest {
                         "\n" +
                         "\n" +
                         "\n";
+            case OUTPUT_9:
+                return "pkg#test1\n"
+                        + "\n"
+                        + "first_test_metric-min:2.90\n"
+                        + "\n"
+                        + "\n"
+                        + "pkg#test2\n"
+                        + "\n"
+                        + "second_test_metric-min:1.50\n"
+                        + "\n"
+                        + "\n";
             default:
                 return null;
         }
