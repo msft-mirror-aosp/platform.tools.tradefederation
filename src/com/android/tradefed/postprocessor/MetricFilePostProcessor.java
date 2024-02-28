@@ -75,6 +75,13 @@ public class MetricFilePostProcessor extends BasePostProcessor {
             + " report in integers in the 0 - 100 range. Can be repeated.")
     private Set<Integer> mPercentiles = new HashSet<>();
 
+    @Option(
+            name = "strict-include-metric-filter",
+            description =
+                    "Regular expression that will be used for filtering the metrics from individual"
+                            + " test metrics and aggregated metrics.")
+    private Set<String> mStrictIncludeRegEx = new HashSet<>();
+
     private MetricUtility mMetricUtil = new MetricUtility();
 
     public MetricFilePostProcessor() {
@@ -99,7 +106,11 @@ public class MetricFilePostProcessor extends BasePostProcessor {
 
         // Write test metric to a file and log it.
         if (mIsPerTestLogEnabled) {
-            writeMetricFile(testMetrics, testDescription.toString());
+            Map<String, Metric> filteredTestMetrics =
+                    mStrictIncludeRegEx.size() > 0
+                            ? mMetricUtil.filterMetrics(testMetrics)
+                            : testMetrics;
+            writeMetricFile(filteredTestMetrics, testDescription.toString());
         }
 
         return new HashMap<String, Builder>();
@@ -110,12 +121,20 @@ public class MetricFilePostProcessor extends BasePostProcessor {
             HashMap<String, Metric> rawMetrics, Map<String, LogFile> runLogs) {
         if (mIsRunLogEnabled) {
             // Log the raw run metrics.
-            writeMetricFile(rawMetrics, getRunName());
+            Map<String, Metric> filteredRawRunMetrics =
+                    mStrictIncludeRegEx.size() > 0
+                            ? mMetricUtil.filterMetrics(rawMetrics)
+                            : rawMetrics;
+            writeMetricFile(filteredRawRunMetrics, getRunName());
 
             // Log the aggregate run metrics.
             if (mAggregateRunMetrics) {
                 Map<String, Metric> aggregatedRunMetrics = mMetricUtil.aggregateMetrics(rawMetrics);
-                writeMetricFile(aggregatedRunMetrics, getRunName() + AGGREGATE_RUN_SUFFIX);
+                Map<String, Metric> filteredAggregateRunMetrics =
+                        mStrictIncludeRegEx.size() > 0
+                                ? mMetricUtil.filterMetrics(aggregatedRunMetrics)
+                                : aggregatedRunMetrics;
+                writeMetricFile(filteredAggregateRunMetrics, getRunName() + AGGREGATE_RUN_SUFFIX);
             }
         }
 
@@ -158,5 +177,6 @@ public class MetricFilePostProcessor extends BasePostProcessor {
     public void setUp() {
         mMetricUtil.setPercentiles(mPercentiles);
         mMetricUtil.setIterationSeparator(mTestIterationSeparator);
+        mMetricUtil.buildMetricFilterPatterns(mStrictIncludeRegEx);
     }
 }
