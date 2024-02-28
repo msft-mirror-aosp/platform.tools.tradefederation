@@ -79,6 +79,7 @@ public class IncrementalImageUtil {
     private boolean mAllowSameBuildFlashing = false;
     private boolean mBootloaderNeedsFlashing = false;
     private boolean mBasebandNeedsFlashing = false;
+    private boolean mUpdateWasCompleted = false;
     private File mSourceDirectory;
 
     private ParallelPreparation mParallelSetup;
@@ -92,7 +93,8 @@ public class IncrementalImageUtil {
             boolean allowCrossRelease,
             boolean applySnapshot)
             throws DeviceNotAvailableException {
-        if (isIsolatedSetup) {
+        // With apply snapshot, device reset is supported
+        if (isIsolatedSetup && !applySnapshot) {
             CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
             return null;
         }
@@ -405,12 +407,13 @@ public class IncrementalImageUtil {
             mDevice.enableAdbRoot();
 
             if (mApplySnapshot) {
-                waitForSnapuserd();
+                waitForSnapuserd(mDevice);
             } else {
                 // If patches are mounted, just print snapuserd once
                 CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
                 CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
             }
+            mUpdateWasCompleted = true;
         } catch (DeviceNotAvailableException | RuntimeException e) {
             if (mSourceDirectory == null) {
                 FileUtil.recursiveDelete(srcDirectory);
@@ -420,6 +423,11 @@ public class IncrementalImageUtil {
             FileUtil.recursiveDelete(workDir);
             FileUtil.recursiveDelete(targetDirectory);
         }
+    }
+
+    /** Returns whether update was completed or not. */
+    public boolean updateCompleted() {
+        return mUpdateWasCompleted;
     }
 
     /*
@@ -471,12 +479,12 @@ public class IncrementalImageUtil {
         }
     }
 
-    private void waitForSnapuserd() throws DeviceNotAvailableException {
+    private static void waitForSnapuserd(ITestDevice device) throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_snapuserd")) {
             long maxTimeout = 300000; // 5 minutes
             while (System.currentTimeMillis() - startTime < maxTimeout) {
-                CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
+                CommandResult psOutput = device.executeShellV2Command("ps -ef | grep snapuserd");
                 CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
                 if (psOutput.getStdout().contains("snapuserd -")) {
                     RunUtil.getDefault().sleep(2500);

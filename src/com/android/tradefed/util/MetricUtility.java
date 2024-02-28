@@ -30,12 +30,16 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.regex.Pattern;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -71,6 +75,8 @@ public class MetricUtility {
     // Outer map key is the test id and inner map key is the metric key name.
     private Map<String, ArrayListMultimap<String, Metric>> mStoredTestMetrics =
             new LinkedHashMap<String, ArrayListMultimap<String, Metric>>();
+
+    private List<Pattern> mMetricPatterns = new ArrayList<>();
 
     /**
      * Used for storing the individual test metrics and use it for aggregation.
@@ -203,6 +209,9 @@ public class MetricUtility {
                     buildStats(metricKey, rawValues, aggregateMetrics);
                 }
             }
+
+            aggregateMetrics =
+                    mMetricPatterns.size() > 0 ? filterMetrics(aggregateMetrics) : aggregateMetrics;
             Map<String, String> compatibleTestMetrics = TfMetricProtoUtil
                     .compatibleConvert(aggregateMetrics);
 
@@ -321,5 +330,28 @@ public class MetricUtility {
                     String.join(STATS_KEY_SEPARATOR, metricKey, statKey),
                     metricBuilder.build());
         }
+    }
+
+    /** Build regular expression patterns to filter the metrics. */
+    public void buildMetricFilterPatterns(Set<String> strictIncludeRegEx) {
+        if (!strictIncludeRegEx.isEmpty() && mMetricPatterns.isEmpty()) {
+            for (String regEx : strictIncludeRegEx) {
+                mMetricPatterns.add(Pattern.compile(regEx));
+            }
+        }
+    }
+
+    /** Filter the metrics that matches the pattern. */
+    public Map<String, Metric> filterMetrics(Map<String, Metric> parsedMetrics) {
+        Map<String, Metric> filteredMetrics = new HashMap<>();
+        for (Entry<String, Metric> metricEntry : parsedMetrics.entrySet()) {
+            for (Pattern pattern : mMetricPatterns) {
+                if (pattern.matcher(metricEntry.getKey()).matches()) {
+                    filteredMetrics.put(metricEntry.getKey(), metricEntry.getValue());
+                    break;
+                }
+            }
+        }
+        return filteredMetrics;
     }
 }

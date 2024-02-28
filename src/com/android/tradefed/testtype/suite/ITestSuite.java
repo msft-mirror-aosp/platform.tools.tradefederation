@@ -358,6 +358,9 @@ public abstract class ITestSuite
             description = "Feature flag to use snapshot/restore instead of powerwash.")
     private boolean mUseSnapshotForReset = false;
 
+    @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
+    private boolean mStageRemoteFile = true;
+
     public enum MultiDeviceModuleStrategy {
         EXCLUDE_ALL,
         RUN,
@@ -1302,6 +1305,7 @@ public abstract class ITestSuite
     @Override
     public void setBuild(IBuildInfo buildInfo) {
         mBuildInfo = buildInfo;
+        mBuildInfo.allowStagingRemoteFile(mStageRemoteFile);
     }
 
     /**

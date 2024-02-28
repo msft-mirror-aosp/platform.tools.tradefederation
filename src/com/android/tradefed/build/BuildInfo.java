@@ -74,6 +74,8 @@ public class BuildInfo implements IBuildInfo {
 
     /** File handling properties: Some files of the BuildInfo might requires special handling */
     private final Set<BuildInfoProperties> mProperties = new HashSet<>();
+    /** Whether to stage remote files. */
+    private boolean mStageRemoteFile = true;
 
     private static final String[] FILE_NOT_TO_CLONE =
             new String[] {
@@ -712,6 +714,10 @@ public class BuildInfo implements IBuildInfo {
     /** {@inheritDoc} */
     @Override
     public File stageRemoteFile(String fileName, File workingDir) {
+        if (!mStageRemoteFile) {
+            CLog.w("Staging remote files is disabled. Skip staging file: %s", fileName);
+            return null;
+        }
         if (getRemoteFiles().isEmpty()) {
             return null;
         }
@@ -746,5 +752,11 @@ public class BuildInfo implements IBuildInfo {
         }
 
         return FileUtil.findFile(workingDir, fileName);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void allowStagingRemoteFile(boolean stageRemoteFile) {
+        mStageRemoteFile = stageRemoteFile;
     }
 }
