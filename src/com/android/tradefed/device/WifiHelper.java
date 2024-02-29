@@ -569,8 +569,15 @@ public class WifiHelper implements IWifiHelper {
     public WifiConnectionResult connectToNetwork(
             String ssid, String psk, String urlToCheck, boolean scanSsid)
             throws DeviceNotAvailableException {
+        return connectToNetwork(ssid, psk, urlToCheck, scanSsid, null);
+    }
+    /** {@inheritDoc} */
+    @Override
+    public WifiConnectionResult connectToNetwork(
+            String ssid, String psk, String urlToCheck, boolean scanSsid, String defaultType)
+            throws DeviceNotAvailableException {
         if (mUseV2) {
-            return connectToNetworkV2(ssid, psk, scanSsid);
+            return connectToNetworkV2(ssid, psk, scanSsid, defaultType);
         }
 
         if (!enableWifi()) {
@@ -585,7 +592,8 @@ public class WifiHelper implements IWifiHelper {
     }
 
     /** Uses the wifi connect-network cmd to connect to wifi network instead of using the apk. */
-    private WifiConnectionResult connectToNetworkV2(String ssid, String psk, boolean scanSsid)
+    private WifiConnectionResult connectToNetworkV2(
+            String ssid, String psk, boolean scanSsid, String defaultType)
             throws DeviceNotAvailableException {
         if (!enableWifiV2()) {
             return WifiConnectionResult.FAILED_TO_ENABLE;
@@ -597,7 +605,15 @@ public class WifiHelper implements IWifiHelper {
         }
         String networkType = findNetworkType(ssid, scanResults);
         if (networkType == null) {
-            return WifiConnectionResult.FAILED_TO_CONNECT;
+            if (defaultType != null) {
+                // Use the default network type if we fail to find it.
+                CLog.d(
+                        "Defaulting to a `%s` network type. Network connection may fail.",
+                        defaultType);
+                networkType = defaultType;
+            } else {
+                return WifiConnectionResult.FAILED_TO_CONNECT;
+            }
         }
         String connectCmd =
                 String.format("cmd -w wifi connect-network %s %s %s", ssid, networkType, psk);
