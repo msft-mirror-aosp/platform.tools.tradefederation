@@ -242,6 +242,7 @@ import com.android.tradefed.suite.checker.DeviceBaselineCheckerTest;
 import com.android.tradefed.suite.checker.DeviceSettingCheckerTest;
 import com.android.tradefed.suite.checker.DeviceStorageStatusCheckerTest;
 import com.android.tradefed.suite.checker.EnforcedSeLinuxCheckerTest;
+import com.android.tradefed.suite.checker.FilesystemRootCheckerTest;
 import com.android.tradefed.suite.checker.KeyguardStatusCheckerTest;
 import com.android.tradefed.suite.checker.LeakedThreadStatusCheckerTest;
 import com.android.tradefed.suite.checker.ShellStatusCheckerTest;
@@ -878,6 +879,7 @@ import org.junit.runners.Suite.SuiteClasses;
     DeviceSettingCheckerTest.class,
     DeviceStorageStatusCheckerTest.class,
     EnforcedSeLinuxCheckerTest.class,
+    FilesystemRootCheckerTest.class,
     KeyguardStatusCheckerTest.class,
     LeakedThreadStatusCheckerTest.class,
     ShellStatusCheckerTest.class,
