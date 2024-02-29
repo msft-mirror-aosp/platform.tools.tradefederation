@@ -46,6 +46,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.io.File;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -357,7 +358,7 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                 ValidateSuiteConfigHelper.validateConfig(c);
 
                 for (IDeviceConfiguration dConfig : c.getDeviceConfig()) {
-                    validatePreparers(config, dConfig.getTargetPreparers());
+                    validatePreparers(c, config, dConfig.getTargetPreparers());
                 }
                 // Check that all the tests runners are well supported.
                 checkRunners(c.getTests(), "general-tests");
@@ -381,8 +382,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
         }
     }
 
-    public static void validatePreparers(File config, List<ITargetPreparer> preparers)
-            throws Exception {
+    public static void validatePreparers(
+            IConfiguration c, File config, List<ITargetPreparer> preparers) throws Exception {
         if (EXEMPTED_PYTHON_TEST_MODULES.contains(config.getName())) {
             LogUtil.CLog.w(
                     "Module %s is a python_test_host module. Ignoring until b/274930471 is fixed.s",
@@ -436,11 +437,21 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             String.format(
                                     "Config: %s should set cleanup=true for file pusher.", config));
                 }
+                boolean isPerfModule = ModuleTestTypeUtil.isPerformanceModule(c);
                 for (File f : pusher.getPushSpecs(null).values()) {
                     String path = f.getPath();
                     // Use findFiles to also match top-level dir, which is a valid push spec
                     Set<String> toBePushed = FileUtil.findFiles(config.getParentFile(), path);
                     if (toBePushed.isEmpty()) {
+                        // allow performance modules to specify dynamic links
+                        if (isPerfModule) {
+                            URI uri = new URI(path);
+                            if (uri.getScheme() != null
+                                    && (uri.getScheme().contains("gs")
+                                            || uri.getScheme().contains("http"))) {
+                                continue;
+                            }
+                        }
                         // See if binary files exists
                         File file32 = FileUtil.findFile(config.getParentFile(), path + "32");
                         File file64 = FileUtil.findFile(config.getParentFile(), path + "64");

@@ -20,9 +20,9 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.tracing.ActiveTrace;
 import com.android.tradefed.invoker.tracing.TracingLogger;
-import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -41,6 +41,7 @@ import com.android.tradefed.util.SubprocessEventHelper.InvocationEndedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationFailedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationStartedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.LogAssociationEventInfo;
+import com.android.tradefed.util.SubprocessEventHelper.SkippedTestEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestEndedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestLogEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestModuleStartedEventInfo;
@@ -107,6 +108,7 @@ public class SubprocessTestResultsParser implements Closeable {
         public static final String TEST_ENDED = "TEST_ENDED";
         public static final String TEST_FAILED = "TEST_FAILED";
         public static final String TEST_IGNORED = "TEST_IGNORED";
+        public static final String TEST_SKIPPED = "TEST_SKIPPED";
         public static final String TEST_STARTED = "TEST_STARTED";
         public static final String TEST_RUN_ENDED = "TEST_RUN_ENDED";
         public static final String TEST_RUN_FAILED = "TEST_RUN_FAILED";
@@ -305,6 +307,7 @@ public class SubprocessTestResultsParser implements Closeable {
         mHandlerMap.put(StatusKeys.TEST_ENDED, new TestEndedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_FAILED, new TestFailedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_IGNORED, new TestIgnoredEventHandler());
+        mHandlerMap.put(StatusKeys.TEST_SKIPPED, new TestSkippedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_STARTED, new TestStartedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_RUN_ENDED, new TestRunEndedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_RUN_FAILED, new TestRunFailedEventHandler());
@@ -487,6 +490,15 @@ public class SubprocessTestResultsParser implements Closeable {
             BaseTestEventInfo baseTestIgnored = new BaseTestEventInfo(new JSONObject(eventJson));
             checkCurrentTestId(baseTestIgnored.mClassName, baseTestIgnored.mTestName);
             mListener.testIgnored(mCurrentTestCase);
+        }
+    }
+
+    private class TestSkippedEventHandler implements EventHandler {
+        @Override
+        public void handleEvent(String eventJson) throws JSONException {
+            SkippedTestEventInfo skipped = new SkippedTestEventInfo(new JSONObject(eventJson));
+            checkCurrentTestId(skipped.mClassName, skipped.mTestName);
+            mListener.testSkipped(mCurrentTestCase, skipped.skipReason);
         }
     }
 

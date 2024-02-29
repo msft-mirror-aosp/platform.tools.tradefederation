@@ -169,6 +169,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             + "This changes the baseline and does require reverting.")
     private boolean mApplySnapshot = false;
 
+    @Option(
+            name = "enforce-snapshot-completed",
+            description = "Test mode was snapshot to ensure the logic was used and throw if not.")
+    private boolean mEnforceSnapshotCompleted = false;
+
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
 
@@ -432,7 +437,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             // In case success with full flashing
             if (!getHostOptions().isOptOutOfIncrementalFlashing()) {
                 boolean moveBaseLine = true;
-                if (mUseIncrementalFlashing && !useIncrementalFlashing) {
+                if (!mUseIncrementalFlashing || useIncrementalFlashing) {
+                    // Do not move baseline if using incremental flashing
                     moveBaseLine = false;
                 }
                 if (mApplySnapshot) {
@@ -517,7 +523,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         if (mIncrementalImageUtil != null) {
             CLog.d("Teardown related to incremental update.");
             mIncrementalImageUtil.teardownDevice();
-            mIncrementalImageUtil = null;
+        }
+        if (mEnforceSnapshotCompleted && e == null) {
+            if (mIncrementalImageUtil == null || !mIncrementalImageUtil.updateCompleted()) {
+                throw new RuntimeException(
+                        "We expected incremental-flashing to be used but wasn't.");
+            }
         }
     }
 
