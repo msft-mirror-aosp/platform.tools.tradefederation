@@ -375,16 +375,21 @@ public class TestDiscoveryExecutor {
             CLog.w("root dir env not set.");
             return parentModules;
         }
-        for (String name : moduleNames) {
-            File config = FileUtil.findFile(new File(rootDirPath), name + ".config");
-            if (config != null) {
-                CLog.d("Parent: %s being added for the extra configs",
-                        config.getParentFile().getName());
-                if (!config.getParentFile().getName().equals(name)) {
-                    parentModules.add(config.getParentFile().getName());
+        CLog.d("Seaching parent configs.");
+        try (CloseableTraceScope ignored = new CloseableTraceScope("find parent configs")) {
+            for (String name : moduleNames) {
+                File config = FileUtil.findFile(new File(rootDirPath), name + ".config");
+                if (config != null) {
+                    if (!config.getParentFile().getName().equals(name)) {
+                        CLog.d(
+                                "Parent: %s being added for the extra configs",
+                                config.getParentFile().getName());
+                        parentModules.add(config.getParentFile().getName());
+                    }
                 }
             }
         }
+        CLog.d("Done searching parent configs.");
         return parentModules;
     }
 
