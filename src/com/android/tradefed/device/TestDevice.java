@@ -94,7 +94,7 @@ public class TestDevice extends NativeDevice {
     static final String DISMISS_DIALOG_CMD = "input keyevent 23";
 
     static final String DISMISS_DIALOG_BROADCAST =
-            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOG";
+            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS";
     // Collapse notifications
     private static final String COLLAPSE_STATUS_BAR = "cmd statusbar collapse";
 
