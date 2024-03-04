@@ -131,7 +131,7 @@ public class IncrementalImageUtil {
             }
         }
 
-        if (!isSnapshotSupported(device)) {
+        if (!isSnapshotSupported(device, applySnapshot)) {
             CLog.d("Incremental flashing not supported.");
             return null;
         }
@@ -226,7 +226,7 @@ public class IncrementalImageUtil {
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
-    public static boolean isSnapshotSupported(ITestDevice device)
+    public static boolean isSnapshotSupported(ITestDevice device, boolean applySnapshot)
             throws DeviceNotAvailableException {
         // Ensure snapshotctl exists
         CommandResult whichOutput = device.executeShellV2Command("which snapshotctl");
@@ -236,9 +236,16 @@ public class IncrementalImageUtil {
         }
         CommandResult helpOutput = device.executeShellV2Command("snapshotctl");
         CLog.d("stdout: %s, stderr: %s", helpOutput.getStdout(), helpOutput.getStderr());
-        if (helpOutput.getStdout().contains("map-snapshots")
-                || helpOutput.getStderr().contains("map-snapshots")) {
-            return true;
+        if (applySnapshot) {
+            if (helpOutput.getStdout().contains("apply-update")
+                    || helpOutput.getStderr().contains("apply-update")) {
+                return true;
+            }
+        } else {
+            if (helpOutput.getStdout().contains("map-snapshots")
+                    || helpOutput.getStderr().contains("map-snapshots")) {
+                return true;
+            }
         }
         return false;
     }
