@@ -3164,7 +3164,11 @@ public class NativeDevice
                     }
                     WifiConnectionResult result =
                             wifi.connectToNetwork(
-                                    wifiSsid, wifiPsk, mOptions.getConnCheckUrl(), scanSsid);
+                                    wifiSsid,
+                                    wifiPsk,
+                                    mOptions.getConnCheckUrl(),
+                                    scanSsid,
+                                    mOptions.getDefaultNetworkType());
 
                     final Map<String, String> wifiInfo = wifi.getWifiInfo();
                     if (WifiConnectionResult.SUCCESS.equals(result)) {
