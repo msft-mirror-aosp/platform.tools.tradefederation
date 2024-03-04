@@ -369,7 +369,7 @@ public class TestDiscoveryExecutor {
      * search for it to backfill the download
      */
     private Set<String> findExtraConfigsParents(Set<String> moduleNames) {
-        Set<String> parentModules = new HashSet<>();
+        Set<String> parentModules = Collections.synchronizedSet(new HashSet<>());
         String rootDirPath = getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
         if (rootDirPath == null) {
             CLog.w("root dir env not set.");
@@ -377,17 +377,20 @@ public class TestDiscoveryExecutor {
         }
         CLog.d("Seaching parent configs.");
         try (CloseableTraceScope ignored = new CloseableTraceScope("find parent configs")) {
-            for (String name : moduleNames) {
-                File config = FileUtil.findFile(new File(rootDirPath), name + ".config");
-                if (config != null) {
-                    if (!config.getParentFile().getName().equals(name)) {
-                        CLog.d(
-                                "Parent: %s being added for the extra configs",
-                                config.getParentFile().getName());
-                        parentModules.add(config.getParentFile().getName());
-                    }
-                }
-            }
+            moduleNames.parallelStream()
+                    .forEach(
+                            name -> {
+                                File config =
+                                        FileUtil.findFile(new File(rootDirPath), name + ".config");
+                                if (config != null) {
+                                    if (!config.getParentFile().getName().equals(name)) {
+                                        CLog.d(
+                                                "Parent: %s being added for the extra configs",
+                                                config.getParentFile().getName());
+                                        parentModules.add(config.getParentFile().getName());
+                                    }
+                                }
+                            });
         }
         CLog.d("Done searching parent configs.");
         return parentModules;
