@@ -162,6 +162,13 @@ public class TestDeviceOptions {
     @Option(name = "wifiutil-apk-path", description = "path to the wifiutil APK file")
     private String mWifiUtilAPKPath = null;
 
+    @Option(
+            name = "default-network-type",
+            description =
+                    "default network type to fallback to, if wifi helper fails to find the correct"
+                            + " network type for the specified network.")
+    private String mDefaultNetworkType = "wpa2";
+
     @Option(name = "post-boot-command",
             description = "shell command to run after reboots during invocation")
     private List<String> mPostBootCommands = new ArrayList<String>();
@@ -971,6 +978,10 @@ public class TestDeviceOptions {
 
     public void setUseConnection(boolean useConnection) {
         mEnableConnectionFeature = useConnection;
+    }
+
+    public String getDefaultNetworkType() {
+        return mDefaultNetworkType;
     }
 }
 
