@@ -20,7 +20,6 @@ import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.DdmPreferences;
 import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
@@ -30,6 +29,7 @@ import com.android.tradefed.invoker.tracing.ActiveTrace;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogRegistry;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
@@ -51,6 +51,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -377,7 +378,22 @@ public class TestDiscoveryExecutor {
         }
         CLog.d("Seaching parent configs.");
         try (CloseableTraceScope ignored = new CloseableTraceScope("find parent configs")) {
-            moduleNames.parallelStream()
+            Set<File> testCasesDirs = FileUtil.findFilesObject(new File(rootDirPath), "testcases");
+            Set<String> moduleDirs = Collections.synchronizedSet(new HashSet<>());
+            testCasesDirs.parallelStream()
+                    .forEach(
+                            f -> {
+                                String[] modules = f.list();
+                                if (modules != null) {
+                                    moduleDirs.addAll(Arrays.asList(modules));
+                                }
+                            });
+            Set<String> moduleNameMismatch =
+                    moduleNames.parallelStream()
+                            .filter(m -> !moduleDirs.contains(m))
+                            .collect(Collectors.toSet());
+            // Only search the mismatch
+            moduleNameMismatch.parallelStream()
                     .forEach(
                             name -> {
                                 File config =
@@ -391,6 +407,8 @@ public class TestDiscoveryExecutor {
                                     }
                                 }
                             });
+        } catch (IOException e) {
+            CLog.e(e);
         }
         CLog.d("Done searching parent configs.");
         return parentModules;
