@@ -21,12 +21,18 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -58,6 +64,14 @@ public class KernelTargetTest extends ExecutableTargetTest {
                         + " at least the kernel version and major revision, and optionally the"
                         + " minor revision, separated by periods, e.g. 5.4 or 4.19.1")
     private Map<String, String> mTestMinKernelVersion = new LinkedHashMap<>();
+
+    @Option(name = "parse-ktap", description = "Parse test outputs in KTAP format")
+    private boolean mParseKTAP = false;
+
+    @Override
+    protected boolean doesRunBinaryGenerateTestResults() {
+        return mParseKTAP;
+    }
 
     /**
      * Skips the binary check in findBinary. Redundant with mSkipBinaryCheck but needed for
@@ -143,10 +157,34 @@ public class KernelTargetTest extends ExecutableTargetTest {
     @Override
     protected void checkCommandResult(
             CommandResult result, ITestInvocationListener listener, TestDescription description) {
-        if (mExitCodeSkip != null && result.getExitCode().equals(mExitCodeSkip)) {
-            listener.testIgnored(description);
-        } else {
-            super.checkCommandResult(result, listener, description);
+        if (mParseKTAP) {
+            if (result.getExitCode().equals(mExitCodeSkip)) {
+                listener.testStarted(description);
+                listener.testIgnored(description);
+                listener.testEnded(description, new HashMap<String, Metric>());
+                return;
+            }
+            try {
+                KTapResultParser.applyKTapResultToListener(
+                        listener,
+                        description.getTestName(),
+                        result.getStdout(),
+                        KTapResultParser.ParseResolution.AGGREGATED_TOP_LEVEL);
+            } catch (RuntimeException exception) {
+                CLog.e("KTAP parse error: %s", exception.toString());
+                listener.testStarted(description);
+                listener.testFailed(
+                        description,
+                        FailureDescription.create(exception.toString())
+                                .setFailureStatus(FailureStatus.TEST_FAILURE));
+                listener.testEnded(description, new HashMap<String, Metric>());
+            }
+            return;
         }
+        if (result.getExitCode().equals(mExitCodeSkip)) {
+            listener.testIgnored(description);
+            return;
+        }
+        super.checkCommandResult(result, listener, description);
     }
 }
