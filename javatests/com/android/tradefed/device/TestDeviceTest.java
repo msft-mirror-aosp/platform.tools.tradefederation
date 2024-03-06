@@ -477,7 +477,8 @@ public class TestDeviceTest {
         // output of this cmd goes to stderr
         fastbootResult.setStdout("");
         fastbootResult.setStderr("product: nexusone\n" + "finished. total time: 0.001s");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         (String) Mockito.any(),
                         (String) Mockito.any(),
@@ -502,7 +503,8 @@ public class TestDeviceTest {
         // output of this cmd goes to stderr
         fastbootResult.setStdout("");
         fastbootResult.setStderr("product: foo-bar\n" + "finished. total time: 0.001s");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         (String) Mockito.any(),
                         (String) Mockito.any(),
@@ -527,7 +529,8 @@ public class TestDeviceTest {
         // output of this cmd goes to stderr
         fastbootResult.setStdout("");
         fastbootResult.setStderr("product: \n" + "finished. total time: 0.001s");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         (String) Mockito.any(),
                         (String) Mockito.any(),
@@ -1232,7 +1235,8 @@ public class TestDeviceTest {
                     assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
                     return new CommandResult(CommandStatus.SUCCESS);
                 };
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         Mockito.eq("fastboot"),
                         Mockito.eq("-s"),
@@ -1256,7 +1260,8 @@ public class TestDeviceTest {
         verify(mMockStateMonitor).setState(TestDeviceState.FASTBOOT);
         verify(mMockStateMonitor).setState(TestDeviceState.NOT_AVAILABLE);
         verify(mMockRunUtil, times(2))
-                .runTimedCmd(
+                .runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         Mockito.eq("fastboot"),
                         Mockito.eq("-s"),
@@ -1272,7 +1277,8 @@ public class TestDeviceTest {
         CommandResult successResult = new CommandResult(CommandStatus.SUCCESS);
         successResult.setStderr("");
         successResult.setStdout("");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         Mockito.eq("fastboot"),
                         Mockito.eq("-s"),
