@@ -66,6 +66,19 @@ public class KernelTestModuleControllerTest {
     }
 
     @Test
+    public void testModuleAbiMatchesOneOfArch()
+            throws DeviceNotAvailableException, ConfigurationException {
+        mContext.addInvocationAttribute(ModuleDefinition.MODULE_ABI, "arm64-v8a");
+        Mockito.when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        Mockito.when(mMockDevice.getProperty(mLowMemProp)).thenReturn("false");
+        Mockito.when(mMockDevice.getProperty(mProductNameProp)).thenReturn("product");
+        OptionSetter setter = new OptionSetter(mController);
+        setter.setOptionValue("arch", "arm");
+        setter.setOptionValue("arch", "arm64");
+        assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));
+    }
+
+    @Test
     public void testModuleAbiMismatchesArch()
             throws DeviceNotAvailableException, ConfigurationException {
         mContext.addInvocationAttribute(ModuleDefinition.MODULE_ABI, "arm64-v8a");
@@ -74,6 +87,8 @@ public class KernelTestModuleControllerTest {
         Mockito.when(mMockDevice.getProperty(mProductNameProp)).thenReturn("product");
         OptionSetter setter = new OptionSetter(mController);
         setter.setOptionValue("arch", "arm");
+        setter.setOptionValue("arch", "x86_64");
+        setter.setOptionValue("arch", "x86");
         assertEquals(RunStrategy.FULL_MODULE_BYPASS, mController.shouldRunModule(mContext));
     }
 
