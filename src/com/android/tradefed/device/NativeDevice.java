@@ -6069,7 +6069,13 @@ public class NativeDevice
         // device will disappear from fastboot devices while command is being executed
         mFastbootLock.lock();
         try {
-            result = runUtil.runTimedCmd(timeout, fullCmd);
+            if (mOptions.getFastbootOutputTimeout() > 0) {
+                result =
+                        runUtil.runTimedCmdWithOutputMonitor(
+                                timeout, mOptions.getFastbootOutputTimeout(), fullCmd);
+            } else {
+                result = runUtil.runTimedCmd(timeout, fullCmd);
+            }
         } finally {
             mFastbootLock.unlock();
         }
