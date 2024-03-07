@@ -48,14 +48,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /** Thread Monitor for the Gce ssh tunnel. */
-public class GceSshTunnelMonitor extends Thread {
+public class GceSshTunnelMonitor extends AbstractTunnelMonitor {
 
     public static final String VIRTUAL_DEVICE_SERIAL = "virtual-device-serial";
 
     // stop/start adbd has longer retries in order to support possible longer reboot time.
     private static final long ADBD_RETRY_INTERVAL_MS = 15000;
     private static final int ADBD_MAX_RETRIES = 10;
-    private static final long DEFAULT_LONG_CMD_TIMEOUT = 60 * 1000;
     private static final long DEFAULT_SHORT_CMD_TIMEOUT = 20 * 1000;
     private static final int WAIT_FOR_FIRST_CONNECT = 10 * 1000;
     private static final long WAIT_AFTER_REBOOT = 60 * 1000;
@@ -123,6 +122,7 @@ public class GceSshTunnelMonitor extends Thread {
     }
 
     /** Returns True if the {@link GceSshTunnelMonitor} is still alive, false otherwise. */
+    @Override
     public boolean isTunnelAlive() {
         if (mSshTunnelProcess != null) {
             return mSshTunnelProcess.isAlive();
@@ -131,11 +131,13 @@ public class GceSshTunnelMonitor extends Thread {
     }
 
     /** Set True when an adb reboot is about to be called to make sure the monitor expect it. */
+    @Override
     public void isAdbRebootCalled(boolean isCalled) {
         mAdbRebootCalled = isCalled;
     }
 
     /** Terminate the tunnel monitor */
+    @Override
     public void shutdown() {
         mQuit = true;
         closeConnection();
@@ -144,13 +146,8 @@ public class GceSshTunnelMonitor extends Thread {
         interrupt();
     }
 
-    /** Waits for this monitor to finish, as in {@link Thread#join()}. */
-    public void joinMonitor() throws InterruptedException {
-        // We use join with a timeout to ensure tearDown is never blocked forever.
-        super.join(DEFAULT_LONG_CMD_TIMEOUT);
-    }
-
     /** Close all the connections from the monitor (adb and ssh tunnel). */
+    @Override
     public void closeConnection() {
         // shutdown adb connection first, if we reached where there could be a connection
         CLog.d("closeConnection is triggered.");
@@ -397,6 +394,7 @@ public class GceSshTunnelMonitor extends Thread {
     }
 
     /** Log all the interesting log files generated from the ssh tunnel. */
+    @Override
     public void logSshTunnelLogs(ITestLogger logger) {
         if (mDevice.getConnection() instanceof AdbTcpConnection) {
             ((AdbTcpConnection) mDevice.getConnection()).setAdbLogFile(null);

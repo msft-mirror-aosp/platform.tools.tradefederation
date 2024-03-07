@@ -878,6 +878,45 @@ public class KTapResultParserTest {
         checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
     }
 
+    @Test
+    public void test_passed_kselftest_binderfs() {
+        String ktapResults =
+                "TAP version 13\n"
+                    + "1..3\n"
+                    + "# Starting 3 tests from 1 test cases.\n"
+                    + "#  RUN           global.binderfs_stress ...\n"
+                    + "#      SKIP      binderfs_stress: user namespace not supported\n"
+                    + "\n"
+                    + "#            OK  global.binderfs_stress\n"
+                    + "ok 1 # SKIP binderfs_stress: user namespace not supported\n"
+                    + "\n"
+                    + "#  RUN           global.binderfs_test_privileged ...\n"
+                    + "# external/linux-kselftest/tools/testing/selftests/filesystems/binderfs/binderfs_test.c:109:binderfs_test_privileged:Allocated"
+                    + " new binder device with major 506, minor 8, and name my-binder\n"
+                    + "# external/linux-kselftest/tools/testing/selftests/filesystems/binderfs/binderfs_test.c:131:binderfs_test_privileged:Detected"
+                    + " binder version: 8\n"
+                    + "#            OK  global.binderfs_test_privileged\n"
+                    + "ok 2 global.binderfs_test_privileged\n"
+                    + "#  RUN           global.binderfs_test_unprivileged ...\n"
+                    + "#      SKIP      binderfs_test_unprivileged: user namespace not supported\n"
+                    + "\n"
+                    + "#            OK  global.binderfs_test_unprivileged\n"
+                    + "ok 3 # SKIP binderfs_test_unprivileged: user namespace not supported\n"
+                    + "\n"
+                    + "# PASSED: 3 / 3 tests passed.\n"
+                    + "# Totals: pass:1 fail:0 xfail:0 xpass:0 skip:2 error:\n";
+        String[][] expectedLeafResults = {
+            {"unnamed_test_1", "IGNORED", ""},
+            {"global.binderfs_test_privileged", "PASSED", ""},
+            {"unnamed_test_3", "IGNORED", ""}
+        };
+
+        String[] expectedRootResults = {
+            "unnamed_test_1.global.binderfs_test_privileged.unnamed_test_3", "PASSED", ""
+        };
+        checkKTap(ktapResults, expectedLeafResults, expectedRootResults);
+    }
+
     private void checkKTap(
             String ktapResults, String[][] expectedLeafResults, String[] expectedRootResults) {
         // Setup
