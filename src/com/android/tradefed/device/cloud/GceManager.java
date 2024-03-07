@@ -228,7 +228,9 @@ public class GceManager {
         // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
         mSkipSerialLogCollection =
                 (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
-        if (getTestDeviceOptions().useOxygen()) {
+        if (getTestDeviceOptions().useOxygen() || getTestDeviceOptions().useOxygenationDevice()) {
+            // Leasing an oxygenation device will still depend on the existing oxygen client tool
+            // with more parameters passed in.
             return startGceWithOxygenClient(logger, attributes);
         } else {
             return startGceWithAcloud(ipDevice, user, offset, attributes);
@@ -680,7 +682,7 @@ public class GceManager {
      * @return returns true if gce shutdown was requested as non-blocking.
      */
     public boolean shutdownGce() {
-        if (getTestDeviceOptions().useOxygen()) {
+        if (getTestDeviceOptions().useOxygen() || getTestDeviceOptions().useOxygenationDevice()) {
             return shutdownGceWithOxygen();
         } else {
             return shutdownGceWithAcloud();

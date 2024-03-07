@@ -32,6 +32,7 @@ import com.android.tradefed.device.cloud.AbstractTunnelMonitor;
 import com.android.tradefed.device.cloud.CommonLogRemoteFileUtil;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
+import com.android.tradefed.device.cloud.GceLHPTunnelMonitor;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.cloud.OxygenUtil;
@@ -55,7 +56,6 @@ import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
-import com.google.common.net.HostAndPort;
 
 import java.io.File;
 import java.io.IOException;
@@ -110,8 +110,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         // mGceAvd is null means the device hasn't been launched.
         if (mGceAvd != null) {
             CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
-            createGceTunnelMonitor(
-                    getDevice(), getBuildInfo(), mGceAvd.hostAndPort(), getDevice().getOptions());
+            createGceTunnelMonitor(getDevice(), getBuildInfo(), mGceAvd, getDevice().getOptions());
         } else {
             // Launch GCE helper script.
             long startTime = getCurrentTime();
@@ -413,17 +412,23 @@ public class AdbSshConnection extends AdbTcpConnection {
                         mGceAvd.getErrors(), getDevice().getDeviceDescriptor(), errorIdentifier);
             }
         }
-        createGceTunnelMonitor(
-                getDevice(), buildInfo, mGceAvd.hostAndPort(), getDevice().getOptions());
+        createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
     void createGceTunnelMonitor(
             ITestDevice device,
             IBuildInfo buildInfo,
-            HostAndPort hostAndPort,
+            GceAvdInfo gceAvdInfo,
             TestDeviceOptions deviceOptions) {
-        mGceTunnelMonitor = new GceSshTunnelMonitor(device, buildInfo, hostAndPort, deviceOptions);
+        if (deviceOptions.useOxygenationDevice()) {
+            mGceTunnelMonitor = new GceLHPTunnelMonitor();
+        } else {
+            mGceTunnelMonitor =
+                    new GceSshTunnelMonitor(
+                            device, buildInfo, gceAvdInfo.hostAndPort(), deviceOptions);
+        }
+        CLog.d("Using GCE tunnel monitor: %s ", mGceTunnelMonitor);
         mGceTunnelMonitor.start();
     }
 
