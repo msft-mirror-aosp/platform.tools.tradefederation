@@ -65,7 +65,7 @@ public class SkipManager implements IDisableable {
     @Option(
             name = "skip-on-no-tests-discovered",
             description = "Enable the layer of skipping when there is no discovered tests to run.")
-    private boolean mSkipOnNoTestsDiscovered = false;
+    private boolean mSkipOnNoTestsDiscovered = true;
 
     @Option(
             name = "skip-on-no-change-presubmit-only",
