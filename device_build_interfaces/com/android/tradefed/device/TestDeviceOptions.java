@@ -89,6 +89,14 @@ public class TestDeviceOptions {
             "time in ms to wait for a device to boot into fastboot.")
     private int mFastbootTimeout = 1 * 60 * 1000;
 
+    @Option(
+            name = "fastboot-output-timeout",
+            isTimeVal = true,
+            description =
+                    "Maximum time to wait for a fastboot command to output something. If non"
+                            + " zero, timeout will be enforced.")
+    private long mFastbootOutputTimeout = 5 * 60 * 1000;
+
     @Option(name = "adb-command-timeout", description =
             "time to wait for an adb command.", isTimeVal = true)
     private long mAdbCommandTimeout = 2 * 60 * 1000;
@@ -453,6 +461,10 @@ public class TestDeviceOptions {
      */
     public int getFastbootTimeout() {
         return mFastbootTimeout;
+    }
+
+    public long getFastbootOutputTimeout() {
+        return mFastbootOutputTimeout;
     }
 
     /**

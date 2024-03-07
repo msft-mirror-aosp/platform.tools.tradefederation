@@ -28,6 +28,7 @@ import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
+import com.android.tradefed.device.cloud.AbstractTunnelMonitor;
 import com.android.tradefed.device.cloud.CommonLogRemoteFileUtil;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
@@ -69,7 +70,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private GceAvdInfo mGceAvd = null;
 
     private GceManager mGceHandler = null;
-    private GceSshTunnelMonitor mGceSshMonitor;
+    private AbstractTunnelMonitor mGceTunnelMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
 
     private boolean mIsRemote = false;
@@ -81,6 +82,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private static final long WAIT_FOR_TUNNEL_OFFLINE = 5 * 1000;
     private static final long WAIT_FOR_TUNNEL_ONLINE = 2 * 60 * 1000;
     private static final long FETCH_TOMBSTONES_TIMEOUT_MS = 5 * 60 * 1000;
+    private static final long DEFAULT_LONG_CMD_TIMEOUT = 60 * 1000;
 
     public AdbSshConnection(ConnectionBuilder builder) {
         super(builder);
@@ -91,7 +93,7 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     @Override
     public void initializeConnection() throws DeviceNotAvailableException, TargetSetupError {
-        mGceSshMonitor = null;
+        mGceTunnelMonitor = null;
         mTunnelInitFailed = null;
         // We create a brand new GceManager each time to ensure clean state.
         mGceHandler =
@@ -108,7 +110,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         // mGceAvd is null means the device hasn't been launched.
         if (mGceAvd != null) {
             CLog.d("skipped GCE launch because GceAvdInfo %s is already set", mGceAvd);
-            createGceSshMonitor(
+            createGceTunnelMonitor(
                     getDevice(), getBuildInfo(), mGceAvd.hostAndPort(), getDevice().getOptions());
         } else {
             // Launch GCE helper script.
@@ -199,8 +201,8 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     @Override
     public void reconnect(String serial) throws DeviceNotAvailableException {
-        if (!getGceSshMonitor().isTunnelAlive()) {
-            getGceSshMonitor().closeConnection();
+        if (!getGceTunnelMonitor().isTunnelAlive()) {
+            getGceTunnelMonitor().closeConnection();
             getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
             waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
         }
@@ -209,7 +211,7 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     @Override
     public void reconnectForRecovery(String serial) throws DeviceNotAvailableException {
-        if (getGceSshMonitor() == null) {
+        if (getGceTunnelMonitor() == null) {
             if (mTunnelInitFailed != null) {
                 // We threw before but was not reported, so throw the root cause here.
                 throw mTunnelInitFailed;
@@ -222,7 +224,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             try {
                 // Re-init tunnel when attempting recovery
                 CLog.i("Attempting recovery on GCE AVD %s", serial);
-                getGceSshMonitor().closeConnection();
+                getGceTunnelMonitor().closeConnection();
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
                 waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
@@ -243,7 +245,7 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     @Override
     public void notifyAdbRebootCalled() {
-        final GceSshTunnelMonitor tunnelMonitor = getGceSshMonitor();
+        final AbstractTunnelMonitor tunnelMonitor = getGceTunnelMonitor();
         if (tunnelMonitor != null) {
             tunnelMonitor.isAdbRebootCalled(true);
         }
@@ -257,16 +259,16 @@ public class AdbSshConnection extends AdbTcpConnection {
             getDevice().clearLogcat();
             getDevice().stopLogcat();
             // Terminate SSH tunnel process.
-            if (getGceSshMonitor() != null) {
-                getGceSshMonitor().logSshTunnelLogs(getLogger());
-                getGceSshMonitor().shutdown();
+            if (getGceTunnelMonitor() != null) {
+                getGceTunnelMonitor().logSshTunnelLogs(getLogger());
+                getGceTunnelMonitor().shutdown();
                 try {
-                    getGceSshMonitor().joinMonitor();
+                    getGceTunnelMonitor().join(DEFAULT_LONG_CMD_TIMEOUT);
                 } catch (InterruptedException e1) {
                     CLog.i("Interrupted while waiting for GCE SSH monitor to shutdown.");
                 }
                 // We are done with the monitor, clean it to prevent re-entry.
-                mGceSshMonitor = null;
+                mGceTunnelMonitor = null;
             }
             if (!((IManagedTestDevice) getDevice())
                     .waitForDeviceNotAvailable(DEFAULT_SHORT_CMD_TIMEOUT)) {
@@ -410,18 +412,18 @@ public class AdbSshConnection extends AdbTcpConnection {
                         mGceAvd.getErrors(), getDevice().getDeviceDescriptor(), errorIdentifier);
             }
         }
-        createGceSshMonitor(
+        createGceTunnelMonitor(
                 getDevice(), buildInfo, mGceAvd.hostAndPort(), getDevice().getOptions());
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
-    void createGceSshMonitor(
+    void createGceTunnelMonitor(
             ITestDevice device,
             IBuildInfo buildInfo,
             HostAndPort hostAndPort,
             TestDeviceOptions deviceOptions) {
-        mGceSshMonitor = new GceSshTunnelMonitor(device, buildInfo, hostAndPort, deviceOptions);
-        mGceSshMonitor.start();
+        mGceTunnelMonitor = new GceSshTunnelMonitor(device, buildInfo, hostAndPort, deviceOptions);
+        mGceTunnelMonitor.start();
     }
 
     /** Check if the tunnel monitor is running. */
@@ -429,11 +431,11 @@ public class AdbSshConnection extends AdbTcpConnection {
         CLog.i("Waiting %d ms for tunnel to be restarted", waitTime);
         long startTime = getCurrentTime();
         while (getCurrentTime() - startTime < waitTime) {
-            if (getGceSshMonitor() == null) {
+            if (getGceTunnelMonitor() == null) {
                 CLog.e("Tunnel Thread terminated, something went wrong with the device.");
                 break;
             }
-            if (getGceSshMonitor().isTunnelAlive()) {
+            if (getGceTunnelMonitor().isTunnelAlive()) {
                 CLog.d("Tunnel online again, resuming.");
                 return;
             }
@@ -447,9 +449,11 @@ public class AdbSshConnection extends AdbTcpConnection {
         throw mTunnelInitFailed;
     }
 
-    /** Returns the {@link com.android.tradefed.device.cloud.GceSshTunnelMonitor} of the device. */
-    public GceSshTunnelMonitor getGceSshMonitor() {
-        return mGceSshMonitor;
+    /**
+     * Returns the {@link com.android.tradefed.device.cloud.AbstractTunnelMonitor} of the device.
+     */
+    public AbstractTunnelMonitor getGceTunnelMonitor() {
+        return mGceTunnelMonitor;
     }
 
     /** Returns the current system time. Exposed for testing. */

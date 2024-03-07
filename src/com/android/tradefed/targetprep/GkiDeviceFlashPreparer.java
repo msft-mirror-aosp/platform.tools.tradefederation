@@ -845,7 +845,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                             device.getSerialNumber(),
                             result.getStdout(),
                             result.getStderr()),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
         }
         if (result.getStderr().length() > 0) {
             return result.getStderr();
