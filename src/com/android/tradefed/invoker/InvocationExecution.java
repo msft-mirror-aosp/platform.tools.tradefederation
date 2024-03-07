@@ -43,6 +43,7 @@ import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInvocation.Stage;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -446,6 +447,9 @@ public class InvocationExecution implements IInvocationExecution {
                     }
                     if (error instanceof DeviceNotAvailableException) {
                         throw (DeviceNotAvailableException) error;
+                    }
+                    if (error instanceof HarnessRuntimeException) {
+                        throw (HarnessRuntimeException) error;
                     }
                     throw new RuntimeException(error);
                 }
