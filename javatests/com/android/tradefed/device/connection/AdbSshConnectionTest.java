@@ -33,6 +33,7 @@ import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.cloud.AbstractTunnelMonitor;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceManager;
@@ -115,7 +116,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
                 };
@@ -466,7 +467,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    void createGceSshMonitor(
+                    void createGceTunnelMonitor(
                             ITestDevice device,
                             IBuildInfo buildInfo,
                             HostAndPort hostAndPort,
@@ -475,7 +476,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
 
@@ -568,7 +569,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
 
@@ -752,7 +753,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
                 };
@@ -786,7 +787,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
                 };
