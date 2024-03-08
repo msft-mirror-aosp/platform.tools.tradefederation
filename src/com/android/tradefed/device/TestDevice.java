@@ -2767,8 +2767,9 @@ public class TestDevice extends NativeDevice {
     }
 
     private boolean isVirtFeatureEnabled(String feature) throws DeviceNotAvailableException {
-        String result = executeShellCommand(VIRT_APEX + "bin/vm check-feature-enabled " + feature);
-        return result.contains("enabled");
+        CommandResult result =
+                executeShellV2Command(VIRT_APEX + "bin/vm check-feature-enabled " + feature);
+        return result.getExitCode() == 0 && result.getStdout().contains("is enabled");
     }
 
     /**
