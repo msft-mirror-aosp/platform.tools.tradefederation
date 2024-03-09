@@ -61,6 +61,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.io.Reader;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2874,32 +2875,22 @@ public class TestDevice extends NativeDevice {
         }
 
         // Run the VM
-        String cid;
-        Process process;
+        String cid = null;
+        Process process = null;
         try {
             PipedInputStream pipe = new PipedInputStream();
             process = getRunUtil().runCmdInBackground(args, new PipedOutputStream(pipe));
-            BufferedReader stdout = new BufferedReader(new InputStreamReader(pipe));
-
-            // Retrieve the CID from the vm tool output
-            Pattern pattern = Pattern.compile("with CID (\\d+)");
-            while ((cid = stdout.readLine()) != null) {
-                Matcher matcher = pattern.matcher(cid);
-                if (matcher.find()) {
-                    cid = matcher.group(1);
-                    break;
-                }
-            }
-            if (cid == null) {
-                throw new DeviceRuntimeException(
-                        "Failed to find the CID of the VM",
-                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-            }
+            cid = getCidFromVmRunOutput(new InputStreamReader(pipe));
         } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    "IOException trying to start a VM",
+                    "Exception trying to start a VM",
                     ex,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        } finally {
+            if (cid == null) {
+                // Don't leak the process on failure
+                process.destroyForcibly();
+            }
         }
 
         // Redirect log.txt to logd using logwrapper
@@ -2953,6 +2944,40 @@ public class TestDevice extends NativeDevice {
         tracker.cid = cid;
         mStartedMicrodroids.put(process, tracker);
         return microdroid;
+    }
+
+    private static String getCidFromVmRunOutput(Reader outputReader) {
+        BufferedReader stdout = new BufferedReader(outputReader);
+
+        StringBuilder output = new StringBuilder();
+
+        // Retrieve the CID from the vm tool output
+        String cid = null;
+        Pattern pattern = Pattern.compile("with CID (\\d+)");
+        String line;
+        try {
+            while ((line = stdout.readLine()) != null) {
+                output.append(line);
+                output.append(' ');
+
+                Matcher matcher = pattern.matcher(line);
+                if (matcher.find()) {
+                    cid = matcher.group(1);
+                    break;
+                }
+            }
+        } catch (IOException ex) {
+            throw new DeviceRuntimeException(
+                    "Failed to find the CID of the VM: " + output,
+                    ex,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        if (cid == null) {
+            throw new DeviceRuntimeException(
+                    "Failed to find the CID of the VM: " + output,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        return cid;
     }
 
     /** Find an unused port and forward microdroid's adb connection. Returns the port number. */
