@@ -62,6 +62,7 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -452,14 +453,21 @@ public class MoblyBinaryHostTest
         CLog.d("Included tests: %s", includedTests);
 
         // Split test across shards.
-        int chunkSize = includedTests.size() / totalShards;
-        if (includedTests.size() % totalShards > 0) chunkSize++;
-        int startIndex = shardIndex * chunkSize;
-        int endIndex =
-                (totalShards == 1 || shardIndex == totalShards - 1)
-                        ? includedTests.size()
-                        : (shardIndex + 1) * chunkSize;
-        includedTests = includedTests.subList(startIndex, endIndex);
+        int totalTests = includedTests.size();
+        int chunkSize = totalTests / totalShards;
+        if (totalTests % totalShards > 0) chunkSize++;
+        // Ensure shards beyond the number of available tests get no tests
+        if (shardIndex >= totalTests) {
+            includedTests = Collections.emptyList();
+        } else {
+            int startIndex = shardIndex * chunkSize;
+            int endIndex = Math.min((shardIndex + 1) * chunkSize, totalTests);
+            if (startIndex >= totalTests) {
+                startIndex = Math.max(0, totalTests - 1);
+                endIndex = totalTests;
+            }
+            includedTests = includedTests.subList(startIndex, endIndex);
+        }
         int testCount = includedTests.size();
 
         // Start run.
