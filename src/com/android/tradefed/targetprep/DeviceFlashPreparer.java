@@ -576,4 +576,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     public void setAllowCrossReleaseFlashing(boolean allowCrossReleaseFlashing) {
         mAllowIncrementalCrossRelease = allowCrossReleaseFlashing;
     }
+
+    public void setApplySnapshot(boolean applySnapshot) {
+        mApplySnapshot = applySnapshot;
+    }
 }
