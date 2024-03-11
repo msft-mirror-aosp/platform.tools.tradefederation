@@ -766,7 +766,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             boolean shouldFlash = true;
             if (mIncrementalFlashing != null) {
                 try {
-                    mIncrementalFlashing.updateDevice();
+                    mIncrementalFlashing.updateDevice(
+                            deviceBuild.getBootloaderImageFile(),
+                            deviceBuild.getBasebandImageFile());
                     shouldFlash = false;
                 } catch (TargetSetupError e) {
                     // In case of TargetSetupError for incremental flashing,
