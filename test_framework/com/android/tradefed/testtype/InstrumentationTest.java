@@ -87,6 +87,7 @@ public class InstrumentationTest
 
     /** max number of attempts to collect list of tests in package */
     private static final int COLLECT_TESTS_ATTEMPTS = 3;
+
     /** instrumentation test runner argument key used for test execution using a file */
     private static final String TEST_FILE_INST_ARGS_KEY = "testFile";
 
@@ -607,66 +608,71 @@ public class InstrumentationTest
         mExtraDeviceListener.addAll(extraListeners);
     }
 
+    private String getRunOptions(TestInformation testInformation)
+            throws DeviceNotAvailableException {
+        String abiName = resolveAbiName();
+        String runOptions = "";
+        // hidden-api-checks flag only exists in P and after.
+        // Using a temp variable to consolidate the dynamic checks
+        int apiLevel = !mHiddenApiChecks || !mWindowAnimation ? getDevice().getApiLevel() : 0;
+        if (!mHiddenApiChecks && apiLevel >= 28) {
+            runOptions += "--no-hidden-api-checks ";
+        }
+        // test-api-access flag only exists in R and after.
+        // Test API checks are subset of hidden API checks, so only make sense if hidden API
+        // checks are enabled.
+        if (mHiddenApiChecks
+                && !mTestApiAccess
+                && getDevice().checkApiLevelAgainstNextRelease(30)) {
+            runOptions += "--no-test-api-access ";
+        }
+        // isolated-storage flag only exists in Q and after.
+        if (!mIsolatedStorage && getDevice().checkApiLevelAgainstNextRelease(29)) {
+            runOptions += "--no-isolated-storage ";
+        }
+        // window-animation flag only exists in ICS and after
+        if (!mWindowAnimation && apiLevel >= 14) {
+            runOptions += "--no-window-animation ";
+        }
+        if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
+            runOptions += "--no-restart ";
+        }
+        if (mInstrumentSdkInSandbox
+                || (getDevice().checkApiLevelAgainstNextRelease(33)
+                        && Optional.ofNullable(testInformation)
+                                .map(TestInformation::properties)
+                                .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
+                                .map(value -> Boolean.TRUE.toString().equals(value))
+                                .orElse(false))) {
+            runOptions += "--instrument-sdk-in-sandbox ";
+        }
+        if (mInstrumentSdkSandbox) {
+            runOptions += "--instrument-sdk-sandbox ";
+        }
+
+        if (abiName != null && getDevice().getApiLevel() > 20) {
+            mInstallArgs.add(String.format("--abi %s", abiName));
+            runOptions += String.format("--abi %s", abiName);
+        }
+        return runOptions.stripTrailing();
+    }
+
     /**
-     * @return the {@link IRemoteAndroidTestRunner} to use.
-     * @throws DeviceNotAvailableException
+     * Configures the passed {@link RemoteAndroidTestRunner runner} with the run options that are
+     * fetched from {@link InstrumentationTest#getRunOptions(TestInformation)}
      */
     IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
             String packageName, String runnerName, IDevice device, TestInformation testInformation)
             throws DeviceNotAvailableException {
         try (CloseableTraceScope ignored =
-                new CloseableTraceScope("createRemoteAndroidTestRunner")) {
+                new CloseableTraceScope("configureRemoteAndroidTestRunnerParams")) {
             RemoteAndroidTestRunner runner =
                     new DefaultRemoteAndroidTestRunner(packageName, runnerName, device);
-            String abiName = resolveAbiName();
-            String runOptions = "";
-            // hidden-api-checks flag only exists in P and after.
-            // Using a temp variable to consolidate the dynamic checks
-            int apiLevel = !mHiddenApiChecks || !mWindowAnimation ? getDevice().getApiLevel() : 0;
-            if (!mHiddenApiChecks && apiLevel >= 28) {
-                runOptions += "--no-hidden-api-checks ";
-            }
-            // test-api-access flag only exists in R and after.
-            // Test API checks are subset of hidden API checks, so only make sense if hidden API
-            // checks are enabled.
-            if (mHiddenApiChecks
-                    && !mTestApiAccess
-                    && getDevice().checkApiLevelAgainstNextRelease(30)) {
-                runOptions += "--no-test-api-access ";
-            }
-            // isolated-storage flag only exists in Q and after.
-            if (!mIsolatedStorage && getDevice().checkApiLevelAgainstNextRelease(29)) {
-                runOptions += "--no-isolated-storage ";
-            }
-            // window-animation flag only exists in ICS and after
-            if (!mWindowAnimation && apiLevel >= 14) {
-                runOptions += "--no-window-animation ";
-            }
-            if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
-                runOptions += "--no-restart ";
-            }
-            if (mInstrumentSdkInSandbox
-                    || (getDevice().checkApiLevelAgainstNextRelease(33)
-                            && Optional.ofNullable(testInformation)
-                                    .map(TestInformation::properties)
-                                    .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
-                                    .map(value -> Boolean.TRUE.toString().equals(value))
-                                    .orElse(false))) {
-                runOptions += "--instrument-sdk-in-sandbox ";
-            }
-            if (mInstrumentSdkSandbox) {
-                runOptions += "--instrument-sdk-sandbox ";
-            }
-
-            if (abiName != null && getDevice().getApiLevel() > 20) {
-                mInstallArgs.add(String.format("--abi %s", abiName));
-                runOptions += String.format("--abi %s", abiName);
-            }
+            String runOptions = getRunOptions(testInformation);
             // Set the run options if any.
             if (!runOptions.isEmpty()) {
                 runner.setRunOptions(runOptions);
             }
-
             return runner;
         }
     }
