@@ -277,7 +277,8 @@ public class IncrementalImageUtil {
     }
 
     /** Updates the device using the snapshot logic. */
-    public void updateDevice() throws DeviceNotAvailableException, TargetSetupError {
+    public void updateDevice(File currentBootloader, File currentRadio)
+            throws DeviceNotAvailableException, TargetSetupError {
         if (mDevice.isStateBootloaderOrFastbootd()) {
             mDevice.rebootUntilOnline();
         }
@@ -287,7 +288,7 @@ public class IncrementalImageUtil {
                     InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
         }
         try {
-            internalUpdateDevice();
+            internalUpdateDevice(currentBootloader, currentRadio);
         } catch (DeviceNotAvailableException | TargetSetupError | RuntimeException e) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.INCREMENTAL_FLASHING_UPDATE_FAILURE, 1);
@@ -295,7 +296,8 @@ public class IncrementalImageUtil {
         }
     }
 
-    private void internalUpdateDevice() throws DeviceNotAvailableException, TargetSetupError {
+    private void internalUpdateDevice(File currentBootloader, File currentRadio)
+            throws DeviceNotAvailableException, TargetSetupError {
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.INCREMENTAL_FLASHING_ATTEMPT_COUNT, 1);
         // Join the unzip thread
@@ -406,7 +408,7 @@ public class IncrementalImageUtil {
                 }
             }
             if (mApplySnapshot) {
-                attemptBootloaderAndRadioFlashing(true);
+                attemptBootloaderAndRadioFlashing(true, currentBootloader, currentRadio);
             }
             flashStaticPartition(targetDirectory);
             mSourceDirectory = srcDirectory;
@@ -446,7 +448,7 @@ public class IncrementalImageUtil {
                 return;
             }
             try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
-                attemptBootloaderAndRadioFlashing(false);
+                attemptBootloaderAndRadioFlashing(false, mSrcBootloader, mSrcBaseband);
                 if (mDevice.isStateBootloaderOrFastbootd()) {
                     mDevice.reboot();
                 }
@@ -474,15 +476,15 @@ public class IncrementalImageUtil {
             FileUtil.deleteFile(mSrcImage);
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
-        }
-        // In case of same build flashing, we should clean the setup operation
-        if (mParallelSetup != null) {
-            try {
-                mParallelSetup.join();
-            } catch (InterruptedException e) {
-                CLog.e(e);
+            // In case of same build flashing, we should clean the setup operation
+            if (mParallelSetup != null) {
+                try {
+                    mParallelSetup.join();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+                mParallelSetup.cleanUpFiles();
             }
-            mParallelSetup.cleanUpFiles();
         }
     }
 
@@ -510,27 +512,36 @@ public class IncrementalImageUtil {
         }
     }
 
-    private void attemptBootloaderAndRadioFlashing(boolean forceFlashing)
+    private void attemptBootloaderAndRadioFlashing(
+            boolean forceFlashing, File bootloader, File baseband)
             throws DeviceNotAvailableException {
         if (mBootloaderNeedsFlashing || forceFlashing) {
-            mDevice.rebootIntoBootloader();
+            if (bootloader == null) {
+                CLog.w("No bootloader file to flash.");
+            } else {
+                mDevice.rebootIntoBootloader();
 
-            CommandResult bootloaderFlashTarget =
-                    mDevice.executeFastbootCommand(
-                            "flash", "bootloader", mSrcBootloader.getAbsolutePath());
-            CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
-            CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
-            CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+                CommandResult bootloaderFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash", "bootloader", bootloader.getAbsolutePath());
+                CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
+                CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
+                CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+            }
         }
         if (mBasebandNeedsFlashing || forceFlashing) {
-            mDevice.rebootIntoBootloader();
+            if (baseband == null) {
+                CLog.w("No baseband file to flash");
+            } else {
+                mDevice.rebootIntoBootloader();
 
-            CommandResult radioFlashTarget =
-                    mDevice.executeFastbootCommand(
-                            "flash", "radio", mSrcBaseband.getAbsolutePath());
-            CLog.d("Status: %s", radioFlashTarget.getStatus());
-            CLog.d("stdout: %s", radioFlashTarget.getStdout());
-            CLog.d("stderr: %s", radioFlashTarget.getStderr());
+                CommandResult radioFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash", "radio", baseband.getAbsolutePath());
+                CLog.d("Status: %s", radioFlashTarget.getStatus());
+                CLog.d("stdout: %s", radioFlashTarget.getStdout());
+                CLog.d("stderr: %s", radioFlashTarget.getStderr());
+            }
         }
     }
 
