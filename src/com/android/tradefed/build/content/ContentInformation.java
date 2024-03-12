@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.build.content;
 
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
@@ -47,7 +48,8 @@ public class ContentInformation {
             baseClone =
                     FileUtil.createTempFile(
                             FileUtil.getBaseName(baseContent.getName()),
-                            FileUtil.getExtension(baseContent.getName()));
+                            FileUtil.getExtension(baseContent.getName()),
+                            CurrentInvocation.getWorkFolder());
             baseClone.delete();
             FileUtil.hardlinkFile(baseContent, baseClone);
         }
@@ -56,7 +58,8 @@ public class ContentInformation {
             currentClone =
                     FileUtil.createTempFile(
                             FileUtil.getBaseName(currentContent.getName()),
-                            FileUtil.getExtension(currentContent.getName()));
+                            FileUtil.getExtension(currentContent.getName()),
+                            CurrentInvocation.getWorkFolder());
             currentClone.delete();
             FileUtil.hardlinkFile(currentContent, currentClone);
         }
