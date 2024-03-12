@@ -1097,6 +1097,43 @@ public class MoblyBinaryHostTestTest {
     }
 
     @Test
+    public void testRun_oneTest_twoShards() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-par-file-name", mMoblyBinary2.getName());
+        Mockito.doReturn(mMoblyTestDir)
+                .when(mTestInfo)
+                .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        int shardCountHint = 2;
+        Collection<IRemoteTest> shards = mSpyTest.split(shardCountHint, mTestInfo);
+        assertTrue(shards.size() == shardCountHint);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_baguette\n");
+                            return res;
+                        });
+
+        int shardIndex = 0;
+        for (IRemoteTest shard : shards) {
+            ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+            MoblyBinaryHostTest test = Mockito.spy((MoblyBinaryHostTest) shard);
+            Mockito.doReturn(mMockRunUtil).when(test).getRunUtil();
+
+            test.run(mTestInfo, mockListener);
+
+            if (shardIndex == 0) {
+                verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+            } else {
+                verify(mockListener, never()).testRunStarted(anyString(), eq(1));
+            }
+            shardIndex++;
+        }
+    }
+
+    @Test
     public void testFilterTests_withInvalidIncludeFilters() throws Exception {
         Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
 

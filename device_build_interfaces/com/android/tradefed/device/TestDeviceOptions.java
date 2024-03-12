@@ -89,6 +89,14 @@ public class TestDeviceOptions {
             "time in ms to wait for a device to boot into fastboot.")
     private int mFastbootTimeout = 1 * 60 * 1000;
 
+    @Option(
+            name = "fastboot-output-timeout",
+            isTimeVal = true,
+            description =
+                    "Maximum time to wait for a fastboot command to output something. If non"
+                            + " zero, timeout will be enforced.")
+    private long mFastbootOutputTimeout = 5 * 60 * 1000;
+
     @Option(name = "adb-command-timeout", description =
             "time to wait for an adb command.", isTimeVal = true)
     private long mAdbCommandTimeout = 2 * 60 * 1000;
@@ -161,6 +169,13 @@ public class TestDeviceOptions {
 
     @Option(name = "wifiutil-apk-path", description = "path to the wifiutil APK file")
     private String mWifiUtilAPKPath = null;
+
+    @Option(
+            name = "default-network-type",
+            description =
+                    "default network type to fallback to, if wifi helper fails to find the correct"
+                            + " network type for the specified network.")
+    private String mDefaultNetworkType = "wpa2";
 
     @Option(name = "post-boot-command",
             description = "shell command to run after reboots during invocation")
@@ -446,6 +461,10 @@ public class TestDeviceOptions {
      */
     public int getFastbootTimeout() {
         return mFastbootTimeout;
+    }
+
+    public long getFastbootOutputTimeout() {
+        return mFastbootOutputTimeout;
     }
 
     /**
@@ -971,6 +990,10 @@ public class TestDeviceOptions {
 
     public void setUseConnection(boolean useConnection) {
         mEnableConnectionFeature = useConnection;
+    }
+
+    public String getDefaultNetworkType() {
+        return mDefaultNetworkType;
     }
 }
 

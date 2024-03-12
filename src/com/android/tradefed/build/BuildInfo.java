@@ -733,6 +733,7 @@ public class BuildInfo implements IBuildInfo {
             // TODO: Remove exclude filter when we support not specifying it. For now put a
             // placeholder that will exclude nothing.
             args.put(ResolvePartialDownload.EXCLUDE_FILTERS, "doesntmatch");
+            args.put("use-cas", "false");
             String remotePaths =
                     getRemoteFiles().stream()
                             .map(p -> p.toString())

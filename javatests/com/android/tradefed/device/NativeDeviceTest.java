@@ -791,7 +791,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false))
+                        false,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
@@ -807,7 +808,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false))
+                        false,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
@@ -828,7 +830,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false))
+                        false,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
@@ -842,7 +845,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false);
+                        false,
+                        "wpa2");
         verify(mMockWifi, times(mTestDevice.getOptions().getWifiAttempts())).getWifiInfo();
     }
 
@@ -856,7 +860,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false))
+                        false,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Map<String, String> fakeWifiInfo = new HashMap<>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
@@ -872,7 +877,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false);
+                        false,
+                        "wpa2");
         verify(mMockWifi, times(mTestDevice.getOptions().getWifiAttempts())).getWifiInfo();
     }
 
@@ -891,7 +897,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false))
+                        false,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Mockito.when(mockClock.millis())
                 .thenReturn(Long.valueOf(0), Long.valueOf(6000), Long.valueOf(12000));
@@ -905,7 +912,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false);
+                        false,
+                        "wpa2");
         verify(mMockWifi, times(2)).getWifiInfo();
         Mockito.verify(mockClock, Mockito.times(4)).millis();
     }
@@ -925,7 +933,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false))
+                        false,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.FAILED_TO_CONNECT);
         Mockito.when(mockClock.millis())
                 .thenReturn(Long.valueOf(0), Long.valueOf(6000), Long.valueOf(12000));
@@ -941,7 +950,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        false);
+                        false,
+                        "wpa2");
         verify(mMockWifi, times(2)).getWifiInfo();
         Mockito.verify(mockClock, Mockito.times(4)).millis();
     }
@@ -953,7 +963,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        true))
+                        true,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<String, String>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
@@ -970,7 +981,8 @@ public class NativeDeviceTest {
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
                         mTestDevice.getOptions().getConnCheckUrl(),
-                        true))
+                        true,
+                        "wpa2"))
                 .thenReturn(WifiConnectionResult.SUCCESS);
         Map<String, String> fakeWifiInfo = new HashMap<>();
         fakeWifiInfo.put("bssid", FAKE_NETWORK_SSID);
