@@ -12,6 +12,13 @@
     "value": "1",
     "min_api_level": "34"
   },
+  "keep_location_mode_on": {
+    "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
+    "namespace": "secure",
+    "key": "location_mode",
+    "value": "3",
+    "min_api_level": "34"
+  },
   "keep_engprod_mode_on": {
     "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
     "namespace": "global",
