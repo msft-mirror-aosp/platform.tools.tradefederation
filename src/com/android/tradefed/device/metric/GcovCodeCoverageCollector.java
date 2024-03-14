@@ -107,9 +107,7 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
 
     private NativeCodeCoverageFlusher getCoverageFlusher(ITestDevice device) {
         if (mFlusher == null) {
-            mFlusher =
-                    new NativeCodeCoverageFlusher(
-                            device, mConfiguration.getCoverageOptions().getCoverageProcesses());
+            mFlusher = new NativeCodeCoverageFlusher(device, mConfiguration.getCoverageOptions());
             mFlusher.setRunUtil(mRunUtil);
         }
         return mFlusher;
