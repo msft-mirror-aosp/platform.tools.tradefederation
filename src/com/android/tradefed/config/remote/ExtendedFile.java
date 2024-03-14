@@ -16,6 +16,7 @@
 package com.android.tradefed.config.remote;
 
 import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 
 import java.io.File;
 import java.util.concurrent.ExecutionException;
@@ -91,7 +92,7 @@ public class ExtendedFile extends File {
         if (!isDownloadingInParallel()) {
             return;
         }
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_" + mRemoteFilePath)) {
             BuildRetrievalError error = mParallelDownload.get();
             if (error == null) {
                 return;
