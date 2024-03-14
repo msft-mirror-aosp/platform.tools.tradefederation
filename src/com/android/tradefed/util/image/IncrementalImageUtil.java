@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -219,7 +220,11 @@ public class IncrementalImageUtil {
     }
 
     private static File copyImage(File originalImage) throws IOException {
-        File copy = FileUtil.createTempFile(FileUtil.getBaseName(originalImage.getName()), ".img");
+        File copy =
+                FileUtil.createTempFile(
+                        FileUtil.getBaseName(originalImage.getName()),
+                        ".img",
+                        CurrentInvocation.getWorkFolder());
         copy.delete();
         FileUtil.hardlinkFile(originalImage, copy);
         return copy;
