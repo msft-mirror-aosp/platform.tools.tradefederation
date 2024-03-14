@@ -909,6 +909,7 @@ public class TestInvocation implements ITestInvocation {
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope("wait_for_dynamic_download")) {
                     for (ExtendedFile file : mParallelDynamicDownloads) {
+                        CLog.d("Wait for %s to finish downloading", file);
                         file.waitForDownload();
                     }
                 }
