@@ -321,6 +321,34 @@ public class InstrumentationTestTest {
         assertThat(runner.getRunOptions()).contains("--instrument-sdk-in-sandbox");
     }
 
+    /** Ensure isolated-Tests is turned off when run in dry-mode */
+    @Test
+    public void testRun_runInIsolatedTestsAndDryModeTurnsOffIsolatedTests() throws Exception {
+        mInstrumentationTest.setOrchestrator(true);
+        mInstrumentationTest.setCollectTestsOnly(true);
+        mInstrumentationTest.run(mTestInfo, mMockListener);
+        assertThat(mInstrumentationTest.isOrchestrator()).isFalse();
+    }
+
+    /** Ensure runOptions are comma-delimited to be compatible with the orchestrator */
+    @Test
+    public void testRun_runOptionsAreCommaDelimitedWhenRunInIsolatedTests() throws Exception {
+        doReturn(31).when(mMockTestDevice).getApiLevel();
+        mInstrumentationTest.setOrchestrator(true);
+        OptionSetter setter = new OptionSetter(mInstrumentationTest);
+        setter.setOptionValue("window-animation", "false");
+        setter.setOptionValue("hidden-api-checks", "false");
+        RemoteAndroidTestRunner runner =
+                (RemoteAndroidTestRunner)
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
+
+        // Use three different assert to avoid creating a dependency on the order of flags.
+        assertThat(runner.getRunOptions()).contains("--no-hidden-api-checks");
+        assertThat(runner.getRunOptions()).contains(",");
+        assertThat(runner.getRunOptions()).contains("--no-window-animation");
+    }
+
     /** Test normal run scenario with a test class specified. */
     @Test
     public void testRun_class() {
