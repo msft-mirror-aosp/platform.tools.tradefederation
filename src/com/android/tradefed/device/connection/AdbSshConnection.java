@@ -276,11 +276,12 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
 
             if (mGceAvd != null) {
-                // Host and port can be null in case of acloud timeout
-                if (mGceAvd.hostAndPort() != null) {
+                if (mGceAvd.getSkipDeviceLogCollection()) {
+                    CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
+                } else if (mGceAvd.hostAndPort() != null) {
+                    // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
-                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())
-                            && !mGceAvd.getSkipBugreportCollection()) {
+                    if (!GceStatus.SUCCESS.equals(mGceAvd.getStatus())) {
                         // Get a bugreport via ssh
                         getSshBugreport();
                     }
