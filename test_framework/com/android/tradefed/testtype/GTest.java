@@ -26,6 +26,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 
@@ -283,6 +284,9 @@ public class GTest extends GTestBase implements IDeviceTest {
             sb.append(String.format("GTEST_SHARD_INDEX=%s ", getShardIndex()));
             sb.append(String.format("GTEST_TOTAL_SHARDS=%s ", getShardCount()));
         }
+        if (isCoverageEnabled()) {
+            sb.append("LLVM_PROFILE_FILE=/data/local/tmp/clang-%m.profraw ");
+        }
         sb.append(super.getGTestCmdLine(fullPath, flags));
         return sb.toString();
     }
@@ -496,5 +500,14 @@ public class GTest extends GTestBase implements IDeviceTest {
             return new String[0];
         }
         return output.split("\r?\n");
+    }
+
+    /** Checks if native coverage is enabled. */
+    private boolean isCoverageEnabled() {
+        CoverageOptions options = getConfiguration().getCoverageOptions();
+        return options.isCoverageEnabled()
+                && (options.getCoverageToolchains().contains(CoverageOptions.Toolchain.GCOV)
+                        || options.getCoverageToolchains()
+                                .contains(CoverageOptions.Toolchain.CLANG));
     }
 }
