@@ -372,6 +372,7 @@ public class InvocationMetricLogger {
         wait_for_results_update("wait_for_results_update", true),
         instru_collect_tests("instru_collect_tests", true),
         TestContentAnalyzer("TestContentAnalyzer", true),
+        screen_on_setup("screen_on_setup", true),
 
         // Test caching metrics
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
