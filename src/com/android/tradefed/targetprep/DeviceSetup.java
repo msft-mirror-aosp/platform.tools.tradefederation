@@ -36,6 +36,7 @@ import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -1046,19 +1047,23 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         String cmd = "svc power stayon %s";
         switch (mScreenAlwaysOn) {
             case ON:
-                CLog.d("Setting screen always on to true");
-                device.executeShellCommand(String.format(cmd, "true"));
-                // send MENU press in case keygaurd needs to be dismissed again
-                device.executeShellCommand("input keyevent 82");
-                // send HOME press in case keyguard was already dismissed, so we bring device back
-                // to home screen
-                // No need for this on Wear OS, since that causes the launcher to show
-                // instead of the home screen
-                if ((device instanceof TestDevice)
-                        && !device.hasFeature("android.hardware.type.watch")) {
-                    device.executeShellCommand("input keyevent 3");
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(InvocationMetricKey.screen_on_setup.toString())) {
+                    CLog.d("Setting screen always on to true");
+                    device.executeShellCommand(String.format(cmd, "true"));
+                    // send MENU press in case keyguard needs to be dismissed again
+                    device.executeShellCommand("input keyevent 82");
+                    // send HOME press in case keyguard was already dismissed, so we bring device
+                    // back
+                    // to home screen
+                    // No need for this on Wear OS, since that causes the launcher to show
+                    // instead of the home screen
+                    if ((device instanceof TestDevice)
+                            && !device.hasFeature("android.hardware.type.watch")) {
+                        device.executeShellCommand("input keyevent 3");
+                    }
+                    break;
                 }
-                break;
             case OFF:
                 CLog.d("Setting screen always on to false");
                 device.executeShellCommand(String.format(cmd, "false"));
