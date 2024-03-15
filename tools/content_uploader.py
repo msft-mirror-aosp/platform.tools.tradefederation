@@ -129,7 +129,10 @@ ARTIFACTS = [
     ArtifactConfig('bootloader.img', False),
     ArtifactConfig('radio.img', False),
     ArtifactConfig('*-target_files-*.zip', True),
-    ArtifactConfig('*-img-*zip', False)
+    ArtifactConfig('*-img-*zip', False),
+
+    # Chunking enabled artifacts.
+    ArtifactConfig('oriole-img-*zip', False, True, True)
 ]
 
 # Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
