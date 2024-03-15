@@ -107,3 +107,22 @@ java_test_host {
         unit_test: false,
     },
 }
+
+java_test_host {
+    name: "IncludeFilterTest",
+    srcs: [
+        "src/java/com/android/tradefed/referencetests/SimplePassingTest.java",
+        "src/java/com/android/tradefed/referencetests/SimpleFailingTest.java",
+        "src/java/com/android/tradefed/referencetests/OnePassingOneFailingTest.java",
+        "src/java/com/android/tradefed/referencetests/OnePassOneFailParamTest.java",
+        "src/java/com/android/tradefed/otherpkg/SimplePassingTest.java",
+    ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+    libs: [
+        "junit",
+    ],
+    test_options: {
+        unit_test: false,
+    },
+}
