@@ -155,8 +155,8 @@ public class GceAvdInfo {
     private boolean mIsIpPreconfigured = false;
     private Integer mDeviceOffset = null;
     private String mInstanceUser = null;
-    // Skip collecting bugreport if set to true.
-    private boolean mSkipBugreportCollection = false;
+    // Skip collecting device log if set to true.
+    private boolean mSkipDeviceLogCollection = false;
 
     public static enum GceStatus {
         SUCCESS,
@@ -287,12 +287,17 @@ public class GceAvdInfo {
         return new HashMap<String, String>(mBuildVars);
     }
 
-    public boolean getSkipBugreportCollection() {
-        return mSkipBugreportCollection;
+    public boolean getSkipDeviceLogCollection() {
+        return mSkipDeviceLogCollection;
     }
 
-    public void setSkipBugreportCollection(boolean skipBugreportCollection) {
-        mSkipBugreportCollection = skipBugreportCollection;
+    // TODO(b/329150949): Remove after lab update
+    public void setSkipBugreportCollection(boolean skipDeviceLogCollection) {
+        mSkipDeviceLogCollection = skipDeviceLogCollection;
+    }
+
+    public void setSkipDeviceLogCollection(boolean skipDeviceLogCollection) {
+        mSkipDeviceLogCollection = skipDeviceLogCollection;
     }
 
     /**
