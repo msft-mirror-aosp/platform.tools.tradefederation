@@ -36,8 +36,10 @@ import java.util.AbstractMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nonnull;
 
@@ -48,6 +50,7 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
 
     private static final long SLEEP_INTERVAL_MS = 5 * 1000;
     private static final String RETRY_TIMEOUT_MS_ARG = "retry_timeout_ms";
+    private static final AtomicInteger poolNumber = new AtomicInteger(1);
 
     private GCSDownloaderHelper mHelper = null;
 
@@ -136,6 +139,20 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
                             FileUtil.getBaseName(destFile.getName()),
                             CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
         }
+        ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
+        ThreadFactory factory =
+                new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable r) {
+                        Thread t =
+                                new Thread(
+                                        currentGroup,
+                                        r,
+                                        "gcs-pool-task-" + poolNumber.getAndIncrement());
+                        t.setDaemon(true);
+                        return t;
+                    }
+                };
         File destDir = possibleDir;
         CompletableFuture<BuildRetrievalError> futureClient =
                 CompletableFuture.supplyAsync(
@@ -154,7 +171,8 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
                                 return e;
                             }
                         },
-                        TracePropagatingExecutorService.create(ForkJoinPool.commonPool()));
+                        TracePropagatingExecutorService.create(
+                                Executors.newFixedThreadPool(1, factory)));
         if (useDirectory) {
             return new AbstractMap.SimpleEntry<File, Future<BuildRetrievalError>>(
                     destDir, futureClient);
