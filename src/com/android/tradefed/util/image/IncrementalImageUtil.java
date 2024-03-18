@@ -20,7 +20,6 @@ import static org.junit.Assert.assertTrue;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
-import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -421,7 +420,8 @@ public class IncrementalImageUtil {
             mDevice.enableAdbRoot();
 
             if (mApplySnapshot) {
-                waitForSnapuserd(mDevice);
+                mDevice.notifySnapuserd();
+                mDevice.waitForSnapuserd();
             } else {
                 // If patches are mounted, just print snapuserd once
                 CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
@@ -490,30 +490,6 @@ public class IncrementalImageUtil {
                 }
                 mParallelSetup.cleanUpFiles();
             }
-        }
-    }
-
-    private static void waitForSnapuserd(ITestDevice device) throws DeviceNotAvailableException {
-        long startTime = System.currentTimeMillis();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_snapuserd")) {
-            long maxTimeout = 300000; // 5 minutes
-            while (System.currentTimeMillis() - startTime < maxTimeout) {
-                CommandResult psOutput = device.executeShellV2Command("ps -ef | grep snapuserd");
-                CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
-                if (psOutput.getStdout().contains("snapuserd -")) {
-                    RunUtil.getDefault().sleep(2500);
-                    CLog.d("waiting for snapuserd to complete.");
-                } else {
-                    return;
-                }
-            }
-            throw new DeviceRuntimeException(
-                    "snapuserd didn't complete in the 5 minutes",
-                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_TIME,
-                    System.currentTimeMillis() - startTime);
         }
     }
 
