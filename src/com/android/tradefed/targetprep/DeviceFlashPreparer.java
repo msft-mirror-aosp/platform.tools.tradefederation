@@ -43,6 +43,7 @@ import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
@@ -168,6 +169,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                     "Whether to apply the snapshot after mounting it. "
                             + "This changes the baseline and does require reverting.")
     private boolean mApplySnapshot = false;
+
+    @Option(
+            name = "allow-unzip-baseline",
+            description = "Whether to allow tracking the baseline as unzipped or not.")
+    private boolean mAllowUnzippedBaseline = false;
 
     @Option(
             name = "enforce-snapshot-completed",
@@ -446,15 +452,30 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                     moveBaseLine = true;
                 }
                 if (moveBaseLine) {
-                    DeviceImageTracker.getDefaultCache()
-                            .trackUpdatedDeviceImage(
-                                    device.getSerialNumber(),
-                                    deviceBuild.getDeviceImageFile(),
-                                    deviceBuild.getBootloaderImageFile(),
-                                    deviceBuild.getBasebandImageFile(),
-                                    deviceBuild.getBuildId(),
-                                    deviceBuild.getBuildBranch(),
-                                    deviceBuild.getBuildFlavor());
+                    File deviceImage = deviceBuild.getDeviceImageFile();
+                    File tmpReference = null;
+                    try {
+                        if (mAllowUnzippedBaseline
+                                && mIncrementalImageUtil != null
+                                && mIncrementalImageUtil.getExtractedTargetDirectory() != null
+                                && mIncrementalImageUtil
+                                        .getExtractedTargetDirectory()
+                                        .isDirectory()) {
+                            tmpReference = mIncrementalImageUtil.getExtractedTargetDirectory();
+                            deviceImage = tmpReference;
+                        }
+                        DeviceImageTracker.getDefaultCache()
+                                .trackUpdatedDeviceImage(
+                                        device.getSerialNumber(),
+                                        deviceImage,
+                                        deviceBuild.getBootloaderImageFile(),
+                                        deviceBuild.getBasebandImageFile(),
+                                        deviceBuild.getBuildId(),
+                                        deviceBuild.getBuildBranch(),
+                                        deviceBuild.getBuildFlavor());
+                    } finally {
+                        FileUtil.recursiveDelete(tmpReference);
+                    }
                 }
             }
         } finally {
@@ -579,5 +600,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     public void setApplySnapshot(boolean applySnapshot) {
         mApplySnapshot = applySnapshot;
+    }
+
+    public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
+        mAllowUnzippedBaseline = allowUnzipBaseline;
     }
 }
