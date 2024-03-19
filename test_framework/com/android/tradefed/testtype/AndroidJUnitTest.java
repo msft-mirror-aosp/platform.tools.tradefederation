@@ -362,7 +362,7 @@ public class AndroidJUnitTest extends InstrumentationTest
             if (params != null && params.contains(InstantAppHandler.INSTANT_APP_ID)) {
                 mUseTestStorage = false;
                 CLog.d("Disable test storage on instant app module.");
-            } else if (mInstrumentSdkSandbox || mInstrumentSdkInSandbox) {
+            } else if (isTestRunningOnSdkSandbox(testInfo)) {
                 // SDK sandboxes don't have access to the test ContentProvider.
                 mUseTestStorage = false;
                 CLog.d("Disable test storage for SDK sandbox instrumentation tests.");
