@@ -209,6 +209,7 @@ public class TestDevice extends NativeDevice {
     }
 
     private boolean mWaitForSnapuserd = false;
+    private SnapuserdWaitPhase mWaitPhase = null;
     private long mSnapuserNotificationTimestamp = 0L;
 
     /**
@@ -2664,15 +2665,22 @@ public class TestDevice extends NativeDevice {
     }
 
     @Override
-    public void notifySnapuserd() {
+    public void notifySnapuserd(SnapuserdWaitPhase waitPhase) {
         mWaitForSnapuserd = true;
         mSnapuserNotificationTimestamp = System.currentTimeMillis();
+        mWaitPhase = waitPhase;
     }
 
     @Override
-    public void waitForSnapuserd() throws DeviceNotAvailableException {
+    public void waitForSnapuserd(SnapuserdWaitPhase currentPhase)
+            throws DeviceNotAvailableException {
         if (!mWaitForSnapuserd) {
             CLog.d("No snapuserd notification in progress.");
+            return;
+        }
+        // At releasing or at the reported phase, block for snapuserd.
+        if (!SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING.equals(currentPhase)
+                && !currentPhase.equals(mWaitPhase)) {
             return;
         }
         long startTime = System.currentTimeMillis();
@@ -2700,6 +2708,7 @@ public class TestDevice extends NativeDevice {
                     System.currentTimeMillis() - mSnapuserNotificationTimestamp);
             mWaitForSnapuserd = false;
             mSnapuserNotificationTimestamp = 0L;
+            mWaitPhase = null;
         }
     }
 

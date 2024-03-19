@@ -20,6 +20,7 @@ import static org.junit.Assert.fail;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
@@ -108,7 +109,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                         null,
                         getBuild().getFile("target-image"),
                         getBuild().getFile("create_snapshot.zip"),
-                        mApplySnapshot);
+                        mApplySnapshot,
+                        SnapuserdWaitPhase.BLOCK_AFTER_UPDATE);
         try {
             updateUtil.updateDevice(null, null);
 
