@@ -277,6 +277,12 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
         CAS_DOWNLOAD_HOT_FILES_COUNT("cas_download_hot_files_count", true),
         CAS_DOWNLOAD_COLD_FILES_COUNT("cas_download_cold_files_count", true),
+        // Records  chunking metrics
+        CHUNKING_FILE_COUNT("chunking_file_count", true),
+        CHUNKING_HOT_BYTES("chunking_hot_bytes", true),
+        CHUNKING_COLD_BYTES("chunking_cold_bytes", true),
+        CHUNKING_HOT_CHUNK_COUNT("chunking_hot_chunk_count", true),
+        CHUNKING_COLD_CHUNK_COUNT("chunking_cold_chunk_count", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
