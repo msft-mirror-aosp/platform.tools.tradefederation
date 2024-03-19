@@ -89,6 +89,7 @@ CHUNKED_ARTIFACT_NAME_PREFIX = "_chunked_"
 
 # Configurations of artifacts will be uploaded to CAS.
 # TODO(b/298890453) Add artifacts after this script is attached to build process.
+# If configs share files, chunking enabled artifacts should come first.
 ARTIFACTS = [
     # test_suite targets
     ArtifactConfig('android-catbox.zip', True),
@@ -129,10 +130,8 @@ ARTIFACTS = [
     ArtifactConfig('bootloader.img', False),
     ArtifactConfig('radio.img', False),
     ArtifactConfig('*-target_files-*.zip', True),
-    ArtifactConfig('*-img-*zip', False),
-
-    # Chunking enabled artifacts.
-    ArtifactConfig('oriole-img-*zip', False, True, True)
+    ArtifactConfig('oriole*-img-*zip', False, True, True),
+    ArtifactConfig('*-img-*zip', False)
 ]
 
 # Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
@@ -337,15 +336,17 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
     dist_dir: str, working_dir: str, log_file:str):
     file_digests = {}
     content_details = []
+    skip_files = []
     _add_fallback_artifacts(all_artifacts)
     for artifact in all_artifacts:
         source_path = artifact.source_path
         for f in glob.glob(dist_dir + '/**/' + source_path, recursive=True):
             start = time.time()
-            name = _artifact_name(os.path.basename(f), artifact.chunk)
+            basename = os.path.basename(f)
+            name = _artifact_name(basename, artifact.chunk)
 
             # Avoid redundant upload if multiple ArtifactConfigs share files.
-            if name in file_digests:
+            if name in file_digests or name in skip_files:
                 continue
 
             artifact.source_path = f
@@ -353,6 +354,9 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
 
             if result and result.digest:
                 file_digests[name] = result.digest
+                if artifact.chunk and not artifact.chunk_fallback:
+                    # Skip the regular version even it matches other configs.
+                    skip_files.append(basename)
             else:
                 logging.warning(
                     'Skip to save the digest of file %s, the uploading may fail', name
@@ -423,3 +427,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

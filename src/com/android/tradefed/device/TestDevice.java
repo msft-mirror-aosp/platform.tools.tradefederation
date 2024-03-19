@@ -208,6 +208,9 @@ public class TestDevice extends NativeDevice {
         String cid;
     }
 
+    private boolean mWaitForSnapuserd = false;
+    private long mSnapuserNotificationTimestamp = 0L;
+
     /**
      * @param device
      * @param stateMonitor
@@ -2399,6 +2402,7 @@ public class TestDevice extends NativeDevice {
     /** {@inheritDoc} */
     @Override
     public void postInvocationTearDown(Throwable exception) {
+        mWaitForSnapuserd = false;
         super.postInvocationTearDown(exception);
         // If wifi was installed and it's a real device, attempt to clean it.
         if (mWasWifiHelperInstalled) {
@@ -2656,6 +2660,46 @@ public class TestDevice extends NativeDevice {
                 }
             }
             return foldableStates;
+        }
+    }
+
+    @Override
+    public void notifySnapuserd() {
+        mWaitForSnapuserd = true;
+        mSnapuserNotificationTimestamp = System.currentTimeMillis();
+    }
+
+    @Override
+    public void waitForSnapuserd() throws DeviceNotAvailableException {
+        if (!mWaitForSnapuserd) {
+            CLog.d("No snapuserd notification in progress.");
+            return;
+        }
+        long startTime = System.currentTimeMillis();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_snapuserd")) {
+            long maxTimeout = 300000; // 5 minutes
+            while (System.currentTimeMillis() - startTime < maxTimeout) {
+                CommandResult psOutput = executeShellV2Command("ps -ef | grep snapuserd");
+                CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+                if (psOutput.getStdout().contains("snapuserd -")) {
+                    RunUtil.getDefault().sleep(2500);
+                    CLog.d("waiting for snapuserd to complete.");
+                } else {
+                    return;
+                }
+            }
+            throw new DeviceRuntimeException(
+                    "snapuserd didn't complete in the 5 minutes",
+                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_TIME,
+                    System.currentTimeMillis() - mSnapuserNotificationTimestamp);
+            mWaitForSnapuserd = false;
+            mSnapuserNotificationTimestamp = 0L;
         }
     }
 
