@@ -81,6 +81,7 @@ public class IncrementalImageUtil {
     private boolean mBasebandNeedsFlashing = false;
     private boolean mUpdateWasCompleted = false;
     private File mSourceDirectory;
+    private File mTargetDirectory;
 
     private ParallelPreparation mParallelSetup;
     private final IRunUtil mRunUtil;
@@ -160,7 +161,7 @@ public class IncrementalImageUtil {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
             CLog.e(e);
-            FileUtil.deleteFile(deviceImage);
+            FileUtil.recursiveDelete(deviceImage);
             FileUtil.deleteFile(bootloader);
             FileUtil.deleteFile(baseband);
             return null;
@@ -219,14 +220,24 @@ public class IncrementalImageUtil {
     }
 
     private static File copyImage(File originalImage) throws IOException {
-        File copy =
-                FileUtil.createTempFile(
-                        FileUtil.getBaseName(originalImage.getName()),
-                        ".img",
-                        CurrentInvocation.getWorkFolder());
-        copy.delete();
-        FileUtil.hardlinkFile(originalImage, copy);
-        return copy;
+        if (originalImage.isDirectory()) {
+            CLog.d("Baseline was already unzipped for %s", originalImage);
+            File copy =
+                    FileUtil.createTempDir(
+                            FileUtil.getBaseName(originalImage.getName()),
+                            CurrentInvocation.getWorkFolder());
+            FileUtil.recursiveHardlink(originalImage, copy);
+            return copy;
+        } else {
+            File copy =
+                    FileUtil.createTempFile(
+                            FileUtil.getBaseName(originalImage.getName()),
+                            ".img",
+                            CurrentInvocation.getWorkFolder());
+            copy.delete();
+            FileUtil.hardlinkFile(originalImage, copy);
+            return copy;
+        }
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
@@ -427,6 +438,7 @@ public class IncrementalImageUtil {
                 CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
                 CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
             }
+            mTargetDirectory = targetDirectory;
             mUpdateWasCompleted = true;
         } catch (DeviceNotAvailableException | RuntimeException e) {
             if (mSourceDirectory == null) {
@@ -435,13 +447,16 @@ public class IncrementalImageUtil {
             throw e;
         } finally {
             FileUtil.recursiveDelete(workDir);
-            FileUtil.recursiveDelete(targetDirectory);
         }
     }
 
     /** Returns whether update was completed or not. */
     public boolean updateCompleted() {
         return mUpdateWasCompleted;
+    }
+
+    public File getExtractedTargetDirectory() {
+        return mTargetDirectory;
     }
 
     /*
@@ -478,6 +493,7 @@ public class IncrementalImageUtil {
         } finally {
             // Delete the copy we made to use the incremental update
             FileUtil.recursiveDelete(mSourceDirectory);
+            FileUtil.recursiveDelete(mTargetDirectory);
             FileUtil.deleteFile(mSrcImage);
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
@@ -635,6 +651,9 @@ public class IncrementalImageUtil {
                 Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
+                                    if (mSetupSrcImage.isDirectory()) {
+                                        return true;
+                                    }
                                     try {
                                         ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
                                         return true;
