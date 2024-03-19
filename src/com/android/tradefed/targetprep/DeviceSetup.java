@@ -340,7 +340,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     "Force switching to root before the setup.Root should only be need for system"
                         + " props, but adding this flag while transitioning in case someone reports"
                         + " issues.")
-    private boolean mForceRoot = true;
+    private boolean mForceRoot = false;
 
     @Option(name = "force-skip-settings",
             description = "Force setup to not modify any device settings. All other setting " +
