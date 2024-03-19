@@ -20,7 +20,6 @@ import static org.junit.Assert.assertTrue;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
-import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -82,6 +81,7 @@ public class IncrementalImageUtil {
     private boolean mBasebandNeedsFlashing = false;
     private boolean mUpdateWasCompleted = false;
     private File mSourceDirectory;
+    private File mTargetDirectory;
 
     private ParallelPreparation mParallelSetup;
     private final IRunUtil mRunUtil;
@@ -161,7 +161,7 @@ public class IncrementalImageUtil {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
             CLog.e(e);
-            FileUtil.deleteFile(deviceImage);
+            FileUtil.recursiveDelete(deviceImage);
             FileUtil.deleteFile(bootloader);
             FileUtil.deleteFile(baseband);
             return null;
@@ -220,14 +220,24 @@ public class IncrementalImageUtil {
     }
 
     private static File copyImage(File originalImage) throws IOException {
-        File copy =
-                FileUtil.createTempFile(
-                        FileUtil.getBaseName(originalImage.getName()),
-                        ".img",
-                        CurrentInvocation.getWorkFolder());
-        copy.delete();
-        FileUtil.hardlinkFile(originalImage, copy);
-        return copy;
+        if (originalImage.isDirectory()) {
+            CLog.d("Baseline was already unzipped for %s", originalImage);
+            File copy =
+                    FileUtil.createTempDir(
+                            FileUtil.getBaseName(originalImage.getName()),
+                            CurrentInvocation.getWorkFolder());
+            FileUtil.recursiveHardlink(originalImage, copy);
+            return copy;
+        } else {
+            File copy =
+                    FileUtil.createTempFile(
+                            FileUtil.getBaseName(originalImage.getName()),
+                            ".img",
+                            CurrentInvocation.getWorkFolder());
+            copy.delete();
+            FileUtil.hardlinkFile(originalImage, copy);
+            return copy;
+        }
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
@@ -421,12 +431,14 @@ public class IncrementalImageUtil {
             mDevice.enableAdbRoot();
 
             if (mApplySnapshot) {
-                waitForSnapuserd(mDevice);
+                mDevice.notifySnapuserd();
+                mDevice.waitForSnapuserd();
             } else {
                 // If patches are mounted, just print snapuserd once
                 CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
                 CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
             }
+            mTargetDirectory = targetDirectory;
             mUpdateWasCompleted = true;
         } catch (DeviceNotAvailableException | RuntimeException e) {
             if (mSourceDirectory == null) {
@@ -435,13 +447,16 @@ public class IncrementalImageUtil {
             throw e;
         } finally {
             FileUtil.recursiveDelete(workDir);
-            FileUtil.recursiveDelete(targetDirectory);
         }
     }
 
     /** Returns whether update was completed or not. */
     public boolean updateCompleted() {
         return mUpdateWasCompleted;
+    }
+
+    public File getExtractedTargetDirectory() {
+        return mTargetDirectory;
     }
 
     /*
@@ -478,6 +493,7 @@ public class IncrementalImageUtil {
         } finally {
             // Delete the copy we made to use the incremental update
             FileUtil.recursiveDelete(mSourceDirectory);
+            FileUtil.recursiveDelete(mTargetDirectory);
             FileUtil.deleteFile(mSrcImage);
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
@@ -490,30 +506,6 @@ public class IncrementalImageUtil {
                 }
                 mParallelSetup.cleanUpFiles();
             }
-        }
-    }
-
-    private static void waitForSnapuserd(ITestDevice device) throws DeviceNotAvailableException {
-        long startTime = System.currentTimeMillis();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_snapuserd")) {
-            long maxTimeout = 300000; // 5 minutes
-            while (System.currentTimeMillis() - startTime < maxTimeout) {
-                CommandResult psOutput = device.executeShellV2Command("ps -ef | grep snapuserd");
-                CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
-                if (psOutput.getStdout().contains("snapuserd -")) {
-                    RunUtil.getDefault().sleep(2500);
-                    CLog.d("waiting for snapuserd to complete.");
-                } else {
-                    return;
-                }
-            }
-            throw new DeviceRuntimeException(
-                    "snapuserd didn't complete in the 5 minutes",
-                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_TIME,
-                    System.currentTimeMillis() - startTime);
         }
     }
 
@@ -659,6 +651,9 @@ public class IncrementalImageUtil {
                 Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
+                                    if (mSetupSrcImage.isDirectory()) {
+                                        return true;
+                                    }
                                     try {
                                         ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
                                         return true;
