@@ -331,7 +331,8 @@ public class IncrementalImageUtil {
             mParallelSetup.cleanUpFiles();
             throw mParallelSetup.getError();
         }
-        boolean bootComplete = mDevice.waitForBootComplete(mDevice.getOptions().getOnlineTimeout());
+        boolean bootComplete =
+                mDevice.waitForBootComplete(mDevice.getOptions().getAvailableTimeout());
         if (!bootComplete) {
             mParallelSetup.cleanUpFiles();
             throw new TargetSetupError(
