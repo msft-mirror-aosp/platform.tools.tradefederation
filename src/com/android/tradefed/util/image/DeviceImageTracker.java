@@ -84,7 +84,7 @@ public class DeviceImageTracker {
                     @Override
                     public void onRemoval(RemovalNotification<String, FileCacheTracker> n) {
                         if (n.wasEvicted()) {
-                            FileUtil.deleteFile(n.getValue().zippedDeviceImage);
+                            FileUtil.recursiveDelete(n.getValue().zippedDeviceImage);
                             FileUtil.deleteFile(n.getValue().zippedBootloaderImage);
                             FileUtil.deleteFile(n.getValue().zippedBasebandImage);
                         }
@@ -140,7 +140,7 @@ public class DeviceImageTracker {
             return;
         }
         File copyInCacheDeviceImage = new File(mCacheDir, serial + "_device_image");
-        FileUtil.deleteFile(copyInCacheDeviceImage);
+        FileUtil.recursiveDelete(copyInCacheDeviceImage);
         File copyInCacheBootloader = new File(mCacheDir, serial + "_bootloader");
         FileUtil.deleteFile(copyInCacheBootloader);
         File copyInCacheBaseband = null;
@@ -149,7 +149,12 @@ public class DeviceImageTracker {
             FileUtil.deleteFile(copyInCacheBaseband);
         }
         try {
-            FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
+            if (deviceImage.isDirectory()) {
+                CLog.d("Tracking device image as directory.");
+                FileUtil.recursiveHardlink(deviceImage, copyInCacheDeviceImage);
+            } else {
+                FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
+            }
             FileUtil.hardlinkFile(bootloader, copyInCacheBootloader);
             if (copyInCacheBaseband != null) {
                 FileUtil.hardlinkFile(baseband, copyInCacheBaseband);

@@ -277,6 +277,12 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
         CAS_DOWNLOAD_HOT_FILES_COUNT("cas_download_hot_files_count", true),
         CAS_DOWNLOAD_COLD_FILES_COUNT("cas_download_cold_files_count", true),
+        // Records  chunking metrics
+        CHUNKING_FILE_COUNT("chunking_file_count", true),
+        CHUNKING_HOT_BYTES("chunking_hot_bytes", true),
+        CHUNKING_COLD_BYTES("chunking_cold_bytes", true),
+        CHUNKING_HOT_CHUNK_COUNT("chunking_hot_chunk_count", true),
+        CHUNKING_COLD_CHUNK_COUNT("chunking_cold_chunk_count", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
@@ -339,6 +345,8 @@ public class InvocationMetricLogger {
         INCREMENTAL_FLASHING_TEARDOWN_FAILURE("incremental_flashing_teardown_failure", true),
         INCREMENTAL_FLASHING_UPDATE_FAILURE("incremental_flashing_update_failure", true),
         INCREMENTAL_SNAPUSERD_WRITE_TIME("incremental_snapuserd_write_time", true),
+        INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME(
+                "incremental_snapuserd_write_blocking_time", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
