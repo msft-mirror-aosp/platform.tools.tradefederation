@@ -17,6 +17,7 @@
 package com.android.tradefed.config;
 
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 import org.xml.sax.Attributes;
 import org.xml.sax.InputSource;
@@ -339,8 +340,12 @@ class ConfigurationXmlParser {
         }
 
         private void throwException(String reason) throws SAXException {
-            throw new SAXException(new ConfigurationException(String.format(
-                    "Failed to parse config xml '%s'. Reason: %s", mConfigDef.getName(), reason)));
+            throw new SAXException(
+                    new ConfigurationException(
+                            String.format(
+                                    "Failed to parse config xml '%s'. Reason: %s",
+                                    mConfigDef.getName(), reason),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR));
         }
 
         private void throwTemplateException(String configName, String templateName)
@@ -433,10 +438,12 @@ class ConfigurationXmlParser {
     private void throwConfigException(String configName, Throwable e)
             throws ConfigurationException {
         if (e.getCause() instanceof ConfigurationException) {
-            throw (ConfigurationException)e.getCause();
+            throw (ConfigurationException) e.getCause();
         }
-        throw new ConfigurationException(String.format("Failed to parse config xml '%s' due to "
-                + "'%s'", configName, e), e);
+        throw new ConfigurationException(
+                String.format("Failed to parse config xml '%s' due to " + "'%s'", configName, e),
+                e,
+                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
     }
 
     /**
