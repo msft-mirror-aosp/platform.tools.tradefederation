@@ -671,13 +671,7 @@ public class InstrumentationTest
         if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
             runOptions.add("--no-restart");
         }
-        if (mInstrumentSdkInSandbox
-                || (getDevice().checkApiLevelAgainstNextRelease(33)
-                        && Optional.ofNullable(testInformation)
-                                .map(TestInformation::properties)
-                                .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
-                                .map(value -> Boolean.TRUE.toString().equals(value))
-                                .orElse(false))) {
+        if (mInstrumentSdkInSandbox || testHasRunOnSdkSandboxProperty(testInformation)) {
             runOptions.add("--instrument-sdk-in-sandbox");
         }
         if (mInstrumentSdkSandbox) {
@@ -689,6 +683,22 @@ public class InstrumentationTest
             runOptions.add(String.format("--abi %s", abiName));
         }
         return runOptions;
+    }
+
+    private boolean testHasRunOnSdkSandboxProperty(TestInformation testInformation)
+            throws DeviceNotAvailableException {
+        return getDevice().checkApiLevelAgainstNextRelease(33)
+                && Optional.ofNullable(testInformation)
+                        .map(TestInformation::properties)
+                        .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
+                        .map(value -> Boolean.TRUE.toString().equals(value))
+                        .orElse(false);
+    }
+
+    boolean isTestRunningOnSdkSandbox(TestInformation testInfo) throws DeviceNotAvailableException {
+        return mInstrumentSdkSandbox
+                || mInstrumentSdkInSandbox
+                || testHasRunOnSdkSandboxProperty(testInfo);
     }
 
     /**
