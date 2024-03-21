@@ -27,6 +27,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -171,6 +172,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mApplySnapshot = false;
 
     @Option(
+            name = "snapuserd-wait-phase",
+            description =
+                    "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
+    private SnapuserdWaitPhase mWaitPhase = SnapuserdWaitPhase.BLOCK_AFTER_UPDATE;
+
+    @Option(
             name = "allow-unzip-baseline",
             description = "Whether to allow tracking the baseline as unzipped or not.")
     private boolean mAllowUnzippedBaseline = false;
@@ -303,7 +310,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             mCreateSnapshotBinary,
                             isIsolated,
                             mAllowIncrementalCrossRelease,
-                            mApplySnapshot);
+                            mApplySnapshot,
+                            mWaitPhase);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
             } else {
