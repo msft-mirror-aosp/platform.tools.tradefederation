@@ -59,6 +59,11 @@ public class EventsLoggerListener implements ILogSaverListener {
     }
 
     @Override
+    public void invocationSkipped(SkipReason reason) {
+        writeToFile(String.format("[invocation skipped: %s]\n", reason));
+    }
+
+    @Override
     public void invocationEnded(long elapsedTime) {
         writeToFile("[invocation ended]\n");
     }
