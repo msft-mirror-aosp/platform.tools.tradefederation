@@ -291,6 +291,11 @@ public class GceAvdInfo {
         return mSkipDeviceLogCollection;
     }
 
+    // TODO(b/329150949): Remove after lab update
+    public void setSkipBugreportCollection(boolean skipDeviceLogCollection) {
+        mSkipDeviceLogCollection = skipDeviceLogCollection;
+    }
+
     public void setSkipDeviceLogCollection(boolean skipDeviceLogCollection) {
         mSkipDeviceLogCollection = skipDeviceLogCollection;
     }
