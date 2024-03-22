@@ -155,16 +155,6 @@ public class HostOptions implements IHostOptions {
     private long mTestPhaseTimeout = 0;
 
     @Option(
-            name = "enable-flashstation",
-            description = "Feature flag to enable the support for flashstation.")
-    private boolean mEnableFlashstation = false;
-
-    @Option(
-            name = "cl-flashstation",
-            description = "cl_flashstation script stored in remote GCS bucket.")
-    private File mClFlashstation = new File("/tradefed/cl_flashstation");
-
-    @Option(
             name = "enable-incremental-flashing",
             description = "Feature flag to enable incremental flashing on one host.")
     private boolean mEnableIncrementalFlashing = false;
@@ -403,18 +393,6 @@ public class HostOptions implements IHostOptions {
     @Override
     public boolean shouldFlashWithFuseZip() {
         return mFlashWithFuseZip;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean isFlashstationEnabled() {
-        return mEnableFlashstation;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public File getClFlashstation() {
-        return mClFlashstation;
     }
 
     /** {@inheritDoc} */
