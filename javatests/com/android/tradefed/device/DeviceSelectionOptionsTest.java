@@ -28,7 +28,6 @@ import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceManager.FastbootDevice;
-import com.android.tradefed.device.DeviceSelectionOptions.DeviceRequestedType;
 
 import com.google.common.util.concurrent.SettableFuture;
 
@@ -327,11 +326,11 @@ public class DeviceSelectionOptionsTest {
         assertTrue(mDeviceSelection.matches(stubDevice));
     }
 
-    /** Test for matching with tcp device requested flag */
+    /** Test for matching with gce device requested flag */
     @Test
-    public void testMatches_tcpDevice() {
-        mDeviceSelection.setTcpDeviceRequested(true);
-        IDevice stubDevice = new TcpDevice("tcp device");
+    public void testMatches_gceDevice() {
+        mDeviceSelection.setGceDeviceRequested(true);
+        IDevice stubDevice = new RemoteAvdIDevice("gce device");
         assertTrue(mDeviceSelection.matches(stubDevice));
     }
 
@@ -599,35 +598,6 @@ public class DeviceSelectionOptionsTest {
         assertFalse(mDeviceSelection.matches(gceDevice));
     }
 
-    /** When a tcp-device is requested, a gce-device cannot be allocated for it. */
-    @Test
-    public void testAllocateGceDevice_whenTcpRequested() throws ConfigurationException {
-        IDevice gceDevice = new RemoteAvdIDevice("gce-device:0");
-        OptionSetter setter = new OptionSetter(mDeviceSelection);
-        setter.setOptionValue("tcp-device", "true");
-        assertFalse(mDeviceSelection.matches(gceDevice));
-    }
-
-    /** When a tcp-device is requested, a tcp-device can be allocated for it. */
-    @Test
-    public void testAllocateTcpDevice_whenTcpRequested() throws ConfigurationException {
-        IDevice gceDevice = new TcpDevice("tcp-device:0");
-        OptionSetter setter = new OptionSetter(mDeviceSelection);
-        setter.setOptionValue("tcp-device", "true");
-        assertTrue(mDeviceSelection.matches(gceDevice));
-    }
-
-    /** When a tcp-device is requested, and device-type is also requested, it has precedence */
-    @Test
-    public void testAllocateTcpDevice_whenDeviceRequestIsSet() throws ConfigurationException {
-        IDevice gceDevice = new TcpDevice("tcp-device:0");
-        OptionSetter setter = new OptionSetter(mDeviceSelection);
-        setter.setOptionValue("tcp-device", "true");
-        // Device type takes precedence.
-        setter.setOptionValue("device-type", DeviceRequestedType.GCE_DEVICE.toString());
-        assertFalse(mDeviceSelection.matches(gceDevice));
-    }
-
     /** When a gce-device is requested, a serial is provided that match a non gce-device. */
     @Test
     public void testAllocateDeviceMatch_gceRequested() throws ConfigurationException {
@@ -666,14 +636,17 @@ public class DeviceSelectionOptionsTest {
         }
 
         final String dumpsysMock = dumpsysOutput;
-        doAnswer(invocation -> {
-            IShellOutputReceiver receiver =
-                    (IShellOutputReceiver) invocation.getArgument(1);
-            byte[] inputData = dumpsysMock.getBytes();
-            receiver.addOutput(inputData, 0, inputData.length);
-            receiver.flush();
-            return null;
-        }).when(mMockDevice).executeShellCommand(Mockito.contains("dumpsys battery"), Mockito.any());
+        doAnswer(
+                        invocation -> {
+                            IShellOutputReceiver receiver =
+                                    (IShellOutputReceiver) invocation.getArgument(1);
+                            byte[] inputData = dumpsysMock.getBytes();
+                            receiver.addOutput(inputData, 0, inputData.length);
+                            receiver.flush();
+                            return null;
+                        })
+                .when(mMockDevice)
+                .executeShellCommand(Mockito.contains("dumpsys battery"), Mockito.any());
 
         mDeviceSelection.setMaxBatteryTemperature(maxBatteryTemp);
         mDeviceSelection.setRequireBatteryTemperatureCheck(required);
