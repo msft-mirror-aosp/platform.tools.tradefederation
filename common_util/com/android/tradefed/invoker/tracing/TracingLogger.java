@@ -80,6 +80,15 @@ public class TracingLogger {
         }
     }
 
+    public static ActiveTrace getActiveTraceForGroup(ThreadGroup group) {
+        if (group == null) {
+            return null;
+        }
+        synchronized (mPerGroupActiveTrace) {
+            return mPerGroupActiveTrace.get(group);
+        }
+    }
+
     /** Finalize the tracing and clear the tracking. */
     public static File finalizeTrace() {
         ThreadGroup group = Thread.currentThread().getThreadGroup();

@@ -994,9 +994,6 @@ public class RunUtil implements IRunUtil {
                 if ((mOutputMonitorStdoutFile == null || !mOutputMonitorStdoutFile.exists())
                         && (mOutputMonitorStderrFile == null
                                 || !mOutputMonitorStderrFile.exists())) {
-                    CLog.w(
-                            "checkOutputMonitor: No streams present to monitor for command progress"
-                                    + " - Progress monitoring is not available.");
                     // Let the operation timeout on its own.
                     return true;
                 }
