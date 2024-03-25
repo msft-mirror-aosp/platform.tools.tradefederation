@@ -512,6 +512,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     @Option(name = "parallelize-core-setup")
     private boolean mParallelCoreSetup = false;
 
+    @Option(name = "dismiss-keyguard-via-wm", description = "Flag to dismiss keyguard via wm")
+    private boolean mDismissViaWm = false;
+
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
@@ -1051,8 +1054,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                         new CloseableTraceScope(InvocationMetricKey.screen_on_setup.toString())) {
                     CLog.d("Setting screen always on to true");
                     device.executeShellCommand(String.format(cmd, "true"));
-                    // send MENU press in case keyguard needs to be dismissed again
-                    device.executeShellCommand("input keyevent 82");
+                    if (mDismissViaWm) {
+                        CommandResult res = device.executeShellV2Command("wm dismiss-keyguard");
+                        CLog.d("Output of dismiss-keyguard: %s", res);
+                    } else {
+                        // send MENU press in case keyguard needs to be dismissed again
+                        device.executeShellCommand("input keyevent 82");
+                    }
                     // send HOME press in case keyguard was already dismissed, so we bring device
                     // back
                     // to home screen
