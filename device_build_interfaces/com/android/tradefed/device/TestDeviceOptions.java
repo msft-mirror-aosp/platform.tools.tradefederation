@@ -138,6 +138,12 @@ public class TestDeviceOptions {
             isTimeVal = true)
     private long mAdbRootUnavailableTimeout = 2 * 1000;
 
+    @Option(
+            name = "snapuserd-timeout",
+            description = "time to wait for a device to finish committing patches with snapuserd",
+            isTimeVal = true)
+    private long mSnapuserdTimeout = 10 * 60 * 1000;
+
     @Option(name = "conn-check-url",
             description = "default URL to be used for connectivity checks.")
     private String mConnCheckUrl = "http://www.google.com";
@@ -994,6 +1000,10 @@ public class TestDeviceOptions {
 
     public String getDefaultNetworkType() {
         return mDefaultNetworkType;
+    }
+
+    public long getSnapuserdTimeout() {
+        return mSnapuserdTimeout;
     }
 }
 
