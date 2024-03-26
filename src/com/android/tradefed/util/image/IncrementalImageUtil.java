@@ -22,6 +22,7 @@ import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
@@ -75,6 +76,7 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
+    private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
     private boolean mBootloaderNeedsFlashing = false;
@@ -92,7 +94,8 @@ public class IncrementalImageUtil {
             File createSnapshot,
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
-            boolean applySnapshot)
+            boolean applySnapshot,
+            SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
         if (isIsolatedSetup && !applySnapshot) {
@@ -176,7 +179,8 @@ public class IncrementalImageUtil {
                 baseband,
                 build.getDeviceImageFile(),
                 createSnapshot,
-                applySnapshot);
+                applySnapshot,
+                waitPhase);
     }
 
     public IncrementalImageUtil(
@@ -186,12 +190,14 @@ public class IncrementalImageUtil {
             File baseband,
             File targetImage,
             File createSnapshot,
-            boolean applySnapshot) {
+            boolean applySnapshot,
+            SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
         mApplySnapshot = applySnapshot;
+        mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
         mRunUtil = new RunUtil();
@@ -432,8 +438,8 @@ public class IncrementalImageUtil {
             mDevice.enableAdbRoot();
 
             if (mApplySnapshot) {
-                mDevice.notifySnapuserd();
-                mDevice.waitForSnapuserd();
+                mDevice.notifySnapuserd(mWaitPhase);
+                mDevice.waitForSnapuserd(SnapuserdWaitPhase.BLOCK_AFTER_UPDATE);
             } else {
                 // If patches are mounted, just print snapuserd once
                 CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
@@ -495,7 +501,7 @@ public class IncrementalImageUtil {
             // Delete the copy we made to use the incremental update
             FileUtil.recursiveDelete(mSourceDirectory);
             FileUtil.recursiveDelete(mTargetDirectory);
-            FileUtil.deleteFile(mSrcImage);
+            FileUtil.recursiveDelete(mSrcImage);
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
             // In case of same build flashing, we should clean the setup operation
@@ -652,10 +658,13 @@ public class IncrementalImageUtil {
                 Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    if (mSetupSrcImage.isDirectory()) {
-                                        return true;
-                                    }
                                     try {
+                                        if (mSetupSrcImage.isDirectory()) {
+                                            FileUtil.recursiveHardlink(
+                                                    mSetupSrcImage, mSrcDirectory);
+                                            return true;
+                                        }
+
                                         ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
                                         return true;
                                     } catch (IOException ioe) {

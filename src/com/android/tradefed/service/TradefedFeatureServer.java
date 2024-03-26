@@ -21,6 +21,8 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.internal.IRemoteScheduledListenersFeature;
 import com.android.tradefed.testtype.ITestInformationReceiver;
@@ -174,7 +176,11 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                         ((IRemoteScheduledListenersFeature) feature).setListeners(listeners);
                     }
                 }
-                try {
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(
+                                TracingLogger.getActiveTraceForGroup(
+                                        mRegisteredGroup.get(request.getReferenceId())),
+                                feature.getName())) {
                     FeatureResponse rep = feature.execute(request);
                     if (rep == null) {
                         return FeatureResponse.newBuilder()

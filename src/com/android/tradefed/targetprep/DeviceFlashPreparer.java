@@ -27,6 +27,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
@@ -171,6 +172,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mApplySnapshot = false;
 
     @Option(
+            name = "snapuserd-wait-phase",
+            description =
+                    "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
+    private SnapuserdWaitPhase mWaitPhase = SnapuserdWaitPhase.BLOCK_AFTER_UPDATE;
+
+    @Option(
             name = "allow-unzip-baseline",
             description = "Whether to allow tracking the baseline as unzipped or not.")
     private boolean mAllowUnzippedBaseline = false;
@@ -303,7 +310,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                             mCreateSnapshotBinary,
                             isIsolated,
                             mAllowIncrementalCrossRelease,
-                            mApplySnapshot);
+                            mApplySnapshot,
+                            mWaitPhase);
             if (mIncrementalImageUtil == null) {
                 useIncrementalFlashing = false;
             } else {
@@ -398,6 +406,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                 // only want logcat captured for current build, delete any accumulated log data
                 device.clearLogcat();
             }
+            // In case success with full flashing
+            moveBaseline(deviceBuild, device.getSerialNumber(), useIncrementalFlashing);
             if (mSkipPostFlashingSetup) {
                 return;
             }
@@ -440,48 +450,52 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                         DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
             }
             device.postBootSetup();
-            // In case success with full flashing
-            if (!getHostOptions().isOptOutOfIncrementalFlashing()) {
-                boolean moveBaseLine = true;
-                if (!mUseIncrementalFlashing || useIncrementalFlashing) {
-                    // Do not move baseline if using incremental flashing
-                    moveBaseLine = false;
-                }
-                if (mApplySnapshot) {
-                    // Move baseline when going with incremental + apply update
-                    moveBaseLine = true;
-                }
-                if (moveBaseLine) {
-                    File deviceImage = deviceBuild.getDeviceImageFile();
-                    File tmpReference = null;
-                    try {
-                        if (mAllowUnzippedBaseline
-                                && mIncrementalImageUtil != null
-                                && mIncrementalImageUtil.getExtractedTargetDirectory() != null
-                                && mIncrementalImageUtil
-                                        .getExtractedTargetDirectory()
-                                        .isDirectory()) {
-                            tmpReference = mIncrementalImageUtil.getExtractedTargetDirectory();
-                            deviceImage = tmpReference;
-                        }
-                        DeviceImageTracker.getDefaultCache()
-                                .trackUpdatedDeviceImage(
-                                        device.getSerialNumber(),
-                                        deviceImage,
-                                        deviceBuild.getBootloaderImageFile(),
-                                        deviceBuild.getBasebandImageFile(),
-                                        deviceBuild.getBuildId(),
-                                        deviceBuild.getBuildBranch(),
-                                        deviceBuild.getBuildFlavor());
-                    } finally {
-                        FileUtil.recursiveDelete(tmpReference);
-                    }
-                }
-            }
         } finally {
             device.setRecoveryMode(RecoveryMode.AVAILABLE);
             // Allow interruption at the end no matter what.
             getRunUtil().allowInterrupt(true);
+        }
+    }
+
+    private void moveBaseline(
+            IDeviceBuildInfo deviceBuild, String serial, boolean useIncrementalFlashing) {
+        if (!getHostOptions().isOptOutOfIncrementalFlashing()) {
+            boolean moveBaseLine = true;
+            if (!mUseIncrementalFlashing || useIncrementalFlashing) {
+                // Do not move baseline if using incremental flashing
+                moveBaseLine = false;
+            }
+            if (mApplySnapshot) {
+                // Move baseline when going with incremental + apply update
+                moveBaseLine = true;
+            }
+            if (moveBaseLine) {
+                File deviceImage = deviceBuild.getDeviceImageFile();
+                File tmpReference = null;
+                try {
+                    if (mAllowUnzippedBaseline
+                            && mIncrementalImageUtil != null
+                            && mIncrementalImageUtil.getExtractedTargetDirectory() != null
+                            && mIncrementalImageUtil.getExtractedTargetDirectory().isDirectory()) {
+                        CLog.d(
+                                "Using unzipped baseline: %s",
+                                mIncrementalImageUtil.getExtractedTargetDirectory());
+                        tmpReference = mIncrementalImageUtil.getExtractedTargetDirectory();
+                        deviceImage = tmpReference;
+                    }
+                    DeviceImageTracker.getDefaultCache()
+                            .trackUpdatedDeviceImage(
+                                    serial,
+                                    deviceImage,
+                                    deviceBuild.getBootloaderImageFile(),
+                                    deviceBuild.getBasebandImageFile(),
+                                    deviceBuild.getBuildId(),
+                                    deviceBuild.getBuildBranch(),
+                                    deviceBuild.getBuildFlavor());
+                } finally {
+                    FileUtil.recursiveDelete(tmpReference);
+                }
+            }
         }
     }
 

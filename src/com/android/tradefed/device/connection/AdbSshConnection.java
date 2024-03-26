@@ -614,7 +614,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         }
 
         if (getDevice().getOptions().useOxygen()) {
-            if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd=")
+            if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")
                     && bin.equals("cvd")) {
                 return String.format("/usr/bin/%s %s", bin, args);
             }

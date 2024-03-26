@@ -293,12 +293,18 @@ public class InvocationMetricLogger {
         CF_ARTIFACTS_FETCH_SOURCE("cf_artifacts_fetch_source", false),
 
         // Ab downloader metrics
+        AB_BUILD_GET_API_TIME("ab_build_get_api_time", true),
         AB_DOWNLOAD_SIZE_ELAPSED_TIME("ab_download_size_elapsed_time", true),
         ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
         DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
         AB_LIST_API_TIME_PAIR("ab_list_api_time_pair", true),
 
+        // Ab log saver metrics
+        AB_LOG_SAVER_STAGING_TIME("ab_log_saver_staging_time", true),
+        AB_LOG_SAVER_UPLOAD_TIME("ab_log_saver_upload_time", true),
         // Ants metrics
+        ANTS_INVOCATION_START_TIME("ants_invocation_start_time", true),
+        ANTS_INVOCATION_END_TIME("ants_invocation_end_time", true),
         ANTS_MODULE_START_TIME("ants_module_start_time", true),
         ANTS_MODULE_END_TIME("ants_module_end_time", true),
         ANTS_RUN_START_TIME("ants_run_start_time", true),
@@ -321,6 +327,7 @@ public class InvocationMetricLogger {
         WOKRDIR_MODULE_WITH_DIFFS("workdir_module_with_diffs", true),
         WORKDIR_UNCHANGED_MODULES("workdir_unchanged_modules", true),
         ABORT_CONTENT_ANALYSIS("abort_content_analysis", true),
+        ABORT_CONTENT_ANALYSIS_REASON("abort_content_analysis_reason", true),
         XTS_DIFFS_IN_COMMON("xts_diffs_in_common", true),
         XTS_MODULE_WITH_DIFFS("xts_module_with_diffs", true),
         XTS_UNCHANGED_MODULES("xts_unchanged_modules", true),
