@@ -157,6 +157,7 @@ public class GceAvdInfo {
     private String mInstanceUser = null;
     // Skip collecting device log if set to true.
     private boolean mSkipDeviceLogCollection = false;
+    private boolean mIsOxygenationDevice = false;
 
     public static enum GceStatus {
         SUCCESS,
@@ -208,6 +209,10 @@ public class GceAvdInfo {
                 + ", mLogs="
                 + mLogs.toString()
                 + "]";
+    }
+
+    public boolean isOxygenationDevice() {
+        return mIsOxygenationDevice;
     }
 
     public String instanceName() {

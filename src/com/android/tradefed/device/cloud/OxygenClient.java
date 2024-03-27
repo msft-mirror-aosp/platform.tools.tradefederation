@@ -39,6 +39,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,6 +47,11 @@ import com.google.common.base.Strings;
 
 /** A class that manages the use of Oxygen client binary to lease or release Oxygen device. */
 public class OxygenClient {
+
+    public enum LHPTunnelMode {
+        SSH,
+        ADB;
+    }
 
     private final File mClientBinary;
 
@@ -191,6 +197,15 @@ public class OxygenClient {
      */
     public CommandResult leaseDevice(
             IBuildInfo b, TestDeviceOptions deviceOptions, MultiMap<String, String> attributes) {
+        if (deviceOptions.useOxygenationDevice()) {
+            // TODO(easoncylee/haoch): Flesh out this section when the oxygen client is supported.
+            // Lease an oxygenation device with additional options passed in when
+            // use-oxygenation-device is set.
+            // For now, return failure with exceptions first.
+            CommandResult ret = new CommandResult(CommandStatus.EXCEPTION);
+            ret.setStderr("OxygenClient: Leasing an oxygenation device is not supported for now.");
+            return ret;
+        }
         List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
         List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
@@ -357,6 +372,13 @@ public class OxygenClient {
                 || gceAvdInfo.hostAndPort().getHost() == null) {
             return true;
         }
+        if (deviceOptions.useOxygenationDevice()) {
+            // TODO(easoncylee/haoch): Flesh out this section when the oxygen client is supported.
+            // Release an oxygenation device with additional options passed in when
+            // use-oxygenation-device is set.
+            // For now, return false first.
+            return false;
+        }
         List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
 
         for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
@@ -393,6 +415,40 @@ public class OxygenClient {
             }
         }
         return res.getStatus().equals(CommandStatus.SUCCESS);
+    }
+
+    /**
+     * Create an adb or ssh tunnel to a given instance name and assign the endpoint to a device via
+     * LHP based on the given tunnel mode.
+     *
+     * @return {@link Process} of the adb over LHP tunnel.
+     */
+    public Process createTunnelViaLHP(LHPTunnelMode mode) {
+        // TODO(easoncylee): Flesh out this section once the oxygen client is ready.
+        // At high level, the logic would look like as following steps:
+        // Step1: Create an unused ServerSocket port for establishing the adb tunnel.
+        // Step2: Establish ssh over LHP connection by running command.
+        // Step3: return the process of the connection, or null if the tunnel can't be established.
+        if (LHPTunnelMode.ADB.equals(mode)) {
+            return null;
+        } else {
+            return null;
+        }
+    }
+
+    /** Close the connection to the remote oxygenation device with a given {@link Process}. */
+    public void closeLHPConnection(Process p) {
+        if (p != null) {
+            p.destroy();
+            try {
+                boolean res = p.waitFor(20 * 1000, TimeUnit.MILLISECONDS);
+                if (!res) {
+                    CLog.e("Tunnel may not have properly terminated.");
+                }
+            } catch (InterruptedException e) {
+                CLog.e("Tunnel interrupted during shutdown: %s", e.getMessage());
+            }
+        }
     }
 
     /**
