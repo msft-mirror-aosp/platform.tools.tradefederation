@@ -24,6 +24,7 @@ import static org.junit.Assert.assertTrue;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -543,5 +544,51 @@ public class OxygenClientTest {
         CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    @Test
+    public void testLeaseOxygenationDevice() throws Exception {
+        mTestDeviceOptions =
+                new TestDeviceOptions() {
+                    @Override
+                    public boolean useOxygenationDevice() {
+                        return true;
+                    }
+                };
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
+        assertEquals(res.getStatus(), CommandStatus.EXCEPTION);
+        assertEquals(
+                res.getStderr(),
+                "OxygenClient: Leasing an oxygenation device is not supported for now.");
+    }
+
+    @Test
+    public void testReleaseOxygenationDevice() throws Exception {
+        mTestDeviceOptions =
+                new TestDeviceOptions() {
+                    @Override
+                    public boolean useOxygenationDevice() {
+                        return true;
+                    }
+                };
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        assertFalse(mOxygenClient.release(mGceAvdInfo, mTestDeviceOptions));
+    }
+
+    @Test
+    public void testCreateADBTunnelViaLHP() throws Exception {
+        // TODO(easoncylee): Flesh out when the oxygen client is ready.
+        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.ADB));
+    }
+
+    @Test
+    public void testCreateSSHTunnelViaLHP() throws Exception {
+        // TODO(easoncylee): Flesh out when the oxygen client is ready.
+        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.SSH));
     }
 }

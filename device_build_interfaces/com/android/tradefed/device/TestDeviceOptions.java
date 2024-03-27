@@ -403,6 +403,15 @@ public class TestDeviceOptions {
             name = "use-cmd-wifi",
             description = "Feature flag to switch the wifi connection to using cmd commands.")
     private boolean mUseCmdWidi = false;
+
+    @Option(
+            name = "use-oxygenation-device",
+            description =
+                    "Whether or not to use virtual devices created by Oxygenation. This is under"
+                            + " development, and should be set on demand for running platform"
+                            + " tests against an oxygenation device.")
+    private boolean mUseOxygenationDevice = false;
+
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -1004,6 +1013,11 @@ public class TestDeviceOptions {
 
     public long getSnapuserdTimeout() {
         return mSnapuserdTimeout;
+    }
+
+    /** Returns true if it's to lease oxygenation devices in OmniLab's infra. False otherwise. */
+    public boolean useOxygenationDevice() {
+        return mUseOxygenationDevice;
     }
 }
 
