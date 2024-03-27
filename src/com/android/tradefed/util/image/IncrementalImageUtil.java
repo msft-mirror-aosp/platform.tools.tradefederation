@@ -501,7 +501,7 @@ public class IncrementalImageUtil {
             // Delete the copy we made to use the incremental update
             FileUtil.recursiveDelete(mSourceDirectory);
             FileUtil.recursiveDelete(mTargetDirectory);
-            FileUtil.deleteFile(mSrcImage);
+            FileUtil.recursiveDelete(mSrcImage);
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
             // In case of same build flashing, we should clean the setup operation
@@ -658,10 +658,13 @@ public class IncrementalImageUtil {
                 Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    if (mSetupSrcImage.isDirectory()) {
-                                        return true;
-                                    }
                                     try {
+                                        if (mSetupSrcImage.isDirectory()) {
+                                            FileUtil.recursiveHardlink(
+                                                    mSetupSrcImage, mSrcDirectory);
+                                            return true;
+                                        }
+
                                         ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
                                         return true;
                                     } catch (IOException ioe) {
