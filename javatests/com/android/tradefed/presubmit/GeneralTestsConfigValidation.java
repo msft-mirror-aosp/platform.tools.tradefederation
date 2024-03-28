@@ -109,7 +109,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "com.android.tradefed.testtype.binary.KernelTargetTest",
                             // Others
                             "com.google.android.deviceconfig.RebootTest",
-                            "com.android.scenario.AppSetup"));
+                            "com.android.scenario.AppSetup",
+                            "com.android.power.PowerRunner"));
 
     /**
      * List of configs that will be exempted until they are converted to use MediaPreparers.
