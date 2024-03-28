@@ -36,6 +36,7 @@ import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.cloud.AbstractTunnelMonitor;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
+import com.android.tradefed.device.cloud.GceLHPTunnelMonitor;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
@@ -82,6 +83,8 @@ public class AdbSshConnectionTest {
     @Mock ITestLogger mMockLogger;
     @Mock GceManager mGceHandler;
     @Mock GceSshTunnelMonitor mGceSshMonitor;
+    @Mock ITestDevice mMockTestDevice;
+    @Mock GceAvdInfo mMockAvdInfo;
 
     public static interface TestableConfigurableVirtualDevice
             extends IDevice, IConfigurableVirtualDevice {}
@@ -470,7 +473,7 @@ public class AdbSshConnectionTest {
                     void createGceTunnelMonitor(
                             ITestDevice device,
                             IBuildInfo buildInfo,
-                            HostAndPort hostAndPort,
+                            GceAvdInfo gceAvdInfo,
                             TestDeviceOptions deviceOptions) {
                         // Ignore
                     }
@@ -801,5 +804,35 @@ public class AdbSshConnectionTest {
         } catch (TargetSetupError expected) {
             // expected
         }
+    }
+
+    /** Test ssh tunnel monitor will be initialized when use-oxygenation-device is True */
+    @Test
+    public void testCreateGceTunnelMonitor_SSHTunnel() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger));
+        mOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("use-oxygenation-device", "true");
+        mConnection.createGceTunnelMonitor(mMockTestDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
+        assertTrue(mConnection.getGceTunnelMonitor() instanceof GceLHPTunnelMonitor);
+    }
+
+    /** Test LHP tunnel monitor will be initialized when use-oxygenation-device is False */
+    @Test
+    public void testCreateGceTunnelMonitor_LHPTunnel() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger));
+        mOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("use-oxygenation-device", "false");
+        mConnection.createGceTunnelMonitor(mMockTestDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
+        assertTrue(mConnection.getGceTunnelMonitor() instanceof GceSshTunnelMonitor);
     }
 }
