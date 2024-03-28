@@ -22,6 +22,7 @@ import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -286,6 +287,17 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         }
         if (getHostOptions().isOptOutOfIncrementalFlashing()) {
             mUseIncrementalFlashing = false;
+        }
+        if (mConfig != null) {
+            for (IDeviceConfiguration deviceConfig : mConfig.getDeviceConfig()) {
+                for (ITargetPreparer p : deviceConfig.getTargetPreparers()) {
+                    if (p instanceof GkiDeviceFlashPreparer
+                            && !((GkiDeviceFlashPreparer) p).isDisabled()) {
+                        CLog.d("Force disabling incremental flashing due to GkiDeviceFlashPreparer.");
+                        mForceDisableIncrementalFlashing = true;
+                    }
+                }
+            }
         }
         if (mForceDisableIncrementalFlashing) {
             // The local option disable the feature, and skip tracking baseline
