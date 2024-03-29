@@ -667,15 +667,28 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String snapshotCommand =
-                commandBuilder(
-                        "cvd",
-                        String.format(
-                                "snapshot_take --force --auto_suspend"
-                                        + " --snapshot_path=/tmp/%s/snapshots/%s",
-                                user, snapshotId),
-                        user,
-                        offset);
+        String snapshotCommand;
+        if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")) {
+            snapshotCommand =
+                    commandBuilder(
+                            "cvd",
+                            String.format(
+                                    "snapshot_take --force --auto_suspend"
+                                            + " --snapshot_path=/tmp/%s/snapshots/%s",
+                                    user, snapshotId),
+                            user,
+                            offset);
+        } else {
+            snapshotCommand =
+                    commandBuilder(
+                            "snapshot_util_cvd",
+                            String.format(
+                                    "--subcmd=snapshot_take --force --auto_suspend"
+                                            + " --snapshot_path=/tmp/%s/snapshots/%s",
+                                    user, snapshotId),
+                            user,
+                            offset);
+        }
         if (Strings.isNullOrEmpty(snapshotCommand)) {
             throw new TargetSetupError(
                     "failed to set up snapshot command, invalid path",
@@ -733,13 +746,23 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String restoreCommand =
-                commandBuilder(
-                        "cvd",
-                        String.format(
-                                "start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
-                        user,
-                        offset);
+        String restoreCommand;
+        if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")) {
+            restoreCommand =
+                    commandBuilder(
+                            "cvd",
+                            String.format(
+                                    "start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                            user,
+                            offset);
+        } else {
+            restoreCommand =
+                    commandBuilder(
+                            "launch_cvd",
+                            String.format("--snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                            user,
+                            offset);
+        }
         if (restoreCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up restore command, invalid path",
@@ -804,7 +827,12 @@ public class AdbSshConnection extends AdbTcpConnection {
             user = getDevice().getOptions().getInstanceUser();
         }
 
-        String stopCommand = commandBuilder("cvd", "stop", user, offset);
+        String stopCommand;
+        if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")) {
+            stopCommand = commandBuilder("cvd", "stop", user, offset);
+        } else {
+            stopCommand = commandBuilder("stop_cvd", "", user, offset);
+        }
         if (stopCommand.length() == 0) {
             throw new TargetSetupError(
                     "failed to set up stop command, invalid path",
