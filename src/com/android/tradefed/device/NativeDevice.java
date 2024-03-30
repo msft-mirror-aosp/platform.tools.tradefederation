@@ -3558,6 +3558,8 @@ public class NativeDevice
             throw new UnsupportedOperationException(
                     String.format("Fastboot is not available and cannot reboot into %s", mode));
         }
+        // Force wait for snapuserd in progress just to be sure
+        waitForSnapuserd(SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
         long startTime = System.currentTimeMillis();
 
         try (CloseableTraceScope ignored =
