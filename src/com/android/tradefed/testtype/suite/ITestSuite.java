@@ -158,13 +158,12 @@ public abstract class ITestSuite
     private static final Set<String> ALLOWED_PREPARERS_CONFIGS =
             ImmutableSet.of("/suite/allowed-preparers.txt", "/suite/google-allowed-preparers.txt");
 
-    // Options for test failure case
+    @Deprecated
     @Option(
-        name = "bugreport-on-failure",
-        description =
-                "Take a bugreport on every test failure. Warning: This may require a lot"
-                        + "of storage space of the machine running the tests."
-    )
+            name = "bugreport-on-failure",
+            description =
+                    "Take a bugreport on every test failure. Warning: This may require a lot"
+                            + "of storage space of the machine running the tests.")
     private boolean mBugReportOnFailure = false;
 
     @Deprecated
@@ -189,8 +188,8 @@ public abstract class ITestSuite
     )
     private boolean mScreenshotOnFailure = false;
 
-    @Option(name = "reboot-on-failure",
-            description = "Reboot the device after every test failure.")
+    @Deprecated
+    @Option(name = "reboot-on-failure", description = "Reboot the device after every test failure.")
     private boolean mRebootOnFailure = false;
 
     // Options for suite runner behavior
@@ -777,10 +776,6 @@ public abstract class ITestSuite
             }
         }
 
-        /** Setup a special listener to take actions on test failures. */
-        TestFailureListener failureListener =
-                new TestFailureListener(
-                        mContext.getDevices(), mBugReportOnFailure, mRebootOnFailure);
         /** Create the list of listeners applicable at the module level. */
         List<ITestInvocationListener> moduleListeners = createModuleListeners();
 
@@ -889,8 +884,7 @@ public abstract class ITestSuite
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
                     try {
-                        runSingleModule(
-                                module, moduleInfo, listener, moduleListeners, failureListener);
+                        runSingleModule(module, moduleInfo, listener, moduleListeners);
                     } finally {
                         module.getModuleInvocationContext()
                                 .addInvocationAttribute(
@@ -1001,8 +995,7 @@ public abstract class ITestSuite
             ModuleDefinition module,
             TestInformation moduleInfo,
             ITestInvocationListener listener,
-            List<ITestInvocationListener> moduleListeners,
-            TestFailureListener failureListener)
+            List<ITestInvocationListener> moduleListeners)
             throws DeviceNotAvailableException {
         Map<String, String> properties = new LinkedHashMap<>();
         try (CloseableTraceScope ignored = new CloseableTraceScope("module_pre_check")) {
@@ -1057,7 +1050,6 @@ public abstract class ITestSuite
                 moduleInfo,
                 listener,
                 moduleListeners,
-                failureListener,
                 getConfiguration().getRetryDecision().getMaxRetryCount());
 
         if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
