@@ -466,6 +466,28 @@ public class IncrementalImageUtil {
         return mTargetDirectory;
     }
 
+    /** When doing some of the apply logic, we can clean up files right after setup. */
+    public void cleanAfterSetup() {
+        if (!mApplySnapshot) {
+            return;
+        }
+        // Delete the copy we made to use the incremental update
+        FileUtil.recursiveDelete(mSourceDirectory);
+        FileUtil.recursiveDelete(mTargetDirectory);
+        FileUtil.recursiveDelete(mSrcImage);
+        FileUtil.deleteFile(mSrcBootloader);
+        FileUtil.deleteFile(mSrcBaseband);
+        // In case of same build flashing, we should clean the setup operation
+        if (mParallelSetup != null) {
+            try {
+                mParallelSetup.join();
+            } catch (InterruptedException e) {
+                CLog.e(e);
+            }
+            mParallelSetup.cleanUpFiles();
+        }
+    }
+
     /*
      * Returns the device to its original state.
      */
