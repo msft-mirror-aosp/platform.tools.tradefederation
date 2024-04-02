@@ -550,7 +550,6 @@ public class AdbSshConnectionTest {
         String snapshotId = "snapshot_user1";
         OptionSetter setter = new OptionSetter(mOptions);
         setter.setOptionValue("instance-user", instanceUser);
-        String cvdBin = String.format("/home/%s/bin/cvd", instanceUser);
         String snapshotPath = String.format("/tmp/%s/snapshots/%s", instanceUser, snapshotId);
         String snapshotCommandPath = String.format("--snapshot_path=%s", snapshotPath);
         String restoreSnapshotCommandPath = String.format("--snapshot_path=%s", snapshotPath);
@@ -609,8 +608,8 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("snapshot_take"),
+                        Mockito.eq(String.format("/home/%s/bin/snapshot_util_cvd", instanceUser)),
+                        Mockito.eq("--subcmd=snapshot_take"),
                         Mockito.eq("--force"),
                         Mockito.eq("--auto_suspend"),
                         Mockito.eq(snapshotCommandPath)))
@@ -631,8 +630,7 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("stop")))
+                        Mockito.eq(String.format("/home/%s/bin/stop_cvd", instanceUser))))
                 .thenReturn(successCmdResult);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
@@ -650,8 +648,7 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("start"),
+                        Mockito.eq(String.format("/home/%s/bin/launch_cvd", instanceUser)),
                         Mockito.eq(restoreSnapshotCommandPath)))
                 .thenReturn(successCmdResult);
         CommandResult adbResult = new CommandResult();
