@@ -92,13 +92,11 @@ public class MetricUtility {
         }
 
         // Group test cases which differs only by the iteration separator or test the same name.
-        String className = testDescription.getClassName();
-        int iterationSeparatorIndex = testDescription.getClassName()
-                .indexOf(mTestIterationSeparator);
-        if (iterationSeparatorIndex != -1) {
-            className = testDescription.getClassName().substring(0, iterationSeparatorIndex);
-        }
-        String newTestId = CLASS_METHOD_JOINER.join(className, testDescription.getTestName());
+        // Removes iteration numbers like "$17".
+        String newTestId =
+                CLASS_METHOD_JOINER
+                        .join(testDescription.getClassName(), testDescription.getTestName())
+                        .replaceFirst(Pattern.quote(mTestIterationSeparator) + "\\d+", "");
 
         if (!mStoredTestMetrics.containsKey(newTestId)) {
             mStoredTestMetrics.put(newTestId, ArrayListMultimap.create());
