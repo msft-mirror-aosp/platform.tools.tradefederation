@@ -635,9 +635,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
             }
             // Set experimental flags
             if (config.getCommandOptions().isExperimentEnabled()) {
-                try {
-                    for (Map.Entry<String, String> entry :
-                            config.getCommandOptions().getExperimentalFlags().entrySet()) {
+                for (Map.Entry<String, String> entry :
+                        config.getCommandOptions().getExperimentalFlags().entrySet()) {
+                    try {
                         String optionName = entry.getKey();
                         String optionValue = entry.getValue();
                         // Support map experiments, where optionValue is a key=value pair
@@ -651,10 +651,10 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         }
                         mInvocationContext.addInvocationAttribute(
                                 "experiment:" + optionName, optionValue);
+                    } catch (ConfigurationException e) {
+                        CLog.e("Configuration Exception caught while setting experimental flags.");
+                        CLog.e(e);
                     }
-                } catch (ConfigurationException e) {
-                    CLog.e("Configuration Exception caught while setting experimental flags.");
-                    CLog.e(e);
                 }
             }
             mStartTime = System.currentTimeMillis();
