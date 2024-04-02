@@ -610,47 +610,10 @@ public class AdbSshConnectionTest {
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
                         Mockito.eq(cvdBin),
-                        Mockito.eq("suspend")))
-                .thenReturn(successCmdResult);
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(stdout),
-                        Mockito.eq(stderr),
-                        Mockito.eq("ssh"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("LogLevel=ERROR"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("UserKnownHostsFile=/dev/null"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("StrictHostKeyChecking=no"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("ServerAliveInterval=10"),
-                        Mockito.eq("-i"),
-                        Mockito.any(),
-                        Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
                         Mockito.eq("snapshot_take"),
+                        Mockito.eq("--force"),
+                        Mockito.eq("--auto_suspend"),
                         Mockito.eq(snapshotCommandPath)))
-                .thenReturn(successCmdResult);
-        // Make sure the instance resumes
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(stdout),
-                        Mockito.eq(stderr),
-                        Mockito.eq("ssh"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("LogLevel=ERROR"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("UserKnownHostsFile=/dev/null"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("StrictHostKeyChecking=no"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("ServerAliveInterval=10"),
-                        Mockito.eq("-i"),
-                        Mockito.any(),
-                        Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("resume")))
                 .thenReturn(successCmdResult);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
@@ -690,27 +653,6 @@ public class AdbSshConnectionTest {
                         Mockito.eq(cvdBin),
                         Mockito.eq("start"),
                         Mockito.eq(restoreSnapshotCommandPath)))
-                .thenReturn(successCmdResult);
-        // Make sure the instance resumes
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(stdout),
-                        Mockito.eq(stderr),
-                        Mockito.eq("ssh"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("LogLevel=ERROR"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("UserKnownHostsFile=/dev/null"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("StrictHostKeyChecking=no"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("ServerAliveInterval=10"),
-                        Mockito.eq("-i"),
-                        Mockito.any(),
-                        Mockito.eq(avdConnectHost),
-                        Mockito.eq("rm"),
-                        Mockito.eq("-rf"),
-                        Mockito.eq(snapshotPath)))
                 .thenReturn(successCmdResult);
         CommandResult adbResult = new CommandResult();
         adbResult.setStatus(CommandStatus.SUCCESS);
