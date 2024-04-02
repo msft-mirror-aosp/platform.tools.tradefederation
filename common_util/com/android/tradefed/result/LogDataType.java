@@ -51,6 +51,11 @@ public enum LogDataType {
             "application/octet-stream",
             false, // Not compressed by default, so we can gzip them
             false), // binary proto perfetto trace file
+    TRACE(
+            "trace",
+            "application/octet-stream",
+            false, // Not compressed by default, so we can gzip them
+            false), // binary method trace file
     /* Specific text file types */
     ANRS("txt", "text/plain", true, true),
     BUGREPORT("txt", "text/plain", false, true),

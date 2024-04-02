@@ -407,6 +407,9 @@ public class DynamicRemoteFileResolver {
             throws IOException {
         String unzipValue = query.get(UNZIP_KEY);
         if (unzipValue != null && "true".equals(unzipValue.toLowerCase())) {
+            if (downloadedFile.isDirectory()) {
+                return downloadedFile;
+            }
             // File was requested to be unzipped.
             try (CloseableTraceScope ignored =
                     new CloseableTraceScope("unzip " + downloadedFile.getName())) {

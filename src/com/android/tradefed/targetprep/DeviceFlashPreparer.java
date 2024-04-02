@@ -293,7 +293,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                 for (ITargetPreparer p : deviceConfig.getTargetPreparers()) {
                     if (p instanceof GkiDeviceFlashPreparer
                             && !((GkiDeviceFlashPreparer) p).isDisabled()) {
-                        CLog.d("Force disabling incremental flashing due to GkiDeviceFlashPreparer.");
+                        CLog.d(
+                                "Force disabling incremental flashing due to"
+                                        + " GkiDeviceFlashPreparer.");
                         mForceDisableIncrementalFlashing = true;
                     }
                 }
@@ -307,6 +309,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
         }
         boolean useIncrementalFlashing = mUseIncrementalFlashing;
+        boolean reEntry = false;
         if (useIncrementalFlashing) {
             boolean isIsolated = false;
             if (mConfig.getRetryDecision() instanceof BaseRetryDecision) {
@@ -315,25 +318,30 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 ((BaseRetryDecision) mConfig.getRetryDecision())
                                         .getIsolationGrade());
             }
-            mIncrementalImageUtil =
-                    IncrementalImageUtil.initialize(
-                            device,
-                            deviceBuild,
-                            mCreateSnapshotBinary,
-                            isIsolated,
-                            mAllowIncrementalCrossRelease,
-                            mApplySnapshot,
-                            mWaitPhase);
-            if (mIncrementalImageUtil == null) {
-                useIncrementalFlashing = false;
+            if (mIncrementalImageUtil != null) {
+                // Re-entry can occur during reset isolation.
+                reEntry = true;
             } else {
-                if (mAllowIncrementalOnSameBuild) {
-                    mIncrementalImageUtil.allowSameBuildFlashing();
-                }
-                if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
-                    // No need to reboot yet, it will happen later in the sequence
-                    String verityOutput = device.executeAdbCommand("enable-verity");
-                    CLog.d("%s", verityOutput);
+                mIncrementalImageUtil =
+                        IncrementalImageUtil.initialize(
+                                device,
+                                deviceBuild,
+                                mCreateSnapshotBinary,
+                                isIsolated,
+                                mAllowIncrementalCrossRelease,
+                                mApplySnapshot,
+                                mWaitPhase);
+                if (mIncrementalImageUtil == null) {
+                    useIncrementalFlashing = false;
+                } else {
+                    if (mAllowIncrementalOnSameBuild) {
+                        mIncrementalImageUtil.allowSameBuildFlashing();
+                    }
+                    if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                        // No need to reboot yet, it will happen later in the sequence
+                        String verityOutput = device.executeAdbCommand("enable-verity");
+                        CLog.d("%s", verityOutput);
+                    }
                 }
             }
         }
@@ -354,7 +362,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                 }
                 if (flasher instanceof FastbootDeviceFlasher) {
                     ((FastbootDeviceFlasher) flasher).setFlashOptions(mFastbootFlashOptions);
-                    ((FastbootDeviceFlasher) flasher).setIncrementalFlashing(mIncrementalImageUtil);
+                    if (!reEntry) {
+                        // Avoid using incremental during re-entry since it will just wipe
+                        ((FastbootDeviceFlasher) flasher)
+                                .setIncrementalFlashing(mIncrementalImageUtil);
+                    }
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
@@ -419,7 +431,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                 device.clearLogcat();
             }
             // In case success with full flashing
-            moveBaseline(deviceBuild, device.getSerialNumber(), useIncrementalFlashing);
+            if (!reEntry) {
+                moveBaseline(deviceBuild, device.getSerialNumber(), useIncrementalFlashing);
+            }
             if (mSkipPostFlashingSetup) {
                 return;
             }
@@ -466,6 +480,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             device.setRecoveryMode(RecoveryMode.AVAILABLE);
             // Allow interruption at the end no matter what.
             getRunUtil().allowInterrupt(true);
+            if (mIncrementalImageUtil != null) {
+                mIncrementalImageUtil.cleanAfterSetup();
+            }
         }
     }
 

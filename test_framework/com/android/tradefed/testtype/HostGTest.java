@@ -16,6 +16,8 @@
 
 package com.android.tradefed.testtype;
 
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
+
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.DeviceBuildInfo;
@@ -35,6 +37,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -145,6 +148,18 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
         }
 
+        // Set LLVM_PROFILE_FILE for coverage.
+        File coverageDir = null;
+        if (isClangCoverageEnabled()) {
+            try {
+                coverageDir = FileUtil.createTempDir("clang");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            runUtil.setEnvVariable(
+                    "LLVM_PROFILE_FILE", coverageDir.getAbsolutePath() + "/clang-%m.profraw");
+        }
+
         // If there's a shell output receiver to pass results along to, then
         // ShellOutputReceiverStream will write that into the IShellOutputReceiver. If not, the
         // command output will just be ignored.
@@ -186,6 +201,27 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                 }
             }
             FileUtil.deleteFile(stdout);
+
+            if (isClangCoverageEnabled()) {
+                File profdata = null;
+                try {
+                    Set<String> profraws = FileUtil.findFiles(coverageDir, ".*\\.profraw");
+                    ClangProfileIndexer indexer =
+                            new ClangProfileIndexer(
+                                    getConfiguration().getCoverageOptions().getLlvmProfdataPath());
+                    profdata = FileUtil.createTempFile(gtestFile.getName(), ".profdata");
+                    indexer.index(profraws, profdata);
+
+                    try (FileInputStreamSource source = new FileInputStreamSource(profdata, true)) {
+                        logger.testLog(gtestFile.getName(), LogDataType.CLANG_COVERAGE, source);
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    FileUtil.deleteFile(profdata);
+                    FileUtil.recursiveDelete(coverageDir);
+                }
+            }
         }
         return result;
     }
@@ -420,5 +456,11 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             }
         }
         return new LinkedHashSet(seen.values());
+    }
+
+    /** Returns whether Clang code coverage is enabled. */
+    private boolean isClangCoverageEnabled() {
+        return getConfiguration().getCoverageOptions().isCoverageEnabled()
+                && getConfiguration().getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 }
