@@ -197,12 +197,6 @@ public class InvocationMetricLogger {
         DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT("device_snapshot_restore_success_count", true),
         DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT("device_snapshot_restore_failure_count", true),
         DEVICE_SNAPSHOT_RESTORE_DURATIONS("device_snapshot_restore_durations", true),
-        DEVICE_SUSPEND_SUCCESS_COUNT("device_suspend_success_count", true),
-        DEVICE_SUSPEND_FAILURE_COUNT("device_suspend_failure_count", true),
-        DEVICE_SUSPEND_DURATIONS("device_suspend_durations", true),
-        DEVICE_RESUME_SUCCESS_COUNT("device_resume_success_count", true),
-        DEVICE_RESUME_FAILURE_COUNT("device_resume_failure_count", true),
-        DEVICE_RESUME_DURATIONS("device_resume_durations", true),
         DEVICE_STOP_SUCCESS_COUNT("device_stop_success_count", true),
         DEVICE_STOP_FAILURE_COUNT("device_stop_failure_count", true),
         DEVICE_STOP_DURATIONS("device_stop_durations", true),
@@ -214,10 +208,6 @@ public class InvocationMetricLogger {
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
-        // Represents the time we spent deleting file on host
-        DELETE_SNAPSHOT_FILES("delete_host_file_time_ms", true),
-        // Represents how many times we call the delete host file method
-        DELETE_SNAPSHOT_FILES_COUNT("delete_host_file_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
@@ -423,7 +413,6 @@ public class InvocationMetricLogger {
 
         INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true),
         INCREMENTAL_FLASHING_TARGET_SIZE("incremental-flashing-target-size", true);
-
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.
