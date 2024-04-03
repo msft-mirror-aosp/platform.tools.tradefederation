@@ -16,7 +16,6 @@
 package com.android.tradefed.device.internal;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.config.Configuration;
@@ -77,7 +76,10 @@ public class DeviceSnapshotFeatureTest {
                         .putArgs("device_name", ConfigurationDef.DEFAULT_DEVICE_NAME);
 
         FeatureResponse response = mFeature.execute(request.build());
-        assertFalse(response.hasErrorInfo());
+        assertTrue(
+                response.getErrorInfo()
+                        .getErrorTrace()
+                        .contains("with connection type [null] doesn't support snapshotting"));
     }
 
     @Test
@@ -89,6 +91,9 @@ public class DeviceSnapshotFeatureTest {
                         .putArgs("snapshot_id", "random_id");
 
         FeatureResponse response = mFeature.execute(request.build());
-        assertFalse(response.hasErrorInfo());
+        assertTrue(
+                response.getErrorInfo()
+                        .getErrorTrace()
+                        .contains("with connection type [null] doesn't support snapshotting"));
     }
 }
