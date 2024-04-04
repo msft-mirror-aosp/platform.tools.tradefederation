@@ -34,8 +34,8 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
-import com.android.tradefed.device.connection.AdbTcpConnection;
 import com.android.tradefed.device.connection.AbstractConnection;
+import com.android.tradefed.device.connection.AdbTcpConnection;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -148,6 +148,7 @@ public abstract class ITestSuite
     public static final String MODULE_METADATA_EXCLUDE_FILTER = "module-metadata-exclude-filter";
     public static final String RANDOM_SEED = "random-seed";
     public static final String SKIP_STAGING_ARTIFACTS = "skip-staging-artifacts";
+    public static final String STAGE_MODULE_ARTIFACTS = "stage-module-artifacts";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
@@ -489,24 +490,39 @@ public abstract class ITestSuite
             moduleNames.add(config.getValue().getConfigurationDescription().getModuleName());
         }
 
-        if (mBuildInfo != null
-                && mBuildInfo.getRemoteFiles() != null
-                && !mBuildInfo.getRemoteFiles().isEmpty()) {
+        if (stageAtInvocationLevel()) {
             stageTestArtifacts(mDevice, moduleNames);
+        } else {
+            CLog.d(SKIP_STAGING_ARTIFACTS + " is set. Skipping #stageTestArtifacts");
         }
 
         runConfig.clear();
         return filteredConfig;
     }
 
+    private boolean stageAtInvocationLevel() {
+        if (mBuildInfo != null) {
+            if (mSkipStagingArtifacts
+                    || mBuildInfo.getBuildAttributes().get(SKIP_STAGING_ARTIFACTS) != null) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean stageModuleLevel() {
+        if (mBuildInfo != null) {
+            return mBuildInfo.getBuildAttributes().get(STAGE_MODULE_ARTIFACTS) != null;
+        }
+        return false;
+    }
+
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
-        if (mBuildInfo.getRemoteFiles().isEmpty()) {
-            return;
-        }
-        if (mSkipStagingArtifacts
-                || mBuildInfo.getBuildAttributes().get(SKIP_STAGING_ARTIFACTS) != null) {
-            CLog.d(SKIP_STAGING_ARTIFACTS + " is set. Skipping #stageTestArtifacts");
+        if (mBuildInfo.getRemoteFiles() == null || mBuildInfo.getRemoteFiles().isEmpty()) {
+            CLog.d("No remote build info, skipping stageTestArtifacts");
             return;
         }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
@@ -809,6 +825,14 @@ public abstract class ITestSuite
                 }
 
                 try (CloseableTraceScope ignore = new CloseableTraceScope(module.getId())) {
+                    if (!stageAtInvocationLevel() && stageModuleLevel()) {
+                        stageTestArtifacts(
+                                mDevice,
+                                ImmutableSet.of(
+                                        module.getModuleConfiguration()
+                                                .getConfigurationDescription()
+                                                .getModuleName()));
+                    }
                     // Populate the module context with devices and builds
                     for (String deviceName : mContext.getDeviceConfigNames()) {
                         module.getModuleInvocationContext()
