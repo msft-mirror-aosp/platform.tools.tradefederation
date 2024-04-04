@@ -257,7 +257,12 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(configZip != null);
         List<String> errors = new ArrayList<>();
         List<String> testConfigs = new ArrayList<>();
-        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        File testConfigDir = null;
+        if (configZip.isDirectory()) {
+            testConfigDir = configZip;
+        } else {
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        }
         testConfigs.addAll(
                 ConfigurationUtil.getConfigNamesFromDirs(null, Arrays.asList(testConfigDir)));
         for (String configName : testConfigs) {
@@ -435,17 +440,28 @@ public class TestMappingsValidation implements IBuildReceiver {
 
         File testConfigDir = null;
         File deviceTestConfigDir = null;
+        boolean deleteConfigDir = false;
+        boolean deleteDeviceConfigDir = false;
         try {
             File configZip = deviceBuildInfo.getFile("general-tests_configs.zip");
             File deviceConfigZip = deviceBuildInfo.getFile("device-tests_configs.zip");
             Assume.assumeTrue(configZip != null);
             List<String> testConfigs = new ArrayList<>();
             List<File> dirToLoad = new ArrayList<>();
-            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+            if (configZip.isDirectory()) {
+                testConfigDir = configZip;
+            } else {
+                testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+                deleteConfigDir = true;
+            }
             dirToLoad.add(testConfigDir);
             if (deviceConfigZip != null) {
-                deviceTestConfigDir =
-                        ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                if (deviceConfigZip.isDirectory()) {
+                    deviceTestConfigDir = deviceConfigZip;
+                } else {
+                    deviceTestConfigDir = ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                    deleteDeviceConfigDir = true;
+                }
                 dirToLoad.add(deviceTestConfigDir);
             }
             testConfigs.addAll(ConfigurationUtil.getConfigNamesFromDirs(null, dirToLoad));
@@ -472,8 +488,12 @@ public class TestMappingsValidation implements IBuildReceiver {
         } catch (ConfigurationException e) {
             fail(e.toString());
         } finally {
-            FileUtil.recursiveDelete(testConfigDir);
-            FileUtil.recursiveDelete(deviceTestConfigDir);
+            if (deleteConfigDir) {
+                FileUtil.recursiveDelete(testConfigDir);
+            }
+            if (deleteDeviceConfigDir) {
+                FileUtil.recursiveDelete(deviceTestConfigDir);
+            }
         }
     }
 
@@ -725,12 +745,24 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(configZip != null);
         List<String> testConfigs = new ArrayList<>();
         List<File> dirToLoad = new ArrayList<>();
-        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
-        File deviceTestConfigDir = null;
+        File testConfigDir = null;
+        boolean deleteConfigDir = false;
+        if (configZip.isDirectory()) {
+            testConfigDir = configZip;
+        } else {
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+            deleteConfigDir = true;
+        }
         dirToLoad.add(testConfigDir);
+        File deviceTestConfigDir = null;
+        boolean deleteDeviceConfigDir = false;
         if (deviceConfigZip != null) {
-            deviceTestConfigDir =
-                    ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+            if (deviceConfigZip.isDirectory()) {
+                deviceTestConfigDir = deviceConfigZip;
+            } else {
+                deviceTestConfigDir = ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                deleteDeviceConfigDir = true;
+            }
             dirToLoad.add(deviceTestConfigDir);
         }
         try {
@@ -773,8 +805,12 @@ public class TestMappingsValidation implements IBuildReceiver {
                 fail(Joiner.on("\n").join(errors));
             }
         } finally {
-            FileUtil.recursiveDelete(testConfigDir);
-            FileUtil.recursiveDelete(deviceTestConfigDir);
+            if (deleteConfigDir) {
+                FileUtil.recursiveDelete(testConfigDir);
+            }
+            if (deleteDeviceConfigDir) {
+                FileUtil.recursiveDelete(deviceTestConfigDir);
+            }
         }
     }
 
