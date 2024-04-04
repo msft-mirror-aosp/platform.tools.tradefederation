@@ -1057,7 +1057,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     CommandResult stayOn = device.executeShellV2Command(cmdStayOn);
                     CLog.d("%s output: %s", cmdStayOn, stayOn);
                     if (mDismissViaWm) {
-                        CommandResult res = device.executeShellV2Command("wm dismiss-keyguard");
+                        CommandResult res =
+                                device.executeShellV2Command(
+                                        "wm dismiss-keyguard", 30000L, TimeUnit.MILLISECONDS, 0);
                         CLog.d("Output of dismiss-keyguard: %s", res);
                     } else {
                         // send MENU press in case keyguard needs to be dismissed again
