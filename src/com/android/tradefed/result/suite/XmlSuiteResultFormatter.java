@@ -31,7 +31,6 @@ import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
-import com.android.tradefed.testtype.suite.TestFailureListener;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -443,7 +442,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         return fullStackTrace;
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Add files captured on test failures. */
     private static void HandleLoggedFiles(
             XmlSerializer serializer, Entry<String, TestResult> testResult)
             throws IllegalArgumentException, IllegalStateException, IOException {
@@ -731,7 +730,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         }
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Add files captured on test failures. */
     private static void parseLoggedFiles(XmlPullParser parser, TestRunResult currentModule)
             throws XmlPullParserException, IOException {
         if (parser.getName().equals(BUGREPORT_TAG)) {

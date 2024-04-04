@@ -89,7 +89,6 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     private IRemoteTest mTest;
     private ModuleDefinition mModule;
     private List<IMetricCollector> mRunMetricCollectors;
-    private TestFailureListener mFailureListener;
     private IInvocationContext mModuleInvocationContext;
     private IConfiguration mModuleConfiguration;
     private ModuleListener mMainGranularRunListener;
@@ -109,17 +108,15 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     public GranularRetriableTestWrapper(
             IRemoteTest test,
             ITestInvocationListener mainListener,
-            TestFailureListener failureListener,
             List<ITestInvocationListener> moduleLevelListeners,
             int maxRunLimit) {
-        this(test, null, mainListener, failureListener, moduleLevelListeners, maxRunLimit);
+        this(test, null, mainListener, moduleLevelListeners, maxRunLimit);
     }
 
     public GranularRetriableTestWrapper(
             IRemoteTest test,
             ModuleDefinition module,
             ITestInvocationListener mainListener,
-            TestFailureListener failureListener,
             List<ITestInvocationListener> moduleLevelListeners,
             int maxRunLimit) {
         mTest = test;
@@ -129,7 +126,6 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             context = module.getModuleInvocationContext();
         }
         initializeGranularRunListener(mainListener, context);
-        mFailureListener = failureListener;
         mModuleLevelListeners = moduleLevelListeners;
         mMaxRunLimit = maxRunLimit;
     }
@@ -248,10 +244,6 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
 
         mRetryAttemptForwarder = new RetryLogSaverResultForwarder(mLogSaver, currentTestListener);
         ITestInvocationListener runListener = mRetryAttemptForwarder;
-        if (mFailureListener != null) {
-            mFailureListener.setLogger(mRetryAttemptForwarder);
-            currentTestListener.add(mFailureListener);
-        }
 
         // The module collectors itself are added: this list will be very limited.
         // We clone them since the configuration object is shared across shards.
