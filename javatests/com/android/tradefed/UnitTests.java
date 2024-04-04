@@ -375,7 +375,6 @@ import com.android.tradefed.testtype.suite.RemoteTestTimeOutEnforcerTest;
 import com.android.tradefed.testtype.suite.ResolvePartialDownloadTest;
 import com.android.tradefed.testtype.suite.SuiteModuleLoaderTest;
 import com.android.tradefed.testtype.suite.SuiteTestFilterTest;
-import com.android.tradefed.testtype.suite.TestFailureListenerTest;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunnerTest;
 import com.android.tradefed.testtype.suite.TestSuiteInfoTest;
 import com.android.tradefed.testtype.suite.TfSuiteRunnerTest;
@@ -972,7 +971,6 @@ import org.junit.runners.Suite.SuiteClasses;
     ResolvePartialDownloadTest.class,
     SuiteModuleLoaderTest.class,
     SuiteTestFilterTest.class,
-    TestFailureListenerTest.class,
     TestMappingSuiteRunnerTest.class,
     TestSuiteInfoTest.class,
     TfSuiteRunnerTest.class,

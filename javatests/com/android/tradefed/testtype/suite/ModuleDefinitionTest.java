@@ -80,8 +80,6 @@ import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.module.BaseModuleController;
-import com.android.tradefed.testtype.suite.module.IModuleController;
-import com.android.tradefed.testtype.suite.module.TestFailureModuleController;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -812,7 +810,7 @@ public class ModuleDefinitionTest {
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
         mModule.setRetryDecision(mDecision);
-        mModule.run(mModuleInfo, mMockListener, Arrays.asList(mockModuleListener), null);
+        mModule.run(mModuleInfo, mMockListener, Arrays.asList(mockModuleListener));
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
@@ -980,7 +978,7 @@ public class ModuleDefinitionTest {
                 .shouldRetryPreparation(Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
         when(mMockDecision.getRetryStrategy()).thenReturn(RetryStrategy.ITERATIONS);
         mModule.setRetryDecision(mMockDecision);
-        mModule.run(mModuleInfo, mMockListener, null, null, 3);
+        mModule.run(mModuleInfo, mMockListener, null, 3);
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
@@ -1252,7 +1250,7 @@ public class ModuleDefinitionTest {
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
         // module is completely skipped, no tests is recorded.
-        mModule.run(mModuleInfo, mMockListener, null, null);
+        mModule.run(mModuleInfo, mMockListener, null);
     }
 
     /**
@@ -1304,7 +1302,7 @@ public class ModuleDefinitionTest {
                         .build();
 
         // expect the module to run but tests to be ignored
-        mModule.run(mModuleInfo, mMockListener, null, null);
+        mModule.run(mModuleInfo, mMockListener, null);
         verify(mMockListener)
                 .testRunStarted(Mockito.any(), Mockito.anyInt(), Mockito.eq(0), Mockito.anyLong());
         verify(mMockListener).testStarted(Mockito.any(), Mockito.anyLong());
@@ -1423,54 +1421,6 @@ public class ModuleDefinitionTest {
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
-    /**
-     * Test that the {@link IModuleController} object can override the behavior of the capture of
-     * the failure.
-     */
-    @Test
-    public void testOverrideModuleConfig() throws Exception {
-        // failure listener with capture logcat on failure and screenshot on failure.
-        List<ITestDevice> listDevice = new ArrayList<>();
-        listDevice.add(mMockDevice);
-        when(mMockDevice.getSerialNumber()).thenReturn("Serial");
-        TestFailureListener failureListener = new TestFailureListener(listDevice, true, false);
-        failureListener.setLogger(mMockListener);
-        IConfiguration config = new Configuration("", "");
-        TestFailureModuleController moduleConfig = new TestFailureModuleController();
-        OptionSetter setter = new OptionSetter(moduleConfig);
-        // Module option should override the logcat on failure
-        setter.setOptionValue("bugreportz-on-failure", "false");
-        config.setConfigurationObject(ModuleDefinition.MODULE_CONTROLLER, moduleConfig);
-        List<IRemoteTest> testList = new ArrayList<>();
-        testList.add(
-                new IRemoteTest() {
-                    @Override
-                    public void run(TestInformation testInfo, ITestInvocationListener listener)
-                            throws DeviceNotAvailableException {
-                        listener.testFailed(
-                                new TestDescription("failedclass", "failedmethod"),
-                                FailureDescription.create("trace", FailureStatus.TEST_FAILURE));
-                    }
-                });
-        mTargetPrepList.clear();
-        mModule =
-                new ModuleDefinition(
-                        MODULE_NAME,
-                        testList,
-                        mMapDeviceTargetPreparer,
-                        mMultiTargetPrepList,
-                        config);
-        mModule.setRetryDecision(mDecision);
-        mModule.setLogSaver(mMockLogSaver);
-
-        mModule.run(mModuleInfo, mMockListener, null, failureListener);
-        verify(mMockListener)
-                .testRunStarted(
-                        Mockito.eq("fakeName"), Mockito.eq(0), Mockito.eq(0), Mockito.anyLong());
-        verify(mMockListener)
-                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
-    }
-
     /** Test when the test yields a DeviceUnresponsive exception. */
     @Test
     public void testRun_partialRun_deviceUnresponsive() throws Exception {
@@ -1572,7 +1522,7 @@ public class ModuleDefinitionTest {
 
         LogSaverResultForwarder forwarder =
                 new LogSaverResultForwarder(mMockLogSaver, Arrays.asList(mMockLogSaverListener));
-        mModule.run(mModuleInfo, forwarder, Arrays.asList(mMockListener), null);
+        mModule.run(mModuleInfo, forwarder, Arrays.asList(mMockListener));
         InOrder inOrder = Mockito.inOrder(mMockLogSaverListener, mMockListener);
         inOrder.verify(mMockLogSaverListener).setLogSaver(mMockLogSaver);
         inOrder.verify(mMockListener)
@@ -1780,7 +1730,7 @@ public class ModuleDefinitionTest {
         when(mMockPrep.isDisabled()).thenReturn(false);
         when(mMockPrep.isTearDownDisabled()).thenReturn(false);
 
-        mModule.run(mModuleInfo, mMockListener, null, null, 3);
+        mModule.run(mModuleInfo, mMockListener, null, 3);
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
         verify(mMockPrep).tearDown(Mockito.eq(mModuleInfo), Mockito.isNull());
@@ -1881,7 +1831,7 @@ public class ModuleDefinitionTest {
         when(mMockPrep.isTearDownDisabled()).thenReturn(false);
         when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
 
-        mModule.run(mModuleInfo, mMockListener, null, null, 3);
+        mModule.run(mModuleInfo, mMockListener, null, 3);
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockDevice, times(3)).getIDevice();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
