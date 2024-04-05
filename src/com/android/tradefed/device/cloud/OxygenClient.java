@@ -160,9 +160,7 @@ public class OxygenClient {
             return null;
         }
 
-        String path = deviceOptions.getExtraOxygenArgs().get("override_fetch_cvd_path");
-        // An empty string is used to represent fetch_cvd from the build being tested.
-        return path == null ? "" : path;
+        return deviceOptions.getExtraOxygenArgs().get("override_fetch_cvd_path");
     }
 
     /**
@@ -265,12 +263,6 @@ public class OxygenClient {
         String override_fetch_cvd_path = getOverrideFetchCvdPath(deviceOptions);
         if (override_fetch_cvd_path != null) {
             oxygenClientArgs.add("-override_fetch_cvd_path");
-            // If the path is not specified, use the fetch_cvd in BuildInfo.
-            if (override_fetch_cvd_path.isEmpty()) {
-                String build_target =
-                        b.getBuildAttributes().getOrDefault("build_target", b.getBuildFlavor());
-                override_fetch_cvd_path = String.format("ab/%s/%s", b.getBuildId(), build_target);
-            }
             oxygenClientArgs.add(override_fetch_cvd_path);
         }
 
