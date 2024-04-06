@@ -122,6 +122,12 @@ public class OxygenUtil {
                                                     "Setup failed for cuttlefish::ConfigServer",
                                                     "config_server_failed")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pair.create(
+                                                    "VIRTUAL_DEVICE_BOOT_FAILED: Dependencies not"
+                                                            + " ready after 10 checks: Bluetooth",
+                                                    "bluetooth_failed")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^logcat.*"),
                                             Pair.create(
                                                     "System zygote died with fatal exception",

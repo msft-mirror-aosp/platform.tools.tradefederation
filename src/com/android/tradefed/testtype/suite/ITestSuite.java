@@ -358,6 +358,13 @@ public abstract class ITestSuite
             description = "Feature flag to use snapshot/restore instead of powerwash.")
     private boolean mUseSnapshotForReset = false;
 
+    @Option(
+            name = "use-snapshot-before-first-module",
+            description =
+                    "Immediately restore the device after taking a snapshot. Ensures tests are"
+                            + " consistently run within a restored VM.")
+    private boolean mUseSnapshotBeforeFirstModule = false;
+
     @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
     private boolean mStageRemoteFile = true;
 
@@ -791,6 +798,11 @@ public abstract class ITestSuite
                     ((AdbTcpConnection) connection)
                             .getSuiteSnapshots()
                             .put(mDevice, mContext.getInvocationId());
+                }
+                if (mUseSnapshotBeforeFirstModule) {
+                    String snapshot =
+                            ((AdbTcpConnection) connection).getSuiteSnapshots().get(mDevice);
+                    ((AdbTcpConnection) connection).recoverVirtualDevice(mDevice, snapshot, null);
                 }
             }
         }
