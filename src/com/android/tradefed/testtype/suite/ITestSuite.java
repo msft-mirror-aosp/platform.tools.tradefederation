@@ -542,8 +542,8 @@ public abstract class ITestSuite
                             .map(m -> String.format("/%s/", m))
                             .collect(Collectors.joining("|"));
             List<String> includeFilters = Arrays.asList(moduleRegex);
-            // Ignore config file as it's part of config zip artifact that's staged already.
-            List<String> excludeFilters = Arrays.asList("[.]config$");
+            // Ignore config file as it's part of config and jar zip artifact that's staged already.
+            List<String> excludeFilters = Arrays.asList("[.]config$", "[.]jar$");
             if (mStageArtifactsViaFeature) {
                 try (TradefedFeatureClient client = new TradefedFeatureClient()) {
                     Map<String, String> args = new HashMap<>();
@@ -568,7 +568,6 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
-                    args.put("use-cas", "false");
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,

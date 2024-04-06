@@ -1838,7 +1838,8 @@ public class ITestSuiteTest {
                         assertEquals(destDir, testsDir);
                         assertEquals(remoteFilePath, remoteFilePath);
                         assertArrayEquals(new String[] {"/test/"}, includeFilters.toArray());
-                        assertArrayEquals(new String[] {"[.]config$"}, excludeFilters.toArray());
+                        assertArrayEquals(
+                                new String[] {"[.]config$", "[.]jar$"}, excludeFilters.toArray());
                     }
                 };
         OptionSetter setter = new OptionSetter(mTestSuite);
