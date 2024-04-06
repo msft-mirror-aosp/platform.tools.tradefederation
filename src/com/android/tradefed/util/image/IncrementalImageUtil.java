@@ -28,6 +28,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
@@ -54,11 +55,16 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** A utility to leverage the incremental image and device update. */
 public class IncrementalImageUtil {
+
+    private static final AtomicInteger poolNumber = new AtomicInteger(1);
 
     public static final Set<String> DYNAMIC_PARTITIONS_TO_DIFF =
             ImmutableSet.of(
@@ -674,13 +680,28 @@ public class IncrementalImageUtil {
 
         @Override
         public void run() {
+            ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
+            ThreadFactory factory =
+                    new ThreadFactory() {
+                        @Override
+                        public Thread newThread(Runnable r) {
+                            Thread t =
+                                    new Thread(
+                                            currentGroup,
+                                            r,
+                                            "unzip-pool-task-" + poolNumber.getAndIncrement());
+                            t.setDaemon(true);
+                            return t;
+                        }
+                    };
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
                 mSrcDirectory = FileUtil.createTempDir("incremental_src");
                 mTargetDirectory = FileUtil.createTempDir("incremental_target");
                 Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    try {
+                                    try (CloseableTraceScope unzipBaseline =
+                                            new CloseableTraceScope("unzip_baseline")) {
                                         if (mSetupSrcImage.isDirectory()) {
                                             FileUtil.recursiveHardlink(
                                                     mSetupSrcImage, mSrcDirectory);
@@ -692,17 +713,27 @@ public class IncrementalImageUtil {
                                     } catch (IOException ioe) {
                                         throw new RuntimeException(ioe);
                                     }
-                                });
+                                },
+                                TracePropagatingExecutorService.create(
+                                        Executors.newFixedThreadPool(1, factory)));
                 Future<Boolean> futureTargetDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    try {
+                                    try (CloseableTraceScope unzipTarget =
+                                            new CloseableTraceScope("unzip_target")) {
+                                        if (mSetupTargetImage.isDirectory()) {
+                                            FileUtil.recursiveHardlink(
+                                                    mSetupTargetImage, mTargetDirectory);
+                                            return true;
+                                        }
                                         ZipUtil2.extractZip(mSetupTargetImage, mTargetDirectory);
                                         return true;
                                     } catch (IOException ioe) {
                                         throw new RuntimeException(ioe);
                                     }
-                                });
+                                },
+                                TracePropagatingExecutorService.create(
+                                        Executors.newFixedThreadPool(1, factory)));
                 // Join the unzipping
                 futureSrcDir.get();
                 futureTargetDir.get();
