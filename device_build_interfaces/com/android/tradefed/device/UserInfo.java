@@ -40,6 +40,8 @@ public final class UserInfo {
 
     public static final String COMMUNAL_PROFILE_TYPE = "profile.COMMUNAL";
 
+    public static final String PRIVATE_PROFILE_TYPE = "profile.PRIVATE";
+
     private final int mUserId;
     private final String mUserName;
     private final int mFlag;
@@ -70,7 +72,9 @@ public final class UserInfo {
         /** clone profile user */
         CLONE_PROFILE,
         /** communal profile user */
-        COMMUNAL_PROFILE;
+        COMMUNAL_PROFILE,
+        /** private profile user */
+        PRIVATE_PROFILE;
 
         public boolean isCurrent() {
             return this == CURRENT;
@@ -104,10 +108,14 @@ public final class UserInfo {
             return this == CLONE_PROFILE;
         }
 
+        public boolean isPrivateProfile() {
+            return this == PRIVATE_PROFILE;
+        }
+
         /** Return whether this instance is of profile type. */
         public boolean isProfile() {
             // Other types are not supported
-            return isManagedProfile() || isCloneProfile();
+            return isManagedProfile() || isCloneProfile() || isPrivateProfile();
         }
     }
 
@@ -167,6 +175,10 @@ public final class UserInfo {
         return CLONE_PROFILE_TYPE.equals(mUserType);
     }
 
+    public boolean isPrivateProfile() {
+        return PRIVATE_PROFILE_TYPE.equals(mUserType);
+    }
+
     public boolean isCommunalProfile() {
         return COMMUNAL_PROFILE_TYPE.equals(mUserType);
     }
@@ -200,6 +212,8 @@ public final class UserInfo {
                 return isCloneProfile();
             case COMMUNAL_PROFILE:
                 return isCommunalProfile();
+            case PRIVATE_PROFILE:
+                return isPrivateProfile();
             default:
                 throw new RuntimeException("Variant not covered: " + userType);
         }
