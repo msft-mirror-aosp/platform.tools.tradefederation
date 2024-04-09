@@ -123,6 +123,8 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
             // However, major functionalities supporting clone got added in 34.
             // Android U = 34
             return true;
+        } else if (mTradefedUserType.isPrivateProfile() && !matchesApiLevel(testInfo, 34)) {
+            return true;
         }
         return false;
     }
@@ -166,7 +168,7 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
 
         command += " user";
 
-        if (mTradefedUserType.isCloneProfile() || mTradefedUserType.isManagedProfile()) {
+        if (mTradefedUserType.isProfile()) {
             removeDeviceOwnerIfPresent(device);
         }
 

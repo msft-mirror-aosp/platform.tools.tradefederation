@@ -291,6 +291,7 @@ import com.android.tradefed.targetprep.RunCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostCommandTargetPreparerTest;
 import com.android.tradefed.targetprep.RunHostScriptTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnCloneProfileTargetPreparerTest;
+import com.android.tradefed.targetprep.RunOnPrivateProfileTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSdkSandboxTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparerTest;
 import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparerTest;
@@ -375,7 +376,6 @@ import com.android.tradefed.testtype.suite.RemoteTestTimeOutEnforcerTest;
 import com.android.tradefed.testtype.suite.ResolvePartialDownloadTest;
 import com.android.tradefed.testtype.suite.SuiteModuleLoaderTest;
 import com.android.tradefed.testtype.suite.SuiteTestFilterTest;
-import com.android.tradefed.testtype.suite.TestFailureListenerTest;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunnerTest;
 import com.android.tradefed.testtype.suite.TestSuiteInfoTest;
 import com.android.tradefed.testtype.suite.TfSuiteRunnerTest;
@@ -397,6 +397,7 @@ import com.android.tradefed.testtype.suite.params.RunOnSdkSandboxHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserHandlerTest;
 import com.android.tradefed.testtype.suite.params.SecondaryUserOnSecondaryDisplayHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnCloneProfileParameterHandlerTest;
+import com.android.tradefed.testtype.suite.params.multiuser.RunOnPrivateProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnSecondaryUserParameterHandlerTest;
 import com.android.tradefed.testtype.suite.params.multiuser.RunOnWorkProfileParameterHandlerTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayerTest;
@@ -835,6 +836,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RunHostCommandTargetPreparerTest.class,
     RunHostScriptTargetPreparerTest.class,
     RunOnCloneProfileTargetPreparerTest.class,
+    RunOnPrivateProfileTargetPreparerTest.class,
     RunOnSdkSandboxTargetPreparerTest.class,
     RunOnSecondaryUserTargetPreparerTest.class,
     RunOnSystemUserTargetPreparerTest.class,
@@ -972,7 +974,6 @@ import org.junit.runners.Suite.SuiteClasses;
     ResolvePartialDownloadTest.class,
     SuiteModuleLoaderTest.class,
     SuiteTestFilterTest.class,
-    TestFailureListenerTest.class,
     TestMappingSuiteRunnerTest.class,
     TestSuiteInfoTest.class,
     TfSuiteRunnerTest.class,
@@ -1000,6 +1001,7 @@ import org.junit.runners.Suite.SuiteClasses;
     SecondaryUserHandlerTest.class,
     SecondaryUserOnSecondaryDisplayHandlerTest.class,
     RunOnCloneProfileParameterHandlerTest.class,
+    RunOnPrivateProfileParameterHandlerTest.class,
 
     // testtype/suite/retry
     ResultsPlayerTest.class,

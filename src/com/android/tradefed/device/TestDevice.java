@@ -3099,7 +3099,7 @@ public class TestDevice extends NativeDevice {
                 .runTimedCmd(10000, deviceManager.getAdbPath(), "-s", serial, "forward", from, to);
 
         boolean disconnected = true;
-        while (disconnected) {
+        while (disconnected && timeoutMillis >= 0) {
             elapsed = System.currentTimeMillis() - start;
             timeoutMillis -= elapsed;
             start = System.currentTimeMillis();
@@ -3132,14 +3132,15 @@ public class TestDevice extends NativeDevice {
 
         elapsed = System.currentTimeMillis() - start;
         timeoutMillis -= elapsed;
-        getRunUtil()
-                .runTimedCmd(
-                        timeoutMillis,
-                        deviceManager.getAdbPath(),
-                        "-s",
-                        microdroidSerial,
-                        "wait-for-device");
-
+        if (timeoutMillis > 0) {
+            getRunUtil()
+                    .runTimedCmd(
+                            timeoutMillis,
+                            deviceManager.getAdbPath(),
+                            "-s",
+                            microdroidSerial,
+                            "wait-for-device");
+        }
         boolean dataAvailable = false;
         while (!dataAvailable && timeoutMillis >= 0) {
             elapsed = System.currentTimeMillis() - start;

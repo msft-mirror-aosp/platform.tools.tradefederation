@@ -82,6 +82,18 @@ public class CurrentInvocation {
     private static final Map<ThreadGroup, Map<InvocationLocal<?>, Optional<?>>> mInvocationLocals =
             new ConcurrentHashMap<>();
 
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
+
     /**
      * Add one key-value to be tracked at the invocation level.
      *
@@ -102,6 +114,9 @@ public class CurrentInvocation {
     public static File getInfo(InvocationInfo key) {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupInfo) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
             if (mPerGroupInfo.get(group) == null) {
                 mPerGroupInfo.put(group, new InternalInvocationTracking());
             }
