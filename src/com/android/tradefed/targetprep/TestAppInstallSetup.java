@@ -113,7 +113,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             name = "split-apk-file-names",
             description =
                     "the split apk file names separted by comma that will be installed on device."
-                        + " Can be repeated for multiple split apk sets.See"
+                        + " Can be repeated for multiple split apk sets. See"
                         + " https://developer.android.com/studio/build/configure-apk-splits on how"
                         + " to split apk to several files")
     private List<String> mSplitApkFileNames = new ArrayList<>();
