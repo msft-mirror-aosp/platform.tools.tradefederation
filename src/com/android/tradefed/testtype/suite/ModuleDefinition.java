@@ -33,6 +33,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.connection.AdbTcpConnection;
+import com.android.tradefed.device.metric.BugreportzOnTestCaseFailureCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.LogcatOnFailureCollector;
 import com.android.tradefed.device.metric.ScreenshotOnFailureCollector;
@@ -1422,6 +1423,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 }
                 if (!controller.shouldCaptureScreenshot()) {
                     mRunMetricCollectors.removeIf(c -> (c instanceof ScreenshotOnFailureCollector));
+                }
+                if (!controller.shouldCaptureBugreport()) {
+                    mRunMetricCollectors.removeIf(
+                            c -> (c instanceof BugreportzOnTestCaseFailureCollector));
                 }
             }
         }
