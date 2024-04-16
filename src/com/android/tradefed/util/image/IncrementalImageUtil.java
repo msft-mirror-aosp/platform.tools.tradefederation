@@ -509,7 +509,8 @@ public class IncrementalImageUtil {
                 }
                 mDevice.enableAdbRoot();
                 CommandResult revertOutput =
-                        mDevice.executeShellV2Command("snapshotctl revert-snapshots");
+                        mDevice.executeShellV2Command(
+                                "snapshotctl revert-snapshots", 60L, TimeUnit.SECONDS, 0);
                 if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
                     CLog.d(
                             "Failed revert-snapshots. stdout: %s, stderr: %s",
