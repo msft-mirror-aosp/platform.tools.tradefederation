@@ -26,6 +26,7 @@ import org.apache.commons.compress.archivers.zip.ZipFile;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
@@ -274,21 +275,38 @@ public class FlashingResourcesParser implements IFlashingResourcesParser {
         ZipFile deviceZip = null;
         BufferedReader infoReader = null;
         try {
-            deviceZip = new ZipFile(deviceImgZipFile);
-            ZipArchiveEntry androidInfoEntry = deviceZip.getEntry(ANDROID_INFO_FILE_NAME);
-            if (androidInfoEntry == null) {
-                DeviceDescriptor nullDescriptor = null;
-                throw new TargetSetupError(
-                        String.format(
-                                "Could not find %s in device image zip %s",
-                                ANDROID_INFO_FILE_NAME, deviceImgZipFile.getName()),
-                        nullDescriptor,
-                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-            }
-            infoReader = new BufferedReader(new InputStreamReader(
-                    deviceZip.getInputStream(androidInfoEntry)));
+            if (deviceImgZipFile.isDirectory()) {
+                File androidInfo = new File(deviceImgZipFile, ANDROID_INFO_FILE_NAME);
+                if (!androidInfo.exists()) {
+                    DeviceDescriptor nullDescriptor = null;
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Could not find %s in device image directory %s",
+                                    ANDROID_INFO_FILE_NAME, deviceImgZipFile.getName()),
+                            nullDescriptor,
+                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+                }
+                infoReader =
+                        new BufferedReader(new InputStreamReader(new FileInputStream(androidInfo)));
+                return parseAndroidInfo(infoReader, constraints);
+            } else {
+                deviceZip = new ZipFile(deviceImgZipFile);
+                ZipArchiveEntry androidInfoEntry = deviceZip.getEntry(ANDROID_INFO_FILE_NAME);
+                if (androidInfoEntry == null) {
+                    DeviceDescriptor nullDescriptor = null;
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Could not find %s in device image zip %s",
+                                    ANDROID_INFO_FILE_NAME, deviceImgZipFile.getName()),
+                            nullDescriptor,
+                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+                }
+                infoReader =
+                        new BufferedReader(
+                                new InputStreamReader(deviceZip.getInputStream(androidInfoEntry)));
 
-            return parseAndroidInfo(infoReader, constraints);
+                return parseAndroidInfo(infoReader, constraints);
+            }
         } catch (ZipException e) {
             throw new TargetSetupError(
                     String.format("Could not read device image zip %s", deviceImgZipFile.getName()),
