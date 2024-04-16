@@ -2404,7 +2404,6 @@ public class TestDevice extends NativeDevice {
     /** {@inheritDoc} */
     @Override
     public void postInvocationTearDown(Throwable exception) {
-        mWaitForSnapuserd = false;
         super.postInvocationTearDown(exception);
         // If wifi was installed and it's a real device, attempt to clean it.
         if (mWasWifiHelperInstalled) {
@@ -2670,13 +2669,14 @@ public class TestDevice extends NativeDevice {
         mWaitForSnapuserd = true;
         mSnapuserNotificationTimestamp = System.currentTimeMillis();
         mWaitPhase = waitPhase;
+        CLog.d("Notified to wait for snapuserd at %s", waitPhase);
     }
 
     @Override
     public void waitForSnapuserd(SnapuserdWaitPhase currentPhase)
             throws DeviceNotAvailableException {
         if (!mWaitForSnapuserd) {
-            CLog.d("No snapuserd notification in progress.");
+            CLog.d("No snapuserd notification in progress for %s", currentPhase);
             return;
         }
         // At releasing or at the reported phase, block for snapuserd.
