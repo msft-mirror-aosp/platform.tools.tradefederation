@@ -40,8 +40,8 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.image.DeviceImageTracker;
-import com.android.tradefed.util.image.IncrementalImageUtil;
 import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
+import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
@@ -783,7 +783,13 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             }
 
             if (shouldFlash) {
-                if (getHostOptions().shouldFlashWithFuseZip() && getFuseUtil().canMountZip()) {
+                if (deviceBuild.getDeviceImageFile().isDirectory()) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_METHOD,
+                            FlashingMethod.FASTBOOT_FLASH_ALL.toString());
+                    flashWithAll(device, deviceBuild);
+                } else if (getHostOptions().shouldFlashWithFuseZip()
+                        && getFuseUtil().canMountZip()) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.FLASHING_METHOD,
                             FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
@@ -804,6 +810,32 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             if (mSystemFlashStatus == null) {
                 mSystemFlashStatus = CommandStatus.EXCEPTION;
             }
+        }
+    }
+
+    /**
+     * Flash the system image on device by using an image directory with fastboot flashall command.
+     *
+     * @param device the {@link ITestDevice} to flash
+     * @param deviceBuild the {@link IDeviceBuildInfo} to flash
+     * @throws DeviceNotAvailableException if device is not available
+     * @throws TargetSetupError if fastboot command fails
+     */
+    private void flashWithAll(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws DeviceNotAvailableException, TargetSetupError {
+        try {
+            Map<String, String> systemVarMap = new HashMap<>();
+            systemVarMap.put(
+                    "ANDROID_PRODUCT_OUT", deviceBuild.getDeviceImageFile().getAbsolutePath());
+            String[] fastbootArgs = buildFastbootCommand("flashall", mShouldFlashRamdisk);
+            executeLongFastbootCmd(device, systemVarMap, fastbootArgs);
+        } catch (DeviceNotAvailableException e) {
+            // We wrap the exception from recovery if it fails to provide a clear message
+            throw new DeviceNotAvailableException(
+                    "Device became unavailable during fastboot 'flashall'. Please verify that "
+                            + "the image you are flashing can boot properly.",
+                    e,
+                    device.getSerialNumber());
         }
     }
 
