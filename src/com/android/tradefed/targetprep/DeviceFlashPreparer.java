@@ -586,7 +586,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         }
         if (mIncrementalImageUtil != null) {
             CLog.d("Teardown related to incremental update.");
-            mIncrementalImageUtil.teardownDevice();
+            RecoveryMode mode = testInfo.getDevice().getRecoveryMode();
+            try {
+                testInfo.getDevice().setRecoveryMode(RecoveryMode.NONE);
+                mIncrementalImageUtil.teardownDevice();
+            } finally {
+                testInfo.getDevice().setRecoveryMode(mode);
+            }
         }
         if (mEnforceSnapshotCompleted && e == null) {
             if (mIncrementalImageUtil == null || !mIncrementalImageUtil.updateCompleted()) {
