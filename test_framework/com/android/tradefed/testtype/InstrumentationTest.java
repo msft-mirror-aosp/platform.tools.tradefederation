@@ -48,6 +48,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.ddmlib.AndroidTestOrchestratorRemoteTestRunner;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -1095,7 +1096,7 @@ public class InstrumentationTest
         }
     }
 
-    /** Filter out "NOT_EXECUTED" for the purpose of tracking what needs to be rerun. */
+    /** Filter out "NOT_EXECUTED" and Skipped for the purpose of tracking what needs to be rerun. */
     protected static Set<TestDescription> excludeNonExecuted(TestRunResult results) {
         Set<TestDescription> completedTest = results.getCompletedTests();
         for (Entry<TestDescription, TestResult> entry : results.getTestResults().entrySet()) {
@@ -1104,6 +1105,10 @@ public class InstrumentationTest
                         entry.getValue().getFailure().getFailureStatus())) {
                     completedTest.remove(entry.getKey());
                 }
+            }
+            if (completedTest.contains(entry.getKey())
+                    && TestStatus.SKIPPED.equals(entry.getValue().getResultStatus())) {
+                completedTest.remove(entry.getKey());
             }
         }
         return completedTest;
