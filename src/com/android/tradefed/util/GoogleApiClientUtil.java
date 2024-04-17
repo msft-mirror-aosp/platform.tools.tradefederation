@@ -324,6 +324,9 @@ public class GoogleApiClientUtil {
             CLog.w(
                     "Request to %s failed: %d %s",
                     request.getUrl(), response.getStatusCode(), response.getStatusMessage());
+            if (response.getStatusCode() == 400) {
+                return false;
+            }
             return backOffHandler.handleResponse(request, response, supportsRetry);
         }
     }

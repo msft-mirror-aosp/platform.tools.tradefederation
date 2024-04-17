@@ -35,6 +35,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -203,10 +204,15 @@ public class DynamicShardHelper extends StrictShardHelper {
                     suite.setIntraModuleSharding(false);
                 }
 
-                allTests.addAll(
-                        suite.split(1000000, testInfo).stream()
-                                .map(x -> (ITestSuite) x)
-                                .collect(Collectors.toList()));
+                Collection<IRemoteTest> splitSuite = suite.split(1000000, testInfo);
+                if (splitSuite == null) {
+                    allTests.add(suite);
+                } else {
+                    allTests.addAll(
+                            splitSuite.stream()
+                                    .map(x -> (ITestSuite) x)
+                                    .collect(Collectors.toList()));
+                }
             } else {
                 throw new HarnessRuntimeException(
                         "Test not an instance of ITestSuite, cannot execute this using dynamic"
