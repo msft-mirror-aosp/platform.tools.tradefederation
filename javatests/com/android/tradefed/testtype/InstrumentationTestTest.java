@@ -61,6 +61,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.testtype.suite.GranularRetriableTestWrapperTest.CalledMetricCollector;
 import com.android.tradefed.util.ListInstrumentationParser;
@@ -549,7 +550,7 @@ public class InstrumentationTestTest {
                 .testRunFailed(
                         FailureDescription.create(RUN_ERROR_MSG, FailureStatus.TEST_FAILURE));
         inOrder.verify(mMockListener).testStarted(eq(TEST2), anyLong());
-        inOrder.verify(mMockListener).testFailed(eq(TEST2), (FailureDescription) any());
+        inOrder.verify(mMockListener).testSkipped(eq(TEST2), (SkipReason) any());
         inOrder.verify(mMockListener).testEnded(eq(TEST2), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testRunEnded(1, EMPTY_STRING_MAP);
         verify(mMockTestDevice).waitForDeviceAvailable();
