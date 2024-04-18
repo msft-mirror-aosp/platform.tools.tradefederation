@@ -22,6 +22,8 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 
+import com.google.api.client.util.Joiner;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -48,7 +50,7 @@ public class ImageContentAnalyzer {
                         CLog.d(
                                 "Removing context '%s' from content analysis in presubmit as it's"
                                         + " not a moving head.",
-                                context);
+                                context.contentEntry());
                     }
                 }
             }
@@ -135,6 +137,8 @@ public class ImageContentAnalyzer {
             if (diffs.isEmpty()) {
                 CLog.d("Device image from '%s' is unchanged", context.contentEntry());
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(diffs));
             return diffs.size();
         } catch (RuntimeException e) {
             CLog.e(e);
