@@ -179,7 +179,7 @@ public final class SandboxOptions {
             description =
                     "Feature to delegate most of the heavy download after sharding to reduce"
                             + " downloaded size.")
-    private boolean mDelayDownloadAfterSharding = false;
+    private boolean mDelayDownloadAfterSharding = true;
 
     /**
      * Returns the provided directories containing the Trade Federation version to use for

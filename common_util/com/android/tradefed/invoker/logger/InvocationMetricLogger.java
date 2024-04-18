@@ -227,6 +227,7 @@ public class InvocationMetricLogger {
         FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
         FLASHING_METHOD("flashing_method", false),
+        FLASHSTATION_DOWNLOAD_SIZE("flashstation_download_size_bytes", true),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
         // Unzipping metrics
         UNZIP_TESTS_DIR_TIME("unzip_tests_dir_time_ms", true),
