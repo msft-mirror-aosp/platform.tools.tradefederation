@@ -50,7 +50,7 @@ public class ImageContentAnalyzer {
                         CLog.d(
                                 "Removing context '%s' from content analysis in presubmit as it's"
                                         + " not a moving head.",
-                                context);
+                                context.contentEntry());
                     }
                 }
             }
