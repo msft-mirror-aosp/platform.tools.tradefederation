@@ -94,6 +94,12 @@ public class DynamicShardHelper extends StrictShardHelper {
             shouldDelegate = true;
         }
 
+        List<ITestSuite> allModules = getAllModules(config, testInfo);
+        if (allModules == null) {
+            CLog.w("Failed to split ITestSuite, falling back to strict mode.");
+            shouldDelegate = true;
+        }
+
         if (shouldDelegate) {
             CLog.d(
                     "Setting option 'remote-dynamic-sharding' to false since precondition checks"
@@ -107,7 +113,6 @@ public class DynamicShardHelper extends StrictShardHelper {
 
         String poolId = String.format("invocation-%s", invocationId);
 
-        List<ITestSuite> allModules = getAllModules(config, testInfo);
 
         Map<String, ITestSuite> moduleMapping = new HashMap<>();
         for (ITestSuite test : allModules) {
@@ -206,7 +211,7 @@ public class DynamicShardHelper extends StrictShardHelper {
 
                 Collection<IRemoteTest> splitSuite = suite.split(1000000, testInfo);
                 if (splitSuite == null) {
-                    allTests.add(suite);
+                    return null;
                 } else {
                     allTests.addAll(
                             splitSuite.stream()
