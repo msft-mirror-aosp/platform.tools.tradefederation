@@ -62,10 +62,13 @@ public class ImageContentAnalyzer {
                                                     || AnalysisMethod.DEVICE_IMAGE.equals(
                                                             c.analysisMethod())))
                             .collect(Collectors.toList());
-            // Handle invalidation should it be set.
+            // Handle invalidation should it be set for a device image.
             for (ContentAnalysisContext context : buildKeyAnalysis) {
-                if (context.abortAnalysis()) {
-                    CLog.w("Analysis was aborted: %s", context.abortReason());
+                if (AnalysisMethod.DEVICE_IMAGE.equals(context.analysisMethod())
+                        && context.abortAnalysis()) {
+                    CLog.w(
+                            "Analysis was aborted: %s for %s",
+                            context.abortReason(), context.contentEntry());
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
                     return null;
@@ -102,6 +105,12 @@ public class ImageContentAnalyzer {
 
     /** Returns true if the analysis has differences */
     private boolean buildKeyAnalysis(ContentAnalysisContext context) {
+        if (context.abortAnalysis()) {
+            CLog.w(
+                    "Analysis was aborted for build key %s: %s",
+                    context.contentEntry(), context.abortReason());
+            return true;
+        }
         try {
             List<ArtifactFileDescriptor> diffs =
                     TestContentAnalyzer.analyzeContentDiff(
