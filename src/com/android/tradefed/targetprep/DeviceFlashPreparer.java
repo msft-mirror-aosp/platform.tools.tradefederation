@@ -176,7 +176,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
-    private SnapuserdWaitPhase mWaitPhase = SnapuserdWaitPhase.BLOCK_AFTER_UPDATE;
+    private SnapuserdWaitPhase mWaitPhase = SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING;
 
     @Option(
             name = "allow-unzip-baseline",
