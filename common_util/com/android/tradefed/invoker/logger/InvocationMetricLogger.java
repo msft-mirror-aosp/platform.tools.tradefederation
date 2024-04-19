@@ -289,6 +289,7 @@ public class InvocationMetricLogger {
         ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
         DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
         AB_LIST_API_TIME_PAIR("ab_list_api_time_pair", true),
+        AB_TEST_ZIP_NAME("ab_test_zip_name", true),
 
         // Ab log saver metrics
         AB_LOG_SAVER_STAGING_TIME("ab_log_saver_staging_time", true),
