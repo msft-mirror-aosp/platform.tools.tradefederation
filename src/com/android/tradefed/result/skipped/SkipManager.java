@@ -108,12 +108,14 @@ public class SkipManager implements IDisableable {
     }
 
     public void setImageAnalysis(ITestDevice device, ContentAnalysisContext analysisContext) {
-        CLog.d("Received image artifact analysis for %s", device.getSerialNumber());
+        CLog.d(
+                "Received image artifact analysis '%s' for %s",
+                analysisContext.contentEntry(), device.getSerialNumber());
         mImageAnalysis.put(device, analysisContext);
     }
 
     public void setTestArtifactsAnalysis(ContentAnalysisContext analysisContext) {
-        CLog.d("Received test artifact analysis.");
+        CLog.d("Received test artifact analysis '%s'", analysisContext.contentEntry());
         mTestArtifactsAnalysisContent.add(analysisContext);
     }
 
