@@ -77,6 +77,9 @@ public class SkipManager implements IDisableable {
             description = "Some tests do not directly rely on content for being relevant.")
     private boolean mConsideredForContent = true;
 
+    @Option(name = "analysis-level", description = "Alter assumptions level of the analysis.")
+    private AnalysisHeuristic mAnalysisLevel = AnalysisHeuristic.REMOVE_EXEMPTION;
+
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
@@ -155,7 +158,8 @@ public class SkipManager implements IDisableable {
                         mImageAnalysis,
                         mTestArtifactsAnalysisContent,
                         mModulesDiscovered,
-                        mDependencyFiles);
+                        mDependencyFiles,
+                        mAnalysisLevel);
         return buildAnalysisDecision(information, analyzer.analyzeArtifacts());
     }
 
