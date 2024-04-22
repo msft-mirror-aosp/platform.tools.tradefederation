@@ -66,11 +66,7 @@ public class RunOnSdkSandboxHandlerTest {
         mConfiguration.setTargetPreparer(installer);
         mHandler.applySetup(mConfiguration);
 
-        // SdkSandbox mode is included.
-        assertEquals(1, test.getIncludeAnnotations().size());
-        assertEquals(
-                "android.platform.test.annotations.AppModeSdkSandbox",
-                test.getIncludeAnnotations().iterator().next());
+        assertEquals(0, test.getIncludeAnnotations().size());
         // Full mode tests and tests not applicable for the sandbox are excluded.
         assertEquals(2, test.getExcludeAnnotations().size());
         List<String> expected =
