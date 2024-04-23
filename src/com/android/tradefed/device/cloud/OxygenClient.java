@@ -150,19 +150,17 @@ public class OxygenClient {
     }
 
     /**
-     * Returns the value of the 'override_fetch_cvd_path' argument in the given TestDeviceOptions.
+     * Returns the value of the 'override_cvd_path' argument in the given TestDeviceOptions.
      *
      * @param deviceOptions {@link TestDeviceOptions}
-     * @return the value of 'override_fetch_cvd_path', or null if it is not present
+     * @return the value of 'override_cvd_path', or null if it is not present
      */
-    public String getOverrideFetchCvdPath(TestDeviceOptions deviceOptions) {
-        if (!deviceOptions.getExtraOxygenArgs().containsKey("override_fetch_cvd_path")) {
+    public String getOverrideCvdPath(TestDeviceOptions deviceOptions) {
+        if (!deviceOptions.getExtraOxygenArgs().containsKey("override_cvd_path")) {
             return null;
         }
 
-        String path = deviceOptions.getExtraOxygenArgs().get("override_fetch_cvd_path");
-        // An empty string is used to represent fetch_cvd from the build being tested.
-        return path == null ? "" : path;
+        return deviceOptions.getExtraOxygenArgs().get("override_cvd_path");
     }
 
     /**
@@ -261,17 +259,11 @@ public class OxygenClient {
         oxygenClientArgs.add("-lease_length_secs");
         oxygenClientArgs.add(Long.toString(deviceOptions.getOxygenLeaseLength() / 1000));
 
-        // Check if there is a new fetch CVD path to override
-        String override_fetch_cvd_path = getOverrideFetchCvdPath(deviceOptions);
-        if (override_fetch_cvd_path != null) {
-            oxygenClientArgs.add("-override_fetch_cvd_path");
-            // If the path is not specified, use the fetch_cvd in BuildInfo.
-            if (override_fetch_cvd_path.isEmpty()) {
-                String build_target =
-                        b.getBuildAttributes().getOrDefault("build_target", b.getBuildFlavor());
-                override_fetch_cvd_path = String.format("ab/%s/%s", b.getBuildId(), build_target);
-            }
-            oxygenClientArgs.add(override_fetch_cvd_path);
+        // Check if there is a new CVD path to override
+        String override_cvd_path = getOverrideCvdPath(deviceOptions);
+        if (override_cvd_path != null) {
+            oxygenClientArgs.add("-override_cvd_path");
+            oxygenClientArgs.add(override_cvd_path);
         }
 
         for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {

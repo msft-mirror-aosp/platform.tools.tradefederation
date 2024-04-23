@@ -626,6 +626,10 @@ public class BaseRetryDecision
         Set<TestDescription> failedTests = new HashSet<>(previousFailedTests.keySet());
         for (Entry<TestDescription, TestResult> testCaseEntry : previousFailedTests.entrySet()) {
             TestDescription testCase = testCaseEntry.getKey();
+            if (!TestStatus.FAILURE.equals(testCaseEntry.getValue().getResultStatus())) {
+                // Only consider failures for retriable failures.
+                continue;
+            }
             if (!testCaseEntry.getValue().getFailure().isRetriable()) {
                 // If a test case failure is not retriable, exclude it from the filters.
                 String filter =

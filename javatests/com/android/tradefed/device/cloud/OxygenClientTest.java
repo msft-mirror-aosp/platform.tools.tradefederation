@@ -351,14 +351,14 @@ public class OxygenClientTest {
         assertTrue(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
     }
 
-    /** Test fetch cvd path override. */
+    /** Test cvd path override. */
     @Test
-    public void testFetchCvdOverride() throws Exception {
-        assertNull(mOxygenClient.getOverrideFetchCvdPath(mTestDeviceOptions));
+    public void testCvdOverride() throws Exception {
+        assertNull(mOxygenClient.getOverrideCvdPath(mTestDeviceOptions));
         OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        setter.setOptionValue("extra-oxygen-args", "override_fetch_cvd_path", "gs://abc/fetch_cvd");
+        setter.setOptionValue("extra-oxygen-args", "override_cvd_path", "gs://abc/cvd");
         assertEquals(
-                mOxygenClient.getOverrideFetchCvdPath(mTestDeviceOptions), "gs://abc/fetch_cvd");
+                mOxygenClient.getOverrideCvdPath(mTestDeviceOptions), "gs://abc/cvd");
     }
 
     @Test

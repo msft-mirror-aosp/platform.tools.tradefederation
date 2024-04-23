@@ -197,12 +197,6 @@ public class InvocationMetricLogger {
         DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT("device_snapshot_restore_success_count", true),
         DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT("device_snapshot_restore_failure_count", true),
         DEVICE_SNAPSHOT_RESTORE_DURATIONS("device_snapshot_restore_durations", true),
-        DEVICE_SUSPEND_SUCCESS_COUNT("device_suspend_success_count", true),
-        DEVICE_SUSPEND_FAILURE_COUNT("device_suspend_failure_count", true),
-        DEVICE_SUSPEND_DURATIONS("device_suspend_durations", true),
-        DEVICE_RESUME_SUCCESS_COUNT("device_resume_success_count", true),
-        DEVICE_RESUME_FAILURE_COUNT("device_resume_failure_count", true),
-        DEVICE_RESUME_DURATIONS("device_resume_durations", true),
         DEVICE_STOP_SUCCESS_COUNT("device_stop_success_count", true),
         DEVICE_STOP_FAILURE_COUNT("device_stop_failure_count", true),
         DEVICE_STOP_DURATIONS("device_stop_durations", true),
@@ -214,10 +208,6 @@ public class InvocationMetricLogger {
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
-        // Represents the time we spent deleting file on host
-        DELETE_SNAPSHOT_FILES("delete_host_file_time_ms", true),
-        // Represents how many times we call the delete host file method
-        DELETE_SNAPSHOT_FILES_COUNT("delete_host_file_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
@@ -237,6 +227,7 @@ public class InvocationMetricLogger {
         FLASHING_TIME("flashing_time_ms", true),
         FLASHING_PERMIT_LATENCY("flashing_permit_latency_ms", true),
         FLASHING_METHOD("flashing_method", false),
+        FLASHSTATION_DOWNLOAD_SIZE("flashstation_download_size_bytes", true),
         DOWNLOAD_PERMIT_LATENCY("download_permit_latency_ms", true),
         // Unzipping metrics
         UNZIP_TESTS_DIR_TIME("unzip_tests_dir_time_ms", true),
@@ -298,6 +289,7 @@ public class InvocationMetricLogger {
         ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
         DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
         AB_LIST_API_TIME_PAIR("ab_list_api_time_pair", true),
+        AB_TEST_ZIP_NAME("ab_test_zip_name", true),
 
         // Ab log saver metrics
         AB_LOG_SAVER_STAGING_TIME("ab_log_saver_staging_time", true),
@@ -320,6 +312,7 @@ public class InvocationMetricLogger {
 
         DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
         IMAGE_CHANGES_IN_KEY_FILE("image_changes_in_key_file", true),
+        DEVICE_IMAGE_FILE_CHANGES("device_image_file_changes", true),
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
@@ -423,7 +416,6 @@ public class InvocationMetricLogger {
 
         INCREMENTAL_FLASHING_PATCHES_SIZE("incremental-flashing-patches-size", true),
         INCREMENTAL_FLASHING_TARGET_SIZE("incremental-flashing-target-size", true);
-
 
         private final String mGroupName;
         // Whether or not to add the value when the key is added again.

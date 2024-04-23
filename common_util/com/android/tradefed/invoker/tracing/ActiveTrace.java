@@ -158,8 +158,6 @@ public class ActiveTrace {
                         .setTimestamp(System.nanoTime())
                         .setTrustedPacketSequenceId(1)
                         .setSequenceFlags(1)
-                        .setProcessDescriptor(ProcessDescriptor.newBuilder().setPid((int) pid))
-                        .setThreadDescriptor(ThreadDescriptor.newBuilder().setTid(threadId))
                         .setTrackEvent(
                                 TrackEvent.newBuilder()
                                         .setTrackUuid(traceIdentifier)

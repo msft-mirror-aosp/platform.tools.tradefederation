@@ -176,7 +176,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
-    private SnapuserdWaitPhase mWaitPhase = SnapuserdWaitPhase.BLOCK_AFTER_UPDATE;
+    private SnapuserdWaitPhase mWaitPhase = SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING;
 
     @Option(
             name = "allow-unzip-baseline",
@@ -586,7 +586,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         }
         if (mIncrementalImageUtil != null) {
             CLog.d("Teardown related to incremental update.");
-            mIncrementalImageUtil.teardownDevice();
+            RecoveryMode mode = testInfo.getDevice().getRecoveryMode();
+            try {
+                testInfo.getDevice().setRecoveryMode(RecoveryMode.NONE);
+                mIncrementalImageUtil.teardownDevice();
+            } finally {
+                testInfo.getDevice().setRecoveryMode(mode);
+            }
         }
         if (mEnforceSnapshotCompleted && e == null) {
             if (mIncrementalImageUtil == null || !mIncrementalImageUtil.updateCompleted()) {

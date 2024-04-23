@@ -33,6 +33,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.connection.AdbTcpConnection;
+import com.android.tradefed.device.metric.BugreportzOnTestCaseFailureCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.LogcatOnFailureCollector;
 import com.android.tradefed.device.metric.ScreenshotOnFailureCollector;
@@ -393,7 +394,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      */
     public final void run(TestInformation moduleInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        run(moduleInfo, listener, null, null);
+        run(moduleInfo, listener, null);
     }
 
     /**
@@ -402,16 +403,14 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      *
      * @param listener the {@link ITestInvocationListener} where to report results.
      * @param moduleLevelListeners The list of listeners at the module level.
-     * @param failureListener a particular listener to collect logs on testFail. Can be null.
      * @throws DeviceNotAvailableException in case of device going offline.
      */
     public final void run(
             TestInformation moduleInfo,
             ITestInvocationListener listener,
-            List<ITestInvocationListener> moduleLevelListeners,
-            TestFailureListener failureListener)
+            List<ITestInvocationListener> moduleLevelListeners)
             throws DeviceNotAvailableException {
-        run(moduleInfo, listener, moduleLevelListeners, failureListener, 1);
+        run(moduleInfo, listener, moduleLevelListeners, 1);
     }
 
     /**
@@ -429,7 +428,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             TestInformation moduleInfo,
             ITestInvocationListener listener,
             List<ITestInvocationListener> moduleLevelListeners,
-            TestFailureListener failureListener,
             int maxRunLimit)
             throws DeviceNotAvailableException {
         mMaxRetry = maxRunLimit;
@@ -440,7 +438,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         // Load extra configuration for the module from module_controller
         // TODO: make module_controller a full TF object
         boolean skipTestCases = false;
-        RunStrategy rs = applyConfigurationControl(failureListener);
+        RunStrategy rs = applyConfigurationControl();
         if (RunStrategy.FULL_MODULE_BYPASS.equals(rs)) {
             CLog.d("module_controller applied and module %s should not run.", getId());
             return;
@@ -581,7 +579,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         prepareGranularRetriableWrapper(
                                 test,
                                 listener,
-                                failureListener,
                                 moduleLevelListeners,
                                 skipTestCases,
                                 perModuleRetryQuota);
@@ -699,9 +696,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 CLog.e(e);
                 tearDownException = e;
             } finally {
-                if (failureListener != null) {
-                    failureListener.join();
-                }
                 InvocationMetricLogger
                         .addInvocationPairMetrics(InvocationMetricKey.MODULE_TEARDOWN_PAIR,
                                 cleanStartTime, getCurrentTime());
@@ -768,13 +762,12 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     GranularRetriableTestWrapper prepareGranularRetriableWrapper(
             IRemoteTest test,
             ITestInvocationListener listener,
-            TestFailureListener failureListener,
             List<ITestInvocationListener> moduleLevelListeners,
             boolean skipTestCases,
             int maxRunLimit) {
         GranularRetriableTestWrapper retriableTest =
                 new GranularRetriableTestWrapper(
-                        test, this, listener, failureListener, moduleLevelListeners, maxRunLimit);
+                        test, this, listener, moduleLevelListeners, maxRunLimit);
         retriableTest.setModuleId(getId());
         retriableTest.setMarkTestsSkipped(skipTestCases);
         retriableTest.setMetricCollectors(mRunMetricCollectors);
@@ -1415,8 +1408,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      * @param failureListener The {@link TestFailureListener} taking actions on tests failures.
      * @return The strategy to use to run the tests.
      */
-    private RunStrategy applyConfigurationControl(TestFailureListener failureListener)
-            throws DeviceNotAvailableException {
+    private RunStrategy applyConfigurationControl() throws DeviceNotAvailableException {
         List<?> ctrlObjectList = mModuleConfiguration.getConfigurationObjectList(MODULE_CONTROLLER);
         if (ctrlObjectList == null) {
             return RunStrategy.RUN;
@@ -1426,15 +1418,15 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 BaseModuleController controller = (BaseModuleController) ctrlObject;
                 // Track usage of the controller
                 TfObjectTracker.countWithParents(controller.getClass());
-                // module_controller can also control the log collection for the one module
-                if (failureListener != null) {
-                    failureListener.applyModuleConfiguration(controller.shouldCaptureBugreport());
-                }
                 if (!controller.shouldCaptureLogcat()) {
                     mRunMetricCollectors.removeIf(c -> (c instanceof LogcatOnFailureCollector));
                 }
                 if (!controller.shouldCaptureScreenshot()) {
                     mRunMetricCollectors.removeIf(c -> (c instanceof ScreenshotOnFailureCollector));
+                }
+                if (!controller.shouldCaptureBugreport()) {
+                    mRunMetricCollectors.removeIf(
+                            c -> (c instanceof BugreportzOnTestCaseFailureCollector));
                 }
             }
         }

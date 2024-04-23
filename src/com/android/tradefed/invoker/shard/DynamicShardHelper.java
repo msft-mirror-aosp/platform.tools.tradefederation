@@ -35,6 +35,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,10 +88,21 @@ public class DynamicShardHelper extends StrictShardHelper {
 
         // Check if any of the tests are not ITestSuite instances
         // If not, make sure that intra-module sharding is off and delegate
-        if (config.getTests().stream()
-                .anyMatch(x -> !ITestSuite.class.isAssignableFrom(x.getClass()))) {
+        if (!shouldDelegate
+                && config.getTests().stream()
+                        .anyMatch(x -> !ITestSuite.class.isAssignableFrom(x.getClass()))) {
             CLog.d("Found non-ITestSuite tests, falling back to strict sharding");
             shouldDelegate = true;
+        }
+
+        List<ITestSuite> allModules = null;
+
+        if (!shouldDelegate) {
+            allModules = getAllModules(config, testInfo);
+            if (allModules == null) {
+                CLog.w("No sharding supported.");
+                shouldDelegate = true;
+            }
         }
 
         if (shouldDelegate) {
@@ -106,7 +118,6 @@ public class DynamicShardHelper extends StrictShardHelper {
 
         String poolId = String.format("invocation-%s", invocationId);
 
-        List<ITestSuite> allModules = getAllModules(config, testInfo);
 
         Map<String, ITestSuite> moduleMapping = new HashMap<>();
         for (ITestSuite test : allModules) {
@@ -159,10 +170,12 @@ public class DynamicShardHelper extends StrictShardHelper {
     }
 
     private IDynamicShardingClient getClient() {
-        TradefedFeatureClient featureClient = new TradefedFeatureClient();
-        FeatureResponse resp =
-                featureClient.triggerFeature(
-                        "getDynamicShardingConnectionInfo", new HashMap<String, String>());
+        FeatureResponse resp = null;
+        try (TradefedFeatureClient featureClient = new TradefedFeatureClient()) {
+            resp =
+                    featureClient.triggerFeature(
+                            "getDynamicShardingConnectionInfo", new HashMap<String, String>());
+        }
         if (resp.hasMultiPartResponse()) {
             DynamicShardingConnectionInfoMessage msg =
                     DynamicShardingConnectionInfoMessage.fromMultiPartResponse(
@@ -203,10 +216,15 @@ public class DynamicShardHelper extends StrictShardHelper {
                     suite.setIntraModuleSharding(false);
                 }
 
-                allTests.addAll(
-                        suite.split(1000000, testInfo).stream()
-                                .map(x -> (ITestSuite) x)
-                                .collect(Collectors.toList()));
+                Collection<IRemoteTest> splitSuite = suite.split(1000000, testInfo);
+                if (splitSuite == null) {
+                    return null;
+                } else {
+                    allTests.addAll(
+                            splitSuite.stream()
+                                    .map(x -> (ITestSuite) x)
+                                    .collect(Collectors.toList()));
+                }
             } else {
                 throw new HarnessRuntimeException(
                         "Test not an instance of ITestSuite, cannot execute this using dynamic"
