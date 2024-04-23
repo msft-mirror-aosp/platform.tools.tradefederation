@@ -21,6 +21,9 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.skipped.AnalysisHeuristic;
+
+import com.google.api.client.util.Joiner;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,10 +34,15 @@ public class ImageContentAnalyzer {
 
     private final boolean presubmitMode;
     private final List<ContentAnalysisContext> contexts;
+    private final AnalysisHeuristic mAnalysisLevel;
 
-    public ImageContentAnalyzer(boolean presubmitMode, List<ContentAnalysisContext> contexts) {
+    public ImageContentAnalyzer(
+            boolean presubmitMode,
+            List<ContentAnalysisContext> contexts,
+            AnalysisHeuristic analysisLevel) {
         this.presubmitMode = presubmitMode;
         this.contexts = contexts;
+        this.mAnalysisLevel = analysisLevel;
     }
 
     public ContentAnalysisResults evaluate() {
@@ -48,7 +56,7 @@ public class ImageContentAnalyzer {
                         CLog.d(
                                 "Removing context '%s' from content analysis in presubmit as it's"
                                         + " not a moving head.",
-                                context);
+                                context.contentEntry());
                     }
                 }
             }
@@ -60,10 +68,13 @@ public class ImageContentAnalyzer {
                                                     || AnalysisMethod.DEVICE_IMAGE.equals(
                                                             c.analysisMethod())))
                             .collect(Collectors.toList());
-            // Handle invalidation should it be set.
+            // Handle invalidation should it be set for a device image.
             for (ContentAnalysisContext context : buildKeyAnalysis) {
-                if (context.abortAnalysis()) {
-                    CLog.w("Analysis was aborted: %s", context.abortReason());
+                if (AnalysisMethod.DEVICE_IMAGE.equals(context.analysisMethod())
+                        && context.abortAnalysis()) {
+                    CLog.w(
+                            "Analysis was aborted: %s for %s",
+                            context.abortReason(), context.contentEntry());
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
                     return null;
@@ -100,6 +111,12 @@ public class ImageContentAnalyzer {
 
     /** Returns true if the analysis has differences */
     private boolean buildKeyAnalysis(ContentAnalysisContext context) {
+        if (context.abortAnalysis()) {
+            CLog.w(
+                    "Analysis was aborted for build key %s: %s",
+                    context.contentEntry(), context.abortReason());
+            return true;
+        }
         try {
             List<ArtifactFileDescriptor> diffs =
                     TestContentAnalyzer.analyzeContentDiff(
@@ -132,9 +149,27 @@ public class ImageContentAnalyzer {
             diffs.removeIf(d -> d.path.startsWith("META/"));
             diffs.removeIf(d -> d.path.startsWith("PREBUILT_IMAGES/"));
             diffs.removeIf(d -> d.path.startsWith("RADIO/"));
+            if (mAnalysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
+                boolean removed = false;
+                // b/335722003
+                removed =
+                        removed
+                                || diffs.removeIf(
+                                        d -> d.path.equals("SYSTEM/boot_otas/boot_ota_4k.zip"));
+                removed =
+                        removed
+                                || diffs.removeIf(
+                                        d -> d.path.equals("SYSTEM/boot_otas/boot_ota_16k.zip"));
+                if (removed) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.DEVICE_IMAGE_USED_HEURISTIC, mAnalysisLevel.name());
+                }
+            }
             if (diffs.isEmpty()) {
                 CLog.d("Device image from '%s' is unchanged", context.contentEntry());
             }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(diffs));
             return diffs.size();
         } catch (RuntimeException e) {
             CLog.e(e);

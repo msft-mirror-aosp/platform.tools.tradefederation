@@ -88,10 +88,21 @@ public class DynamicShardHelper extends StrictShardHelper {
 
         // Check if any of the tests are not ITestSuite instances
         // If not, make sure that intra-module sharding is off and delegate
-        if (config.getTests().stream()
-                .anyMatch(x -> !ITestSuite.class.isAssignableFrom(x.getClass()))) {
+        if (!shouldDelegate
+                && config.getTests().stream()
+                        .anyMatch(x -> !ITestSuite.class.isAssignableFrom(x.getClass()))) {
             CLog.d("Found non-ITestSuite tests, falling back to strict sharding");
             shouldDelegate = true;
+        }
+
+        List<ITestSuite> allModules = null;
+
+        if (!shouldDelegate) {
+            allModules = getAllModules(config, testInfo);
+            if (allModules == null) {
+                CLog.w("No sharding supported.");
+                shouldDelegate = true;
+            }
         }
 
         if (shouldDelegate) {
@@ -107,7 +118,6 @@ public class DynamicShardHelper extends StrictShardHelper {
 
         String poolId = String.format("invocation-%s", invocationId);
 
-        List<ITestSuite> allModules = getAllModules(config, testInfo);
 
         Map<String, ITestSuite> moduleMapping = new HashMap<>();
         for (ITestSuite test : allModules) {
@@ -160,10 +170,12 @@ public class DynamicShardHelper extends StrictShardHelper {
     }
 
     private IDynamicShardingClient getClient() {
-        TradefedFeatureClient featureClient = new TradefedFeatureClient();
-        FeatureResponse resp =
-                featureClient.triggerFeature(
-                        "getDynamicShardingConnectionInfo", new HashMap<String, String>());
+        FeatureResponse resp = null;
+        try (TradefedFeatureClient featureClient = new TradefedFeatureClient()) {
+            resp =
+                    featureClient.triggerFeature(
+                            "getDynamicShardingConnectionInfo", new HashMap<String, String>());
+        }
         if (resp.hasMultiPartResponse()) {
             DynamicShardingConnectionInfoMessage msg =
                     DynamicShardingConnectionInfoMessage.fromMultiPartResponse(
@@ -206,7 +218,7 @@ public class DynamicShardHelper extends StrictShardHelper {
 
                 Collection<IRemoteTest> splitSuite = suite.split(1000000, testInfo);
                 if (splitSuite == null) {
-                    allTests.add(suite);
+                    return null;
                 } else {
                     allTests.addAll(
                             splitSuite.stream()

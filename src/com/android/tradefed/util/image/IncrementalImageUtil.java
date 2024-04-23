@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.SnapuserdWaitPhase;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
@@ -85,6 +86,7 @@ public class IncrementalImageUtil {
     private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
+    private boolean mAllowUnzipBaseline = false;
     private boolean mBootloaderNeedsFlashing = false;
     private boolean mBasebandNeedsFlashing = false;
     private boolean mUpdateWasCompleted = false;
@@ -293,6 +295,10 @@ public class IncrementalImageUtil {
         return mAllowSameBuildFlashing;
     }
 
+    public void allowUnzipBaseline() {
+        mAllowUnzipBaseline = true;
+    }
+
     /** Returns whether device is currently using snapshots or not. */
     public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
         CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
@@ -497,7 +503,7 @@ public class IncrementalImageUtil {
     /*
      * Returns the device to its original state.
      */
-    public void teardownDevice() throws DeviceNotAvailableException {
+    public void teardownDevice(TestInformation testInfo) throws DeviceNotAvailableException {
         try {
             if (mApplySnapshot) {
                 return;
@@ -520,6 +526,17 @@ public class IncrementalImageUtil {
                 }
                 if (mSourceDirectory != null) {
                     flashStaticPartition(mSourceDirectory);
+                }
+                if (mSourceDirectory != null && mAllowUnzipBaseline) {
+                    DeviceImageTracker.getDefaultCache()
+                            .trackUpdatedDeviceImage(
+                                    mDevice.getSerialNumber(),
+                                    mSourceDirectory,
+                                    mSrcBootloader,
+                                    mSrcBaseband,
+                                    testInfo.getBuildInfo().getBuildId(),
+                                    testInfo.getBuildInfo().getBuildBranch(),
+                                    testInfo.getBuildInfo().getBuildFlavor());
                 }
             } catch (DeviceNotAvailableException e) {
                 InvocationMetricLogger.addInvocationMetrics(

@@ -47,18 +47,21 @@ public class ArtifactsAnalyzer {
     private final List<ContentAnalysisContext> mTestArtifactsAnalysisContent;
     private final List<String> mModulesDiscovered;
     private final List<String> mDependencyFiles;
+    private final AnalysisHeuristic mAnalysisLevel;
 
     public ArtifactsAnalyzer(
             TestInformation information,
             MultiMap<ITestDevice, ContentAnalysisContext> imageAnalysis,
             List<ContentAnalysisContext> testAnalysisContexts,
             List<String> moduleDiscovered,
-            List<String> dependencyFiles) {
+            List<String> dependencyFiles,
+            AnalysisHeuristic analysisLevel) {
         this.information = information;
         this.mImageAnalysis = imageAnalysis;
         this.mTestArtifactsAnalysisContent = testAnalysisContexts;
         this.mModulesDiscovered = moduleDiscovered;
         this.mDependencyFiles = dependencyFiles;
+        this.mAnalysisLevel = analysisLevel;
     }
 
     public BuildAnalysis analyzeArtifacts() {
@@ -134,7 +137,8 @@ public class ArtifactsAnalyzer {
                                         c ->
                                                 c.analysisMethod()
                                                         .equals(AnalysisMethod.DEVICE_IMAGE));
-                ImageContentAnalyzer analyze = new ImageContentAnalyzer(presubmit, context);
+                ImageContentAnalyzer analyze =
+                        new ImageContentAnalyzer(presubmit, context, mAnalysisLevel);
                 ContentAnalysisResults res = analyze.evaluate();
                 if (res == null) {
                     deviceImageChanged = true;

@@ -289,6 +289,7 @@ public class InvocationMetricLogger {
         ZIP_PARTIAL_DOWNLOAD_CACHE_HIT("zip_partial_download_cache_hit", true),
         DOWNLOAD_BOTH_ZIPS_AND_TS("download_both_zips_and_ts", true),
         AB_LIST_API_TIME_PAIR("ab_list_api_time_pair", true),
+        AB_TEST_ZIP_NAME("ab_test_zip_name", true),
 
         // Ab log saver metrics
         AB_LOG_SAVER_STAGING_TIME("ab_log_saver_staging_time", true),
@@ -311,6 +312,8 @@ public class InvocationMetricLogger {
 
         DEVICE_IMAGE_NOT_CHANGED("device_image_not_changed", false),
         IMAGE_CHANGES_IN_KEY_FILE("image_changes_in_key_file", true),
+        DEVICE_IMAGE_FILE_CHANGES("device_image_file_changes", true),
+        DEVICE_IMAGE_USED_HEURISTIC("device_image_used_heuristic", true),
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
