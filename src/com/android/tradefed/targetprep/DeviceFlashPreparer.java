@@ -590,7 +590,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             RecoveryMode mode = testInfo.getDevice().getRecoveryMode();
             try {
                 testInfo.getDevice().setRecoveryMode(RecoveryMode.NONE);
-                mIncrementalImageUtil.teardownDevice();
+                if (mAllowUnzippedBaseline) {
+                    mIncrementalImageUtil.allowUnzipBaseline();
+                }
+                mIncrementalImageUtil.teardownDevice(testInfo);
             } finally {
                 testInfo.getDevice().setRecoveryMode(mode);
             }
