@@ -292,7 +292,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             for (IDeviceConfiguration deviceConfig : mConfig.getDeviceConfig()) {
                 for (ITargetPreparer p : deviceConfig.getTargetPreparers()) {
                     if (p instanceof GkiDeviceFlashPreparer
-                            && !((GkiDeviceFlashPreparer) p).isDisabled()) {
+                            && !((GkiDeviceFlashPreparer) p).isDisabled()
+                            && !mApplySnapshot) {
                         CLog.d(
                                 "Force disabling incremental flashing due to"
                                         + " GkiDeviceFlashPreparer.");
@@ -589,7 +590,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             RecoveryMode mode = testInfo.getDevice().getRecoveryMode();
             try {
                 testInfo.getDevice().setRecoveryMode(RecoveryMode.NONE);
-                mIncrementalImageUtil.teardownDevice();
+                if (mAllowUnzippedBaseline) {
+                    mIncrementalImageUtil.allowUnzipBaseline();
+                }
+                mIncrementalImageUtil.teardownDevice(testInfo);
             } finally {
                 testInfo.getDevice().setRecoveryMode(mode);
             }
