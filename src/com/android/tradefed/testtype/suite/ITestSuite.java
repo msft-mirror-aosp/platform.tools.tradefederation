@@ -20,6 +20,7 @@ import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
@@ -55,9 +56,12 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.postprocessor.IPostProcessor;
+import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
+import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -93,6 +97,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -894,6 +900,7 @@ public abstract class ITestSuite
                     TestInformation moduleInfo =
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
+                    logModuleConfig(listener, module);
                     try {
                         runSingleModule(module, moduleInfo, listener, moduleListeners);
                     } finally {
@@ -948,6 +955,28 @@ public abstract class ITestSuite
             }
         }
         return listener;
+    }
+
+    /** Log the module configuration. */
+    private void logModuleConfig(ITestLogger logger, ModuleDefinition module) {
+        try (StringWriter configXmlWriter = new StringWriter();
+                PrintWriter wrapperWriter = new PrintWriter(configXmlWriter)) {
+            module.getModuleConfiguration()
+                    .dumpXml(
+                            wrapperWriter,
+                            new ArrayList<String>(Configuration.NON_MODULE_OBJECTS),
+                            true,
+                            false);
+            wrapperWriter.flush();
+            // Specified UTF-8 encoding for an abundance of caution, but its possible we could want
+            // something else in the future
+            byte[] configXmlByteArray = configXmlWriter.toString().getBytes("UTF-8");
+            try (InputStreamSource source = new ByteArrayInputStreamSource(configXmlByteArray)) {
+                logger.testLog("module-configuration", LogDataType.HARNESS_CONFIG, source);
+            }
+        } catch (RuntimeException | IOException e) {
+            CLog.e(e);
+        }
     }
 
     /**
