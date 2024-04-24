@@ -46,6 +46,12 @@
     "key": "verifier_verify_adb_installs",
     "value": "0"
   },
+  "hide_error_dialogs": {
+    "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
+    "namespace": "global",
+    "key": "hide_error_dialogs",
+    "value": "1"
+  },
   "clear_lock_screen": {
     "class_name": "com.android.tradefed.suite.checker.baseline.LockSettingsBaselineSetter",
     "clear_pwds": ["0000", "1234", "12345", "private"]
