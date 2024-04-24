@@ -119,7 +119,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                     "Original build id: %s. after mount build id: %s",
                     originalBuildId, afterMountBuildId);
         } finally {
-            updateUtil.teardownDevice();
+            updateUtil.teardownDevice(getTestInformation());
         }
         String afterRevert = getDevice().getBuildId();
         CLog.d("Original build id: %s. after unmount build id: %s", originalBuildId, afterRevert);
