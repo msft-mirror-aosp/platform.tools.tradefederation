@@ -17,6 +17,7 @@ package com.android.tradefed.postprocessor;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -33,16 +34,21 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.skipped.SkipReason;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * The base {@link IPostProcessor} that every implementation should extend. Ensure that the post
@@ -57,6 +63,7 @@ public abstract class BasePostProcessor implements IPostProcessor {
     private ArrayListMultimap<String, Metric> storedTestMetrics = ArrayListMultimap.create();
     private Map<TestDescription, Map<String, LogFile>> mTestLogs = new LinkedHashMap<>();
     private Map<String, LogFile> mRunLogs = new HashMap<>();
+    private Set<LogFile> mToDelete = new HashSet<>();
 
     // Keeps track of the current test; takes null value when the post processor is not in the scope
     // of any test (i.e. before the first test, in-between tests and after the last test).
@@ -244,6 +251,8 @@ public abstract class BasePostProcessor implements IPostProcessor {
             // Clear out the stored test and run logs.
             mTestLogs.clear();
             mRunLogs.clear();
+            // Delete all the copies
+            cleanUp();
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         }
@@ -393,11 +402,15 @@ public abstract class BasePostProcessor implements IPostProcessor {
     public final void logAssociation(String dataName, LogFile logFile) {
         // Only associate files created outside of the current post processor.
         if (!mIsPostProcessing) {
-            // mCurrentTest is null only outside the scope of a test.
-            if (mCurrentTest != null) {
-                mTestLogs.get(mCurrentTest).put(dataName, logFile);
-            } else {
-                mRunLogs.put(dataName, logFile);
+            LogFile copyFile = copyLogFile(logFile);
+            if (copyFile != null) {
+                mToDelete.add(copyFile);
+                // mCurrentTest is null only outside the scope of a test.
+                if (mCurrentTest != null) {
+                    mTestLogs.get(mCurrentTest).put(dataName, copyFile);
+                } else {
+                    mRunLogs.put(dataName, copyFile);
+                }
             }
         }
 
@@ -458,5 +471,39 @@ public abstract class BasePostProcessor implements IPostProcessor {
         return mRunName;
     }
 
+    protected void cleanUp() {
+        // Delete all the copies
+        for (LogFile f : mToDelete) {
+            FileUtil.deleteFile(new File(f.getPath()));
+        }
+        mToDelete.clear();
+    }
 
+    private LogFile copyLogFile(LogFile original) {
+        if (Strings.isNullOrEmpty(original.getPath())) {
+            CLog.d("%s doesn't exist and can't be copied for post processor.", original);
+            return null;
+        }
+        File originalFile = new File(original.getPath());
+        if (!originalFile.exists()) {
+            CLog.d("%s doesn't exist and can't be copied for post processor.", original);
+            return null;
+        }
+        try {
+            File copy =
+                    FileUtil.createTempFile(
+                            originalFile.getName(), "", CurrentInvocation.getWorkFolder());
+            copy.delete();
+            FileUtil.hardlinkFile(originalFile, copy);
+            return new LogFile(
+                    copy.getAbsolutePath(),
+                    original.getUrl(),
+                    original.isCompressed(),
+                    original.getType(),
+                    original.getSize());
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return null;
+    }
 }
