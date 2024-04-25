@@ -777,6 +777,9 @@ public class MoblyBinaryHostTest
                     if (cleanName.contains("btsnoop")) {
                         type = LogDataType.BT_SNOOP_LOG;
                     }
+                    if (cleanName.contains("mp4")) {
+                        type = LogDataType.MP4;
+                    }
                     listener.testLog(cleanName, type, dataStream);
                 }
             }
