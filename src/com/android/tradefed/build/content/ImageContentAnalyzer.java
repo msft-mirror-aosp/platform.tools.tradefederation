@@ -92,6 +92,10 @@ public class ImageContentAnalyzer {
                             results.addChangedBuildKey(1);
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
+                        } else {
+                            CLog.d(
+                                    "build key '%s' was unchanged.",
+                                    context.contentEntry());
                         }
                         break;
                     case DEVICE_IMAGE:
@@ -167,9 +171,10 @@ public class ImageContentAnalyzer {
             }
             if (diffs.isEmpty()) {
                 CLog.d("Device image from '%s' is unchanged", context.contentEntry());
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(diffs));
             }
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(diffs));
             return diffs.size();
         } catch (RuntimeException e) {
             CLog.e(e);
