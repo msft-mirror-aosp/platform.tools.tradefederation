@@ -39,8 +39,11 @@ import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.common.collect.ListMultimap;
 
+import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -102,7 +105,7 @@ public class BasePostProcessorTest {
             for (String dataName : testLogs.keySet()) {
                 newMap.put(
                         FILE_PREFIX + dataName,
-                        TfMetricProtoUtil.stringToMetric(testLogs.get(dataName).getPath())
+                        TfMetricProtoUtil.stringToMetric(testLogs.get(dataName).getUrl())
                                 .toBuilder());
             }
             if (mSavesFile) {
@@ -134,7 +137,7 @@ public class BasePostProcessorTest {
             for (String dataName : runLogs.keySet()) {
                 newMap.put(
                         FILE_PREFIX + dataName,
-                        TfMetricProtoUtil.stringToMetric(runLogs.get(dataName).getPath())
+                        TfMetricProtoUtil.stringToMetric(runLogs.get(dataName).getUrl())
                                 .toBuilder());
             }
             if (mSavesFile) {
@@ -172,7 +175,7 @@ public class BasePostProcessorTest {
                     newMap.put(
                             FILE_PREFIX + String.join("-", test.toString(), dataName),
                             TfMetricProtoUtil.stringToMetric(
-                                    allTestLogs.get(test).get(dataName).getPath())
+                                    allTestLogs.get(test).get(dataName).getUrl())
                                     .toBuilder());
                 }
             }
@@ -213,15 +216,13 @@ public class BasePostProcessorTest {
 
     // A few constants used for testing log file post processing.
     private static final String TEST_DATA_NAME_1 = "test-log-1";
-    private static final LogFile TEST_LOG_1 =
-            new LogFile("test-log-path-1", "url", LogDataType.TEXT);
     private static final String TEST_DATA_NAME_2 = "test-log-2";
-    private static final LogFile TEST_LOG_2 =
-            new LogFile("test-log-path-2", "url", LogDataType.TEXT);
     private static final String RUN_DATA_NAME_1 = "run-log-1";
-    private static final LogFile RUN_LOG_1 = new LogFile("run-log-path-1", "url", LogDataType.TEXT);
     private static final String RUN_DATA_NAME_2 = "run-log-2";
-    private static final LogFile RUN_LOG_2 = new LogFile("run-log-path-2", "url", LogDataType.TEXT);
+    private LogFile mTestLog1;
+    private LogFile mTestLog2;
+    private LogFile mRunLog1;
+    private LogFile mRunLog2;
 
     private TestablePostProcessor mProcessor;
     @Mock ILogSaverListener mMockListener;
@@ -232,23 +233,51 @@ public class BasePostProcessorTest {
     // of LogSaverResultForwarder to generate logAssociation() callbacks upon calls to testLog().
     @Mock ILogSaver mMockLogSaver;
 
+    @Rule public TemporaryFolder folder = new TemporaryFolder();
+
     @Before
     public void setUp() throws IOException {
         MockitoAnnotations.initMocks(this);
 
+        mTestLog1 =
+                new LogFile(
+                        folder.newFile("test-log-path-1").getPath(),
+                        "test-log-path-1",
+                        LogDataType.TEXT);
+        mTestLog2 =
+                new LogFile(
+                        folder.newFile("test-log-path-2").getPath(),
+                        "test-log-path-2",
+                        LogDataType.TEXT);
+        mRunLog1 =
+                new LogFile(
+                        folder.newFile("run-log-path-1").getPath(),
+                        "run-log-path-1",
+                        LogDataType.TEXT);
+        mRunLog2 =
+                new LogFile(
+                        folder.newFile("run-log-path-2").getPath(),
+                        "run-log-path-2",
+                        LogDataType.TEXT);
+
         mProcessor = new TestablePostProcessor();
 
         when(mMockLogSaver.saveLogData(Mockito.eq(TEST_DATA_NAME_1), Mockito.any(), Mockito.any()))
-                .thenReturn(TEST_LOG_1);
+                .thenReturn(mTestLog1);
         when(mMockLogSaver.saveLogData(Mockito.eq(TEST_DATA_NAME_2), Mockito.any(), Mockito.any()))
-                .thenReturn(TEST_LOG_2);
+                .thenReturn(mTestLog2);
         when(mMockLogSaver.saveLogData(Mockito.eq(RUN_DATA_NAME_1), Mockito.any(), Mockito.any()))
-                .thenReturn(RUN_LOG_1);
+                .thenReturn(mRunLog1);
         when(mMockLogSaver.saveLogData(Mockito.eq(RUN_DATA_NAME_2), Mockito.any(), Mockito.any()))
-                .thenReturn(RUN_LOG_2);
+                .thenReturn(mRunLog2);
 
         // A nice mock is used here as this test involves more complex interactions with the
         // listener but only cares about a subset of it.
+    }
+
+    @After
+    public void tearDown() {
+        mProcessor.cleanUp();
     }
 
     /** Test that the run-level post processing metrics are found in the final callback. */
@@ -293,7 +322,7 @@ public class BasePostProcessorTest {
         HashMap<String, Metric> finalMetrics = mCapture.getValue();
         assertTrue(finalMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1));
         assertEquals(
-                RUN_LOG_1.getPath(),
+                mRunLog1.getUrl(),
                 finalMetrics
                         .get(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1)
                         .getMeasurements()
@@ -403,7 +432,7 @@ public class BasePostProcessorTest {
         assertTrue(
                 processedMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
         assertEquals(
-                TEST_LOG_1.getPath(),
+                mTestLog1.getUrl(),
                 processedMetrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1)
                         .getMeasurements()
@@ -411,7 +440,7 @@ public class BasePostProcessorTest {
         assertTrue(
                 processedMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
         assertEquals(
-                TEST_LOG_2.getPath(),
+                mTestLog2.getUrl(),
                 processedMetrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2)
                         .getMeasurements()
@@ -484,7 +513,7 @@ public class BasePostProcessorTest {
         // Check that the first log file ends up being in the metrics.
         assertTrue(test1Metrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
         assertEquals(
-                TEST_LOG_1.getPath(),
+                mTestLog1.getUrl(),
                 test1Metrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1)
                         .getMeasurements()
@@ -497,7 +526,7 @@ public class BasePostProcessorTest {
         // Check that the first log file ends up being in the metrics.
         assertTrue(test2Metrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
         assertEquals(
-                TEST_LOG_2.getPath(),
+                mTestLog2.getUrl(),
                 test2Metrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2)
                         .getMeasurements()
@@ -589,7 +618,7 @@ public class BasePostProcessorTest {
                                                 && e.getValue()
                                                         .getMeasurements()
                                                         .getSingleString()
-                                                        .equals(TEST_LOG_1.getPath())));
+                                                        .equals(mTestLog1.getUrl())));
         assertTrue(
                 processedMetrics.entrySet().stream()
                         .anyMatch(
@@ -600,7 +629,7 @@ public class BasePostProcessorTest {
                                                 && e.getValue()
                                                         .getMeasurements()
                                                         .getSingleString()
-                                                        .equals(TEST_LOG_2.getPath())));
+                                                        .equals(mTestLog2.getUrl())));
     }
 
     /** Test that during each test run the post processor only access logs from the current run. */
