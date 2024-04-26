@@ -20,6 +20,7 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
 import com.android.tradefed.error.HarnessRuntimeException;
@@ -86,6 +87,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             ImmutableList.of("com.google.mainline.primary.libs");
     private static final String STAGED_READY_TIMEOUT_OPTION = "--staged-ready-timeout";
     private static final String TIMEOUT_MILLIS_OPTION = "--timeout-millis=";
+    private static final Pattern ROLLBACK_STATE_PATTERN = Pattern.compile("-state\\:\\s\\w+[\n\r]");
+    public static final String ROLLBACK_STATE_COMMITTED = "committed";
+    public static final String ROLLBACK_STATE_UNKNOWN = "unknown";
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -98,6 +102,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private BundletoolUtil mBundletoolUtil;
     private String mDeviceSpecFilePath = "";
     private boolean mOptimizeMainlineTest = false;
+    private String mParentSessionId = "";
 
     @Option(name = "bundletool-file-name", description = "The file name of the bundletool jar.")
     private String mBundletoolFilename;
@@ -136,6 +141,17 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     "Skip teardown if all files to be installed are apex files. "
                             + "Currently, this option is only used for Test Mapping use case.")
     private boolean mSkipApexTearDown = false;
+
+    @Option(
+            name = "module-teardown",
+            description = "Option for uninstalling mainline modules after running the tests.")
+    private boolean mModuleTearDown = false;
+
+    @Option(
+            name = "detect-module-rollback",
+            description =
+                    "Option for checking if installed mainline modules rollbacked during testing.")
+    private boolean mDetectModuleRollback = false;
 
     @Option(
             name = "enable-rollback",
@@ -420,50 +436,100 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         return apkModuleInData;
     }
 
+    /**
+     * Rollback/Uninstall any module installed during the invocation setup.
+     *
+     * @param device under test.
+     * @throws DeviceNotAvailableException when device is not available.
+     * @throws HarnessRuntimeException when this method fails to rollback module
+     */
+    private void moduleTearDown(ITestDevice device)
+            throws DeviceNotAvailableException, HarnessRuntimeException {
+        // Uninstall any installed APKs
+        if (!getApkInstalled().isEmpty()) {
+            CLog.i("Performing a rollback for mainline modules to previous versions");
+            for (String apkPkgName : getApkInstalled()) {
+                uninstallPackage(device, apkPkgName);
+            }
+        }
+
+        // Uninstall any installed APEXes
+        if (!mTestApexInfoList.isEmpty()) {
+            CLog.i("Performing a rollback for installed modules");
+            // Select the first module to rollback. Performing a rollback on one
+            // of the module will rollback all other modules as well.
+            ApexInfo apex = mTestApexInfoList.get(0);
+            String output =
+                    device.executeShellCommand(String.format("pm rollback-app %s", apex.name));
+            if (!output.contains("Success")) {
+                throw new HarnessRuntimeException(
+                        String.format("Failed to rollback %s, Output: %s", apex.name, output),
+                        DeviceErrorIdentifier.APEX_ROLLBACK_FAILED);
+            }
+            CLog.i("Waiting for rollback to complete.");
+            RunUtil.getDefault().sleep(mApexRollbackWaitTime);
+            CLog.i("Cleaning up staged and active session information from data/.");
+            cleanUpStagedAndActiveSession(device);
+        }
+    }
+
+    /**
+     * Check if there was a rollback for installed modules
+     *
+     * @param sessionId Parent session ID where the modules were installed.
+     * @param device under test.
+     * @throws DeviceNotAvailableException when device is not available.
+     * @throws HarnessRuntimeException when this method fails to rollback module
+     */
+    private void detectModuleRollback(String sessionId, ITestDevice device)
+            throws DeviceNotAvailableException, HarnessRuntimeException {
+        String rollbackState = ROLLBACK_STATE_UNKNOWN;
+        String rollbacks = device.executeShellCommand("dumpsys rollback");
+        // On Android R, the SessionId line is on the third line of the dumpsys rollback output,
+        // while on Android S/T it is on the fourth line.
+        // On Android R/S, "stagedSessionId" identifier is used in the dumpsys rollback output. On
+        // Android T, "originalSessionId" identifier is used. Both identifiers will need to be
+        // supported in pattern matching.
+        Pattern rollbackPattern =
+                Pattern.compile(
+                        "(.*[\\r\\n]+){3,4}.*-(staged|original)SessionId\\:\\s" + sessionId);
+        Matcher rollbackMatcher = rollbackPattern.matcher(rollbacks);
+        if (rollbackMatcher.find()) {
+            Matcher stateMatcher = ROLLBACK_STATE_PATTERN.matcher(rollbackMatcher.group());
+            if (stateMatcher.find()) {
+                String rawState = stateMatcher.group().replace("\n", "").replace("\r", "");
+                rollbackState = rawState.substring(rawState.indexOf(":") + 1).trim();
+            }
+        }
+
+        CLog.i("For session: %s the rollback state was: %s", sessionId, rollbackState);
+        if (rollbackState.equals(ROLLBACK_STATE_COMMITTED)) {
+            throw new HarnessRuntimeException(
+                    "Test results are invalid, detected a rollback on mainline",
+                    InfraErrorIdentifier.UNDETERMINED);
+        }
+    }
+
     @Override
-    public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
+    public void tearDown(TestInformation testInfo, Throwable e)
+            throws DeviceNotAvailableException, DeviceRuntimeException {
         for (File dir : mSplitsDir) {
             FileUtil.recursiveDelete(dir);
         }
         mSplitsDir.clear();
-        if (mOptimizeMainlineTest) {
-            CLog.d("Skipping tearDown as the installed modules may be used for the next test.");
-            return;
-        }
         ITestDevice device = testInfo.getDevice();
         if (e instanceof DeviceNotAvailableException) {
             CLog.e("Device %s is not available. Teardown() skipped.", device.getSerialNumber());
             return;
-        } else {
-            if (mTestApexInfoList.isEmpty() && getApkInstalled().isEmpty()) {
-                super.tearDown(testInfo, e);
-            } else {
-                if (mTestApexInfoList.isEmpty()) {
-                    for (String apkPkgName : getApkInstalled()) {
-                        uninstallPackage(device, apkPkgName);
-                    }
-                } else {
-                    for (ApexInfo apex : mTestApexInfoList) {
-                        String output =
-                                device.executeShellCommand(
-                                        String.format("pm rollback-app %s", apex.name));
-                        // Rolling back one newly installed module will rollback all other newly
-                        // installed modules.
-                        if (output.contains("Success")) {
-                            break;
-                        } else {
-                            throw new HarnessRuntimeException(
-                                    String.format(
-                                            "Failed to rollback %s, Output: %s", apex.name, output),
-                                    DeviceErrorIdentifier.APEX_ROLLBACK_FAILED);
-                        }
-                    }
-                    CLog.i("Wait for rollback fully done.");
-                    RunUtil.getDefault().sleep(mApexRollbackWaitTime);
-                    CLog.i("Clean up staged and active session for mainline test mapping.");
-                    cleanUpStagedAndActiveSession(device);
-                }
-            }
+        }
+        // Check if mainline modules were rolled-back before tearDown()
+        if (mDetectModuleRollback && !Strings.isNullOrEmpty(mParentSessionId)) {
+            detectModuleRollback(mParentSessionId, device);
+        }
+
+        // Check if mainline module should be removed during teardown
+        if (mModuleTearDown) {
+            moduleTearDown(device);
         }
     }
 
@@ -734,7 +800,12 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         String parentSessionId;
         if (res.getStatus() == CommandStatus.SUCCESS) {
             parentSessionId = res.getStdout();
+            // Strip any non-numeric character from session ID
+            if (!Strings.isNullOrEmpty(parentSessionId)) {
+                parentSessionId = parentSessionId.trim();
+            }
             CLog.d("Parent session %s created successfully. ", parentSessionId);
+            mParentSessionId = parentSessionId;
         } else {
             throw new TargetSetupError(
                     String.format(
@@ -783,6 +854,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
             if (res.getStatus() == CommandStatus.SUCCESS) {
                 childSessionId = res.getStdout();
+                // Strip any non-numeric character from session ID
+                if (!Strings.isNullOrEmpty(childSessionId)) {
+                    childSessionId = childSessionId.trim();
+                }
                 CLog.d(
                         "Child session %s created successfully for %s. ",
                         childSessionId, moduleFile.getName());
