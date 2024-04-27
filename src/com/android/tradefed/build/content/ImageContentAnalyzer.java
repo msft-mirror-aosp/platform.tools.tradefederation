@@ -172,8 +172,9 @@ public class ImageContentAnalyzer {
             if (diffs.isEmpty()) {
                 CLog.d("Device image from '%s' is unchanged", context.contentEntry());
             } else {
+                List<String> paths = diffs.stream().map(d -> d.path).collect(Collectors.toList());
                 InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(diffs));
+                        InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(paths));
             }
             return diffs.size();
         } catch (RuntimeException e) {
