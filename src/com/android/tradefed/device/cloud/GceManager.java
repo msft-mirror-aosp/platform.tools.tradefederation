@@ -41,14 +41,16 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
-import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.compute.Compute;
 import com.google.api.services.compute.Compute.Instances.GetSerialPortOutput;
 import com.google.api.services.compute.ComputeScopes;
 import com.google.api.services.compute.model.SerialPortOutput;
+import com.google.auth.Credentials;
+import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.net.HostAndPort;
@@ -1159,17 +1161,18 @@ public class GceManager {
             return null;
         }
         try {
-            Credential credential = createCredential(config, jsonKeyFile);
+            Credentials credential = createCredential(config, jsonKeyFile);
             String project = config.getValueForKey(AcloudKeys.PROJECT);
             String zone = config.getValueForKey(AcloudKeys.ZONE);
             String instanceName = infos.instanceName();
+            HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credential);
             Compute compute =
                     new Compute.Builder(
                                     GoogleNetHttpTransport.newTrustedTransport(),
                                     JSON_FACTORY,
                                     null)
                             .setApplicationName(project)
-                            .setHttpRequestInitializer(credential)
+                            .setHttpRequestInitializer(requestInitializer)
                             .build();
             GetSerialPortOutput outputPort =
                     compute.instances().getSerialPortOutput(project, zone, instanceName);
@@ -1181,19 +1184,14 @@ public class GceManager {
         }
     }
 
-    private static Credential createCredential(AcloudConfigParser config, File jsonKeyFile)
+    private static Credentials createCredential(AcloudConfigParser config, File jsonKeyFile)
             throws GeneralSecurityException, IOException {
         if (jsonKeyFile != null) {
             return GoogleApiClientUtil.createCredentialFromJsonKeyFile(jsonKeyFile, SCOPES);
-        } else if (config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_JSON_PRIVATE_KEY) != null) {
+        } else {
             jsonKeyFile =
                     new File(config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_JSON_PRIVATE_KEY));
             return GoogleApiClientUtil.createCredentialFromJsonKeyFile(jsonKeyFile, SCOPES);
-        } else {
-            String serviceAccount = config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_NAME);
-            String serviceKey = config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_PRIVATE_KEY);
-            return GoogleApiClientUtil.createCredentialFromP12File(
-                    serviceAccount, new File(serviceKey), SCOPES);
         }
     }
 
