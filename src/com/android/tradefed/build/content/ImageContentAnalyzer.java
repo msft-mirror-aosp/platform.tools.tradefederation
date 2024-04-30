@@ -92,6 +92,10 @@ public class ImageContentAnalyzer {
                             results.addChangedBuildKey(1);
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
+                        } else {
+                            CLog.d(
+                                    "build key '%s' was unchanged.",
+                                    context.contentEntry());
                         }
                         break;
                     case DEVICE_IMAGE:
@@ -152,14 +156,13 @@ public class ImageContentAnalyzer {
             if (mAnalysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
                 boolean removed = false;
                 // b/335722003
-                removed =
-                        removed
-                                || diffs.removeIf(
-                                        d -> d.path.equals("SYSTEM/boot_otas/boot_ota_4k.zip"));
-                removed =
-                        removed
-                                || diffs.removeIf(
-                                        d -> d.path.equals("SYSTEM/boot_otas/boot_ota_16k.zip"));
+                boolean ota4k =
+                        diffs.removeIf(d -> d.path.equals("SYSTEM/boot_otas/boot_ota_4k.zip"));
+                boolean ota16k =
+                        diffs.removeIf(d -> d.path.equals("SYSTEM/boot_otas/boot_ota_16k.zip"));
+                if (ota4k || ota16k) {
+                    removed = true;
+                }
                 if (removed) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.DEVICE_IMAGE_USED_HEURISTIC, mAnalysisLevel.name());
@@ -167,9 +170,11 @@ public class ImageContentAnalyzer {
             }
             if (diffs.isEmpty()) {
                 CLog.d("Device image from '%s' is unchanged", context.contentEntry());
+            } else {
+                List<String> paths = diffs.stream().map(d -> d.path).collect(Collectors.toList());
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(paths));
             }
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_IMAGE_FILE_CHANGES, Joiner.on(',').join(diffs));
             return diffs.size();
         } catch (RuntimeException e) {
             CLog.e(e);
