@@ -46,7 +46,9 @@ import org.mockito.junit.MockitoRule;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @RunWith(JUnit4.class)
 public class RunOnSecondaryUserTargetPreparerTest {
@@ -67,7 +69,7 @@ public class RunOnSecondaryUserTargetPreparerTest {
         ArrayList<Integer> userIds = new ArrayList<>();
         userIds.add(0);
 
-        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(2);
+        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(3);
         when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
         when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(false);
@@ -408,5 +410,144 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
         verify(mTestInfo.properties(), never())
                 .put(eq(RunOnSecondaryUserTargetPreparer.SKIP_TESTS_REASON_KEY), any());
+    }
+
+    @Test
+    public void setUp_hasOneSecondaryUser_createSecondaryUserOnSecondaryDisplay() throws Exception {
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
+        when(mTestInfo.getDevice().isVisibleBackgroundUsersSupported()).thenReturn(true);
+        mOptionSetter.setOptionValue(RunOnSecondaryUserTargetPreparer.START_BACKGROUND_USER,
+                "true");
+
+        ArrayList<Integer> userIds = new ArrayList<>();
+        int systemUser = 0;
+        int secondaryUser1 = 100;
+        int secondaryUser2 = 101;
+        userIds.add(systemUser);
+        userIds.add(secondaryUser1);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
+        when(mTestInfo.getDevice().getCurrentUser()).thenReturn(secondaryUser1);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(secondaryUser2);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser1)).thenReturn(true);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser2)).thenReturn(true);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                systemUser,
+                new UserInfo(systemUser, "system", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser1,
+                new UserInfo(secondaryUser1, "current", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+
+        int secondaryDisplayId = 200;
+        Set<Integer> secondaryDisplayIdSet = new HashSet<>();
+        secondaryDisplayIdSet.add(secondaryDisplayId);
+        when(mTestInfo.getDevice().listDisplayIdsForStartingVisibleBackgroundUsers())
+                .thenReturn(secondaryDisplayIdSet);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
+        verify(mTestInfo.getDevice())
+                .startVisibleBackgroundUser(
+                        secondaryUser2, secondaryDisplayId, /* waitFlag= */ true);
+    }
+
+    @Test
+    public void setUp_hasOneSecondaryUser_doNothing() throws Exception {
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
+        when(mTestInfo.getDevice().isVisibleBackgroundUsersSupported()).thenReturn(true);
+        // START_BACKGROUND_USER of this test is false by default.
+
+        ArrayList<Integer> userIds = new ArrayList<>();
+        int systemUser = 0;
+        int secondaryUser1 = 100;
+        int secondaryUser2 = 101;
+        userIds.add(systemUser);
+        userIds.add(secondaryUser1);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
+        when(mTestInfo.getDevice().getCurrentUser()).thenReturn(secondaryUser1);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(secondaryUser2);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser1)).thenReturn(true);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser2)).thenReturn(true);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                systemUser,
+                new UserInfo(systemUser, "system", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser1,
+                new UserInfo(secondaryUser1, "current", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+
+        int secondaryDisplayId = 200;
+        Set<Integer> secondaryDisplayIdSet = new HashSet<>();
+        secondaryDisplayIdSet.add(secondaryDisplayId);
+        when(mTestInfo.getDevice().listDisplayIdsForStartingVisibleBackgroundUsers())
+                .thenReturn(secondaryDisplayIdSet);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
+        verify(mTestInfo.getDevice(), never())
+                .startVisibleBackgroundUser(
+                        secondaryUser2, secondaryDisplayId, /* waitFlag= */ true);
+    }
+
+    @Test
+    public void setUp_hasTwoSecondaryUsers_startSecondaryUserOnSecondaryDisplay() throws Exception {
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
+        when(mTestInfo.getDevice().isVisibleBackgroundUsersSupported()).thenReturn(true);
+        mOptionSetter.setOptionValue(RunOnSecondaryUserTargetPreparer.START_BACKGROUND_USER,
+                "true");
+
+        ArrayList<Integer> userIds = new ArrayList<>();
+        int systemUser = 0;
+        int secondaryUser1 = 100;
+        int secondaryUser2 = 101;
+        userIds.add(systemUser);
+        userIds.add(secondaryUser1);
+        userIds.add(secondaryUser2);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
+        when(mTestInfo.getDevice().getCurrentUser()).thenReturn(secondaryUser1);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser1)).thenReturn(true);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser2)).thenReturn(true);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                systemUser,
+                new UserInfo(systemUser, "system", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser1,
+                new UserInfo(secondaryUser1, "current", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser2,
+                new UserInfo(secondaryUser2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+
+        int secondaryDisplayId = 200;
+        Set<Integer> secondaryDisplayIdSet = new HashSet<>();
+        secondaryDisplayIdSet.add(secondaryDisplayId);
+        when(mTestInfo.getDevice().listDisplayIdsForStartingVisibleBackgroundUsers())
+                .thenReturn(secondaryDisplayIdSet);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice())
+                .startVisibleBackgroundUser(
+                        secondaryUser2, secondaryDisplayId, /* waitFlag= */ true);
     }
 }
