@@ -170,6 +170,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsScopedStoragePublicVolumeHostTest",
                     "CtsContentTestCases",
                     "CtsHostsideNetworkTests",
+                    "CtsHostsideNetworkPolicyTests",
                     "vm-tests-tf",
                     "CtsStatsdAtomHostTestCases",
                     "CtsMediaPlayerTestCases",
