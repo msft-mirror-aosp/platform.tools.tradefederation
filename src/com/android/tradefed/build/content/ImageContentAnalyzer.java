@@ -156,14 +156,13 @@ public class ImageContentAnalyzer {
             if (mAnalysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
                 boolean removed = false;
                 // b/335722003
-                removed =
-                        removed
-                                || diffs.removeIf(
-                                        d -> d.path.equals("SYSTEM/boot_otas/boot_ota_4k.zip"));
-                removed =
-                        removed
-                                || diffs.removeIf(
-                                        d -> d.path.equals("SYSTEM/boot_otas/boot_ota_16k.zip"));
+                boolean ota4k =
+                        diffs.removeIf(d -> d.path.equals("SYSTEM/boot_otas/boot_ota_4k.zip"));
+                boolean ota16k =
+                        diffs.removeIf(d -> d.path.equals("SYSTEM/boot_otas/boot_ota_16k.zip"));
+                if (ota4k || ota16k) {
+                    removed = true;
+                }
                 if (removed) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.DEVICE_IMAGE_USED_HEURISTIC, mAnalysisLevel.name());

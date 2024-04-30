@@ -348,6 +348,7 @@ public class InvocationMetricLogger {
         INCREMENTAL_SNAPUSERD_WRITE_TIME("incremental_snapuserd_write_time", true),
         INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME(
                 "incremental_snapuserd_write_blocking_time", true),
+        INCREMENTAL_FALLBACK_REASON("incremental_fallback_reason", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
