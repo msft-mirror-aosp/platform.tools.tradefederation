@@ -109,6 +109,19 @@ public class Configuration implements IConfiguration {
     public static final String GLOBAL_FILTERS_TYPE_NAME = "global_filters";
     public static final String SKIP_MANAGER_TYPE_NAME = "skip_manager";
 
+    public static final Set<String> NON_MODULE_OBJECTS =
+            ImmutableSet.of(
+                    BUILD_PROVIDER_TYPE_NAME,
+                    DEVICE_RECOVERY_TYPE_NAME,
+                    LOGGER_TYPE_NAME,
+                    LOG_SAVER_TYPE_NAME,
+                    RESULT_REPORTER_TYPE_NAME,
+                    SANDBOX_TYPE_NAME,
+                    SANBOX_OPTIONS_TYPE_NAME,
+                    RETRY_DECISION_TYPE_NAME,
+                    GLOBAL_FILTERS_TYPE_NAME,
+                    SKIP_MANAGER_TYPE_NAME);
+
     private static Map<String, ObjTypeInfo> sObjTypeMap = null;
     private static Set<String> sMultiDeviceSupportedTag =
             ImmutableSet.of(

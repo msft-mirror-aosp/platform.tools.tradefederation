@@ -347,6 +347,9 @@ public class IncrementalImageUtil {
         }
         if (mParallelSetup.getError() != null) {
             mParallelSetup.cleanUpFiles();
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_FALLBACK_REASON,
+                    mParallelSetup.getError().getMessage());
             throw mParallelSetup.getError();
         }
         boolean bootComplete =
@@ -402,6 +405,8 @@ public class IncrementalImageUtil {
                 pushExec.invokeAll(pushTasks, 0, TimeUnit.MINUTES);
                 if (pushExec.hasErrors()) {
                     for (Throwable err : pushExec.getErrors()) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, err.getMessage());
                         if (err instanceof DeviceNotAvailableException) {
                             throw (DeviceNotAvailableException) err;
                         }
@@ -423,6 +428,8 @@ public class IncrementalImageUtil {
                         mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Failed apply-update");
                     throw new TargetSetupError(
                             String.format(
                                     "Failed to apply-update.\nstdout:%s\nstderr:%s",
@@ -434,6 +441,9 @@ public class IncrementalImageUtil {
                         mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FALLBACK_REASON,
+                            "Failed map-snapshots");
                     throw new TargetSetupError(
                             String.format(
                                     "Failed to map the snapshots.\nstdout:%s\nstderr:%s",
