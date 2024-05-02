@@ -860,7 +860,7 @@ public abstract class ITestSuite
                                         ModuleDefinition.MODULE_ISOLATED,
                                         CurrentInvocation.moduleCurrentIsolation().toString());
                     }
-                    // Add module speicifc post processors.
+                    // Add module specific post processors.
                     listener = listenerWithPostProcessorsForPerfModule(module, listener);
                     // Only the module callback will be called here.
                     ITestInvocationListener listenerWithCollectors = listener;
