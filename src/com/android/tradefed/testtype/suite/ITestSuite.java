@@ -320,6 +320,12 @@ public abstract class ITestSuite
     private boolean mIsolatedModule = false;
 
     @Option(
+            name = "isolated-module-grade",
+            description =
+                    "When isolated-module is enabled, this defines what action we try to attempt.")
+    private IsolatedModuleGrade mIsolatedModuleGrade = IsolatedModuleGrade.FULLY_ISOLATED;
+
+    @Option(
             name = "recover-device-by-cvd",
             description =
                     "Try to recover the device by cvd tool when the device is gone during test"
@@ -373,6 +379,11 @@ public abstract class ITestSuite
 
     @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
     private boolean mStageRemoteFile = true;
+
+    public enum IsolatedModuleGrade {
+        REBOOT_ISOLATED, // Reboot was done before the test.
+        FULLY_ISOLATED; // Test received a fresh device.
+    }
 
     public enum MultiDeviceModuleStrategy {
         EXCLUDE_ALL,
@@ -1000,23 +1011,36 @@ public abstract class ITestSuite
         if (!mIsolatedModule) {
             return;
         }
-        // TODO: we can probably make it smarter: Did any test ran for example?
-        ITestDevice device = context.getDevices().get(0);
-        if (device instanceof NestedRemoteDevice) {
-            boolean res = ((NestedRemoteDevice) device).resetVirtualDevice();
-            if (!res) {
-                String serial = device.getSerialNumber();
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to reset the AVD '%s' during module isolation.", serial),
-                        serial);
+        if (IsolatedModuleGrade.REBOOT_ISOLATED.equals(mIsolatedModuleGrade)) {
+            CLog.d("isolated-module is enabled with grade REBOOT_ISOLATED.");
+            try (CloseableTraceScope ignored = new CloseableTraceScope("isolated_module_reboot")) {
+                for (ITestDevice device : context.getDevices()) {
+                    device.reboot();
+                }
+                CurrentInvocation.setModuleIsolation(IsolationGrade.REBOOT_ISOLATED);
+                CurrentInvocation.setRunIsolation(IsolationGrade.REBOOT_ISOLATED);
             }
-        } else if (mUseSnapshotForReset) {
-            AbstractConnection connection = device.getConnection();
-            if (connection instanceof AdbTcpConnection) {
-                String snapshot = ((AdbTcpConnection) connection).getSuiteSnapshots().get(device);
-                // snapshot should not be null, otherwise the device would have crashed.
-                ((AdbTcpConnection) connection).recoverVirtualDevice(device, snapshot, null);
+        } else if (IsolatedModuleGrade.FULLY_ISOLATED.equals(mIsolatedModuleGrade)) {
+            // TODO: we can probably make it smarter: Did any test ran for example?
+            ITestDevice device = context.getDevices().get(0);
+            if (device instanceof NestedRemoteDevice) {
+                boolean res = ((NestedRemoteDevice) device).resetVirtualDevice();
+                if (!res) {
+                    String serial = device.getSerialNumber();
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Failed to reset the AVD '%s' during module isolation.",
+                                    serial),
+                            serial);
+                }
+            } else if (mUseSnapshotForReset) {
+                AbstractConnection connection = device.getConnection();
+                if (connection instanceof AdbTcpConnection) {
+                    String snapshot =
+                            ((AdbTcpConnection) connection).getSuiteSnapshots().get(device);
+                    // snapshot should not be null, otherwise the device would have crashed.
+                    ((AdbTcpConnection) connection).recoverVirtualDevice(device, snapshot, null);
+                }
             }
         }
     }
