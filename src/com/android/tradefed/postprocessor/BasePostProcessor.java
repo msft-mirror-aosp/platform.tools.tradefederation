@@ -63,6 +63,8 @@ public abstract class BasePostProcessor implements IPostProcessor {
     private ArrayListMultimap<String, Metric> storedTestMetrics = ArrayListMultimap.create();
     private Map<TestDescription, Map<String, LogFile>> mTestLogs = new LinkedHashMap<>();
     private Map<String, LogFile> mRunLogs = new HashMap<>();
+
+    private Map<String, LogFile> mCopiedLogs = new HashMap<>();
     private Set<LogFile> mToDelete = new HashSet<>();
 
     // Keeps track of the current test; takes null value when the post processor is not in the scope
@@ -387,6 +389,9 @@ public abstract class BasePostProcessor implements IPostProcessor {
     @Override
     public final void testLogSaved(
             String dataName, LogDataType dataType, InputStreamSource dataStream, LogFile logFile) {
+        if (!mIsPostProcessing) {
+            mCopiedLogs.put(dataName, copyLogFile(logFile));
+        }
         if (mForwarder instanceof ILogSaverListener) {
             ((ILogSaverListener) mForwarder).testLogSaved(dataName, dataType, dataStream, logFile);
         }
@@ -402,7 +407,7 @@ public abstract class BasePostProcessor implements IPostProcessor {
     public final void logAssociation(String dataName, LogFile logFile) {
         // Only associate files created outside of the current post processor.
         if (!mIsPostProcessing) {
-            LogFile copyFile = copyLogFile(logFile);
+            LogFile copyFile = mCopiedLogs.remove(dataName);
             if (copyFile != null) {
                 mToDelete.add(copyFile);
                 // mCurrentTest is null only outside the scope of a test.
@@ -486,7 +491,7 @@ public abstract class BasePostProcessor implements IPostProcessor {
         }
         File originalFile = new File(original.getPath());
         if (!originalFile.exists()) {
-            CLog.d("%s doesn't exist and can't be copied for post processor.", original);
+            CLog.d("%s doesn't exist and can't be copied for post processor.", original.getPath());
             return null;
         }
         try {

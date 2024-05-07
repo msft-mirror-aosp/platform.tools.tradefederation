@@ -512,9 +512,13 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
             if (mIncludeFilters.contains(mCurrentTestClass + "#" + mCurrentTestName)
                     || mIncludeFilters.contains(mCurrentTestClass)) {
                 return false;
-            } else {
-                return true;
             }
+            for (String filter : mIncludeFilters) {
+                if ((mCurrentTestClass + "#" + mCurrentTestName).matches(filter)) {
+                    return false;
+                }
+            }
+            return true;
         }
         return false;
     }

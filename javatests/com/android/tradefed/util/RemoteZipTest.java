@@ -104,7 +104,7 @@ public class RemoteZipTest {
 
             List<CentralDirectoryInfo> entries = remoteZip.getZipEntries();
 
-            assertEquals(8, entries.size());
+            assertEquals(13, entries.size());
             assertTrue(mExpectedEntries.containsAll(entries));
         } finally {
             FileUtil.recursiveDelete(destDir);
@@ -124,7 +124,7 @@ public class RemoteZipTest {
             RemoteZip remoteZip =
                     new RemoteZip(REMOTE_FILE, mZipFileSize, mDownloader, true, false);
             List<CentralDirectoryInfo> entries = remoteZip.getZipEntries();
-            assertEquals(8, entries.size());
+            assertEquals(13, entries.size());
             assertTrue(mExpectedEntries.containsAll(entries));
         } finally {
             FileUtil.recursiveDelete(destDir);

@@ -445,6 +445,12 @@ public class DeviceManager implements IDeviceManager {
         if (mGlobalDeviceFilter != null && !mGlobalDeviceFilter.matches(testDevice.getIDevice())) {
             CLog.logAndDisplay(LogLevel.INFO, "device %s doesn't match global filter, ignoring",
                     testDevice.getSerialNumber());
+            Map<String, String> reasons = mGlobalDeviceFilter.getNoMatchReason();
+            for (Map.Entry<String, String> reason : reasons.entrySet()) {
+                CLog.logAndDisplay(
+                        LogLevel.INFO,
+                        "Match failed because " + reason.getKey() + ": " + reason.getValue());
+            }
             mManagedDeviceList.handleDeviceEvent(testDevice, DeviceEvent.AVAILABLE_CHECK_IGNORED);
             return;
         }

@@ -1953,7 +1953,8 @@ public class NativeDevice
      */
     @Override
     public boolean isDirectory(String path) throws DeviceNotAvailableException {
-        return executeShellCommand(String.format("ls -ld %s", path)).charAt(0) == 'd';
+        String output = executeShellCommand(String.format("ls -ld %s", path));
+        return output != null && output.charAt(0) == 'd';
     }
 
     /**
