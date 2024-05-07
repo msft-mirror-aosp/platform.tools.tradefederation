@@ -20,6 +20,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
 
 import org.junit.Test;
@@ -41,7 +43,8 @@ public final class CentralDirectoryInfoTest {
 
     private static final long DEFAULT_ZIP64_LOCAL_HEADER_OFFSET = 100L;
 
-    private byte[] createCentralDirectoryData(boolean isZip64, byte[] extra) {
+    private byte[] createCentralDirectoryData(
+            boolean isZip64, byte[] extra, int externalFileAttributes) {
         byte[] nameBytes = TEST_FILE_NAME.getBytes(UTF_8);
         byte[] commentBytes = TEST_FILE_HEADER_COMMENT.getBytes(UTF_8);
         byte[] contentBytes = TEST_FILE_CONTENT.getBytes(UTF_8);
@@ -68,7 +71,7 @@ public final class CentralDirectoryInfoTest {
         buffer.putShort((short) commentBytes.length); // File comment length
         buffer.putShort((short) 0); // Disk number start
         buffer.putShort((short) 0); // Internal file attributes
-        buffer.putInt(0); // External file attributes
+        buffer.putInt(externalFileAttributes); // External file attributes
         if (isZip64) {
             buffer.putInt(-1); // Relative offset of local header (0xffffffff for zip64)
         } else {
@@ -92,7 +95,7 @@ public final class CentralDirectoryInfoTest {
 
     @Test
     public void centralDirectoryInfo() throws Exception {
-        byte[] data = createCentralDirectoryData(false, new byte[0]);
+        byte[] data = createCentralDirectoryData(false, new byte[0], 0x81ED0000);
 
         CentralDirectoryInfo info = new CentralDirectoryInfo(data, DEFAULT_OFFSET, false);
 
@@ -105,13 +108,26 @@ public final class CentralDirectoryInfoTest {
         assertEquals(info.getExtraFieldLength(), 0);
         assertEquals(info.getFileCommentLength(), TEST_FILE_HEADER_COMMENT.length());
         assertEquals(info.getLocalHeaderOffset(), 0);
+        assertFalse(info.isSymLink());
+    }
+
+    @Test
+    public void centralDirectoryInfo_symLink() throws Exception {
+        byte[] data = createCentralDirectoryData(false, new byte[0], 0xA1FF0000);
+
+        CentralDirectoryInfo info = new CentralDirectoryInfo(data, DEFAULT_OFFSET, false);
+
+        assertEquals(info.getFileName(), TEST_FILE_NAME);
+        assertEquals(info.getFileNameLength(), TEST_FILE_NAME.length());
+        assertEquals(info.getLocalHeaderOffset(), 0);
+        assertTrue(info.isSymLink());
     }
 
     @Test
     public void centralDirectoryInfo_useZip64() throws Exception {
         ByteBuffer extra = ByteBuffer.allocate(32).order(ByteOrder.LITTLE_ENDIAN);
         writeZip64InfoToExtraField(extra);
-        byte[] data = createCentralDirectoryData(true, extra.array());
+        byte[] data = createCentralDirectoryData(true, extra.array(), 0);
 
         CentralDirectoryInfo info = new CentralDirectoryInfo(data, DEFAULT_OFFSET, true);
 
@@ -128,7 +144,7 @@ public final class CentralDirectoryInfoTest {
         extra.putShort((short) 0); // Size
         // Second entry (zip64 extended information), 32 bytes.
         writeZip64InfoToExtraField(extra);
-        byte[] data = createCentralDirectoryData(true, extra.array());
+        byte[] data = createCentralDirectoryData(true, extra.array(), 0);
 
         CentralDirectoryInfo info = new CentralDirectoryInfo(data, DEFAULT_OFFSET, true);
 
@@ -142,7 +158,7 @@ public final class CentralDirectoryInfoTest {
         ByteBuffer extra = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
         extra.putShort((short) 0x0002); // HeaderID
         extra.putShort((short) 0); // Size
-        byte[] data = createCentralDirectoryData(true, extra.array());
+        byte[] data = createCentralDirectoryData(true, extra.array(), 0);
 
         assertThrows(
                 RuntimeException.class, () -> new CentralDirectoryInfo(data, DEFAULT_OFFSET, true));

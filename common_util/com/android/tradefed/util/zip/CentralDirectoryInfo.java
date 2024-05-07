@@ -83,6 +83,11 @@ public final class CentralDirectoryInfo {
         return mUncompressedSize;
     }
 
+    /** Checks if this is a symlink. */
+    public boolean isSymLink() {
+        return ((mExternalFileAttributes >> 16L) & 0XA000) == 0XA000;
+    }
+
     /** Set the uncompressed size. */
     public void setUncompressedSize(long uncompressedSize) {
         mUncompressedSize = uncompressedSize;
