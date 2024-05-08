@@ -234,8 +234,8 @@ public class ZipUtilTest {
                             partialZipFile,
                             endCentralDirInfo,
                             endCentralDirInfo.getCentralDirOffset());
-            // The zip file has 4 folders, 4 files.
-            assertEquals(8, zipEntries.size());
+            // The zip file has 7 folders, 6 files.
+            assertEquals(13, zipEntries.size());
 
             CentralDirectoryInfo zipEntry;
             LocalFileHeader localFileHeader;
@@ -397,8 +397,8 @@ public class ZipUtilTest {
                             endCentralDirInfo,
                             endCentralDirInfo.getCentralDirOffset(),
                             true);
-            // The zip file has 4 folders, 4 files.
-            assertEquals(8, zipEntries.size());
+            // The zip file has 7 folders, 6 files.
+            assertEquals(13, zipEntries.size());
 
             CentralDirectoryInfo zipEntry;
             LocalFileHeader localFileHeader;

@@ -445,6 +445,7 @@ import com.android.tradefed.util.PythonVirtualenvHelperTest;
 import com.android.tradefed.util.QuotationAwareTokenizerTest;
 import com.android.tradefed.util.RegexTrieTest;
 import com.android.tradefed.util.RemoteZipTest;
+import com.android.tradefed.util.RequestUtilTest;
 import com.android.tradefed.util.ResourceUtilTest;
 import com.android.tradefed.util.RestApiHelperTest;
 import com.android.tradefed.util.RunUtilTest;
@@ -1054,6 +1055,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RemoteZipTest.class,
     ResourceUtilTest.class,
     RestApiHelperTest.class,
+    RequestUtilTest.class,
     RunUtilTest.class,
     SerializationUtilTest.class,
     ShellOutputReceiverStreamTest.class,
