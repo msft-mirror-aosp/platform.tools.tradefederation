@@ -24,6 +24,7 @@ import static com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer.TES
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,6 +58,11 @@ public final class RunOnPrivateProfileTargetPreparerTest {
                     + " --for-testing user";
     public static final String USERTYPE_PROFILE_PRIVATE = "android.os.usertype.profile.PRIVATE";
 
+    private static final String DUMPSYS_USER_COMMAND = "dumpsys user";
+    private static final String SAMPLE_DUMPSYS_USER_CAN_ADD_PS =
+            "Owner name: Owner\n" + "  Boot user: -10000\n" + "Can add private profile: true\n"
+                    + "\n" + "Number of listeners for\n" + "  restrictions: 10\n"
+                    + "  user lifecycle events: 7\n" + "\n" + "User types version: 0\n";
     @Rule
     public final MockitoRule mockito = MockitoJUnit.rule();
 
@@ -93,19 +99,20 @@ public final class RunOnPrivateProfileTargetPreparerTest {
     @Test
     public void setUp_doesNotSupportPrivateUser_doesNotChangeTestUser() throws Exception {
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
-
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         mPreparer.setUp(mTestInfo);
 
         verify(mTestInfo.properties(), never()).put(eq(RUN_TESTS_AS_USER_KEY), any());
     }
 
     @Test
-    public void setUp_doesNotSupportPrivateUser_setsArgumentToSkipTests() throws Exception {
-        when(mTestInfo.getDevice().getApiLevel()).thenReturn(32);
-
+    public void setUp_doesNotSupportPrivateUser_doesNotCreateUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         mPreparer.setUp(mTestInfo);
-
-        verify(mTestInfo.properties()).put(eq(SKIP_TESTS_REASON_KEY), any());
+        verify(mTestInfo.getDevice(), never()).executeShellCommand(
+                argThat(argument -> argument.contains("pm create-user")));
     }
 
     @Test
@@ -132,10 +139,12 @@ public final class RunOnPrivateProfileTargetPreparerTest {
                         /* isRunning= */ true,
                         "profile.PRIVATE"));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
-
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice(), never()).executeShellCommand(any());
+        verify(mTestInfo.getDevice(), never()).executeShellCommand(
+                argThat(argument -> argument.contains("pm create-user")));
     }
 
     @Test
