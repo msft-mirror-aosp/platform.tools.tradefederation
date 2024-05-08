@@ -487,7 +487,7 @@ public class GTest extends GTestBase implements IDeviceTest {
     private String[] getExecutableFiles(
             ITestDevice device, String deviceFilePath, Set<String> excludeDirectories)
             throws DeviceNotAvailableException {
-        String cmd = String.format("find -L %s -type f -perm -a=x", deviceFilePath);
+        String cmd = String.format("find -L %s -type f -perm /u=rx", deviceFilePath);
 
         if (excludeDirectories != null && !excludeDirectories.isEmpty()) {
             for (String directoryName : excludeDirectories) {
