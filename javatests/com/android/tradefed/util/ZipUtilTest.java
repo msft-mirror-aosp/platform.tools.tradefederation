@@ -36,6 +36,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -369,6 +370,69 @@ public class ZipUtilTest {
                     zipEntry.getLocalHeaderOffset());
             permissions = Files.getPosixFilePermissions(targetFile.toPath());
             assertEquals(PosixFilePermissions.fromString("rwxr-xr-x"), permissions);
+
+            // Verify a symlink.
+            zipEntry =
+                    zipEntries.stream()
+                            .filter(
+                                    e ->
+                                            e.getFileName()
+                                                    .equals("symlinks/large_text_derived/file.txt"))
+                            .findFirst()
+                            .get();
+
+            Path targetFilePath = Paths.get(tmpDir.toString(), zipEntry.getFileName());
+            targetFile = new File(targetFilePath.toString());
+            localFileHeader =
+                    new LocalFileHeader(partialZipFile, (int) zipEntry.getLocalHeaderOffset());
+            ZipUtil.unzipPartialZipFile(
+                    partialZipFile,
+                    targetFile,
+                    zipEntry,
+                    localFileHeader,
+                    zipEntry.getLocalHeaderOffset());
+
+            try {
+                assertEquals(
+                        "../../large_text/file.txt",
+                        Files.readSymbolicLink(targetFilePath).toString());
+            } catch (IOException e) {
+                // fail if the file is corrupt in any way
+                throw new RuntimeException(
+                        String.format("failed reading text file, msg: %s", e.getMessage()));
+            }
+
+            // Verify symlink to symlink.
+            zipEntry =
+                    zipEntries.stream()
+                            .filter(
+                                    e ->
+                                            e.getFileName()
+                                                    .equals(
+                                                            "symlinks/large_text_derived2/file_derived_2.txt"))
+                            .findFirst()
+                            .get();
+
+            targetFilePath = Paths.get(tmpDir.toString(), zipEntry.getFileName());
+            targetFile = new File(targetFilePath.toString());
+            localFileHeader =
+                    new LocalFileHeader(partialZipFile, (int) zipEntry.getLocalHeaderOffset());
+            ZipUtil.unzipPartialZipFile(
+                    partialZipFile,
+                    targetFile,
+                    zipEntry,
+                    localFileHeader,
+                    zipEntry.getLocalHeaderOffset());
+
+            try {
+                assertEquals(
+                        "../large_text_derived/file.txt",
+                        Files.readSymbolicLink(targetFilePath).toString());
+            } catch (IOException e) {
+                // fail if the file is corrupt in any way
+                throw new RuntimeException(
+                        String.format("failed reading text file, msg: %s", e.getMessage()));
+            }
         } finally {
             FileUtil.deleteFile(partialZipFile);
             FileUtil.recursiveDelete(tmpDir);
