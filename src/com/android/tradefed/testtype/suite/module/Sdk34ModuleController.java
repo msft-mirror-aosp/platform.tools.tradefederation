@@ -18,8 +18,10 @@ package com.android.tradefed.testtype.suite.module;
 /**
  * Only run tests if the device under test is SDK version 34 or above.
  *
- * <p>Use by adding this line to your AndroidTest.xml: <object type="module_controller"
- * class="com.android.tradefed.testtype.suite.module.Sdk34ModuleController" />
+ * <p>Use by adding this line to your AndroidTest.xml:
+ *
+ * <pre><code>&lt;object type="module_controller"
+ * class="com.android.tradefed.testtype.suite.module.Sdk34ModuleController" /&gt;</code></pre>
  */
 public class Sdk34ModuleController extends MinSdkModuleController {
     public Sdk34ModuleController() {
