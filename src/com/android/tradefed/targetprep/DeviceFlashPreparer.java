@@ -351,6 +351,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             device.setRecoveryMode(RecoveryMode.ONLINE);
             IDeviceFlasher flasher = createFlasher(device);
             flasher.setWipeTimeout(mWipeTimeout);
+            boolean tookPermit = false;
             // only surround fastboot related operations with flashing permit restriction
             try {
                 flasher.overrideDeviceOptions(device);
@@ -382,15 +383,19 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 res.getStatus(), res.getStdout(), res.getStderr());
                     }
                 }
-
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope("wait_for_flashing_permit")) {
-                    // Only #flash is included in the critical section
-                    getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                    if (mIncrementalImageUtil == null) {
+                        // Only #flash is included in the critical section
+                        getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                        tookPermit = true;
+                    }
                     queueTime = System.currentTimeMillis() - start;
-                    CLog.v(
-                            "Flashing permit obtained after %ds",
-                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    if (tookPermit) {
+                        CLog.v(
+                                "Flashing permit obtained after %ds",
+                                TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    }
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
                 }
@@ -409,7 +414,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                 throw e;
             } finally {
                 flashingTime = System.currentTimeMillis() - start;
-                getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                if (tookPermit) {
+                    getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+                }
                 flasher.postFlashOperations(device, deviceBuild);
                 // report flashing status
                 CommandStatus status = flasher.getSystemFlashingStatus();
