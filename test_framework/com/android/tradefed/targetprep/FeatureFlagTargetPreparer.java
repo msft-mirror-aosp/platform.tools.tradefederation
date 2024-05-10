@@ -17,6 +17,7 @@ package com.android.tradefed.targetprep;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.util.flag.DeviceFeatureFlag;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
@@ -39,8 +40,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -68,12 +67,6 @@ import java.util.stream.Collectors;
 @OptionClass(alias = "feature-flags")
 public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
 
-    // Expected flag format (same as output by "device_config list"):
-    // namespace/name=[value]
-    // Note value is optional.
-    private static final Pattern FLAG_PATTERN =
-            Pattern.compile("^(?<namespace>[^\\s/=]+)/(?<name>[^\\s/=]+)=(?<value>.*)$");
-
     @Option(
             name = "flag-file",
             description = "File containing flag values to apply. Can be repeated.")
@@ -94,10 +87,8 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
         if (mFlagFiles.isEmpty() && mFlagValues.isEmpty()) {
-            throw new TargetSetupError(
-                    "Flag files (--flag-file) or values (--flag-value) are required",
-                    device.getDeviceDescriptor(),
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+            CLog.i("No flag-file or flag-value option provided, skipping");
+            return;
         }
 
         // Parse input flag files and values.
@@ -203,21 +194,21 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
             throws TargetSetupError {
         Map<String, Map<String, String>> flags = new HashMap<>();
         for (String line : lines) {
-            Matcher match = FLAG_PATTERN.matcher(line);
-            if (!match.matches()) {
+            try {
+                DeviceFeatureFlag deviceFeatureFlag = new DeviceFeatureFlag(line);
+                flags.computeIfAbsent(deviceFeatureFlag.getNamespace(), ns -> new HashMap<>())
+                        .put(deviceFeatureFlag.getFlagName(), deviceFeatureFlag.getFlagValue());
+            } catch (IllegalArgumentException e) {
                 if (throwIfInvalid) {
                     throw new TargetSetupError(
                             String.format("Failed to parse flag data: %s", line),
+                            e,
                             device.getDeviceDescriptor(),
                             InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
                 CLog.w("Skipping invalid flag data: %s", line);
                 continue;
             }
-            String namespace = match.group("namespace");
-            String name = match.group("name");
-            String value = match.group("value");
-            flags.computeIfAbsent(namespace, ns -> new HashMap<>()).put(name, value);
         }
         return flags;
     }

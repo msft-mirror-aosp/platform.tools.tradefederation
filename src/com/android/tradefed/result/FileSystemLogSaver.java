@@ -21,6 +21,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
@@ -242,7 +243,10 @@ public class FileSystemLogSaver implements ILogSaver {
             return FileUtil.createTempDir("inv_");
         } catch (IOException e) {
             // Abort tradefed if a temp directory cannot be created
-            throw new FatalHostError("Cannot create tmp directory.", e);
+            throw new FatalHostError(
+                    "Cannot create tmp directory.",
+                    e,
+                    InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
         }
     }
 

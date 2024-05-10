@@ -31,6 +31,8 @@ service TestInvocationManagement {
   rpc GetInvocationDetail(InvocationDetailRequest) returns (InvocationDetailResponse) {}
   // Request an invocation to be stopped, non-blocking.
   rpc StopInvocation(StopInvocationRequest) returns (StopInvocationResponse) {}
+  // Request the Tradefed process to exit after a delay that specified by the client, non-blocking.
+  rpc ShutdownTradefed(ShutdownTradefedRequest) returns (ShutdownTradefedResponse) {}
 }
 
 // A new TF test request.
@@ -69,6 +71,21 @@ message StopInvocationResponse {
   Status status = 1;
   // If set, an error occurred and is described by ErrorInfo.
   CommandErrorInfo command_error_info = 2;
+}
+
+// Request the Tradefed Java Process to exit after a delay
+message ShutdownTradefedRequest {
+  // The delay of Tradefed process exit in ms
+  int32 shutdown_delay = 1;
+}
+
+message ShutdownTradefedResponse {
+  // Type of Shutdown Tradefed Request status
+  enum Status {
+    RECEIVED = 0;
+  }
+  // The type of status.
+  Status status = 1;
 }
 
 // The current status of the test command.

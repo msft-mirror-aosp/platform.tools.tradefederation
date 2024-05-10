@@ -20,7 +20,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -31,6 +30,7 @@ import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
@@ -501,7 +501,7 @@ public class XmlSuiteResultFormatterTest {
         assertEquals(3, result.getTestResults().size());
         assertEquals(1, result.getNumTestsInState(TestStatus.FAILURE));
         for (Entry<TestDescription, TestResult> entry : result.getTestResults().entrySet()) {
-            if (TestStatus.FAILURE.equals(entry.getValue().getStatus())) {
+            if (TestStatus.FAILURE.equals(entry.getValue().getResultStatus())) {
                 assertEquals("value00", entry.getValue().getMetrics().get("metric00"));
                 assertEquals("value10", entry.getValue().getMetrics().get("metric10"));
             }
@@ -639,7 +639,7 @@ public class XmlSuiteResultFormatterTest {
         assertEquals(3, result.getTestResults().size());
         assertEquals(1, result.getNumTestsInState(TestStatus.FAILURE));
         for (Entry<TestDescription, TestResult> entry : result.getTestResults().entrySet()) {
-            if (TestStatus.FAILURE.equals(entry.getValue().getStatus())) {
+            if (TestStatus.FAILURE.equals(entry.getValue().getResultStatus())) {
                 assertEquals("value00", entry.getValue().getMetrics().get("metric00"));
                 assertEquals("value10", entry.getValue().getMetrics().get("metric10"));
             }

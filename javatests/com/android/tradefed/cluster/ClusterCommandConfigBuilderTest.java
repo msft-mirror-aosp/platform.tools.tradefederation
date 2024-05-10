@@ -87,8 +87,16 @@ public class ClusterCommandConfigBuilderTest {
     @Before
     public void setUp() throws IOException {
         mWorkDir = FileUtil.createTempDir(this.getClass().getSimpleName());
-        mCommand = new ClusterCommand(REQUEST_ID, COMMAND_ID, TASK_ID, COMMAND_LINE, ATTEMPT_ID,
-                ClusterCommand.RequestType.MANAGED, 0, 0);
+        mCommand =
+                new ClusterCommand(
+                        REQUEST_ID,
+                        COMMAND_ID,
+                        TASK_ID,
+                        COMMAND_LINE,
+                        ATTEMPT_ID,
+                        ClusterCommand.RequestType.MANAGED,
+                        0,
+                        0);
         mCommand.setTargetDeviceSerials(List.of(DEVICE_SERIAL));
         mTestEnvironment = new TestEnvironment();
         mTestResources = new ArrayList<>();
@@ -185,6 +193,7 @@ public class ClusterCommandConfigBuilderTest {
         // work directory and environment variables from both sources were injected
         verify(mConfig, times(1))
                 .injectOptionValue("cluster:env-var", "TF_WORK_DIR", mWorkDir.getAbsolutePath());
+        verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "TF_ATTEMPT_ID", ATTEMPT_ID);
         verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "E1", "V1");
         verify(mConfig, times(1)).injectOptionValue("cluster:env-var", "E2", "V2");
     }
@@ -279,5 +288,15 @@ public class ClusterCommandConfigBuilderTest {
         builder.build();
         verify(mConfig, never()).injectOptionValue("parallel-setup", "true");
         verify(mConfig, never()).injectOptionValue("parallel-setup-timeout", "0");
+    }
+
+    @Test
+    public void testBuild_excludedFilesInClasspath()
+            throws IOException, ConfigurationException, JSONException {
+        mTestEnvironment.addExcludedFileInJavaClasspath("art-run-test.*");
+
+        builder.build();
+        verify(mConfig, times(1))
+                .injectOptionValue("cluster:exclude-file-in-java-classpath", "art-run-test.*");
     }
 }

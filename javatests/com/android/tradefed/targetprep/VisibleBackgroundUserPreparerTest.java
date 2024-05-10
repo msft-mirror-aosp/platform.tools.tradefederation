@@ -15,7 +15,8 @@
  */
 package com.android.tradefed.targetprep;
 
-import static com.android.tradefed.targetprep.VisibleBackgroundUserPreparer.RUN_TESTS_AS_USER_KEY;
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+import static com.android.tradefed.targetprep.UserHelper.USER_SETUP_COMPLETE;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -104,6 +105,7 @@ public final class VisibleBackgroundUserPreparerTest {
         verifyUserCreated();
         verifyUserStartedVisibleOnBackground(42, 108);
         verifyTestInfoProperty(RUN_TESTS_AS_USER_KEY, "42");
+        verifyUserSettings(42, USER_SETUP_COMPLETE, "1");
         verifyNoUserSwitched();
 
         mPreparer.tearDown(mTestInfo, /* e= */ null);
@@ -456,5 +458,9 @@ public final class VisibleBackgroundUserPreparerTest {
         assertWithMessage("value of property %s (all properties: %s)", key, mTestInfo.properties())
                 .that(actualValue)
                 .isEqualTo(expectedValue);
+    }
+
+    private void verifyUserSettings(int userId, String key, String value) throws Exception {
+        mTestDeviceMockHelper.verifyUserSettings(userId, "secure", key, value);
     }
 }

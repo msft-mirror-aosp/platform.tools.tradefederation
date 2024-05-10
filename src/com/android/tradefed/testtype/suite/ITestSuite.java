@@ -20,6 +20,7 @@ import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
@@ -34,6 +35,8 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
+import com.android.tradefed.device.connection.AbstractConnection;
+import com.android.tradefed.device.connection.AdbTcpConnection;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
@@ -52,9 +55,13 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.postprocessor.IPostProcessor;
+import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
+import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -90,6 +97,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -126,6 +135,9 @@ public abstract class ITestSuite
                 ITokenRequest,
                 ITestLoggerReceiver {
 
+    public static final String MODULE_START_TIME = "MODULE_START_TIME";
+    public static final String MODULE_END_TIME = "MODULE_END_TIME";
+
     public static final String SKIP_SYSTEM_STATUS_CHECKER = "skip-system-status-check";
     public static final String RUNNER_WHITELIST = "runner-whitelist";
     public static final String PREPARER_WHITELIST = "preparer-whitelist";
@@ -141,19 +153,23 @@ public abstract class ITestSuite
     public static final String MODULE_METADATA_INCLUDE_FILTER = "module-metadata-include-filter";
     public static final String MODULE_METADATA_EXCLUDE_FILTER = "module-metadata-exclude-filter";
     public static final String RANDOM_SEED = "random-seed";
+    public static final String SKIP_STAGING_ARTIFACTS = "skip-staging-artifacts";
+    public static final String STAGE_MODULE_ARTIFACTS = "stage-module-artifacts";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
+
+    public static final String TEST_TYPE_KEY = "test-type";
+    public static final String TEST_TYPE_VALUE_PERFORMANCE = "performance";
 
     private static final Set<String> ALLOWED_PREPARERS_CONFIGS =
             ImmutableSet.of("/suite/allowed-preparers.txt", "/suite/google-allowed-preparers.txt");
 
-    // Options for test failure case
+    @Deprecated
     @Option(
-        name = "bugreport-on-failure",
-        description =
-                "Take a bugreport on every test failure. Warning: This may require a lot"
-                        + "of storage space of the machine running the tests."
-    )
+            name = "bugreport-on-failure",
+            description =
+                    "Take a bugreport on every test failure. Warning: This may require a lot"
+                            + "of storage space of the machine running the tests.")
     private boolean mBugReportOnFailure = false;
 
     @Deprecated
@@ -178,8 +194,8 @@ public abstract class ITestSuite
     )
     private boolean mScreenshotOnFailure = false;
 
-    @Option(name = "reboot-on-failure",
-            description = "Reboot the device after every test failure.")
+    @Deprecated
+    @Option(name = "reboot-on-failure", description = "Reboot the device after every test failure.")
     private boolean mRebootOnFailure = false;
 
     // Options for suite runner behavior
@@ -303,6 +319,19 @@ public abstract class ITestSuite
     )
     private boolean mIsolatedModule = false;
 
+    @Option(
+            name = "isolated-module-grade",
+            description =
+                    "When isolated-module is enabled, this defines what action we try to attempt.")
+    private IsolatedModuleGrade mIsolatedModuleGrade = IsolatedModuleGrade.FULLY_ISOLATED;
+
+    @Option(
+            name = "recover-device-by-cvd",
+            description =
+                    "Try to recover the device by cvd tool when the device is gone during test"
+                            + " running.")
+    protected boolean mRecoverDeviceByCvd = false;
+
     /** @deprecated to be deleted when next version is deployed */
     @Deprecated
     @Option(
@@ -327,9 +356,34 @@ public abstract class ITestSuite
     private boolean mStageArtifactsViaFeature = true;
 
     @Option(
+            name = SKIP_STAGING_ARTIFACTS,
+            description = "Skip staging artifacts with remote-files if already staged.")
+    private boolean mSkipStagingArtifacts = false;
+
+    @Option(
             name = "multi-devices-modules",
             description = "Running strategy for modules that require multiple devices.")
     private MultiDeviceModuleStrategy mMultiDevicesStrategy = MultiDeviceModuleStrategy.EXCLUDE_ALL;
+
+    @Option(
+            name = "use-snapshot-for-reset",
+            description = "Feature flag to use snapshot/restore instead of powerwash.")
+    private boolean mUseSnapshotForReset = false;
+
+    @Option(
+            name = "use-snapshot-before-first-module",
+            description =
+                    "Immediately restore the device after taking a snapshot. Ensures tests are"
+                            + " consistently run within a restored VM.")
+    private boolean mUseSnapshotBeforeFirstModule = false;
+
+    @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
+    private boolean mStageRemoteFile = true;
+
+    public enum IsolatedModuleGrade {
+        REBOOT_ISOLATED, // Reboot was done before the test.
+        FULLY_ISOLATED; // Test received a fresh device.
+    }
 
     public enum MultiDeviceModuleStrategy {
         EXCLUDE_ALL,
@@ -459,19 +513,39 @@ public abstract class ITestSuite
             moduleNames.add(config.getValue().getConfigurationDescription().getModuleName());
         }
 
-        if (mBuildInfo != null
-                && mBuildInfo.getRemoteFiles() != null
-                && mBuildInfo.getRemoteFiles().size() > 0) {
+        if (stageAtInvocationLevel()) {
             stageTestArtifacts(mDevice, moduleNames);
+        } else {
+            CLog.d(SKIP_STAGING_ARTIFACTS + " is set. Skipping #stageTestArtifacts");
         }
 
         runConfig.clear();
         return filteredConfig;
     }
 
+    private boolean stageAtInvocationLevel() {
+        if (mBuildInfo != null) {
+            if (mSkipStagingArtifacts
+                    || mBuildInfo.getBuildAttributes().get(SKIP_STAGING_ARTIFACTS) != null) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean stageModuleLevel() {
+        if (mBuildInfo != null) {
+            return mBuildInfo.getBuildAttributes().get(STAGE_MODULE_ARTIFACTS) != null;
+        }
+        return false;
+    }
+
     /** Helper to download all artifacts for the given modules. */
     private void stageTestArtifacts(ITestDevice device, Set<String> modules) {
-        if (mBuildInfo.getRemoteFiles().isEmpty()) {
+        if (mBuildInfo.getRemoteFiles() == null || mBuildInfo.getRemoteFiles().isEmpty()) {
+            CLog.d("No remote build info, skipping stageTestArtifacts");
             return;
         }
         CLog.i(String.format("Start to stage test artifacts for %d modules.", modules.size()));
@@ -485,14 +559,20 @@ public abstract class ITestSuite
                             .map(m -> String.format("/%s/", m))
                             .collect(Collectors.joining("|"));
             List<String> includeFilters = Arrays.asList(moduleRegex);
-            // Ignore config file as it's part of config zip artifact that's staged already.
-            List<String> excludeFilters = Arrays.asList("[.]config$");
+            // Ignore config file as it's part of config and jar zip artifact that's staged already.
+            List<String> excludeFilters = Arrays.asList("[.]config$", "[.]jar$");
             if (mStageArtifactsViaFeature) {
                 try (TradefedFeatureClient client = new TradefedFeatureClient()) {
                     Map<String, String> args = new HashMap<>();
-                    args.put(
-                            ResolvePartialDownload.DESTINATION_DIR,
-                            getTestsDir().getAbsolutePath());
+                    String destination = getTestsDir().getAbsolutePath();
+                    // In *TS cases, download from root dir reference instead of tests dir
+                    if (mBuildInfo.getBuildAttributes().containsKey("ROOT_DIR")) {
+                        destination = mBuildInfo.getBuildAttributes().get("ROOT_DIR");
+                    }
+                    CLog.d(
+                            "downloading to destination: %s the following include_filters: %s",
+                            destination, includeFilters);
+                    args.put(ResolvePartialDownload.DESTINATION_DIR, destination);
                     args.put(
                             ResolvePartialDownload.INCLUDE_FILTERS,
                             String.join(";", includeFilters));
@@ -505,7 +585,6 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
-
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
@@ -692,7 +771,7 @@ public abstract class ITestSuite
      * Opportunity to clean up all the things that were needed during the suites setup but are not
      * required to run the tests.
      */
-    void cleanUpSuiteSetup() {
+    public void cleanUpSuiteSetup() {
         // Empty by default.
     }
 
@@ -720,12 +799,29 @@ public abstract class ITestSuite
             }
         }
 
-        /** Setup a special listener to take actions on test failures. */
-        TestFailureListener failureListener =
-                new TestFailureListener(
-                        mContext.getDevices(), mBugReportOnFailure, mRebootOnFailure);
         /** Create the list of listeners applicable at the module level. */
         List<ITestInvocationListener> moduleListeners = createModuleListeners();
+
+        if (mUseSnapshotForReset) {
+            AbstractConnection connection = mDevice.getConnection();
+            if (connection instanceof AdbTcpConnection) {
+                // Capture a snapshot once at the beginning of the suite
+                if (((AdbTcpConnection) connection).getSuiteSnapshots().containsKey(mDevice)) {
+                    CLog.d("Suite snapshot already taken for '%s'", mDevice.getSerialNumber());
+                } else {
+                    ((AdbTcpConnection) connection)
+                            .snapshotDevice(mDevice, mContext.getInvocationId());
+                    ((AdbTcpConnection) connection)
+                            .getSuiteSnapshots()
+                            .put(mDevice, mContext.getInvocationId());
+                }
+                if (mUseSnapshotBeforeFirstModule) {
+                    String snapshot =
+                            ((AdbTcpConnection) connection).getSuiteSnapshots().get(mDevice);
+                    ((AdbTcpConnection) connection).recoverVirtualDevice(mDevice, snapshot, null);
+                }
+            }
+        }
 
         // Only print the running log if we are going to run something.
         if (mRunModules.get(0).hasTests()) {
@@ -747,11 +843,19 @@ public abstract class ITestSuite
                 }
                 // Before running the module we ensure it has tests at this point or skip completely
                 // to avoid running SystemCheckers and preparation for nothing.
-                if (module.hasTests()) {
+                if (!module.hasTests()) {
                     continue;
                 }
 
                 try (CloseableTraceScope ignore = new CloseableTraceScope(module.getId())) {
+                    if (!stageAtInvocationLevel() && stageModuleLevel()) {
+                        stageTestArtifacts(
+                                mDevice,
+                                ImmutableSet.of(
+                                        module.getModuleConfiguration()
+                                                .getConfigurationDescription()
+                                                .getModuleName()));
+                    }
                     // Populate the module context with devices and builds
                     for (String deviceName : mContext.getDeviceConfigNames()) {
                         module.getModuleInvocationContext()
@@ -767,6 +871,8 @@ public abstract class ITestSuite
                                         ModuleDefinition.MODULE_ISOLATED,
                                         CurrentInvocation.moduleCurrentIsolation().toString());
                     }
+                    // Add module specific post processors.
+                    listener = listenerWithPostProcessorsForPerfModule(module, listener);
                     // Only the module callback will be called here.
                     ITestInvocationListener listenerWithCollectors = listener;
                     if (mMetricCollectors != null) {
@@ -794,6 +900,9 @@ public abstract class ITestSuite
                             }
                         }
                     }
+                    module.getModuleInvocationContext()
+                            .addInvocationAttribute(
+                                    MODULE_START_TIME, Long.toString(System.currentTimeMillis()));
                     listenerWithCollectors.testModuleStarted(module.getModuleInvocationContext());
                     mModuleInProgress = module;
                     // Trigger module start on module level listener too
@@ -802,10 +911,13 @@ public abstract class ITestSuite
                     TestInformation moduleInfo =
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
+                    logModuleConfig(listener, module);
                     try {
-                        runSingleModule(
-                                module, moduleInfo, listener, moduleListeners, failureListener);
+                        runSingleModule(module, moduleInfo, listener, moduleListeners);
                     } finally {
+                        module.getModuleInvocationContext()
+                                .addInvocationAttribute(
+                                        MODULE_END_TIME, Long.toString(System.currentTimeMillis()));
                         // Trigger module end on module level listener too
                         new ResultForwarder(moduleListeners).testModuleEnded();
                         // clear out module invocation context since we are now done with module
@@ -829,6 +941,56 @@ public abstract class ITestSuite
     }
 
     /**
+     * Returns a listener with module-level post processors (for perf modules) instered to the
+     * listener chain.
+     */
+    private ITestInvocationListener listenerWithPostProcessorsForPerfModule(
+            ModuleDefinition module, ITestInvocationListener listener) {
+        IConfiguration config = module.getModuleConfiguration();
+        List<String> testTypes = config.getConfigurationDescription().getMetaData(TEST_TYPE_KEY);
+        if (testTypes == null || !testTypes.contains(TEST_TYPE_VALUE_PERFORMANCE)) {
+            return listener; // not a perf module
+        }
+        List<IPostProcessor> topLevelPostProcessors = mMainConfiguration.getPostProcessors();
+        List<IPostProcessor> modulePostProcessors = config.getPostProcessors();
+        if (modulePostProcessors.size() > 0 && topLevelPostProcessors.size() > 0) {
+            CLog.w("Post processors specified at both top level and module level (%s)", module);
+        }
+        for (IPostProcessor postProcessor : modulePostProcessors) {
+            try {
+                listener = postProcessor.init(listener);
+            } catch (Exception e) {
+                CLog.e(
+                        "Post processor %s is ignored as it fails to init() with exception: %s",
+                        postProcessor.getClass().getSimpleName(), e);
+            }
+        }
+        return listener;
+    }
+
+    /** Log the module configuration. */
+    private void logModuleConfig(ITestLogger logger, ModuleDefinition module) {
+        try (StringWriter configXmlWriter = new StringWriter();
+                PrintWriter wrapperWriter = new PrintWriter(configXmlWriter)) {
+            module.getModuleConfiguration()
+                    .dumpXml(
+                            wrapperWriter,
+                            new ArrayList<String>(Configuration.NON_MODULE_OBJECTS),
+                            true,
+                            false);
+            wrapperWriter.flush();
+            // Specified UTF-8 encoding for an abundance of caution, but its possible we could want
+            // something else in the future
+            byte[] configXmlByteArray = configXmlWriter.toString().getBytes("UTF-8");
+            try (InputStreamSource source = new ByteArrayInputStreamSource(configXmlByteArray)) {
+                logger.testLog("module-configuration", LogDataType.HARNESS_CONFIG, source);
+            }
+        } catch (RuntimeException | IOException e) {
+            CLog.e(e);
+        }
+    }
+
+    /**
      * Returns the list of {@link ITestInvocationListener} applicable to the {@link ModuleListener}
      * level. These listeners will be re-used for each module, they will not be re-instantiated so
      * they should not assume an internal state.
@@ -846,16 +1008,39 @@ public abstract class ITestSuite
      */
     private void moduleIsolation(IInvocationContext context, ITestLogger logger)
             throws DeviceNotAvailableException {
-        // TODO: we can probably make it smarter: Did any test ran for example?
-        ITestDevice device = context.getDevices().get(0);
-        if (mIsolatedModule && (device instanceof NestedRemoteDevice)) {
-            boolean res = ((NestedRemoteDevice) device).resetVirtualDevice();
-            if (!res) {
-                String serial = device.getSerialNumber();
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to reset the AVD '%s' during module isolation.", serial),
-                        serial);
+        if (!mIsolatedModule) {
+            return;
+        }
+        if (IsolatedModuleGrade.REBOOT_ISOLATED.equals(mIsolatedModuleGrade)) {
+            CLog.d("isolated-module is enabled with grade REBOOT_ISOLATED.");
+            try (CloseableTraceScope ignored = new CloseableTraceScope("isolated_module_reboot")) {
+                for (ITestDevice device : context.getDevices()) {
+                    device.reboot();
+                }
+                CurrentInvocation.setModuleIsolation(IsolationGrade.REBOOT_ISOLATED);
+                CurrentInvocation.setRunIsolation(IsolationGrade.REBOOT_ISOLATED);
+            }
+        } else if (IsolatedModuleGrade.FULLY_ISOLATED.equals(mIsolatedModuleGrade)) {
+            // TODO: we can probably make it smarter: Did any test ran for example?
+            ITestDevice device = context.getDevices().get(0);
+            if (device instanceof NestedRemoteDevice) {
+                boolean res = ((NestedRemoteDevice) device).resetVirtualDevice();
+                if (!res) {
+                    String serial = device.getSerialNumber();
+                    throw new DeviceNotAvailableException(
+                            String.format(
+                                    "Failed to reset the AVD '%s' during module isolation.",
+                                    serial),
+                            serial);
+                }
+            } else if (mUseSnapshotForReset) {
+                AbstractConnection connection = device.getConnection();
+                if (connection instanceof AdbTcpConnection) {
+                    String snapshot =
+                            ((AdbTcpConnection) connection).getSuiteSnapshots().get(device);
+                    // snapshot should not be null, otherwise the device would have crashed.
+                    ((AdbTcpConnection) connection).recoverVirtualDevice(device, snapshot, null);
+                }
             }
         }
     }
@@ -874,8 +1059,7 @@ public abstract class ITestSuite
             ModuleDefinition module,
             TestInformation moduleInfo,
             ITestInvocationListener listener,
-            List<ITestInvocationListener> moduleListeners,
-            TestFailureListener failureListener)
+            List<ITestInvocationListener> moduleListeners)
             throws DeviceNotAvailableException {
         Map<String, String> properties = new LinkedHashMap<>();
         try (CloseableTraceScope ignored = new CloseableTraceScope("module_pre_check")) {
@@ -897,6 +1081,9 @@ public abstract class ITestSuite
             }
             if (mCollectTestsOnly) {
                 module.setCollectTestsOnly(mCollectTestsOnly);
+            }
+            if (mRecoverDeviceByCvd) {
+                module.setRecoverVirtualDevice(mRecoverDeviceByCvd);
             }
             // Pass the run defined collectors to be used.
             module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
@@ -927,7 +1114,6 @@ public abstract class ITestSuite
                 moduleInfo,
                 listener,
                 moduleListeners,
-                failureListener,
                 getConfiguration().getRetryDecision().getMaxRetryCount());
 
         if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
@@ -1200,6 +1386,7 @@ public abstract class ITestSuite
     @Override
     public void setBuild(IBuildInfo buildInfo) {
         mBuildInfo = buildInfo;
+        mBuildInfo.allowStagingRemoteFile(mStageRemoteFile);
     }
 
     /**
@@ -1486,7 +1673,7 @@ public abstract class ITestSuite
      * @return True if the module should run, false otherwise.
      */
     @VisibleForTesting
-    protected boolean filterByConfigMetadata(
+    public boolean filterByConfigMetadata(
             IConfiguration config,
             MultiMap<String, String> include,
             MultiMap<String, String> exclude) {
@@ -1600,7 +1787,19 @@ public abstract class ITestSuite
         return true;
     }
 
-    protected void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
+    public void setMultiDeviceStrategy(MultiDeviceModuleStrategy strategy) {
         mMultiDevicesStrategy = strategy;
+    }
+
+    public MultiDeviceModuleStrategy getMultiDeviceStrategy() {
+        return mMultiDevicesStrategy;
+    }
+
+    public void setIntraModuleSharding(boolean intraModuleSharding) {
+        mIntraModuleSharding = intraModuleSharding;
+    }
+
+    public boolean getIntraModuleSharding() {
+        return mIntraModuleSharding;
     }
 }

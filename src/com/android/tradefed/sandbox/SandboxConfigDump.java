@@ -71,6 +71,7 @@ public class SandboxConfigDump {
     static {
         VERSIONED_ELEMENTS.add(Configuration.SYSTEM_STATUS_CHECKER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.DEVICE_METRICS_COLLECTOR_TYPE_NAME);
+        VERSIONED_ELEMENTS.add(Configuration.METRIC_POST_PROCESSOR_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.MULTI_PRE_TARGET_PREPARER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.MULTI_PREPARER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.TARGET_PREPARER_TYPE_NAME);
@@ -94,6 +95,7 @@ public class SandboxConfigDump {
         NON_TEST_ELEMENTS.add(Configuration.CMD_OPTIONS_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.GLOBAL_FILTERS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.SKIP_MANAGER_TYPE_NAME);
     }
 
     /**
@@ -211,6 +213,10 @@ public class SandboxConfigDump {
                 // Reset serials, ensure any null/tcp/gce-device can be selected.
                 requirements.setSerial();
             }
+            // Reset device requested type, we don't need it in the sandbox
+            requirements.setBaseDeviceTypeRequested(null);
+            // In sandbox it's pointless to check again for battery for allocation
+            requirements.setRequireBatteryCheck(false);
         }
     }
 }

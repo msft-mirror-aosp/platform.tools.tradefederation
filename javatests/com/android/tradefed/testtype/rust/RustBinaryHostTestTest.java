@@ -143,12 +143,9 @@ public class RustBinaryHostTestTest {
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
-                        Mockito.eq("-Zunstable-options"),
-                        Mockito.eq("--report-time"),
                         Mockito.eq("--bench"),
                         Mockito.eq("--color"),
                         Mockito.eq("never"),
-                        Mockito.eq("--exact"),
                         Mockito.eq("--list")))
                 .thenReturn(successResult("", runListBenchmarksOutput(numOfTest)));
     }
@@ -192,12 +189,9 @@ public class RustBinaryHostTestTest {
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
-                        Mockito.eq("-Zunstable-options"),
-                        Mockito.eq("--report-time"),
                         Mockito.eq("--bench"),
                         Mockito.eq("--color"),
-                        Mockito.eq("never"),
-                        Mockito.eq("--exact")))
+                        Mockito.eq("never")))
                 .thenReturn(successResult("", output));
     }
 

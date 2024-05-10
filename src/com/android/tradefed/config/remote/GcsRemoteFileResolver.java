@@ -19,14 +19,27 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.gcs.GCSDownloaderHelper;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.GCSFileDownloader;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.ZipUtil2;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.AbstractMap;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nonnull;
 
@@ -37,6 +50,7 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
 
     private static final long SLEEP_INTERVAL_MS = 5 * 1000;
     private static final String RETRY_TIMEOUT_MS_ARG = "retry_timeout_ms";
+    private static final AtomicInteger poolNumber = new AtomicInteger(1);
 
     private GCSDownloaderHelper mHelper = null;
 
@@ -45,13 +59,25 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
         File consideredFile = args.getConsideredFile();
         // Don't use absolute path as it would not start with gs:
         String path = consideredFile.getPath();
-        try (CloseableTraceScope ignored = new CloseableTraceScope("gs_download " + path)) {
-            // We need to download the file from the bucket
-            File downloadedFile = fetchResourceWithRetry(path, args.getQueryArgs());
-            // Unzip it if required
-            return new ResolvedFile(
-                    DynamicRemoteFileResolver.unzipIfRequired(downloadedFile, args.getQueryArgs()));
+
+        File destFile = GCSFileDownloader.createTempFileForRemote(path, null);
+        try {
+            if (canUseParallelDownload(args.getQueryArgs())) {
+                Entry<File, Future<BuildRetrievalError>> parallelDownload =
+                        fetchResourceWithRetryParallel(path, args.getQueryArgs(), destFile);
+                ExtendedFile eFile = new ExtendedFile(parallelDownload.getKey(), "gcs", "gcs");
+                eFile.setDownloadFuture(parallelDownload.getValue());
+                // Return the file with metadata
+                return new ResolvedFile(eFile);
+            } else {
+                // We need to download the file from the bucket
+                fetchResourceWithRetry(path, args.getQueryArgs(), destFile);
+                // Unzip it if required
+                return new ResolvedFile(
+                        DynamicRemoteFileResolver.unzipIfRequired(destFile, args.getQueryArgs()));
+            }
         } catch (IOException e) {
+            FileUtil.deleteFile(destFile);
             CLog.e(e);
             throw new BuildRetrievalError(
                     String.format("Failed to download %s due to: %s", path, e.getMessage()),
@@ -79,22 +105,88 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
     }
 
     /** If the retry arg is set, we retry downloading until timeout is reached */
-    private File fetchResourceWithRetry(String path, Map<String, String> queryArgs)
+    private void fetchResourceWithRetry(String path, Map<String, String> queryArgs, File destFile)
             throws BuildRetrievalError {
-        String timeoutStringValue = queryArgs.get(RETRY_TIMEOUT_MS_ARG);
-        if (timeoutStringValue == null) {
-            return getDownloader().fetchTestResource(path);
-        }
-        long timeout = System.currentTimeMillis() + Long.parseLong(timeoutStringValue);
-        BuildRetrievalError error = null;
-        while (System.currentTimeMillis() < timeout) {
-            try {
-                return getDownloader().fetchTestResource(path);
-            } catch (BuildRetrievalError e) {
-                error = e;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("gs_download " + path)) {
+            String timeoutStringValue = queryArgs.get(RETRY_TIMEOUT_MS_ARG);
+            if (timeoutStringValue == null) {
+                getDownloader().fetchTestResource(destFile, path);
+                return;
             }
-            sleep();
+            long timeout = System.currentTimeMillis() + Long.parseLong(timeoutStringValue);
+            BuildRetrievalError error = null;
+            while (System.currentTimeMillis() < timeout) {
+                try {
+                    getDownloader().fetchTestResource(destFile, path);
+                    return;
+                } catch (BuildRetrievalError e) {
+                    error = e;
+                }
+                sleep();
+            }
+            throw error;
         }
-        throw error;
+    }
+
+    private Entry<File, Future<BuildRetrievalError>> fetchResourceWithRetryParallel(
+            String path, Map<String, String> queryArgs, File destFile) throws IOException {
+        String unzipValue = queryArgs.get(DynamicRemoteFileResolver.UNZIP_KEY);
+        boolean useDirectory = unzipValue != null && "true".equals(unzipValue.toLowerCase());
+        File possibleDir = null;
+        if (useDirectory) {
+            possibleDir =
+                    FileUtil.createTempDir(
+                            FileUtil.getBaseName(destFile.getName()),
+                            CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
+        }
+        ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
+        ThreadFactory factory =
+                new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable r) {
+                        Thread t =
+                                new Thread(
+                                        currentGroup,
+                                        r,
+                                        "gcs-pool-task-" + poolNumber.getAndIncrement());
+                        t.setDaemon(true);
+                        return t;
+                    }
+                };
+        File destDir = possibleDir;
+        CompletableFuture<BuildRetrievalError> futureClient =
+                CompletableFuture.supplyAsync(
+                        () -> {
+                            try {
+                                fetchResourceWithRetry(path, queryArgs, destFile);
+                                if (useDirectory) {
+                                    ZipUtil2.extractZip(destFile, destDir);
+                                    FileUtil.deleteFile(destFile);
+                                }
+                                return null;
+                            } catch (IOException ioe) {
+                                FileUtil.deleteFile(destFile);
+                                return new BuildRetrievalError(ioe.getMessage(), ioe);
+                            } catch (BuildRetrievalError e) {
+                                return e;
+                            }
+                        },
+                        TracePropagatingExecutorService.create(
+                                Executors.newFixedThreadPool(1, factory)));
+        if (useDirectory) {
+            return new AbstractMap.SimpleEntry<File, Future<BuildRetrievalError>>(
+                    destDir, futureClient);
+        } else {
+            return new AbstractMap.SimpleEntry<File, Future<BuildRetrievalError>>(
+                    destFile, futureClient);
+        }
+    }
+
+    private boolean canUseParallelDownload(Map<String, String> query) {
+        String parallelValue = query.get("parallel");
+        if (parallelValue != null && "false".equals(parallelValue.toLowerCase())) {
+            return false;
+        }
+        return true;
     }
 }

@@ -45,6 +45,13 @@ public class SandboxConfigUtil {
 
     private static final long DUMP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
+    // For backward compatibility
+    public static File dumpConfigForVersion(
+            String classpath, IRunUtil runUtil, String[] args, DumpCmd dump, File globalConfig)
+            throws SandboxConfigurationException, IOException {
+        return dumpConfigForVersion(classpath, runUtil, args, dump, globalConfig, false);
+    }
+
     /**
      * Create a subprocess based on the Tf jars from any version, and dump the xml {@link
      * IConfiguration} based on the command line args.
@@ -54,11 +61,17 @@ public class SandboxConfigUtil {
      * @param args the command line args.
      * @param dump the {@link DumpCmd} driving some of the outputs.
      * @param globalConfig the file describing the global configuration to be used.
+     * @param skipJavaCheck whether or not to skip the java version check
      * @return A {@link File} containing the xml dump from the command line.
      * @throws SandboxConfigurationException if the dump is not successful.
      */
     public static File dumpConfigForVersion(
-            String classpath, IRunUtil runUtil, String[] args, DumpCmd dump, File globalConfig)
+            String classpath,
+            IRunUtil runUtil,
+            String[] args,
+            DumpCmd dump,
+            File globalConfig,
+            boolean skipJavaCheck)
             throws SandboxConfigurationException, IOException {
         if (Strings.isNullOrEmpty(classpath)) {
             throw new SandboxConfigurationException(
@@ -85,7 +98,7 @@ public class SandboxConfigUtil {
         CommandResult result = null;
         try {
             List<String> mCmdArgs = new ArrayList<>();
-            mCmdArgs.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+            mCmdArgs.add(SystemUtil.getRunningJavaBinaryPath(skipJavaCheck).getAbsolutePath());
             mCmdArgs.add(String.format("-Djava.io.tmpdir=%s", tmpDir.getAbsolutePath()));
             mCmdArgs.add("-cp");
             mCmdArgs.add(classpath);
@@ -150,7 +163,7 @@ public class SandboxConfigUtil {
         String classpath = "";
         Set<String> jarFiles = FileUtil.findFiles(rootDir, ".*.jar");
         classpath = String.join(":", jarFiles);
-        return dumpConfigForVersion(classpath, runUtil, args, dump, globalConfig);
+        return dumpConfigForVersion(classpath, runUtil, args, dump, globalConfig, false);
     }
 
     /** Create a global config with only the keystore to make it available in subprocess. */

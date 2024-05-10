@@ -29,6 +29,7 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.ProcessInfo;
 
 import java.util.ArrayList;
@@ -62,6 +63,8 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
     private boolean mReportUnexecutedTests = false;
     private ProcessInfo mSystemServerProcess = null;
     private String runLevelError = null;
+    private TestDescription mLastTest = null;
+    private TestDescription mLastStartedTest = null;
 
     private CloseableTraceScope mMethodScope = null;
 
@@ -116,6 +119,7 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
         if (!mTests.add(test)) {
             mDuplicateTests.add(test);
         }
+        mLastStartedTest = test;
     }
 
     @Override
@@ -129,6 +133,8 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
 
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
+        mLastTest = test;
+        mLastStartedTest = null;
         super.testEnded(test, endTime, testMetrics);
         if (mMethodScope != null) {
             mMethodScope.close();
@@ -173,11 +179,12 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             }
             error.setErrorMessage(wrapMessage);
         } else if (error.getErrorMessage().startsWith(DDMLIB_SHELL_UNRESPONSIVE)) {
-            String wrapMessage =
-                    String.format(
-                            "Instrumentation did not output anything for the configured timeout. "
-                                    + "ddmlib reported error: %s.",
-                            error.getErrorMessage());
+            String wrapMessage = "Instrumentation ran for longer than the configured timeout.";
+            if (mLastStartedTest != null) {
+                wrapMessage += String.format(" The last started but unfinished test was: %s.",
+                    mLastStartedTest.toString());
+            }
+            CLog.w("ddmlib reported error: %s.", error.getErrorMessage());
             error.setErrorMessage(wrapMessage);
             error.setFailureStatus(FailureStatus.TIMED_OUT);
             error.setErrorIdentifier(TestErrorIdentifier.INSTRUMENTATION_TIMED_OUT);
@@ -185,8 +192,9 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             error.setFailureStatus(FailureStatus.TEST_FAILURE);
             error.setErrorIdentifier(InfraErrorIdentifier.EXPECTED_TESTS_MISMATCH);
         }
-        super.testRunFailed(error);
+        // Use error before injecting the crashes
         runLevelError = error.getErrorMessage();
+        super.testRunFailed(error);
     }
 
     @Override
@@ -208,16 +216,27 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
                 && mExpectedTests.size() > mTests.size()) {
             Set<TestDescription> missingTests = new LinkedHashSet<>(mExpectedTests);
             missingTests.removeAll(mTests);
+
+            TestDescription lastTest = mLastTest;
+            String lastExecutedLog = "";
+            if (lastTest != null) {
+                lastExecutedLog = "Last executed test was " + lastTest.toString() + ".";
+            }
+            if (runLevelError == null) {
+                runLevelError = "Method was expected to run but didn't.";
+            } else {
+                runLevelError =
+                        String.format("Run level error reported reason: '%s", runLevelError);
+            }
             for (TestDescription miss : missingTests) {
                 super.testStarted(miss);
-                FailureDescription failure =
-                        FailureDescription.create(
+                SkipReason reason =
+                        new SkipReason(
                                 String.format(
-                                        "Test did not run due to instrumentation issue. Run level "
-                                                + "error reported reason: '%s'",
-                                        runLevelError),
-                                FailureStatus.NOT_EXECUTED);
-                super.testFailed(miss, failure);
+                                        "Test did not run due to instrumentation issue. %s %s",
+                                        lastExecutedLog, runLevelError),
+                                "INSTRUMENTATION_ERROR");
+                super.testSkipped(miss, reason);
                 super.testEnded(miss, new HashMap<String, Metric>());
             }
         }

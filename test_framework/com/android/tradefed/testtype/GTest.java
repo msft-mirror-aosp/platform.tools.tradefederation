@@ -26,6 +26,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 
@@ -37,7 +38,9 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** A Test that runs a native test package on given device. */
@@ -91,6 +94,17 @@ public class GTest extends GTestBase implements IDeviceTest {
                     "If an abi specific hierarchy seem to exists, only run the parts that "
                             + "match abi under test.")
     private boolean mFilterAbiFolders = true;
+
+    @Option(
+            name = "use-updated-shard-retry",
+            description = "Whether to use the updated logic for retry with sharding.")
+    private boolean mUseUpdatedShardRetry = true;
+
+    /** Whether any incomplete test is found in the current run. */
+    private boolean mIncompleteTestFound = false;
+
+    /** List of tests that failed in the current test run when test run was complete. */
+    private Set<String> mCurFailedTests = new LinkedHashSet<>();
 
     // Max characters allowed for executing GTest via command line
     private static final int GTEST_CMD_CHAR_LIMIT = 1000;
@@ -165,48 +179,32 @@ public class GTest extends GTestBase implements IDeviceTest {
     void doRunAllTestsInSubdirectory(
             String root, ITestDevice testDevice, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        if (testDevice.isDirectory(root)) {
-            if (!shouldRunFolder(root)) {
-                return;
-            }
-            // recursively run tests in all subdirectories
-            for (String child : testDevice.getChildren(root)) {
-                doRunAllTestsInSubdirectory(root + "/" + child, testDevice, listener);
-            }
-        } else {
-            if (!shouldRunFile(root)) {
-                return;
-            }
-            IShellOutputReceiver resultParser = createResultParser(getFileName(root), listener);
-            String flags = getAllGTestFlags(root);
-            CLog.i("Running gtest %s %s on %s", root, flags, testDevice.getSerialNumber());
-            if (isEnableXmlOutput()) {
-                runTestXml(testDevice, root, flags, listener);
-            } else {
-                runTest(testDevice, resultParser, root, flags);
+        Set<String> excludeDirectories = new LinkedHashSet<>();
+        // Decide to filter out a folder sub-path based on whether we should enforce the
+        // current abi under test.
+        if (mFilterAbiFolders && getAbi() != null) {
+            String currentArch = AbiUtils.getArchForAbi(getAbi().getName());
+            // exclude all abi specific folders, that is not the current abi, from the search
+            for (String supportedArch : AbiUtils.getArchSupported()) {
+                if (!supportedArch.equals(currentArch)) {
+                    excludeDirectories.add(supportedArch);
+                }
             }
         }
-    }
-
-    /**
-     * Decide to filter out a folder subpath based on whether or not we should enforce the current
-     * abi under test.
-     */
-    boolean shouldRunFolder(String path) {
-        if (!mFilterAbiFolders) {
-            return true;
+        String[] executableFiles = getExecutableFiles(testDevice, root, excludeDirectories);
+        for (String filePath : executableFiles) {
+            if (shouldRunFile(filePath)) {
+                IShellOutputReceiver resultParser =
+                        createResultParser(getFileName(filePath), listener);
+                String flags = getAllGTestFlags(filePath);
+                CLog.i("Running gtest %s %s on %s", filePath, flags, testDevice.getSerialNumber());
+                if (isEnableXmlOutput()) {
+                    runTestXml(testDevice, filePath, flags, listener);
+                } else {
+                    runTest(testDevice, resultParser, filePath, flags);
+                }
+            }
         }
-        if (getAbi() == null) {
-            return true;
-        }
-        String fileName = getFileName(path);
-        if (!AbiUtils.getArchSupported().contains(fileName)) {
-            return true;
-        }
-        if (fileName.equals(AbiUtils.getArchForAbi(getAbi().getName()))) {
-            return true;
-        }
-        return false;
     }
 
     String getFileName(String fullPath) {
@@ -227,7 +225,7 @@ public class GTest extends GTestBase implements IDeviceTest {
      * @param fullPath the full path of the file in question
      * @return true if we should execute the said file.
      */
-    protected boolean shouldRunFile(String fullPath) throws DeviceNotAvailableException {
+    protected boolean shouldRunFile(String fullPath) {
         if (fullPath == null || fullPath.isEmpty()) {
             return false;
         }
@@ -236,11 +234,6 @@ public class GTest extends GTestBase implements IDeviceTest {
         String moduleName = getTestModule();
         String fileName = getFileName(fullPath);
         if (moduleName != null && !fileName.startsWith(moduleName)) {
-            return false;
-        }
-
-        // skip any file that's not executable
-        if (!mDevice.isExecutable(fullPath)) {
             return false;
         }
 
@@ -290,6 +283,9 @@ public class GTest extends GTestBase implements IDeviceTest {
             }
             sb.append(String.format("GTEST_SHARD_INDEX=%s ", getShardIndex()));
             sb.append(String.format("GTEST_TOTAL_SHARDS=%s ", getShardCount()));
+        }
+        if (isCoverageEnabled()) {
+            sb.append("LLVM_PROFILE_FILE=/data/local/tmp/clang-%m.profraw ");
         }
         sb.append(super.getGTestCmdLine(fullPath, flags));
         return sb.toString();
@@ -358,6 +354,14 @@ public class GTest extends GTestBase implements IDeviceTest {
             // TODO: consider moving the flush of parser data on exceptions to TestDevice or
             // AdbHelper
             resultParser.flush();
+            if (resultParser instanceof GTestResultParser) {
+                if (((GTestResultParser) resultParser).isTestRunIncomplete()) {
+                    mIncompleteTestFound = true;
+                } else {
+                    // if test run is complete, collect the failed tests so that they can be retried
+                    mCurFailedTests.addAll(((GTestResultParser) resultParser).getFailedTests());
+                }
+            }
             for (String cmd : getAfterTestCmd()) {
                 testDevice.executeShellCommand(cmd);
             }
@@ -399,6 +403,12 @@ public class GTest extends GTestBase implements IDeviceTest {
             // Attempt to parse the file, doesn't matter if the content is invalid.
             if (tmpOutput.exists()) {
                 parser.parseResult(tmpOutput, outputCollector);
+                if (parser.isTestRunIncomplete()) {
+                    mIncompleteTestFound = true;
+                } else {
+                    // if test run is complete, collect the failed tests so that they can be retried
+                    mCurFailedTests.addAll(parser.getFailedTests());
+                }
             }
         } catch (DeviceNotAvailableException | RuntimeException e) {
             throw e;
@@ -428,6 +438,10 @@ public class GTest extends GTestBase implements IDeviceTest {
                     mDevice.getSerialNumber());
             return;
         }
+        // Reset flags that are used to track results of current test run.
+        mIncompleteTestFound = false;
+        mCurFailedTests = new LinkedHashSet<>();
+
         if (mStopRuntime) {
             mDevice.executeShellCommand("stop");
         }
@@ -438,8 +452,16 @@ public class GTest extends GTestBase implements IDeviceTest {
             doRunAllTestsInSubdirectory(testPath, mDevice, listener);
         } catch (Throwable t) {
             throwable = t;
+            // if we encounter any errors, count it as test Incomplete so that retry attempts
+            // during sharding uses a full retry.
+            mIncompleteTestFound = true;
             throw t;
         } finally {
+            if (mUseUpdatedShardRetry) {
+                // notify of test execution will enable the new sharding retry behavior since Gtest
+                // will be aware of retries.
+                notifyTestExecution(mIncompleteTestFound, mCurFailedTests);
+            }
             if (!(throwable instanceof DeviceNotAvailableException)) {
                 if (mStopRuntime) {
                     mDevice.executeShellCommand("start");
@@ -451,5 +473,41 @@ public class GTest extends GTestBase implements IDeviceTest {
 
     public boolean isRebootBeforeTestEnabled() {
         return mRebootBeforeTest;
+    }
+
+    /**
+     * Searches directories recursively to find all executable files.
+     *
+     * @param device {@link ITestDevice} where the search will occur.
+     * @param deviceFilePath is the path on the device where to do the search.
+     * @param excludeDirectories Set of directory names that must be excluded from the search.
+     * @return Array of string containing all the executable file paths on the device.
+     * @throws DeviceNotAvailableException
+     */
+    private String[] getExecutableFiles(
+            ITestDevice device, String deviceFilePath, Set<String> excludeDirectories)
+            throws DeviceNotAvailableException {
+        String cmd = String.format("find -L %s -type f -perm -a=x", deviceFilePath);
+
+        if (excludeDirectories != null && !excludeDirectories.isEmpty()) {
+            for (String directoryName : excludeDirectories) {
+                cmd += String.format(" -not -path \"*/%s/*\"", directoryName);
+            }
+        }
+
+        String output = device.executeShellCommand(cmd);
+        if (output.trim().isEmpty()) {
+            return new String[0];
+        }
+        return output.split("\r?\n");
+    }
+
+    /** Checks if native coverage is enabled. */
+    private boolean isCoverageEnabled() {
+        CoverageOptions options = getConfiguration().getCoverageOptions();
+        return options.isCoverageEnabled()
+                && (options.getCoverageToolchains().contains(CoverageOptions.Toolchain.GCOV)
+                        || options.getCoverageToolchains()
+                                .contains(CoverageOptions.Toolchain.CLANG));
     }
 }

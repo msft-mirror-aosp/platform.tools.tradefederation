@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.targetprep;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -22,6 +23,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
 import java.util.regex.Matcher;
@@ -30,6 +32,17 @@ import java.util.regex.Pattern;
 /** An {@link ITargetPreparer} that waits until device's temperature gets down to target */
 @OptionClass(alias = "temperature-throttle-waiter")
 public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
+    // temperature raw format example output : Result:30 Raw:7f6f
+    private static final Pattern TEMPERATURE_RAW_FORMAT_REGEX =
+        Pattern.compile("Result:(\\d+)\\sRaw:(\\w+)");
+
+    // temperature format example output : 30
+    private static final Pattern TEMPERATURE_FORMAT_REGEX = Pattern.compile("\\d+");
+
+    // temperature format example output:
+    //    Temperature{mValue=28.787504, mType=3, mName=VIRTUAL-SKIN, mStatus=0}
+    private static final Pattern TEMPERATURE_SKIN_FORMAT_PATTERN =
+        Pattern.compile("mValue=([\\d]+.[\\d]+).*mType=3");
 
     @Option(name = "poll-interval",
             description = "Interval in seconds, to poll for device temperature; defaults to 30s")
@@ -56,6 +69,19 @@ public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
                             + "temperature. Example: /sys/class/hwmon/hwmon1/device/msm_therm")
     private String mDeviceTemperatureFilePath = null;
 
+    public static final String DEVICE_TEMPERATURE_COMMAND_NAME = "device-temperature-command";
+
+    @Option(
+        name = DEVICE_TEMPERATURE_COMMAND_NAME,
+        description =
+            "Command for getting device temperature. If both device-temperature-file-path"
+                + " and device-temperature-command are set,"
+                + " only device-temperature-file-path will be actived."
+                + " Example: dumpsys thermalservice"
+                + " | grep 'mType=3' | grep Temperature | awk 'END{print}'")
+    private String mDeviceTemperatureCommand =
+        "dumpsys thermalservice | grep 'mType=3' | grep Temperature | awk 'END{print}'";
+
     @Option(name = "target-temperature", description = "Target Temperature that device should have;"
         + "defaults to 30c")
     private int mTargetTemperature = 30;
@@ -64,7 +90,7 @@ public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
-        if (mDeviceTemperatureFilePath == null) {
+        if (mDeviceTemperatureFilePath == null && mDeviceTemperatureCommand == null) {
             return;
         }
         ITestDevice device = testInfo.getDevice();
@@ -74,7 +100,7 @@ public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
         int deviceTemperature = Integer.MAX_VALUE;
         while (true) {
             // get device temperature
-            deviceTemperature = getDeviceTemperature(device, mDeviceTemperatureFilePath);
+            deviceTemperature = getDeviceTemperature(device);
             if (deviceTemperature > mTargetTemperature) {
                 CLog.d("Temperature is still high actual %d/expected %d",
                         deviceTemperature, mTargetTemperature);
@@ -93,50 +119,64 @@ public class TemperatureThrottlingWaiter extends BaseTargetPreparer {
                 }
                 break; // while loop
             }
-            RunUtil.getDefault().sleep(intervalMs);
+            getRunUtil().sleep(intervalMs);
         }
         // extra idle time after reaching the targetl to stable the system
-        RunUtil.getDefault().sleep(mPostIdleWaitSecs * 1000);
+        getRunUtil().sleep(mPostIdleWaitSecs * 1000);
         CLog.d("Done waiting, total time elapsed: %ds",
                 (System.currentTimeMillis() - start) / 1000);
     }
 
     /**
      * @param device
-     * @param fileName : filename where device temperature is stored
      * @throws DeviceNotAvailableException
      */
-    protected int getDeviceTemperature (ITestDevice device, String fileName)
+    protected int getDeviceTemperature (ITestDevice device)
             throws DeviceNotAvailableException, TargetSetupError {
-        int deviceTemp = Integer.MAX_VALUE;
-        String result = device.executeShellCommand(
-                String.format("cat %s", fileName)).trim();
-        CLog.i(String.format("Temperature file output : %s", result));
+        String result = executeDeviceTemperatureCommand(device);
+        CLog.i(String.format("Temperature command output : %s", result));
 
         if (result == null || result.contains("No such file or directory")) {
-            throw new TargetSetupError(String.format("File %s doesn't exist", fileName),
+            throw new TargetSetupError(
+                    String.format("File %s doesn't exist", mDeviceTemperatureFilePath),
                     device.getDeviceDescriptor(),
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
+        return parseResult(result, device);
+    }
 
-        // temperature raw format example output : Result:30 Raw:7f6f
-        final Pattern TEMPERATURE_RAW_FORMAT_REGEX = Pattern.compile("Result:(\\d+)\\sRaw:(\\w+)");
-        // temperature format example output : 30
-        final Pattern TEMPERATURE_FORMAT_REGEX = Pattern.compile("\\d+");
-        Matcher matcher = TEMPERATURE_RAW_FORMAT_REGEX.matcher(result);
-        if (matcher.find()) {
-            deviceTemp = Integer.parseInt(matcher.group(1));
-        } else {
-            matcher = TEMPERATURE_FORMAT_REGEX.matcher(result);
-            if (matcher.find()) {
-                deviceTemp = Integer.parseInt(matcher.group());
-            } else {
-                throw new TargetSetupError(
-                        String.format("file content is not as expected. Content : %s", result),
-                        device.getDeviceDescriptor());
-            }
+    private String executeDeviceTemperatureCommand(ITestDevice device)
+            throws DeviceNotAvailableException {
+        if (mDeviceTemperatureFilePath != null) {
+            return device.executeShellCommand(
+                String.format("cat %s", mDeviceTemperatureFilePath)).trim();
         }
+        if (mDeviceTemperatureCommand != null) {
+            return device.executeShellCommand(mDeviceTemperatureCommand).trim();
+        }
+        return "UNKNOWN";
+    }
 
-        return deviceTemp;
+    private int parseResult(String result, ITestDevice device) throws TargetSetupError {
+        Matcher tempRawFormatMatcher = TEMPERATURE_RAW_FORMAT_REGEX.matcher(result);
+        if (tempRawFormatMatcher.find()) {
+            return Integer.parseInt(tempRawFormatMatcher.group(1));
+        }
+        Matcher tempFormatMatcher = TEMPERATURE_FORMAT_REGEX.matcher(result);
+        if (tempFormatMatcher.find()) {
+            return Integer.parseInt(tempFormatMatcher.group());
+        }
+        Matcher skinFormatMatcher = TEMPERATURE_SKIN_FORMAT_PATTERN.matcher(result);
+        if (skinFormatMatcher.find()) {
+            return Integer.parseInt(skinFormatMatcher.group(1));
+        }
+        throw new TargetSetupError(
+            String.format("result content is not as expected. Content : %s", result),
+                device.getDeviceDescriptor());
+    }
+
+    @VisibleForTesting
+    protected IRunUtil getRunUtil() {
+        return RunUtil.getDefault();
     }
 }

@@ -3,6 +3,10 @@
     {
       "name": "test_java",
       "file_patterns": [".*\\.java"]
+    },
+    {
+      "name": "Broadcast_java",
+      "file_patterns": ["Broadcast.*\\.java"]
     }
   ]
 }

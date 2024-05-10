@@ -29,6 +29,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.util.Arrays;
+import java.util.List;
+
 /** Unit tests for {@link RunOnSdkSandboxHandler}. */
 @RunWith(JUnit4.class)
 public class RunOnSdkSandboxHandlerTest {
@@ -57,15 +60,19 @@ public class RunOnSdkSandboxHandlerTest {
         SuiteApkInstaller installer = new SuiteApkInstaller();
         assertFalse(installer.isInstantMode());
         TestFilterable test = new TestFilterable();
+        assertEquals(0, test.getIncludeAnnotations().size());
         assertEquals(0, test.getExcludeAnnotations().size());
         mConfiguration.setTest(test);
         mConfiguration.setTargetPreparer(installer);
         mHandler.applySetup(mConfiguration);
 
-        // Full mode is filtered out.
-        assertEquals(1, test.getExcludeAnnotations().size());
-        assertEquals(
-                "android.platform.test.annotations.AppModeFull",
-                test.getExcludeAnnotations().iterator().next());
+        assertEquals(0, test.getIncludeAnnotations().size());
+        // Full mode tests and tests not applicable for the sandbox are excluded.
+        assertEquals(2, test.getExcludeAnnotations().size());
+        List<String> expected =
+                Arrays.asList(
+                        "android.platform.test.annotations.AppModeFull",
+                        "android.platform.test.annotations.AppModeNonSdkSandbox");
+        assertTrue(test.getExcludeAnnotations().containsAll(expected));
     }
 }

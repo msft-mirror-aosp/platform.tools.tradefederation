@@ -17,17 +17,17 @@
 
 # Periodically writes the central tracing buffers (defined below) to disk.
 write_into_file: true
-file_write_period_ms: 2000
+file_write_period_ms: 1000
 
 # Ensure worst-case reordering of events in the central tracing buffers.
-flush_period_ms: 8000
+flush_period_ms: 30000
 
 # The trace buffers need to be big enough to hold |file_write_period_ms| of
 # trace data. The trace buffer sizing depends on the number of trace categories
 # enabled and the device activity.
 buffers: {
   size_kb: 20480
-  fill_policy: DISCARD
+  fill_policy: RING_BUFFER
 }
 
 data_sources: {

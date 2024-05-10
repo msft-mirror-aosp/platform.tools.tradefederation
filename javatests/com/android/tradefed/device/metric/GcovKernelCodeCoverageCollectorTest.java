@@ -20,17 +20,21 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertTrue;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.IDeviceActionReceiver;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
@@ -65,6 +69,7 @@ import java.io.InputStream;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -82,6 +87,7 @@ public class GcovKernelCodeCoverageCollectorTest {
 
     LogFileReader mFakeListener = new LogFileReader();
     MultiMap<String, String> mContextAttributes = new MultiMap<>();
+    List<IDeviceActionReceiver> mDeviceActionReceivers = new LinkedList<>();
 
     /** Options for coverage. */
     CoverageOptions mCoverageOptions = null;
@@ -115,27 +121,30 @@ public class GcovKernelCodeCoverageCollectorTest {
         doReturn(ImmutableList.of(mMockDevice)).when(mMockContext).getDevices();
         doReturn(mContextAttributes).when(mMockContext).getAttributes();
 
-        // Mock various device `adb` calls embedded in collector methods.
-        //
+        // mock device reboot behavior
+        mDeviceActionReceivers.clear();
+        doAnswer(i -> mDeviceActionReceivers.add((IDeviceActionReceiver) i.getArguments()[0]))
+                .when(mMockDevice)
+                .registerDeviceActionReceiver(any(IDeviceActionReceiver.class));
+        doAnswer(i -> mDeviceActionReceivers.remove((IDeviceActionReceiver) i.getArguments()[0]))
+                .when(mMockDevice)
+                .deregisterDeviceActionReceiver(any(IDeviceActionReceiver.class));
+        doAnswer(
+                        i -> {
+                            for (var receiver : mDeviceActionReceivers) {
+                                receiver.rebootStarted(mMockDevice);
+                            }
 
-        // isDebugfsMounted() happy path: fail, success, success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(mFailedResult) // Inside mountDebugfs() expects it not mounted
-                .thenReturn(mSuccessResult) // Inside collectGcovDebugfsCoverage()
-                .thenReturn(mSuccessResult); // Inside unmountDebugfs()
+                            for (var receiver : mDeviceActionReceivers) {
+                                receiver.rebootEnded(mMockDevice);
+                            }
+                            return null;
+                        })
+                .when(mMockDevice)
+                .reboot();
 
-        // mountDebugFs() happy path: success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.MOUNT_DEBUGFS_COMMAND))
-                .thenReturn(mSuccessResult);
+        doReturn(true).when(mMockDevice).isDebugfsMounted();
 
-        // unmountDebugFs() happy path: success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.UNMOUNT_DEBUGFS_COMMAND))
-                .thenReturn(mSuccessResult);
-
-        // resetGcovCounts() happy path: success
         when(mMockDevice.executeShellV2Command(
                         GcovKernelCodeCoverageCollector.RESET_GCOV_COUNTS_COMMAND))
                 .thenReturn(mSuccessResult);
@@ -182,9 +191,6 @@ public class GcovKernelCodeCoverageCollectorTest {
                 .pullFile(anyString(), anyInt());
 
         when(mMockDevice.isAdbRoot()).thenReturn(true);
-
-        mKernelCodeCoverageListener = new GcovKernelCodeCoverageCollector();
-        mKernelCodeCoverageListener.setConfiguration(mMockConfiguration);
     }
 
     private List<String> configuredRun(
@@ -194,8 +200,10 @@ public class GcovKernelCodeCoverageCollectorTest {
         List<String> testRunNames = new ArrayList<String>();
 
         enableGcovKernelCoverage();
-        mKernelCodeCoverageListener.init(mMockContext, mFakeListener);
         for (String module : modules) {
+            mKernelCodeCoverageListener = new GcovKernelCodeCoverageCollector();
+            mKernelCodeCoverageListener.setConfiguration(mMockConfiguration);
+            mKernelCodeCoverageListener.init(mMockContext, mFakeListener);
             setModuleName(module);
 
             mKernelCodeCoverageListener.onTestModuleStarted();
@@ -267,9 +275,7 @@ public class GcovKernelCodeCoverageCollectorTest {
         var moduleName = name.getMethodName();
 
         // Set mount command to fail
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.MOUNT_DEBUGFS_COMMAND))
-                .thenReturn(mFailedResult);
+        doThrow(DeviceRuntimeException.class).when(mMockDevice).mountDebugfs();
 
         configuredRun(List.of(moduleName), 1, false);
         assertThat(mFakeListener.getLogs()).hasSize(0);
@@ -350,28 +356,10 @@ public class GcovKernelCodeCoverageCollectorTest {
     public void debugfsMountGoneBeforeGather_noTar() throws Exception {
         var moduleName = name.getMethodName();
 
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(mFailedResult) // Inside mountDebugfs() expects it not mounted
-                .thenReturn(mFailedResult); // Inside collectGcovDebugfsCoverage()
+        doReturn(false).when(mMockDevice).isDebugfsMounted();
 
         configuredRun(List.of(moduleName), 1, false);
         assertThat(mFakeListener.getLogs()).hasSize(0);
-    }
-
-    @Test
-    public void debugfsMountAlreadyExists_justWarn() throws Exception {
-        var moduleName = name.getMethodName();
-
-        // All cases return success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(mSuccessResult);
-
-        configuredRun(List.of(moduleName), 1, false);
-
-        assertThat(mFakeListener.getLogs()).hasSize(1);
-        assertThat(mFakeListener.getLogFilenames().get(0)).startsWith(moduleName);
     }
 
     @Test
@@ -385,6 +373,32 @@ public class GcovKernelCodeCoverageCollectorTest {
         assertThat(mFakeListener.getLogs()).hasSize(0);
     }
 
+    @Test
+    public void singleModuleSingleTestRunWithReboot_returnTwoTars() throws Exception {
+        var moduleName = name.getMethodName();
+
+        configuredRun(List.of(moduleName), 1, true);
+
+        var logFileNames = mFakeListener.getLogFilenames();
+        assertThat(logFileNames).hasSize(2);
+        assertTrue(logFileNames.removeIf(x -> x.startsWith(moduleName)));
+        assertThat(logFileNames).hasSize(0);
+    }
+
+    @Test
+    public void multiModuleSingleTestRunWithReboot_returnFourTars() throws Exception {
+        var moduleName1 = name.getMethodName() + "_1";
+        var moduleName2 = name.getMethodName() + "_2";
+        configuredRun(List.of(moduleName1, moduleName2), 1, true);
+
+        var logFileNames = mFakeListener.getLogFilenames();
+        assertThat(logFileNames).hasSize(4);
+        assertTrue(logFileNames.removeIf(x -> x.startsWith(moduleName1)));
+        assertThat(logFileNames).hasSize(2);
+        assertTrue(logFileNames.removeIf(x -> x.startsWith(moduleName2)));
+        assertThat(logFileNames).hasSize(0);
+    }
+
     private void setModuleName(String name) {
         mContextAttributes.put(ModuleDefinition.MODULE_NAME, name);
     }
@@ -393,32 +407,11 @@ public class GcovKernelCodeCoverageCollectorTest {
         mContextAttributes.remove(ModuleDefinition.MODULE_NAME);
     }
 
-    private void failMountDebugfs() throws Exception {
-        CommandResult result = new CommandResult(CommandStatus.FAILED);
-        result.setExitCode(-1);
-        when(mMockDevice.executeShellV2Command(startsWith("mount -t debugfs debugfs")))
-                .thenReturn(result);
-    }
-
-    private void failDebugfsMountCheck() throws Exception {
-        CommandResult result = new CommandResult(CommandStatus.FAILED);
-        result.setExitCode(-1);
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(result);
-    }
-
-    private void passDebugfsMountCheck() throws Exception {
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        result.setExitCode(0);
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(result);
-    }
-
     /** An {@link ITestInvocationListener} which reads test log data streams for verification. */
     private static class LogFileReader implements ITestInvocationListener {
-        private Map<String, ByteString> mLogs = new HashMap<String, ByteString>();
+        // Use MultiMap to allow for filename collisions. This is allowed in actual device testing
+        // when saving to disk by the framework adding a unique ID to each saved file.
+        private MultiMap<String, ByteString> mLogs = new MultiMap<String, ByteString>();
 
         /** Reads the contents of the {@code dataStream} and saves it in the logs. */
         @Override
@@ -430,13 +423,13 @@ public class GcovKernelCodeCoverageCollectorTest {
             }
         }
 
-        Map<String, ByteString> getLogs() {
-            return new HashMap<String, ByteString>(mLogs);
+        List<ByteString> getLogs() {
+            return mLogs.values();
         }
 
         List<String> getLogFilenames() {
             List<String> fileNames = new ArrayList<String>();
-            for (Map.Entry<String, ByteString> entry : mLogs.entrySet()) {
+            for (Map.Entry<String, ByteString> entry : mLogs.entries()) {
                 fileNames.add(entry.getKey());
             }
             return fileNames;

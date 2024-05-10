@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -58,7 +59,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Unit tests for {@link InstalledInstrumentationsTest}. */
 @RunWith(JUnit4.class)
@@ -134,7 +137,7 @@ public class InstalledInstrumentationsTestTest {
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
 
-        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
+        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults, new HashSet<>()));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);
@@ -156,6 +159,31 @@ public class InstalledInstrumentationsTestTest {
     }
 
     @Test
+    public void testRun_retry_skipList() throws Exception {
+        injectShellResponse(
+                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
+
+        ArgsOptionParser p = new ArgsOptionParser(mInstalledInstrTest);
+        p.parse("--size", "small", "--force-abi", ABI);
+        List<TestRunResult> previousResults = new ArrayList<>();
+        TestRunResult result = new TestRunResult();
+        result.testRunStarted(TEST_PKG, 2);
+        TestDescription testDesc = new TestDescription("com.example.tests.class", "testMethod");
+        result.testStarted(testDesc);
+        result.testFailed(testDesc, "failed");
+        result.testEnded(testDesc, new HashMap<String, Metric>());
+        TestDescription testDesc2 = new TestDescription("com.example.tests.class", "testMethod2");
+        result.testStarted(testDesc2);
+        result.testEnded(testDesc2, new HashMap<String, Metric>());
+        result.testRunEnded(5L, new HashMap<String, Metric>());
+        previousResults.add(result);
+
+        Set<String> skipList = new HashSet<>();
+        skipList.add(testDesc.toString());
+        assertFalse(mInstalledInstrTest.shouldRetry(0, previousResults, skipList));
+    }
+
+    @Test
     public void testRun_retry_runFailure() throws Exception {
         injectShellResponse(
                 String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
@@ -173,7 +201,7 @@ public class InstalledInstrumentationsTestTest {
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
 
-        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
+        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults, new HashSet<>()));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);
@@ -210,7 +238,7 @@ public class InstalledInstrumentationsTestTest {
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
 
-        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
+        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults, new HashSet<>()));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(2, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);

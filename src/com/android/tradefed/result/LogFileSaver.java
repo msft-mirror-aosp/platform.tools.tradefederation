@@ -18,6 +18,7 @@ package com.android.tradefed.result;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 
@@ -92,7 +93,10 @@ public class LogFileSaver {
             return FileUtil.createTempDir("inv_");
         } catch (IOException e) {
             // uh oh, this can't be good, abort tradefed
-            throw new FatalHostError("Cannot create tmp directory.", e);
+            throw new FatalHostError(
+                    "Cannot create tmp directory.",
+                    e,
+                    InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
         }
     }
 

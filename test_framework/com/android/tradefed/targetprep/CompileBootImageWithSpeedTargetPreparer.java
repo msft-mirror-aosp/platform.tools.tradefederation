@@ -68,8 +68,5 @@ public final class CompileBootImageWithSpeedTargetPreparer extends BaseTargetPre
         if (device.getIDevice() instanceof StubDevice) {
             return;
         }
-
-        // Reboot to go back to production state.
-        device.reboot();
     }
 }

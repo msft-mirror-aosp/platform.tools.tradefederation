@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.util;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
@@ -112,6 +113,7 @@ public class ZipUtil {
         while (entries.hasMoreElements()) {
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
+            validateDestinationDir(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (entry.isDirectory()) {
                 childFile.mkdirs();
@@ -135,6 +137,7 @@ public class ZipUtil {
         while (entries.hasMoreElements()) {
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
+            validateDestinationDir(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (!entry.isDirectory() && shouldExtract.test(entry)) {
                 FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
@@ -405,7 +408,11 @@ public class ZipUtil {
             EndCentralDirectoryInfo endCentralDirInfo,
             boolean useZip64)
             throws IOException {
-        return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(
+                        "getZipCentralDirectoryInfos:" + partialZipFile.getName())) {
+            return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        }
     }
 
     /**
@@ -551,7 +558,7 @@ public class ZipUtil {
                 return;
             } else if (zipEntry.getCompressedSize() == 0) {
                 // The file is empty, just create an empty file.
-                FileUtil.mkdirsRWX(targetFile.getParentFile());
+                targetFile.getParentFile().mkdirs();
                 targetFile.createNewFile();
                 return;
             }
@@ -637,8 +644,21 @@ public class ZipUtil {
         }
 
         // Validate CRC
-        if (FileUtil.calculateCrc32(targetFile) != zipEntry.getCrc()) {
-            throw new IOException(String.format("Failed to match CRC for file %s", targetFile));
+        long targetFileCrc = FileUtil.calculateCrc32(targetFile);
+        if (targetFileCrc != zipEntry.getCrc()) {
+            throw new IOException(
+                    String.format(
+                            "Failed to match CRC for file %s [expected=%s, actual=%s]",
+                            targetFile, zipEntry.getCrc(), targetFileCrc));
+        }
+    }
+
+    protected static void validateDestinationDir(File destDir, String filename) throws IOException {
+        String canonicalDestinationDirPath = destDir.getCanonicalPath();
+        File destinationfile = new File(destDir, filename);
+        String canonicalDestinationFile = destinationfile.getCanonicalPath();
+        if (!canonicalDestinationFile.startsWith(canonicalDestinationDirPath + File.separator)) {
+            throw new RuntimeException("Entry is outside of the target dir: " + filename);
         }
     }
 }

@@ -16,7 +16,6 @@
 package com.android.tradefed.testtype.suite;
 
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -30,10 +29,16 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.TestStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.annotations.VisibleForTesting;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Listener attached to each {@link IRemoteTest} of each module in order to collect the list of
@@ -54,6 +59,9 @@ public class ModuleListener extends CollectingTestListener {
     /** Track if we are within an isolated run or not */
     private IsolationGrade mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
 
+    private List<String> mTestMappingSources = new ArrayList<String>();
+    private static final String TEST_MAPPING_SOURCE = "test_mapping_source";
+
     /** Constructor. */
     public ModuleListener(ITestInvocationListener listener, IInvocationContext moduleContext) {
         mMainListener = listener;
@@ -70,6 +78,16 @@ public class ModuleListener extends CollectingTestListener {
     /** Sets whether or not we are only collecting the tests. */
     public void setCollectTestsOnly(boolean collectTestsOnly) {
         mCollectTestsOnly = collectTestsOnly;
+    }
+
+    /** Sets test-mapping sources that will be inserted into metrics. */
+    public void setTestMappingSources(List<String> testMappingSources) {
+        mTestMappingSources = testMappingSources;
+    }
+
+    @VisibleForTesting
+    List<String> getTestMappingSources() {
+        return mTestMappingSources;
     }
 
     @Override
@@ -166,7 +184,12 @@ public class ModuleListener extends CollectingTestListener {
             if (mTrace != null) {
                 message += ": " + mTrace;
             }
-            CLog.logAndDisplay(LogLevel.INFO, message);
+            // Respect log level for passed status, force log for non-passed
+            if (TestStatus.PASSED.equals(status)) {
+                CLog.i(message);
+            } else {
+                CLog.logAndDisplay(LogLevel.INFO, message);
+            }
         }
         mTestsRan++;
     }
@@ -181,6 +204,11 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         logTestStatus(test, mTestStatus);
+        if (!mTestMappingSources.isEmpty()) {
+            testMetrics.put(
+                    TEST_MAPPING_SOURCE,
+                    TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
+        }
         super.testEnded(test, endTime, testMetrics);
     }
 
@@ -202,6 +230,13 @@ public class ModuleListener extends CollectingTestListener {
         super.testAssumptionFailure(test, failure);
         mTestStatus = TestStatus.ASSUMPTION_FAILURE;
         mTrace = failure.toString();
+    }
+
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        mTestStatus = TestStatus.SKIPPED;
+        mTrace = reason.toString();
+        super.testSkipped(test, reason);
     }
 
     /** {@inheritDoc} */

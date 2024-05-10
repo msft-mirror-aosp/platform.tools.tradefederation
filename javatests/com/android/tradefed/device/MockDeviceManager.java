@@ -46,7 +46,7 @@ public class MockDeviceManager implements IDeviceManager {
 
     private int mTotalDevices;
     private DeviceMonitorMultiplexer mDvcMon = new DeviceMonitorMultiplexer();
-    private boolean mTcpDeviceRequested = false;
+    private boolean mGceDeviceRequested = false;
     private boolean mNullDeviceRequested = false;
     private boolean mStubDeviceRequested = false;
     private int mStopAdbBridgeCallCount = 0;
@@ -103,7 +103,7 @@ public class MockDeviceManager implements IDeviceManager {
     }
 
     public void setNumDevicesCustom(
-            int numDevices, TestDeviceState state, Class<IDevice> idevicetype) {
+            int numDevices, TestDeviceState state, Class<? extends IDevice> idevicetype) {
         mAvailableDeviceQueue.clear();
         mTotalDevices = numDevices;
         for (int i = 0; i < numDevices; i++) {
@@ -119,8 +119,8 @@ public class MockDeviceManager implements IDeviceManager {
     }
 
     public void setNumDevicesStub(int numDevices, TestDeviceState state, IDevice idevice) {
-        if (idevice instanceof TcpDevice) {
-            mTcpDeviceRequested = true;
+        if (idevice instanceof RemoteAvdIDevice) {
+            mGceDeviceRequested = true;
         } else if (idevice instanceof NullDevice) {
             mNullDeviceRequested = true;
         } else if (idevice instanceof StubDevice) {
@@ -153,7 +153,9 @@ public class MockDeviceManager implements IDeviceManager {
     private static class TestDeviceMatcher implements IMatcher<ITestDevice> {
         private IDeviceSelection mDeviceOptions;
 
-        /** @param deviceSelectionOptions */
+        /**
+         * @param deviceSelectionOptions
+         */
         public TestDeviceMatcher(IDeviceSelection deviceSelectionOptions) {
             mDeviceOptions = deviceSelectionOptions;
         }
@@ -194,8 +196,8 @@ public class MockDeviceManager implements IDeviceManager {
     /** {@inheritDoc} */
     @Override
     public ITestDevice allocateDevice(IDeviceSelection options, boolean isTemporary) {
-        if (mTcpDeviceRequested) {
-            ((DeviceSelectionOptions) options).setTcpDeviceRequested(true);
+        if (mGceDeviceRequested) {
+            ((DeviceSelectionOptions) options).setGceDeviceRequested(true);
         }
         if (mNullDeviceRequested) {
             ((DeviceSelectionOptions) options).setNullDeviceRequested(true);

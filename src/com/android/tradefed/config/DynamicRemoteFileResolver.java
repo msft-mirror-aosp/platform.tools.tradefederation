@@ -18,6 +18,7 @@ package com.android.tradefed.config;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.config.OptionSetter.OptionFieldsForName;
+import com.android.tradefed.config.remote.ExtendedFile;
 import com.android.tradefed.config.remote.IRemoteFileResolver;
 import com.android.tradefed.config.remote.IRemoteFileResolver.RemoteFileResolverArgs;
 import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
@@ -27,10 +28,12 @@ import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationLocal;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -73,6 +76,10 @@ public class DynamicRemoteFileResolver {
     public static final String UNZIP_KEY = "unzip";
     // Query key for requesting a download to be optional, so if it fails we don't replace it.
     public static final String OPTIONAL_KEY = "optional";
+    // Query key for the option name being resolved.
+    public static final String OPTION_NAME_KEY = "option_name";
+    // Query key for the parallel setting
+    public static final String OPTION_PARALLEL_KEY = "parallel";
 
     /**
      * Loads file resolvers using a dedicated {@link ServiceFileResolverLoader} that is scoped to
@@ -96,19 +103,31 @@ public class DynamicRemoteFileResolver {
             };
 
     private final FileResolverLoader mFileResolverLoader;
+    private final boolean mAllowParallelization;
 
     private Map<String, OptionFieldsForName> mOptionMap;
     // Populated from {@link ICommandOptions#getDynamicDownloadArgs()}
     private Map<String, String> mExtraArgs = new LinkedHashMap<>();
     private ITestDevice mDevice;
+    private List<ExtendedFile> mParallelExtendedFiles = new ArrayList<>();
 
     public DynamicRemoteFileResolver() {
         this(DEFAULT_FILE_RESOLVER_LOADER);
     }
 
+    public DynamicRemoteFileResolver(boolean allowParallel) {
+        this(DEFAULT_FILE_RESOLVER_LOADER, allowParallel);
+    }
+
     @VisibleForTesting
     public DynamicRemoteFileResolver(FileResolverLoader loader) {
+        this(loader, false);
+    }
+
+    @VisibleForTesting
+    public DynamicRemoteFileResolver(FileResolverLoader loader, boolean allowParallel) {
         this.mFileResolverLoader = loader;
+        this.mAllowParallelization = allowParallel;
     }
 
     /** Sets the map of options coming from {@link OptionSetter} */
@@ -126,6 +145,10 @@ public class DynamicRemoteFileResolver {
         mExtraArgs.putAll(extraArgs);
     }
 
+    public List<ExtendedFile> getParallelDownloads() {
+        return mParallelExtendedFiles;
+    }
+
     /**
      * Runs through all the {@link File} option type and check if their path should be resolved.
      *
@@ -141,6 +164,9 @@ public class DynamicRemoteFileResolver {
                 for (Map.Entry<Object, Field> fieldEntry : optionFields) {
 
                     final Object obj = fieldEntry.getKey();
+                    if (obj instanceof IDisableable && ((IDisableable) obj).isDisabled()) {
+                        continue;
+                    }
                     final Field field = fieldEntry.getValue();
                     final Option option = field.getAnnotation(Option.class);
                     if (option == null) {
@@ -381,20 +407,26 @@ public class DynamicRemoteFileResolver {
             throws IOException {
         String unzipValue = query.get(UNZIP_KEY);
         if (unzipValue != null && "true".equals(unzipValue.toLowerCase())) {
+            if (downloadedFile.isDirectory()) {
+                return downloadedFile;
+            }
             // File was requested to be unzipped.
-            if (ZipUtil.isZipFileValid(downloadedFile, false)) {
-                File extractedDir =
-                        FileUtil.createTempDir(
-                                FileUtil.getBaseName(downloadedFile.getName()),
-                                CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
-                ZipUtil2.extractZip(downloadedFile, extractedDir);
-                FileUtil.deleteFile(downloadedFile);
-                return extractedDir;
-            } else {
-                throw new IOException(
-                        String.format(
-                                "%s was requested to be unzipped but is not a valid zip.",
-                                downloadedFile));
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope("unzip " + downloadedFile.getName())) {
+                if (ZipUtil.isZipFileValid(downloadedFile, false)) {
+                    File extractedDir =
+                            FileUtil.createTempDir(
+                                    FileUtil.getBaseName(downloadedFile.getName()),
+                                    CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
+                    ZipUtil2.extractZip(downloadedFile, extractedDir);
+                    FileUtil.deleteFile(downloadedFile);
+                    return extractedDir;
+                } else {
+                    throw new IOException(
+                            String.format(
+                                    "%s was requested to be unzipped but is not a valid zip.",
+                                    downloadedFile));
+                }
             }
         }
         // Return the original file untouched
@@ -417,18 +449,29 @@ public class DynamicRemoteFileResolver {
             throw new BuildRetrievalError(
                     e.getMessage(), e, InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
+        query.put(OPTION_NAME_KEY, option.name());
+        if (!mAllowParallelization) {
+            query.put(OPTION_PARALLEL_KEY, "false");
+        }
 
         try {
             IRemoteFileResolver resolver = getResolver(protocol);
             if (resolver == null) {
                 return null;
             }
-
             CLog.d("Considering option '%s' with path: '%s' for download.", option.name(), path);
             resolver.setPrimaryDevice(mDevice);
             RemoteFileResolverArgs args = new RemoteFileResolverArgs();
             args.setConsideredFile(fileToResolve).addQueryArgs(query);
             ResolvedFile resolvedFile = resolver.resolveRemoteFile(args);
+            if (resolvedFile != null && resolvedFile.getResolvedFile() instanceof ExtendedFile) {
+                // It is possible for dynamic download to download in parallel
+                // as long as they do so for the expected output file location
+                ExtendedFile trackingFile = (ExtendedFile) resolvedFile.getResolvedFile();
+                if (trackingFile.isDownloadingInParallel()) {
+                    mParallelExtendedFiles.add(trackingFile);
+                }
+            }
             return resolvedFile;
         } catch (BuildRetrievalError e) {
             if (isOptional(query)) {

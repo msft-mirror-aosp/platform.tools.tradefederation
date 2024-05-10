@@ -16,7 +16,6 @@
 package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -28,10 +27,10 @@ import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
-import com.android.tradefed.testtype.suite.TestFailureListener;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -361,7 +360,11 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             serializer.startTag(NS, CASE_TAG);
             serializer.attribute(NS, NAME_ATTR, className);
             for (Entry<String, TestResult> individualResult : format.get(className).entrySet()) {
-                TestStatus status = individualResult.getValue().getStatus();
+                TestStatus status = individualResult.getValue().getResultStatus();
+                // TODO(b/322204420): Report skipped to XML and support parsing it
+                if (TestStatus.SKIPPED.equals(status)) {
+                    continue;
+                }
                 if (status == null) {
                     continue; // test was not executed, don't report
                 }
@@ -439,7 +442,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         return fullStackTrace;
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Add files captured on test failures. */
     private static void HandleLoggedFiles(
             XmlSerializer serializer, Entry<String, TestResult> testResult)
             throws IllegalArgumentException, IllegalStateException, IOException {
@@ -727,7 +730,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         }
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Add files captured on test failures. */
     private static void parseLoggedFiles(XmlPullParser parser, TestRunResult currentModule)
             throws XmlPullParserException, IOException {
         if (parser.getName().equals(BUGREPORT_TAG)) {

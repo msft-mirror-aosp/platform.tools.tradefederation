@@ -27,7 +27,6 @@ tradefed_java_library_host {
     ],
     static_libs: [
         "diffutils-prebuilt-jar",
-        "longevity-host-lib",
         "perfetto_metrics-full",
         "test-composers",
         "truth",

@@ -115,6 +115,12 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     @Option(name = "device-type", description = "The type of the device requested to be allocated.")
     private DeviceRequestedType mRequestedType = null;
+
+    @Option(
+            name = "base-device-type-request",
+            description =
+                    "Explicitly request a device type which will use device-type for connection.")
+    private BaseDeviceType mBaseDeviceType = null;
     // ============================ END DEVICE TYPE Related Options ============================
 
     @Option(
@@ -372,6 +378,16 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return mRequestedType;
     }
 
+    @Override
+    public BaseDeviceType getBaseDeviceTypeRequested() {
+        return mBaseDeviceType;
+    }
+
+    @Override
+    public void setBaseDeviceTypeRequested(BaseDeviceType type) {
+        mBaseDeviceType = type;
+    }
+
     /**
      * Sets the minimum battery level
      */
@@ -410,9 +426,8 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return mMaxBatteryTemperature;
     }
 
-    /**
-     * Sets whether battery check is required for devices with unknown battery level
-     */
+    /** Sets whether battery check is required for devices with unknown battery level */
+    @Override
     public void setRequireBatteryCheck(boolean requireCheck) {
         mRequireBatteryCheck = requireCheck;
     }
