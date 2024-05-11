@@ -148,6 +148,7 @@ public class ImageContentAnalyzer {
             // Remove all build.prop paths
             diffs.removeIf(d -> d.path.endsWith("/build.prop"));
             diffs.removeIf(d -> d.path.endsWith("/prop.default"));
+            diffs.removeIf(d -> d.path.endsWith("/default.prop"));
             // Remove all IMAGES/ paths
             diffs.removeIf(d -> d.path.startsWith("IMAGES/"));
             diffs.removeIf(d -> d.path.startsWith("META/"));
