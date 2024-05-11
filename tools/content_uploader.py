@@ -155,10 +155,16 @@ def _init_cas_info() -> CasInfo:
 
 
 def _get_client() -> str:
+    if CAS_UPLOADER_PREBUILT_PATH in os.path.abspath(__file__):
+        return _get_prebuilt_client()
     bin_path = os.path.join(CAS_UPLOADER_PATH, CAS_UPLOADER_BIN)
     if os.path.isfile(bin_path):
         logging.info('Using client at %s', bin_path)
         return bin_path
+    return _get_prebuilt_client()
+
+
+def _get_prebuilt_client() -> str:
     client = glob.glob(CAS_UPLOADER_PREBUILT_PATH + '**/' + CAS_UPLOADER_BIN, recursive=True)
     if not client:
         raise ValueError('Could not find casuploader binary')
