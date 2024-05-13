@@ -149,8 +149,10 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsPermissionUiTestCases",// Renamed from Permission3 in 2023
                     "CtsMediaAudioTestCases");
 
-    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST = ImmutableSet.of(
+    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST =
+            ImmutableSet.of(
                     "binderRpcTestNoKernel",
+                    "CtsLibcoreOjTestCases_time",
                     "CtsTelecomTestCases",
                     "CtsAppTestCases",
                     "binderRpcTestSingleThreadedNoKernel",
@@ -460,7 +462,8 @@ public class TestMappingsValidation implements IBuildReceiver {
                 if (deviceConfigZip.isDirectory()) {
                     deviceTestConfigDir = deviceConfigZip;
                 } else {
-                    deviceTestConfigDir = ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                    deviceTestConfigDir =
+                            ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
                     deleteDeviceConfigDir = true;
                 }
                 dirToLoad.add(deviceTestConfigDir);
@@ -761,7 +764,8 @@ public class TestMappingsValidation implements IBuildReceiver {
             if (deviceConfigZip.isDirectory()) {
                 deviceTestConfigDir = deviceConfigZip;
             } else {
-                deviceTestConfigDir = ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                deviceTestConfigDir =
+                        ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
                 deleteDeviceConfigDir = true;
             }
             dirToLoad.add(deviceTestConfigDir);
