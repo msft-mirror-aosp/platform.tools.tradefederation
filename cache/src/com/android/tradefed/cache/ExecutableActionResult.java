@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,18 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.testtype.suite.module;
 
-/**
- * Only run tests if the device under test is SDK version 29 or above.
- *
- * <p>Use by adding this line to your AndroidTest.xml:
- *
- * <pre><code>&lt;object type="module_controller"
- * class="com.android.tradefed.testtype.suite.module.Sdk29ModuleController" /&gt;</code></pre>
- */
-public class Sdk29ModuleController extends MinSdkModuleController {
-    public Sdk29ModuleController() {
-        super(29);
+package com.android.tradefed.cache;
+
+import com.google.auto.value.AutoValue;
+import java.io.File;
+
+/** A value class representing a result of a {@link ExecutableAction}. */
+@AutoValue
+public abstract class ExecutableActionResult {
+    public static ExecutableActionResult create(int exitCode, File stdOut, File stdErr) {
+        return new AutoValue_ExecutableActionResult(exitCode, stdOut, stdErr);
     }
+
+    public abstract int exitCode();
+
+    public abstract File stdOut();
+
+    public abstract File stdErr();
 }
