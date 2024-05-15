@@ -616,7 +616,9 @@ public class WifiHelper implements IWifiHelper {
             }
         }
         String connectCmd =
-                String.format("cmd -w wifi connect-network %s %s %s", ssid, networkType, psk);
+                String.format(
+                        "cmd -w wifi connect-network %s %s %s",
+                        quote(ssid), networkType, quote(psk));
         if (scanSsid) {
             connectCmd += " -h";
         }
