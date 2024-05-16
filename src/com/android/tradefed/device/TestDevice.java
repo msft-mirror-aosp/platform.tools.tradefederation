@@ -2890,6 +2890,7 @@ public class TestDevice extends NativeDevice {
                         ? ""
                         : "--cpu-topology " + builder.mCpuTopology;
         final String gkiFlag = Strings.isNullOrEmpty(builder.mGki) ? "" : "--gki " + builder.mGki;
+        final String hugePagesFlag = builder.mHugePages ? "--hugepages" : "";
 
         List<String> args =
                 new ArrayList<>(
@@ -2908,6 +2909,7 @@ public class TestDevice extends NativeDevice {
                                 cpuAffinityFlag,
                                 cpuTopologyFlag,
                                 gkiFlag,
+                                hugePagesFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
                                 builder.mInstanceImg,
@@ -3254,6 +3256,7 @@ public class TestDevice extends NativeDevice {
         private String mGki;
         private String mInstanceIdFile; // Path to instance_id file
         private String mInstanceImg; // Path to instance_img file
+        private boolean mHugePages;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3425,6 +3428,16 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder instanceImgFile(String instanceImgPath) {
             mInstanceImg = instanceImgPath;
+            return this;
+        }
+
+        /**
+         * Sets whether to hint the kernel for transparent hugepages.
+         *
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder hugePages(boolean hintHugePages) {
+            mHugePages = hintHugePages;
             return this;
         }
 
