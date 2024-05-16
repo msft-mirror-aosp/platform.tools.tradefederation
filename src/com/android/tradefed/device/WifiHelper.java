@@ -28,6 +28,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -595,6 +596,14 @@ public class WifiHelper implements IWifiHelper {
     private WifiConnectionResult connectToNetworkV2(
             String ssid, String psk, boolean scanSsid, String defaultType)
             throws DeviceNotAvailableException {
+        if (Strings.isNullOrEmpty(ssid)) {
+            CLog.d("SSID of the wifi network can not be null or empty.");
+            return WifiConnectionResult.FAILED_TO_CONNECT;
+        }
+        if (psk == null) {
+            // psk can be empty for open networks.
+            psk = "";
+        }
         if (!enableWifiV2()) {
             return WifiConnectionResult.FAILED_TO_ENABLE;
         }
