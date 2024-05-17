@@ -17,6 +17,8 @@ package com.android.tradefed.device.cloud;
 
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -82,47 +84,47 @@ public class OxygenUtil {
             REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP =
                     Stream.of(
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "Address already in use",
                                                     "launch_cvd_port_collision")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "vcpu hw run failure: 0x7",
                                                     "crosvm_vcpu_hw_run_failure_7")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "Unable to connect to vsock server",
                                                     "unable_to_connect_to_vsock_server")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "failed to initialize fetch system images",
                                                     "fetch_cvd_failure")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "failed to read from socket, retry",
                                                     "rootcanal_socket_error")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "VIRTUAL_DEVICE_BOOT_PENDING: Bluetooth",
                                                     "bluetooth_pending")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "another cuttlefish device already running",
                                                     "another_device_running")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "Setup failed for cuttlefish::ConfigServer",
                                                     "config_server_failed")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile("^launcher\\.log.*"),
+                                            Pattern.compile(".*launcher.*"),
                                             Pair.create(
                                                     "VIRTUAL_DEVICE_BOOT_FAILED: Dependencies not"
                                                             + " ready after 10 checks: Bluetooth",
@@ -178,6 +180,15 @@ public class OxygenUtil {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricLogger.InvocationMetricKey.CF_OXYGEN_VERSION,
                         oxygenVersion);
+            }
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("avd:collectErrorSignature")) {
+                List<String> signatures = collectErrorSignatures(localDir);
+                if (signatures.size() > 0) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.DEVICE_ERROR_SIGNATURES,
+                            String.join(",", signatures));
+                }
             }
             Set<String> files = FileUtil.findFiles(localDir, ".*");
             for (String f : files) {
