@@ -581,14 +581,20 @@ public class OxygenClientTest {
     }
 
     @Test
-    public void testCreateADBTunnelViaLHP() throws Exception {
+    public void testCreateTunnelViaLHP_ADB() throws Exception {
         // TODO(easoncylee): Flesh out when the oxygen client is ready.
-        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.ADB));
+        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.ADB, "1111", "instance", "id"));
     }
 
     @Test
-    public void testCreateSSHTunnelViaLHP() throws Exception {
+    public void testCreateSSHTunnelViaLHP_SSH() throws Exception {
         // TODO(easoncylee): Flesh out when the oxygen client is ready.
-        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.SSH));
+        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.SSH, "1111", "instance", "id"));
+    }
+
+    @Test
+    public void testCreateTunnelViaLHP_CURL() throws Exception {
+        // TODO(easoncylee): Flesh out when the oxygen client is ready.
+        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id"));
     }
 }
