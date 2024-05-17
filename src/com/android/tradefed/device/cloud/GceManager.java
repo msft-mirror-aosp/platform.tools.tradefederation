@@ -18,6 +18,7 @@ package com.android.tradefed.device.cloud;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.AcloudConfigParser.AcloudKeys;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.error.HarnessRuntimeException;
@@ -1027,8 +1028,9 @@ public class GceManager {
                 FileUtil.recursiveDelete(remoteFile);
                 return false;
             }
-            // Search log files for known failures for devices hosted by Oxygen
-            if (options.useOxygen() && remoteFile != null) {
+            // Search log files for known failures for devices hosted by Oxygen and ARM server
+            if ((options.useOxygen() || InstanceType.GCE.equals(options.getInstanceType()))
+                    && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
                     List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
@@ -1038,6 +1040,8 @@ public class GceManager {
                                 String.join(",", signatures));
                     }
                 }
+            }
+            if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectDeviceLaunchMetrics")) {
                     long[] launchMetrics = OxygenUtil.collectDeviceLaunchMetrics(remoteFile);
