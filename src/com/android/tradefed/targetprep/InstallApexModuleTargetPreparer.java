@@ -504,9 +504,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
 
         CLog.i("For session: %s the rollback state was: %s", sessionId, rollbackState);
         if (rollbackState.equals(ROLLBACK_STATE_COMMITTED)) {
-            throw new HarnessRuntimeException(
-                    "Test results are invalid, detected a rollback on mainline",
-                    InfraErrorIdentifier.UNDETERMINED);
+            // Show Mainline rollback detection as a warning for now.
+            CLog.w(
+                    new HarnessRuntimeException(
+                            "Test results are invalid, detected a rollback on mainline",
+                            DeviceErrorIdentifier.MAINLINE_MODULE_ROLLBACK_DETECTED));
         }
     }
 

@@ -28,6 +28,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -5822,7 +5823,8 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    ContentProviderHandler getContentProvider() throws DeviceNotAvailableException {
+                    ContentProviderHandler getContentProvider(int userId)
+                            throws DeviceNotAvailableException {
                         return null;
                     }
 
@@ -6065,7 +6067,7 @@ public class TestDeviceTest {
 
         TestableTestDevice spy = (TestableTestDevice) Mockito.spy(mTestDevice);
         ContentProviderHandler cp = Mockito.mock(ContentProviderHandler.class);
-        doReturn(cp).when(spy).getContentProvider();
+        doReturn(cp).when(spy).getContentProvider(mTestDevice.getCurrentUser());
 
         final String fakeFile = "/sdcard/file";
         final String targetFilePath = "/storage/emulated/10/file";
@@ -6074,7 +6076,7 @@ public class TestDeviceTest {
 
         spy.doesFileExist(fakeFile);
 
-        verify(spy, times(1)).getContentProvider();
+        verify(spy, times(1)).getContentProvider(anyInt());
         verify(cp, times(1)).doesFileExist(targetFilePath);
     }
 
@@ -6100,7 +6102,7 @@ public class TestDeviceTest {
             assertTrue(res);
             verify(spy, times(1))
                     .installPackage(Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean());
-            ContentProviderHandler cp = spy.getContentProvider();
+            ContentProviderHandler cp = spy.getContentProvider(mTestDevice.getCurrentUser());
             assertFalse(cp.contentProviderNotFound());
             // Since it didn't fail, we did not re-install the content provider
             verify(spy, times(1))
@@ -6139,7 +6141,7 @@ public class TestDeviceTest {
             verify(spy, times(2))
                     .installPackage(Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean());
             // Since it fails, requesting the content provider again will re-do setup.
-            ContentProviderHandler cp = spy.getContentProvider();
+            ContentProviderHandler cp = spy.getContentProvider(mTestDevice.getCurrentUser());
             assertFalse(cp.contentProviderNotFound());
             verify(spy, times(3))
                     .installPackage(Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean());
