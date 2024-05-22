@@ -123,7 +123,8 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
             // However, major functionalities supporting clone got added in 34.
             // Android U = 34
             return true;
-        } else if (mTradefedUserType.isPrivateProfile() && !matchesApiLevel(testInfo, 34)) {
+        } else if (mTradefedUserType.isPrivateProfile() && isPrivateProfileSupported(
+                testInfo.getDevice())) {
             return true;
         }
         return false;
@@ -137,6 +138,24 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
                         + apiLevel
                         + " requirement does not match",
                 testInfo);
+    }
+
+    private boolean isPrivateProfileSupported(ITestDevice device)
+            throws DeviceNotAvailableException {
+        String command = "dumpsys user";
+        String dumpsysOutput = device.executeShellCommand(command);
+        if (dumpsysOutput == null || !dumpsysOutput.contains("Can add private profile:")) {
+            return false;
+        }
+
+        try {
+            String supportPSOnwards = dumpsysOutput.split("Can add private profile:", 2)[1].trim();
+            String supportsPSValue = supportPSOnwards.split("\n")[0].trim();
+            return Boolean.parseBoolean(supportsPSValue);
+        } catch (RuntimeException e) {
+            throw commandError("Error reading user service information", command, dumpsysOutput, e,
+                    SHELL_COMMAND_ERROR);
+        }
     }
 
     private int getExistingProfileId(ITestDevice device) throws DeviceNotAvailableException {

@@ -17,7 +17,7 @@
 package com.android.tradefed.testtype.suite.params.multiuser;
 
 import com.android.tradefed.targetprep.RunOnPrivateProfileTargetPreparer;
-import com.android.tradefed.testtype.suite.module.Sdk34ModuleController;
+import com.android.tradefed.testtype.suite.module.Sdk35ModuleController;
 import com.android.tradefed.testtype.suite.params.IModuleParameterHandler;
 
 import java.util.Arrays;
@@ -30,7 +30,7 @@ public class RunOnPrivateProfileParameterHandler extends ProfileParameterHandler
 
     public RunOnPrivateProfileParameterHandler() {
         super(REQUIRE_RUN_ON_PRIVATE_PROFILE_NAME, new RunOnPrivateProfileTargetPreparer(),
-                Arrays.asList(new Sdk34ModuleController()));
+                Arrays.asList(new Sdk35ModuleController()));
     }
 
     @Override

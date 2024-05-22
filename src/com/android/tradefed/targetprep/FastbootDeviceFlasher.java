@@ -25,6 +25,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -57,6 +58,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -762,6 +764,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 "Flashing device %s with image %s",
                 device.getSerialNumber(), deviceBuild.getDeviceImageFile().getAbsolutePath());
         // give extra time to the update cmd
+        boolean tookPermit = false;
         try (CloseableTraceScope ignored = new CloseableTraceScope("flash_system")) {
             boolean shouldFlash = true;
             if (mIncrementalFlashing != null) {
@@ -781,7 +784,22 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                     }
                 }
             }
-
+            long startWait = System.currentTimeMillis();
+            if (shouldFlash && mIncrementalFlashing != null) {
+                // Take the permit in case of fallback from incremental
+                try (CloseableTraceScope waitFor =
+                        new CloseableTraceScope("wait_for_flashing_permit")) {
+                    // Only #flash is included in the critical section
+                    getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                    tookPermit = true;
+                    long queueTime = System.currentTimeMillis() - startWait;
+                    CLog.v(
+                            "Flashing permit obtained after %ds",
+                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                }
+            }
             if (shouldFlash) {
                 if (deviceBuild.getDeviceImageFile().isDirectory()) {
                     InvocationMetricLogger.addInvocationMetrics(
@@ -809,6 +827,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             // if system flash status is still null here, an exception has happened
             if (mSystemFlashStatus == null) {
                 mSystemFlashStatus = CommandStatus.EXCEPTION;
+            }
+            if (tookPermit) {
+                getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
             }
         }
     }

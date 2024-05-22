@@ -20,7 +20,10 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.UserInfo;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+
+import com.google.common.base.Strings;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -54,6 +57,27 @@ public final class UserHelper {
         } catch (IllegalStateException e) {
             throw new TargetSetupError("Failed to create user.", e, device.getDeviceDescriptor());
         }
+    }
+
+    /**
+     * Gets the user id to run the tests as, from the {@link #RUN_TESTS_AS_USER_KEY} property.
+     *
+     * <p>If the property is not set or invalid, returns the current user.
+     */
+    public static int getRunTestsAsUser(TestInformation testInfo)
+            throws DeviceNotAvailableException {
+        ITestDevice device = testInfo.getDevice();
+        String val = testInfo.properties().get(RUN_TESTS_AS_USER_KEY);
+        if (!Strings.isNullOrEmpty(val)) {
+            try {
+                return Integer.parseInt(val);
+            } catch (Exception e) {
+                CLog.e("Failed to parse the userId for " + RUN_TESTS_AS_USER_KEY + " due to " + e);
+            }
+        }
+
+        // Fall back to the current user.
+        return device.getCurrentUser();
     }
 
     private static void cleanupOldUsersIfLimitReached(ITestDevice device)

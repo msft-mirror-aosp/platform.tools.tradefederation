@@ -13,18 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.testtype.suite.module;
+
+package com.android.tradefed.cache;
+
+import build.bazel.remote.execution.v2.Action;
+import build.bazel.remote.execution.v2.Command;
+import com.google.auto.value.AutoValue;
 
 /**
- * Only run tests if the device under test is SDK version 35 or above.
+ * A value class representing an action which can be executed.
  *
- * <p>Use by adding this line to your AndroidTest.xml:
- *
- * <pre><code>&lt;object type="module_controller"
- * class="com.android.tradefed.testtype.suite.module.Sdk35ModuleController" /&gt;</code></pre>
+ * <p>Terminology note: "action" is used here in the remote execution protocol sense.
  */
-public class Sdk35ModuleController extends MinSdkModuleController {
-    public Sdk35ModuleController() {
-        super(35);
+@AutoValue
+public abstract class ExecutableAction {
+    public static ExecutableAction create(Action action, Command command) {
+        return new AutoValue_ExecutableAction(action, command);
     }
+
+    public abstract Action action();
+
+    public abstract Command command();
 }
