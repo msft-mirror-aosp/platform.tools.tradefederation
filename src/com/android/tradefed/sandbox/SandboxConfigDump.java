@@ -33,6 +33,8 @@ import com.android.tradefed.result.SubprocessResultsReporter;
 import com.android.tradefed.result.proto.StreamProtoResultReporter;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.keystore.IKeyStoreClient;
+import com.android.tradefed.util.keystore.KeyStoreException;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,6 +44,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Runner class that creates a {@link IConfiguration} based on a command line and dump it to a file.
@@ -109,6 +113,21 @@ public class SandboxConfigDump {
         SandboxConfigurationFactory factory = SandboxConfigurationFactory.getInstance();
         PrintWriter pw = null;
         try {
+            if (DumpCmd.RUN_CONFIG.equals(cmd)
+                    && GlobalConfiguration.getInstance().getKeyStoreFactory() != null) {
+                Pattern USE_KEYSTORE_REGEX = Pattern.compile("USE_KEYSTORE@(.*)");
+                IKeyStoreClient keyClient =
+                        GlobalConfiguration.getInstance()
+                                .getKeyStoreFactory()
+                                .createKeyStoreClient();
+                for (int i = 0; i < argList.size(); i++) {
+                    Matcher m = USE_KEYSTORE_REGEX.matcher(argList.get(i));
+                    if (m.matches() && m.groupCount() > 0) {
+                        String key = keyClient.fetchKey(m.group(1));
+                        argList.set(i, key);
+                    }
+                }
+            }
             IConfiguration config =
                     factory.createConfigurationFromArgs(argList.toArray(new String[0]), cmd);
             if (DumpCmd.RUN_CONFIG.equals(cmd) || DumpCmd.TEST_MODE.equals(cmd)) {
@@ -178,7 +197,7 @@ public class SandboxConfigDump {
                 config.dumpXml(pw, new ArrayList<>(), true,
                         /* Don't print unchanged options */ false);
             }
-        } catch (ConfigurationException | IOException e) {
+        } catch (ConfigurationException | IOException | KeyStoreException e) {
             e.printStackTrace();
             return 1;
         } finally {

@@ -22,6 +22,7 @@ import com.android.tradefed.config.OptionUpdateRule;
 import com.android.tradefed.device.DeviceManager.FastbootDevice;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.base.Strings;
 
@@ -308,10 +309,7 @@ public class DeviceSelectionOptions implements IDeviceSelection {
     /** {@inheritDoc} */
     @Override
     public boolean tcpDeviceRequested() {
-        if (mRequestedType != null) {
-            return mRequestedType.equals(DeviceRequestedType.TCP_DEVICE);
-        }
-        return mTcpDeviceRequested;
+      return false;
     }
 
     /** {@inheritDoc} */
@@ -367,10 +365,15 @@ public class DeviceSelectionOptions implements IDeviceSelection {
      * Sets the tcp device requested flag
      */
     public void setTcpDeviceRequested(boolean tcpDeviceRequested) {
-        mTcpDeviceRequested = tcpDeviceRequested;
+        // This should never get called. Log stack trace if it does.
+        CLog.e("Ignore unexpected call: %s", StreamUtil.getStackTrace(new Exception("")));
     }
 
     public void setDeviceTypeRequested(DeviceRequestedType requestedType) {
+        if (requestedType == DeviceRequestedType.TCP_DEVICE) {
+            CLog.e("Ignore unexpected call: %s", StreamUtil.getStackTrace(new Exception("")));
+            return;
+        }
         mRequestedType = requestedType;
     }
 
