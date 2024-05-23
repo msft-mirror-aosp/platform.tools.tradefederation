@@ -26,7 +26,6 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
-import com.android.tradefed.util.Pair;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -80,58 +79,58 @@ public class OxygenUtil {
                                     LogDataType.TOMBSTONEZ))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-    private static final Map<Pattern, Pair<String, String>>
+    private static final Map<Pattern, AbstractMap.SimpleEntry<String, String>>
             REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP =
                     Stream.of(
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "Address already in use",
                                                     "launch_cvd_port_collision")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "vcpu hw run failure: 0x7",
                                                     "crosvm_vcpu_hw_run_failure_7")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "Unable to connect to vsock server",
                                                     "unable_to_connect_to_vsock_server")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "failed to initialize fetch system images",
                                                     "fetch_cvd_failure")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "failed to read from socket, retry",
                                                     "rootcanal_socket_error")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "VIRTUAL_DEVICE_BOOT_PENDING: Bluetooth",
                                                     "bluetooth_pending")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "another cuttlefish device already running",
                                                     "another_device_running")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "Setup failed for cuttlefish::ConfigServer",
                                                     "config_server_failed")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "VIRTUAL_DEVICE_BOOT_FAILED: Dependencies not"
                                                             + " ready after 10 checks: Bluetooth",
                                                     "bluetooth_failed")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile("^logcat.*"),
-                                            Pair.create(
+                                            new AbstractMap.SimpleEntry<>(
                                                     "System zygote died with fatal exception",
                                                     "zygote_fatal_exception")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -257,8 +256,8 @@ public class OxygenUtil {
                     continue;
                 }
                 String fileName = file.getName();
-                List<Pair<String, String>> pairs = new ArrayList<>();
-                for (Map.Entry<Pattern, Pair<String, String>> entry :
+                List<AbstractMap.SimpleEntry<String, String>> pairs = new ArrayList<>();
+                for (Map.Entry<Pattern, AbstractMap.SimpleEntry<String, String>> entry :
                         REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP.entrySet()) {
                     Matcher matcher = entry.getKey().matcher(fileName);
                     if (matcher.find()) {
@@ -274,13 +273,13 @@ public class OxygenUtil {
                         stream.skip(skipSize);
                     }
                     try (Scanner scanner = new Scanner(stream)) {
-                        List<Pair<String, String>> pairsToRemove = new ArrayList<>();
+                        List<AbstractMap.SimpleEntry<String, String>> pairsToRemove = new ArrayList<>();
                         while (scanner.hasNextLine()) {
                             String line = scanner.nextLine();
-                            for (Pair<String, String> pair : pairs) {
-                                if (line.indexOf(pair.first) != -1) {
+                            for (AbstractMap.SimpleEntry<String, String> pair : pairs) {
+                                if (line.indexOf(pair.getKey()) != -1) {
                                     pairsToRemove.add(pair);
-                                    signatures.add(pair.second);
+                                    signatures.add(pair.getValue());
                                 }
                             }
                             if (pairsToRemove.size() > 0) {
