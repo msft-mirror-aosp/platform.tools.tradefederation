@@ -33,7 +33,6 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
-import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -54,6 +53,7 @@ import com.google.auth.Credentials;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
 
 import java.io.File;
@@ -551,7 +551,7 @@ public class GceManager {
             Integer offset,
             MultiMap<String, String> attributes) {
         List<String> gceArgs =
-                ArrayUtil.list(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
+                Lists.newArrayList(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
@@ -770,7 +770,7 @@ public class GceManager {
             String instanceName,
             String hostname,
             boolean isIpPreconfigured) {
-        List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
+        List<String> gceArgs = Lists.newArrayList(options.getAvdDriverBinary().getAbsolutePath());
         gceArgs.add("delete");
         if (options.getServiceAccountJsonKeyFile() != null) {
             gceArgs.add("--service-account-json-private-key-path");

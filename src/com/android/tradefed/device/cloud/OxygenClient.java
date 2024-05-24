@@ -24,12 +24,13 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
-import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
+
+import com.google.common.collect.Lists;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -204,7 +205,7 @@ public class OxygenClient {
             ret.setStderr("OxygenClient: Leasing an oxygenation device is not supported for now.");
             return ret;
         }
-        List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
         List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
@@ -293,7 +294,7 @@ public class OxygenClient {
             List<IBuildInfo> buildInfos,
             TestDeviceOptions deviceOptions,
             MultiMap<String, String> attributes) {
-        List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
         oxygenClientArgs.add("-lease");
 
         List<String> buildTargets = new ArrayList<>();
@@ -371,7 +372,7 @@ public class OxygenClient {
             // For now, return false first.
             return false;
         }
-        List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
 
         for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
             oxygenClientArgs.add("-" + arg.getKey());
