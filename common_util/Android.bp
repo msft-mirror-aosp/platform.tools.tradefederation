@@ -35,11 +35,17 @@ java_library_host {
         "apache-commons-compress",
         // Trace protos to do invocation tracing
         "perfetto_trace-full",
+        "remote-execution-java-proto",
     ],
     libs: [
         "ddmlib-prebuilt",
         "guava",
         "tradefed-protos",
         "devtools-annotations-prebuilt",
+        "auto_value_annotations",
+    ],
+    plugins: [
+        "auto_value_plugin",
+        "auto_annotation_plugin",
     ],
 }
