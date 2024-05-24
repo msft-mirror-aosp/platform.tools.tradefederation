@@ -25,6 +25,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 
 import com.google.common.base.Strings;
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
@@ -121,7 +122,17 @@ public class DynamicShardHelper extends StrictShardHelper {
 
         Map<String, ITestSuite> moduleMapping = new HashMap<>();
         for (ITestSuite test : allModules) {
-            moduleMapping.put(test.getDirectModule().getId(), test);
+            ModuleDefinition moduleDef = test.getDirectModule();
+            if (moduleDef == null) {
+                throw new HarnessRuntimeException(
+                        "Module definition is null", InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
+            }
+            String moduleName = moduleDef.getId();
+            if (moduleName == null) {
+                throw new HarnessRuntimeException(
+                        "Module name is null", InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
+            }
+            moduleMapping.put(moduleName, test);
         }
 
         // if we're shard 0 populate the pool with the list of tests
