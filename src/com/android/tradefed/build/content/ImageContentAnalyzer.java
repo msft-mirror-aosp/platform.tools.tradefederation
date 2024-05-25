@@ -151,6 +151,8 @@ public class ImageContentAnalyzer {
             diffs.removeIf(d -> d.path.endsWith("/default.prop"));
             // Remove all notices they don't change the image
             diffs.removeIf(d -> d.path.endsWith("/etc/NOTICE.xml.gz"));
+            // Remove build time flags, we will catch other files that are changing
+            diffs.removeIf(d -> d.path.endsWith("/etc/build_flags.json"));
             // Remove all IMAGES/ paths
             diffs.removeIf(d -> d.path.startsWith("IMAGES/"));
             diffs.removeIf(d -> d.path.startsWith("META/"));
