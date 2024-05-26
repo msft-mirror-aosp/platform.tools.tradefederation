@@ -1096,8 +1096,17 @@ public class Console extends Thread {
      *
      * <p>Exposed for unit testing.
      */
+    @SuppressWarnings("SystemConsoleNull") // https://errorprone.info/bugpattern/SystemConsoleNull
     boolean isConsoleFunctional() {
-        return System.console() != null;
+        java.io.Console systemConsole = System.console();
+        if (Runtime.version().feature() < 22) {
+            return systemConsole != null;
+        }
+        try {
+            return (Boolean) java.io.Console.class.getMethod("isTerminal").invoke(systemConsole);
+        } catch (ReflectiveOperationException e) {
+            throw new LinkageError(e.getMessage(), e);
+        }
     }
 
     /**

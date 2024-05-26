@@ -13,18 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.testtype.suite.module;
 
-/**
- * Only run tests if the device under test is SDK version 35 or above.
- *
- * <p>Use by adding this line to your AndroidTest.xml:
- *
- * <pre><code>&lt;object type="module_controller"
- * class="com.android.tradefed.testtype.suite.module.Sdk35ModuleController" /&gt;</code></pre>
- */
-public class Sdk35ModuleController extends MinSdkModuleController {
-    public Sdk35ModuleController() {
-        super(35);
-    }
+package com.android.tradefed.cache;
+
+/** An interface for a cache client. */
+public interface ICacheClient {
+
+    /**
+     * Uploads the results for the {@link ExecutableAction}.
+     *
+     * <p>If the result of the {@code action} doesn't exist, the {@code actionResult} will be
+     * stored. Otherwise, the result will be updated.
+     *
+     * @param action The action that generated the results.
+     * @param actionResult The action result to associate with the {@code action}.
+     */
+    void uploadCache(ExecutableAction action, ExecutableActionResult actionResult);
 }
