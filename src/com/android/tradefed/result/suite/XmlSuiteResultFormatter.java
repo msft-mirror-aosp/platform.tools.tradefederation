@@ -369,7 +369,8 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                     continue; // test was not executed, don't report
                 }
                 serializer.startTag(NS, TEST_TAG);
-                serializer.attribute(NS, RESULT_ATTR, getTestStatusCompatibilityString(status));
+                serializer.attribute(
+                        NS, RESULT_ATTR, TestStatus.convertToCompatibilityString(status));
                 serializer.attribute(NS, NAME_ATTR, individualResult.getKey());
                 if (TestStatus.IGNORED.equals(status)) {
                     serializer.attribute(NS, SKIPPED_ATTR, Boolean.toString(true));
@@ -491,29 +492,6 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static String toReadableDateString(long time) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
         return dateFormat.format(new Date(time));
-    }
-
-    /** Convert our test status to a format compatible with CTS backend. */
-    private static String getTestStatusCompatibilityString(TestStatus status) {
-        switch (status) {
-            case PASSED:
-                return "pass";
-            case FAILURE:
-                return "fail";
-            default:
-                return status.toString();
-        }
-    }
-
-    private static TestStatus getStatusFromString(String status) {
-        switch (status) {
-            case "pass":
-                return TestStatus.PASSED;
-            case "fail":
-                return TestStatus.FAILURE;
-            default:
-                return TestStatus.valueOf(status);
-        }
     }
 
     /** {@inheritDoc} */
@@ -699,7 +677,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         while (parser.nextTag() == XmlPullParser.START_TAG) {
             parser.require(XmlPullParser.START_TAG, NS, TEST_TAG);
             String methodName = parser.getAttributeValue(NS, NAME_ATTR);
-            TestStatus status = getStatusFromString(parser.getAttributeValue(NS, RESULT_ATTR));
+            TestStatus status =
+                    TestStatus.convertFromCompatibilityString(
+                            parser.getAttributeValue(NS, RESULT_ATTR));
             TestDescription description = new TestDescription(className, methodName);
             currentModule.testStarted(description);
             if (TestStatus.IGNORED.equals(status)) {
