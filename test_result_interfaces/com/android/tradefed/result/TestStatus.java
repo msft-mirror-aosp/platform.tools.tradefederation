@@ -71,4 +71,28 @@ public enum TestStatus {
                 return TestStatus.PASSED;
         }
     }
+
+    /** Convert Tradefed status to a format compatible with Android Partner backend. */
+    public static String convertToCompatibilityString(TestStatus status) {
+        switch (status) {
+            case PASSED:
+                return "pass";
+            case FAILURE:
+                return "fail";
+            default:
+                return status.toString();
+        }
+    }
+
+    /** Convert Tradefed status from a format compatible with Android Partner backend. */
+    public static TestStatus convertFromCompatibilityString(String status) {
+        switch (status) {
+            case "pass":
+                return TestStatus.PASSED;
+            case "fail":
+                return TestStatus.FAILURE;
+            default:
+                return TestStatus.valueOf(status);
+        }
+    }
 }
