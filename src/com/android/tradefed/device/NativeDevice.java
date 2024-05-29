@@ -6034,8 +6034,7 @@ public class NativeDevice
      *
      * @param userId the user id to initialize the content provider with.
      */
-    @VisibleForTesting
-    ContentProviderHandler getContentProvider(int userId) throws DeviceNotAvailableException {
+    public ContentProviderHandler getContentProvider(int userId) throws DeviceNotAvailableException {
         // If disabled at the device level, don't attempt any checks.
         if (!getOptions().shouldUseContentProvider()) {
             return null;
