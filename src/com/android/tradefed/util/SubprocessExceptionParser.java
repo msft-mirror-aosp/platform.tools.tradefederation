@@ -34,6 +34,8 @@ import java.util.regex.Pattern;
 /** Helper to handle the exception output from standard Tradefed command runners. */
 public class SubprocessExceptionParser {
 
+    public static final String EVENT_THREAD_JOIN = "Event receiver thread did not complete.";
+
     /** Extract the file path of the serialized exception. */
     public static String getPathFromStderr(String stderr) {
         String patternString = String.format(".*%s.*", TradefedSandboxRunner.EXCEPTION_KEY);
@@ -87,6 +89,10 @@ public class SubprocessExceptionParser {
         ErrorIdentifier id = InfraErrorIdentifier.UNDETERMINED;
         if (CommandStatus.TIMED_OUT.equals(result.getStatus())) {
             id = InfraErrorIdentifier.INVOCATION_TIMEOUT;
+        }
+        // If we reach here and it's an event issue, set the id
+        if (stderr.startsWith(EVENT_THREAD_JOIN)) {
+            id = InfraErrorIdentifier.EVENT_PROCESSING_TIMEOUT;
         }
         throw new HarnessRuntimeException(message, id);
     }

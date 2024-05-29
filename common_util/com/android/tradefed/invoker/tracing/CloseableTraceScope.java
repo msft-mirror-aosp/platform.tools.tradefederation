@@ -23,6 +23,8 @@ import com.google.common.base.Optional;
 
 import perfetto.protos.PerfettoTrace.TrackEvent;
 
+import javax.annotation.Nullable;
+
 /** A scoped class that allows to report tracing section via try-with-resources */
 public class CloseableTraceScope implements AutoCloseable {
 
@@ -31,6 +33,8 @@ public class CloseableTraceScope implements AutoCloseable {
     private final String name;
     private final long startTime;
 
+    @Nullable private final ActiveTrace trace;
+
     /**
      * Report a scoped trace.
      *
@@ -38,18 +42,7 @@ public class CloseableTraceScope implements AutoCloseable {
      * @param name The name for reporting the section
      */
     public CloseableTraceScope(String category, String name) {
-        this.category = category;
-        this.name = name;
-        this.startTime = System.currentTimeMillis();
-        ActiveTrace trace = TracingLogger.getActiveTrace();
-        if (trace == null) {
-            return;
-        }
-        int threadId = (int) Thread.currentThread().getId();
-        String threadName = Thread.currentThread().getName();
-        trace.reportTraceEvent(
-                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_BEGIN);
-
+        this(TracingLogger.getActiveTrace(), category, name);
     }
 
     /** Constructor. */
@@ -57,24 +50,42 @@ public class CloseableTraceScope implements AutoCloseable {
         this(DEFAULT_CATEGORY, name);
     }
 
+    public CloseableTraceScope(ActiveTrace trace, String name) {
+        this(trace, DEFAULT_CATEGORY, name);
+    }
+
     /** Constructor for reporting scope from threads. */
     public CloseableTraceScope() {
         this(DEFAULT_CATEGORY, Thread.currentThread().getName());
     }
 
-    @Override
-    public void close() {
-        ActiveTrace trace = TracingLogger.getActiveTrace();
-        if (trace == null) {
+    private CloseableTraceScope(ActiveTrace trace, String category, String name) {
+        this.category = category;
+        this.name = name;
+        this.startTime = System.currentTimeMillis();
+        this.trace = trace;
+        if (this.trace == null) {
             return;
         }
         int threadId = (int) Thread.currentThread().getId();
         String threadName = Thread.currentThread().getName();
-        trace.reportTraceEvent(
+        this.trace.reportTraceEvent(
+                category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_BEGIN);
+    }
+
+    @Override
+    public void close() {
+        if (this.trace == null) {
+            return;
+        }
+        int threadId = (int) Thread.currentThread().getId();
+        String threadName = Thread.currentThread().getName();
+        this.trace.reportTraceEvent(
                 category, name, threadId, threadName, TrackEvent.Type.TYPE_SLICE_END);
         Optional<InvocationMetricKey> optionalKey =
                 Enums.getIfPresent(InvocationMetricKey.class, name);
-        if (optionalKey.isPresent() && Thread.currentThread().getId() == trace.reportingThreadId()) {
+        if (optionalKey.isPresent()
+                && Thread.currentThread().getId() == this.trace.reportingThreadId()) {
             InvocationMetricLogger.addInvocationPairMetrics(
                     optionalKey.get(), startTime, System.currentTimeMillis());
         }

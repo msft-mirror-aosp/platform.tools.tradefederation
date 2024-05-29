@@ -165,7 +165,6 @@ public class DeviceBaselineChecker implements ISystemStatusChecker {
         }
         if (result.getStatus() == CheckStatus.FAILED) {
             result.setErrorMessage(errorMessage.toString());
-            result.setBugreportNeeded(true);
         }
         String timeInfo = String.valueOf(System.currentTimeMillis() - startTime);
         String enabledBaselineInfo = String.join(",", enabledDeviceBaselines);

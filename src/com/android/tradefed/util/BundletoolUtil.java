@@ -21,17 +21,16 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
-
 import com.google.common.annotations.VisibleForTesting;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -49,8 +48,12 @@ public class BundletoolUtil {
     private static final String DEVICE_ID_FLAG = "--device-id=";
     private static final String EXTRACT_APKS_OPTION = "extract-apks";
     private static final String INSTALL_APKS_OPTION = "install-apks";
+    private static final String INSTALL_MULTI_APKS_OPTION = "install-multi-apks";
     private static final String DEVICE_SPEC_FILE_EXTENSION = ".json";
-    private static final long CMD_TIME_OUT = 10 * 6000; // 1 min
+    private static final String APKS_FILE_INPUT_SELECTOR = "--apks=";
+    private static final String ZIP_FILE_INPUT_SELECTOR = "--apks-zip=";
+    private static final String TIMEOUT_MILLIS_FLAG = "--timeout-millis=";
+    private static final long CMD_TIME_OUT = 20 * 6000; // 2 min
 
     private File mBundleToolFile;
     private IRunUtil mRunUtil;
@@ -104,8 +107,9 @@ public class BundletoolUtil {
                                         new String[generateDeviceSpecCmd.size()]));
         if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
             CLog.e(
-                    "Failed to generated device spec file. Cmd is %s. Error: %s.",
-                    generateDeviceSpecCmd.toString(), res.getStderr());
+                    "Failed to generated device spec file. Cmd is %s. CommandStatus: %s. Error:"
+                            + " %s.",
+                    generateDeviceSpecCmd.toString(), res.getStatus(), res.getStderr());
             return null;
         }
         return specFilePath.toString();
@@ -157,14 +161,16 @@ public class BundletoolUtil {
         return destDir;
     }
 
-    /**
-     * Installs the apk .apks that using bundletool.
-     *
-     * @param apks the apks that need to be installed
-     * @param device the connected device
-     */
-    public void installApks(File apks, ITestDevice device) throws TargetSetupError {
-        String inputPathArg = "--apks=" + apks.getAbsolutePath();
+    private void installApksOnDevice(
+            File inputFile,
+            ITestDevice device,
+            String inputArg,
+            String installOptionCmd,
+            List<String> extraArgs,
+            String onErrorMsg,
+            String onSuccessMsg)
+            throws TargetSetupError {
+        String inputPathArg = inputArg + inputFile.getAbsolutePath();
 
         String deviceIdArg = DEVICE_ID_FLAG + device.getSerialNumber();
 
@@ -174,9 +180,11 @@ public class BundletoolUtil {
                                 "java",
                                 "-jar",
                                 getBundletoolFile().getAbsolutePath(),
-                                INSTALL_APKS_OPTION,
+                                installOptionCmd,
                                 inputPathArg,
                                 deviceIdArg));
+        installApksCmd.addAll(extraArgs);
+        long cmdTimeout = parseCmdTimeout(extraArgs, CMD_TIME_OUT);
 
         if (getAdbPath() != null) {
             installApksCmd.add("--adb=" + getAdbPath());
@@ -185,18 +193,66 @@ public class BundletoolUtil {
         CommandResult res =
                 getRunUtil()
                         .runTimedCmd(
-                                CMD_TIME_OUT,
+                                cmdTimeout,
                                 installApksCmd.toArray(new String[installApksCmd.size()]));
         if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
             throw new TargetSetupError(
                     String.format(
-                            "Failed to install split apk. Cmd: %s. Error: %s.",
-                            installApksCmd.toString(), res.getStderr()),
+                            "%s Cmd: %s. CommandStatus:%s. Error: %s.",
+                            onErrorMsg, installApksCmd, res.getStatus(), res.getStderr()),
                     device.getDeviceDescriptor(),
                     DeviceErrorIdentifier.APK_INSTALLATION_FAILED);
         }
-        CLog.i("%s is installed successfully", apks.getName());
+        CLog.i(onSuccessMsg);
         return;
+    }
+
+    /**
+     * Installs the apk .apks that using bundletool.
+     *
+     * @param apks the apks that need to be installed
+     * @param device the connected device
+     */
+    public void installApks(File apks, ITestDevice device) throws TargetSetupError {
+        installApks(apks, device, new ArrayList<String>());
+    }
+
+    /**
+     * Installs the apk .apks that using bundletool.
+     *
+     * @param apks the apks that need to be installed
+     * @param device the connected device
+     * @param extraArgs for the bundletool command.
+     */
+    public void installApks(File apks, ITestDevice device, List<String> extraArgs)
+            throws TargetSetupError {
+        installApksOnDevice(
+                apks,
+                device,
+                APKS_FILE_INPUT_SELECTOR,
+                INSTALL_APKS_OPTION,
+                extraArgs,
+                "Failed to install split apks.",
+                apks.getName() + " is installed successfully");
+    }
+
+    /**
+     * Installs the apks contained in provided zip file
+     *
+     * @param apksZip the zip file to install
+     * @param device the connected device
+     * @param extraArgs additional args to pass to bundletool install command
+     */
+    public void installApksFromZip(File apksZip, ITestDevice device, List<String> extraArgs)
+            throws TargetSetupError {
+        installApksOnDevice(
+                apksZip,
+                device,
+                ZIP_FILE_INPUT_SELECTOR,
+                INSTALL_MULTI_APKS_OPTION,
+                extraArgs,
+                "Failed to install apks from zip file",
+                "Successfully installed apks from " + apksZip.getName());
     }
 
     @VisibleForTesting
@@ -212,5 +268,30 @@ public class BundletoolUtil {
             return null;
         }
         return adbPath;
+    }
+
+    // Parses command timeout from args. Uses {@code defaultValue} if parse fails or if the value is
+    // < default value.
+    @VisibleForTesting
+    protected static long parseCmdTimeout(List<String> args, long defaultValue)
+            throws TargetSetupError {
+        for (int i = 0; i < args.size(); i++) {
+            if (args.get(i).startsWith(TIMEOUT_MILLIS_FLAG)) {
+                String value = args.get(i).substring(TIMEOUT_MILLIS_FLAG.length());
+                try {
+                    long timeout = Long.parseLong(value);
+                    return Long.max(timeout, defaultValue);
+                } catch (NumberFormatException e) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Invalid parameter for --timeout-millis=%s. It should be a"
+                                            + " numeric value",
+                                    value),
+                            e,
+                            InfraErrorIdentifier.INTERNAL_CONFIG_ERROR);
+                }
+            }
+        }
+        return defaultValue;
     }
 }

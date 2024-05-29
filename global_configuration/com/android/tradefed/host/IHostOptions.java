@@ -121,4 +121,13 @@ public interface IHostOptions {
 
     /** Return maximum allowed size(bytes) of the local file cache. */
     public Long getCacheSizeLimit();
+
+    /** Returns whether or not incremental flashing is enabled. */
+    public boolean isIncrementalFlashingEnabled();
+
+    /** Returns whether the host is opt-out of incremental flashing. */
+    public boolean isOptOutOfIncrementalFlashing();
+
+    /** Returns whether host metric reporting should be disabled. */
+    public boolean isHostMetricReportingDisabled();
 }

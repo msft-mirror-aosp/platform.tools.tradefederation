@@ -41,7 +41,13 @@ public class OptionFetcher implements AutoCloseable {
     /** Set of options that should align with the parent process. */
     private static final Set<String> OPTION_TO_FETCH =
             ImmutableSet.of(
-                    "retry-isolation-grade", "avd-in-parent", "enable-tracing", "auto-collect");
+                    "retry-isolation-grade",
+                    "avd-in-parent",
+                    "enable-tracing",
+                    "auto-collect",
+                    "skip-retry-in-presubmit",
+                    "skip-retrying-list",
+                    "remote-dynamic-sharding");
 
     private TradefedFeatureClient mClient;
 

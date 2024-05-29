@@ -67,7 +67,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -614,8 +613,6 @@ public class TestMappingSuiteRunnerTest {
             assertEquals(0, mRunner.getTestMappingPaths().size());
             assertEquals(false, mRunner.getUseTestMappingPath());
         } finally {
-            // Clean up the static variable due to the usage of option `test-mapping-path`.
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
             FileUtil.recursiveDelete(tempDir);
         }
     }
@@ -775,20 +772,20 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#dedupTestInfos(Set)} that tests with the same test
-     * options would be filtered out.
+     * Test for {@link TestMappingSuiteRunner#dedupTestInfos(File, Set)} that tests with the same
+     * test options would be filtered out.
      */
     @Test
     public void testDedupTestInfos() throws Exception {
         Set<TestInfo> testInfos = new HashSet<>();
         testInfos.add(createTestInfo("test", "path"));
         testInfos.add(createTestInfo("test", "path2"));
-        assertEquals(1, mRunner.dedupTestInfos(testInfos).size());
+        assertEquals(1, mRunner.dedupTestInfos(new File("anything"), testInfos).size());
 
         TestInfo anotherInfo = new TestInfo("test", "folder3", false);
         anotherInfo.addOption(new TestOption("include-filter", "value1"));
         testInfos.add(anotherInfo);
-        assertEquals(2, mRunner.dedupTestInfos(testInfos).size());
+        assertEquals(2, mRunner.dedupTestInfos(new File("anything"), testInfos).size());
 
         // Aggregate the test-mapping sources with the same test options.
         TestInfo anotherInfo2 = new TestInfo("test", "folder4", false);
@@ -797,7 +794,7 @@ public class TestMappingSuiteRunnerTest {
         anotherInfo3.addOption(new TestOption("include-filter", "value1"));
         testInfos.clear();
         testInfos = new HashSet<>(Arrays.asList(anotherInfo, anotherInfo2, anotherInfo3));
-        Set<TestInfo> dedupTestInfos = mRunner.dedupTestInfos(testInfos);
+        Set<TestInfo> dedupTestInfos = mRunner.dedupTestInfos(new File("anything"), testInfos);
         assertEquals(1, dedupTestInfos.size());
         TestInfo dedupTestInfo = dedupTestInfos.iterator().next();
         Set<String> expected_sources =
@@ -831,8 +828,8 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String)} that IRemoteTest
-     * object are created according to the test infos with different test options.
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
+     * IRemoteTest object are created according to the test infos with different test options.
      */
     @Test
     public void testCreateIndividualTestsWithDifferentTestInfos() throws Exception {
@@ -850,7 +847,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with multiple test options.
      */
     @Test
@@ -871,7 +868,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with multiple test options and top
      * level exclude-filter tests.
      */
@@ -936,7 +933,7 @@ public class TestMappingSuiteRunnerTest {
             for (Entry<String, IConfiguration> config : configMap.entrySet()) {
                 IConfiguration currentConfig = config.getValue();
                 IAbi abi = currentConfig.getConfigurationDescription().getAbi();
-                // Ensure that all the sub-tests abi match the module abi
+                // Ensure that all the subtests abi match the module abi
                 for (IRemoteTest test : currentConfig.getTests()) {
                     if (test instanceof IAbiReceiver) {
                         assertEquals(abi, ((IAbiReceiver) test).getAbi());
@@ -1002,7 +999,7 @@ public class TestMappingSuiteRunnerTest {
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, String, IAbi)} that
+     * Test for {@link TestMappingSuiteRunner#createIndividualTests(Set, IConfiguration, IAbi)} that
      * IRemoteTest object are created according to the test infos with the same test options and
      * name.
      */
@@ -1075,14 +1072,12 @@ public class TestMappingSuiteRunnerTest {
             assertTrue(mRunner.getIncludeFilter().contains("test1"));
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#filterByAllowedTestLists()} for filtering tests from a
-     * list of allowed test lists.
+     * Test for {@link TestMappingSuiteRunner#filterByAllowedTestLists(Set)} for filtering tests
+     * from a list of allowed test lists.
      */
     @Test
     public void testFilterByAllowedTestLists() throws Exception {
@@ -1110,7 +1105,7 @@ public class TestMappingSuiteRunnerTest {
             testInfos.add(test2);
             testInfos.add(createTestInfo("test3", "path"));
 
-            testInfos = mRunner.filterByAllowedTestLists(testInfos);
+            testInfos = mRunner.filterByAllowedTestLists(mockBuildInfo, testInfos);
             assertEquals(2, testInfos.size());
             assertTrue(testInfos.contains(test1));
             assertTrue(testInfos.contains(test2));
@@ -1143,13 +1138,11 @@ public class TestMappingSuiteRunnerTest {
             assertTrue(expected.getMessage().contains("Collision of Test Mapping file"));
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
     /**
-     * Test for {@link TestMappingSuiteRunner#loadTests()} ()} for loading tests when full run is
+     * Test for {@link TestMappingSuiteRunner#loadTests()} for loading tests when full run is
      * forced.
      */
     @Test
@@ -1222,8 +1215,6 @@ public class TestMappingSuiteRunnerTest {
         } finally {
             FileUtil.recursiveDelete(tempDir);
             FileUtil.recursiveDelete(tempDir2);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
@@ -1251,8 +1242,6 @@ public class TestMappingSuiteRunnerTest {
                 "Missing extra-zip in the BuildInfo file.", expected.getMessage());
         } finally {
             FileUtil.recursiveDelete(tempDir);
-            TestMapping.setIgnoreTestMappingImports(true);
-            TestMapping.setTestMappingPaths(new ArrayList<String>());
         }
     }
 
@@ -1271,6 +1260,8 @@ public class TestMappingSuiteRunnerTest {
             mOptionSetter.setOptionValue("test-mapping-path", "a");
             mOptionSetter.setOptionValue("test-mapping-path", "b");
             mOptionSetter.setOptionValue("test-mapping-matched-pattern-paths", "a/b.java");
+            mOptionSetter.setOptionValue(
+                    "test-mapping-matched-pattern-paths", "a/BroadcastQueueImpl.java");
 
             tempDir = FileUtil.createTempDir("test_mapping");
             File subDir_a = new File(tempDir.getAbsolutePath() + File.separator + "a");
@@ -1303,8 +1294,9 @@ public class TestMappingSuiteRunnerTest {
             mRunner.setBuild(mockBuildInfo);
 
             LinkedHashMap<String, IConfiguration> configMap = mRunner.loadTests();
-            assertEquals(2, mRunner.getIncludeFilter().size());
+            assertEquals(3, mRunner.getIncludeFilter().size());
             assertTrue(mRunner.getIncludeFilter().contains("test_java"));
+            assertTrue(mRunner.getIncludeFilter().contains("Broadcast_java"));
             assertTrue(mRunner.getIncludeFilter().contains("test_no_pattern"));
 
         } finally {

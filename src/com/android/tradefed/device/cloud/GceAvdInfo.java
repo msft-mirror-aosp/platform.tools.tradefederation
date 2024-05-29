@@ -25,7 +25,6 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -38,9 +37,12 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -50,23 +52,42 @@ import java.util.regex.Pattern;
 public class GceAvdInfo {
 
     // Patterns to match from Oxygen client's return message to identify error.
-    private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP =
-            ImmutableMap.of(
-                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
-                            "Lease aborted due to launcher failure",
-                    InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "server_shutting_down",
-                    InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
-                            "UNAVAILABLE: HTTP status code 502",
-                    InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded",
-                    InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "RESOURCE_EXHAUSTED",
-                    InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "502:Bad Gateway",
-                    InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
+    private static final LinkedHashMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP;
+
+    static {
+        OXYGEN_ERROR_PATTERN_MAP = new LinkedHashMap<InfraErrorIdentifier, String>();
+        // Order the error message matching carefully so it can surface the expected error properly
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN, "server_shutting_down");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR, "UNAVAILABLE: HTTP status code 502");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_REQUEST_TIMEOUT, "DeadlineExceeded");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_RESOURCE_EXHAUSTED, "ResourceExhausted");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_NOT_ENOUGH_RESOURCE,
+                "Oxygen currently doesn't have enough resources to fulfil this request");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE, "Bad Gateway");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR, "OxygenClient");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT,
+                "Lease aborted due to launcher failure: Timed out waiting for virtual device to"
+                        + " start");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
+                "Lease aborted due to launcher failure");
+        OXYGEN_ERROR_PATTERN_MAP.put(
+                InfraErrorIdentifier.OXYGEN_SERVER_LB_CONNECTION_ERROR, "desc = connection error");
+    }
 
     // Error message for specify Oxygen error.
     private static final ImmutableMap<InfraErrorIdentifier, String> OXYGEN_ERROR_MESSAGE_MAP =
             ImmutableMap.of(
                     InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_FAILURE,
-                            "Oxygen failed to boot up the device properly",
+                            "AVD failed to boot up properly",
                     InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN,
                             "Unexpected error from Oxygen service",
                     InfraErrorIdentifier.OXYGEN_BAD_GATEWAY_ERROR,
@@ -78,7 +99,8 @@ public class GceAvdInfo {
                     InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE,
                             "Unexpected error from Oxygen service",
                     InfraErrorIdentifier.OXYGEN_CLIENT_LEASE_ERROR,
-                            "Oxygen client failed to lease a device");
+                            "Oxygen client failed to lease a device",
+                    InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT, "AVD boot timed out");
 
     public static class LogFileEntry {
         public final String path;
@@ -134,6 +156,9 @@ public class GceAvdInfo {
     private boolean mIsIpPreconfigured = false;
     private Integer mDeviceOffset = null;
     private String mInstanceUser = null;
+    // Skip collecting device log if set to true.
+    private boolean mSkipDeviceLogCollection = false;
+    private boolean mIsOxygenationDevice = false;
 
     public static enum GceStatus {
         SUCCESS,
@@ -187,6 +212,10 @@ public class GceAvdInfo {
                 + "]";
     }
 
+    public boolean isOxygenationDevice() {
+        return mIsOxygenationDevice;
+    }
+
     public String instanceName() {
         return mInstanceName;
     }
@@ -199,8 +228,16 @@ public class GceAvdInfo {
         return mErrorType;
     }
 
+    public void setErrorType(ErrorIdentifier errorType) {
+        mErrorType = errorType;
+    }
+
     public String getErrors() {
         return mErrors;
+    }
+
+    public void setErrors(String errors) {
+        mErrors = errors;
     }
 
     /** Return the map from local or remote log paths to types. */
@@ -256,6 +293,19 @@ public class GceAvdInfo {
         return new HashMap<String, String>(mBuildVars);
     }
 
+    public boolean getSkipDeviceLogCollection() {
+        return mSkipDeviceLogCollection;
+    }
+
+    // TODO(b/329150949): Remove after lab update
+    public void setSkipBugreportCollection(boolean skipDeviceLogCollection) {
+        mSkipDeviceLogCollection = skipDeviceLogCollection;
+    }
+
+    public void setSkipDeviceLogCollection(boolean skipDeviceLogCollection) {
+        mSkipDeviceLogCollection = skipDeviceLogCollection;
+    }
+
     /**
      * Parse a given file to obtain the GCE AVD device info.
      *
@@ -268,7 +318,7 @@ public class GceAvdInfo {
             File f, DeviceDescriptor descriptor, int remoteAdbPort) throws TargetSetupError {
         String data;
         try {
-            data = FileUtil.readStringFromFile(f);
+          data = Files.readString(f.toPath(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             CLog.e("Failed to read result file from GCE driver:");
             CLog.e(e);
@@ -299,6 +349,12 @@ public class GceAvdInfo {
             String status = res.getString("status");
             GceStatus gceStatus = GceStatus.valueOf(status);
             String errorType = res.has("error_type") ? res.getString("error_type") : null;
+            if (errorType == null) {
+                // Parse more detailed error type if we can.
+                if (errors.contains("QUOTA_EXCEED") && errors.contains("GPU")) {
+                    errorType = "ACLOUD_QUOTA_EXCEED_GPU";
+                }
+            }
             errorId =
                     GceStatus.SUCCESS.equals(gceStatus)
                             ? null
@@ -435,7 +491,8 @@ public class GceAvdInfo {
      * @param errors error messages returned by Oxygen service.
      * @return InfraErrorIdentifier for the Oxygen service error.
      */
-    private static InfraErrorIdentifier refineOxygenErrorType(String errors) {
+    @VisibleForTesting
+    static InfraErrorIdentifier refineOxygenErrorType(String errors) {
         for (Map.Entry<InfraErrorIdentifier, String> entry : OXYGEN_ERROR_PATTERN_MAP.entrySet()) {
             if (errors.contains(entry.getValue()))
                 return entry.getKey();

@@ -82,6 +82,11 @@ public final class ITestDeviceMockHelper {
         when(mMockDevice.isVisibleBackgroundUsersSupported()).thenReturn(supported);
     }
 
+    public void mockIsVisibleBackgroundUsersOnDefaultDisplaySupported(boolean supported)
+            throws Exception {
+        when(mMockDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported()).thenReturn(supported);
+    }
+
     public void mockIsUserVisibleOnDisplay(int userId, int displayId) throws Exception {
         when(mMockDevice.isUserVisibleOnDisplay(userId, displayId)).thenReturn(true);
     }
@@ -138,5 +143,15 @@ public final class ITestDeviceMockHelper {
 
     public void verifyUserNotRemoved(int userId) throws Exception {
         verify(mMockDevice, never()).removeUser(userId);
+    }
+
+    public void verifyListDisplayIdsForStartingVisibleBackgroundUsersNeverCalled()
+            throws Exception {
+        verify(mMockDevice, never()).listDisplayIdsForStartingVisibleBackgroundUsers();
+    }
+
+    public void verifyUserSettings(int userId, String namespace, String key, String value)
+            throws Exception {
+        verify(mMockDevice).setSetting(userId, namespace, key, value);
     }
 }

@@ -354,7 +354,7 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
 
         // Use absolute path to the trace file if it is available otherwise
         // resolve the trace processor name from the test or module artifacts.
-        if (mTraceProcessorBinary == null) {
+        if (mTraceProcessorBinary == null || !mTraceProcessorBinary.exists()) {
             mTraceProcessorBinary = getFileFromTestArtifacts(mTraceProcessorName);
         }
 

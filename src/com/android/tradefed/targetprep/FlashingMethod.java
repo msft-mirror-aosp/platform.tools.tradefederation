@@ -40,4 +40,12 @@ public enum FlashingMethod {
      * which is mounted from a device image zip file via fuse-zip
      */
     FASTBOOT_FLASH_ALL_FUSE_ZIP,
+
+    /** The device was flashed via flashstation using the cl_flashstation script */
+    FLASHSTATION,
+
+    /**
+     * The device was flashed via a `fastboot flashall` command on a directory of partition images
+     */
+    FASTBOOT_FLASH_ALL
 }

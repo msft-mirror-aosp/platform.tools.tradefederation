@@ -143,8 +143,6 @@ public class TradefedSandboxRunner {
                         }
                     };
             Signal.handle(new Signal("TERM"), handler);
-            // Wait 2 secs to let device discovery finish
-            RunUtil.getDefault().sleep(2000);
             mScheduler.execCommand(
                     context, new StubScheduledInvocationListener(), argList.toArray(new String[0]));
         } catch (NoDeviceException e) {

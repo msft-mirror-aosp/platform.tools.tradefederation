@@ -16,6 +16,8 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -71,15 +73,44 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
     @Option(name = "throw-if-cmd-fail", description = "Whether or not to throw if a command fails")
     private boolean mThrowIfFailed = false;
 
+    @Option(
+            name = "log-command-output",
+            description = "Whether or not to always log the commands output")
+    private boolean mLogOutput = false;
+
+    @Option(
+            name = "test-user-token",
+            description =
+                    "When set, that token will be replaced by the id of the user running the test."
+                        + " For example, if it's set as %TEST_USER%, a command that uses it could"
+                        + " be written as something like 'cmd self-destruct --user %TEST_USER%'.")
+    private String mTestUserToken = "";
+
     private Map<BackgroundDeviceAction, CollectingOutputReceiver> mBgDeviceActionsMap =
             new HashMap<>();
+
+    private final List<String> mExecutedCommands = new ArrayList<>();
+
+    private String mTestUser;
 
     /** {@inheritDoc} */
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
         ITestDevice device = getDevice(testInfo);
-        for (String bgCmd : mBgCommands) {
+
+        if (!mTestUserToken.isEmpty()) {
+            mTestUser = testInfo.properties().get(RUN_TESTS_AS_USER_KEY);
+            if (mTestUser == null || mTestUser.isEmpty()) {
+                // Ideally it should be just "cur", but not all commands support that
+                mTestUser = String.valueOf(device.getCurrentUser());
+            }
+            CLog.d("Will replace '%s' by '%s' on all commands", mTestUserToken, mTestUser);
+        }
+
+        for (String rawCmd : mBgCommands) {
+            String bgCmd = resolveCommand(rawCmd);
+            mExecutedCommands.add(bgCmd);
             CollectingOutputReceiver receiver = new CollectingOutputReceiver();
             BackgroundDeviceAction mBgDeviceAction =
                     new BackgroundDeviceAction(bgCmd, bgCmd, device, receiver, 0);
@@ -87,7 +118,9 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
             mBgDeviceActionsMap.put(mBgDeviceAction, receiver);
         }
 
-        for (String cmd : mCommands) {
+        for (String rawCmd : mCommands) {
+            String cmd = resolveCommand(rawCmd);
+            mExecutedCommands.add(cmd);
             CommandResult result;
             // Shell v2 with command status checks
             if (mRunCmdTimeout > 0) {
@@ -110,6 +143,10 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
                             "cmd: '%s' failed, returned:\nstdout:%s\nstderr:%s",
                             cmd, result.getStdout(), result.getStderr());
                 }
+            } else if (mLogOutput) {
+                CLog.d(
+                        "cmd: '%s', returned:\nstdout:%s\nstderr:%s",
+                        cmd, result.getStdout(), result.getStderr());
             }
         }
 
@@ -119,7 +156,6 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
         }
     }
 
-    /** {@inheritDoc} */
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
         for (Map.Entry<BackgroundDeviceAction, CollectingOutputReceiver> bgAction :
@@ -133,7 +169,8 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
             CLog.e("Skipping command teardown since exception was DeviceNotAvailable");
             return;
         }
-        for (String cmd : mTeardownCommands) {
+        for (String rawCmd : mTeardownCommands) {
+            String cmd = resolveCommand(rawCmd);
             try {
                 CommandResult result;
                 if (mTeardownCmdTimeout > 0) {
@@ -147,6 +184,10 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
                 if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                     CLog.d(
                             "tearDown cmd: '%s' failed, returned:\nstdout:%s\nstderr:%s",
+                            cmd, result.getStdout(), result.getStderr());
+                } else if (mLogOutput) {
+                    CLog.d(
+                            "tearDown cmd: '%s', returned:\nstdout:%s\nstderr:%s",
                             cmd, result.getStdout(), result.getStderr());
                 }
             } catch (TargetSetupError tse) {
@@ -165,6 +206,11 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
         return mCommands;
     }
 
+    @VisibleForTesting
+    public List<String> getExecutedCommands() {
+        return mExecutedCommands;
+    }
+
     /**
      * Returns the device to apply the preparer on.
      *
@@ -174,6 +220,10 @@ public class RunCommandTargetPreparer extends BaseTargetPreparer {
      */
     protected ITestDevice getDevice(TestInformation testInfo) throws TargetSetupError {
         return testInfo.getDevice();
+    }
+
+    private String resolveCommand(String rawCmd) {
+        return mTestUser == null ? rawCmd : rawCmd.replace(mTestUserToken, mTestUser);
     }
 }
 

@@ -186,6 +186,12 @@ public interface ICommandOptions {
     /** Sets the set of auto log collectors that should be added to an invocation. */
     public void setAutoLogCollectors(Set<AutoLogCollector> autoLogCollectors);
 
+    /** Whether or not to enable experiments through experimental flags. */
+    public boolean isExperimentEnabled();
+
+    /** Returns the experimental flags map, that can be used to feature gate projects. */
+    public Map<String, String> getExperimentalFlags();
+
     /** Whether or not to capture a screenshot on test case failure */
     public boolean captureScreenshotOnFailure();
 
@@ -200,6 +206,12 @@ public interface ICommandOptions {
 
     /** Whether or not to attempt parallel setup of the remote devices. */
     public boolean shouldUseParallelRemoteSetup();
+
+    /** Return whether to execute pre-invocation setup in parallel. */
+    public boolean shouldUseParallelPreInvocationSetup();
+
+    /** Return the timeout for parallel pre-invocation setup. */
+    public Duration getParallelPreInvocationSetupTimeout();
 
     /** Whether or not to attempt parallel setup. */
     public boolean shouldUseParallelSetup();
@@ -272,4 +284,16 @@ public interface ICommandOptions {
 
     /** Returns the jdk folder to use when forking execution in a subprocess. */
     public File getJdkFolderForSubprocess();
+
+    /** Returns whether to use remote dynamic sharding server or not */
+    public boolean shouldRemoteDynamicShard();
+
+    /** Sets whether to use remote dynamic sharding server or not */
+    public void setShouldRemoteDynamicShard(boolean shouldRemoteDynamicShard);
+
+    /** Returns whether to attempt to distribute number of modules evenly across shards */
+    public boolean shouldUseEvenModuleSharding();
+
+    /** Set whether to attempt to distribute number of modules evenly across shards */
+    public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding);
 }

@@ -33,6 +33,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;
@@ -46,6 +47,7 @@ import com.android.tradefed.util.ListInstrumentationParser.InstrumentationTarget
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -205,7 +207,7 @@ public class InstalledInstrumentationsTest
             name = "use-test-storage",
             description =
                     "If set to true, we will push filters to the test storage instead of disk.")
-    private boolean mUseTestStorage = false;
+    private boolean mUseTestStorage = true;
 
     private int mTotalShards = 0;
     private int mShardIndex = 0;
@@ -221,19 +223,34 @@ public class InstalledInstrumentationsTest
     private String mForceAbi = null;
 
     @Override
-    public boolean shouldRetry(int attemptJustExecuted, List<TestRunResult> previousResults)
+    public boolean shouldRetry(
+            int attemptJustExecuted, List<TestRunResult> previousResults, Set<String> skipList)
             throws DeviceNotAvailableException {
         boolean retry = false;
-        mRunTestsFailureMap = new HashMap<>();
+        if (mRunTestsFailureMap == null) {
+            mRunTestsFailureMap = new HashMap<>();
+        }
         for (TestRunResult run : previousResults) {
             if (run == null) {
                 continue;
             }
             if (run.isRunFailure() || run.hasFailedTests()) {
-                retry = true;
+                Set<TestDescription> excludes =
+                        new LinkedHashSet<>(
+                                run.getTestsInState(
+                                        Arrays.asList(
+                                                TestStatus.PASSED,
+                                                TestStatus.ASSUMPTION_FAILURE,
+                                                TestStatus.IGNORED)));
+                if (mRunTestsFailureMap.get(run.getName()) != null) {
+                    excludes.addAll(mRunTestsFailureMap.get(run.getName()));
+                }
+                Set<TestDescription> skipListDescriptor = convertStringToDescription(skipList);
+                // Complete the excludes with skip list
+                excludes.addAll(skipListDescriptor);
                 // Exclude passed tests from rerunning
-                mRunTestsFailureMap.put(
-                        run.getName(), new LinkedHashSet<TestDescription>(run.getPassedTests()));
+                retry = shouldRetry(run, skipListDescriptor);
+                mRunTestsFailureMap.put(run.getName(), excludes);
             } else {
                 // Set null if we should not rerun it
                 mRunTestsFailureMap.put(run.getName(), null);
@@ -245,6 +262,27 @@ public class InstalledInstrumentationsTest
             mRunTestsFailureMap = null;
         }
         return retry;
+    }
+
+    private Set<TestDescription> convertStringToDescription(Set<String> skipList) {
+        Set<TestDescription> descriptions = new LinkedHashSet<TestDescription>();
+        for (String s : skipList) {
+            String[] classMethod = s.split("#", 2);
+            descriptions.add(new TestDescription(classMethod[0], classMethod[1]));
+        }
+        return descriptions;
+    }
+
+    private boolean shouldRetry(TestRunResult run, Set<TestDescription> skipList) {
+        if (run.isRunFailure()) {
+            return true;
+        }
+        Set<TestDescription> failedTests = run.getFailedTests();
+        failedTests.removeAll(skipList);
+        if (failedTests.isEmpty()) {
+            return false;
+        }
+        return true;
     }
 
     @Override

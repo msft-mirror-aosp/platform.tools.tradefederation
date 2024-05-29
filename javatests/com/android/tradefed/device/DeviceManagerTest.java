@@ -256,7 +256,6 @@ public class DeviceManagerTest {
         mgr.setSynchronousMode(true);
         mgr.setMaxEmulators(0);
         mgr.setMaxNullDevices(0);
-        mgr.setMaxTcpDevices(0);
         mgr.setMaxGceDevices(0);
         mgr.setMaxRemoteDevices(0);
         return mgr;
@@ -420,33 +419,6 @@ public class DeviceManagerTest {
         ITestDevice device = mgr.allocateDevice(mDeviceSelections, false);
         assertNotNull(device);
         assertTrue(device.getIDevice() instanceof NullDevice);
-    }
-
-    /**
-     * Test that DeviceManager will add devices on fastboot to available queue on startup, and that
-     * they can be allocated.
-     */
-    @Test
-    public void testAllocateDevice_fastboot() {
-        Mockito.reset(mMockRunUtil);
-        // mock 'fastboot help' call
-        when(mMockRunUtil.runTimedCmdSilently(
-                        Mockito.anyLong(), Mockito.eq("fastboot"), Mockito.eq("help")))
-                .thenReturn(new CommandResult(CommandStatus.SUCCESS));
-
-        // mock 'fastboot devices' call to return one device
-        CommandResult fastbootResult = new CommandResult(CommandStatus.SUCCESS);
-        fastbootResult.setStdout("serial        fastboot\n");
-        when(mMockRunUtil.runTimedCmdSilently(
-                        Mockito.anyLong(), Mockito.eq("fastboot"), Mockito.eq("devices")))
-                .thenReturn(fastbootResult);
-        when(mMockTestDevice.handleAllocationEvent(DeviceEvent.FORCE_AVAILABLE))
-                .thenReturn(new DeviceEventResponse(DeviceAllocationState.Available, true));
-        when(mMockTestDevice.handleAllocationEvent(DeviceEvent.ALLOCATE_REQUEST))
-                .thenReturn(new DeviceEventResponse(DeviceAllocationState.Allocated, true));
-
-        DeviceManager manager = createDeviceManager(null);
-        assertNotNull(manager.allocateDevice(mDeviceSelections));
     }
 
     /** Test {@link DeviceManager#forceAllocateDevice(String)} when device is unknown */
@@ -880,7 +852,7 @@ public class DeviceManagerTest {
     /** Test freeing a tcp device, it must return to an unavailable status */
     @Test
     public void testFreeDevice_tcpDevice() {
-        mDeviceSelections.setTcpDeviceRequested(true);
+        mDeviceSelections.setGceDeviceRequested(true);
         when(mMockTestDevice.handleAllocationEvent(DeviceEvent.FORCE_AVAILABLE))
                 .thenReturn(new DeviceEventResponse(DeviceAllocationState.Available, true));
         when(mMockIDevice.isEmulator()).thenReturn(Boolean.FALSE);
@@ -894,7 +866,7 @@ public class DeviceManagerTest {
                 .thenReturn(new DeviceEventResponse(DeviceAllocationState.Available, true));
 
         DeviceManager manager = createDeviceManagerNoInit();
-        manager.setMaxTcpDevices(1);
+        manager.setMaxGceDevices(1);
         manager.init(null, null, mMockDeviceFactory);
         IManagedTestDevice tcpDevice =
                 (IManagedTestDevice) manager.allocateDevice(mDeviceSelections, false);
@@ -1175,6 +1147,8 @@ public class DeviceManagerTest {
                         SIM_STATE,
                         SIM_OPERATOR,
                         false,
+                        null,
+                        null,
                         null);
         if (cached) {
             when(mMockTestDevice.getCachedDeviceDescriptor(false)).thenReturn(descriptor);

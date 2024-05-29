@@ -33,12 +33,12 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public final class SecondaryUserOnSecondaryDisplayHandlerTest {
 
-    private SecondaryUserOnSecondaryDisplayHandler mHandler;
+    private SecondaryUserOnDefaultDisplayHandler mHandler;
     private IConfiguration mModuleConfig;
 
     @Before
     public void setUp() {
-        mHandler = new SecondaryUserOnSecondaryDisplayHandler();
+        mHandler = new SecondaryUserOnDefaultDisplayHandler();
         mModuleConfig = new Configuration("test", "test");
     }
 
@@ -56,6 +56,12 @@ public final class SecondaryUserOnSecondaryDisplayHandlerTest {
                 .isEqualTo("android.platform.test.annotations.SystemUserOnly");
     }
 
+    @Test
+    public void testGetParameterIdentifier() {
+        assertThat(mHandler.getParameterIdentifier())
+                .isEqualTo("secondary_user_on_default_display");
+    }
+
     /**
      * Test that when a module configuration goes through the handler's
      * addParameterSpecificConfiguration, {@link CreateUserPreparer} is added correctly.
@@ -70,7 +76,6 @@ public final class SecondaryUserOnSecondaryDisplayHandlerTest {
         ITargetPreparer preparer2 = mModuleConfig.getTargetPreparers().get(1);
         assertThat(preparer2).isInstanceOf(RunCommandTargetPreparer.class);
         assertThat(((RunCommandTargetPreparer) preparer2).getCommands())
-                .containsExactlyElementsIn(
-                        SecondaryUserOnSecondaryDisplayHandler.LOCATION_COMMANDS);
+                .containsExactly(SecondaryUserOnSecondaryDisplayHandler.CMD_SET_LOCATION_ENABLED);
     }
 }

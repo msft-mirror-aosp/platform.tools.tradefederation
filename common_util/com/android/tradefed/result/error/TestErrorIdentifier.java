@@ -34,7 +34,8 @@ public enum TestErrorIdentifier implements ErrorIdentifier {
     UNEXPECTED_MOBLY_BEHAVIOR(530_011, FailureStatus.CUSTOMER_ISSUE),
     HOST_COMMAND_FAILED(530_012, FailureStatus.CUSTOMER_ISSUE),
     TEST_PHASE_TIMED_OUT(530_013, FailureStatus.TIMED_OUT),
-    TEST_FILTER_NEEDS_UPDATE(530_014, FailureStatus.SYSTEM_UNDER_TEST_CRASHED);
+    TEST_FILTER_NEEDS_UPDATE(530_014, FailureStatus.SYSTEM_UNDER_TEST_CRASHED),
+    TEST_TIMEOUT(530_015, FailureStatus.TIMED_OUT);
 
     private final long code;
     private final @Nonnull FailureStatus status;

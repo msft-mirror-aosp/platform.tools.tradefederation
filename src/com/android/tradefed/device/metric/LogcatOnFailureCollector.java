@@ -44,9 +44,9 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
 
     private static final String NAME_FORMAT = "%s-%s-logcat-on-failure";
 
-    private static final String LOGCAT_COLLECT_CMD = "logcat -T 150";
+    private static final String LOGCAT_COLLECT_CMD = "logcat -b all -T 150";
     // -t implies -d (dump) so it's a one time collection
-    private static final String LOGCAT_COLLECT_CMD_LEGACY = "logcat -t 5000";
+    private static final String LOGCAT_COLLECT_CMD_LEGACY = "logcat -b all -t 5000";
     private static final int API_LIMIT = 20;
 
     private static final int THROTTLE_LIMIT_PER_RUN = 10;
@@ -120,6 +120,11 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
     }
 
     @VisibleForTesting
+    CollectingByteOutputReceiver createLegacyCollectingReceiver() {
+        return new CollectingByteOutputReceiver();
+    }
+
+    @VisibleForTesting
     IRunUtil getRunUtil() {
         return RunUtil.getDefault();
     }
@@ -172,16 +177,28 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
 
     private void legacyCollection(ITestDevice device, String testName)
             throws DeviceNotAvailableException {
-        CollectingByteOutputReceiver outputReceiver = new CollectingByteOutputReceiver();
+        CollectingByteOutputReceiver outputReceiver = createLegacyCollectingReceiver();
         device.executeShellCommand(LOGCAT_COLLECT_CMD_LEGACY, outputReceiver);
         saveLogcatSource(
                 testName,
                 new ByteArrayInputStreamSource(outputReceiver.getOutput()),
                 device.getSerialNumber());
+        outputReceiver.cancel();
     }
 
     private void saveLogcatSource(String testName, InputStreamSource source, String serial) {
+        if (source == null) {
+            return;
+        }
         try (InputStreamSource logcatSource = source) {
+            // If the resulting logcat looks wrong or empty, discard it
+            if (logcatSource.size() < 75L) {
+                CLog.e(
+                        "Discarding logcat on failure (size=%s): it failed to collect something"
+                                + " relevant likely due to timings.",
+                        logcatSource.size());
+                return;
+            }
             String name = String.format(NAME_FORMAT, testName, serial);
             super.testLog(name, LogDataType.LOGCAT, logcatSource);
         }

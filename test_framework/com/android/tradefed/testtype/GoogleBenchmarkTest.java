@@ -16,15 +16,16 @@
 package com.android.tradefed.testtype;
 
 import com.android.ddmlib.FileListingService;
-import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
-import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 import com.android.tradefed.util.StringEscapeUtils;
 
@@ -211,10 +212,9 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
             }
 
             Map<String, String> metricMap = new HashMap<String, String>();
-            CollectingOutputReceiver outputCollector = createOutputCollector();
             GoogleBenchmarkResultParser resultParser = createResultParser(runName, listener);
             listener.testRunStarted(runName, numTests);
-            try {
+            try (CloseableTraceScope ignore = new CloseableTraceScope(runName)) {
                 String cmd =
                         String.format(
                                 "%s%s%s %s",
@@ -224,8 +224,8 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
                                 GBENCHMARK_JSON_OUTPUT_FORMAT);
                 CLog.i(String.format("Running google benchmark test on %s: %s",
                         mDevice.getSerialNumber(), cmd));
-                executeCommand(testDevice, cmd, outputCollector);
-                metricMap = resultParser.parse(outputCollector);
+                CommandResult cmd_result = executeCommand(testDevice, cmd);
+                metricMap = resultParser.parse(cmd_result);
             } catch (DeviceNotAvailableException e) {
                 listener.testRunFailed(e.getMessage());
                 throw e;
@@ -273,7 +273,11 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
                         fullBinaryPath,
                         getFilterFlagForFilters(filters),
                         GBENCHMARK_LIST_TESTS_OPTION);
-        String list_output = executeCommand(testDevice, cmd, null /* outputReceiver */);
+        CommandResult list_cmd = executeCommand(testDevice, cmd);
+        if (!CommandStatus.SUCCESS.equals(list_cmd.getStatus())) {
+            CLog.w("Failed to list tests. error: %s", list_cmd.getStderr());
+        }
+        String list_output = list_cmd.getStdout();
         String[] list = list_output.trim().split("\n");
         if (noMatchesFound(list)) {
             list = new String[0];
@@ -313,13 +317,6 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
             }
         }
         return false;
-    }
-
-    /**
-     * Exposed for testing
-     */
-    CollectingOutputReceiver createOutputCollector() {
-        return new CollectingOutputReceiver();
     }
 
     /**
@@ -466,73 +463,37 @@ public class GoogleBenchmarkTest implements IDeviceTest, IRemoteTest, ITestFilte
      *
      * @param testDevice the device on which to run the command
      * @param cmd the command string to run
-     * @param outputReceiver the output receiver for reading test results
      * @return shell output if outputReceiver is null
      */
-    protected String executeCommand(
-            final ITestDevice testDevice,
-            final String cmd,
-            final IShellOutputReceiver outputReceiver)
+    protected CommandResult executeCommand(final ITestDevice testDevice, final String cmd)
             throws DeviceNotAvailableException {
         String shellCmd = StringEscapeUtils.escapeShell(cmd);
         // Ensure that command is not too long for adb
         if (shellCmd.length() < ADB_CMD_CHAR_LIMIT) {
-            if (outputReceiver == null) {
-                // TODO(b/233709366): Migrate to executeShellV2Command for all other device command
-                //  execution. Stderr output of list tests command contain extra wording
-                //  (ex: using --testdata=/xxx/xxx/...) which breaks the parser, only use stdout for
-                //  parsing the result of list tests.
-                if (cmd.contains(GBENCHMARK_LIST_TESTS_OPTION)) {
-                    return testDevice.executeShellV2Command(shellCmd).getStdout();
-                }
-                return testDevice.executeShellCommand(shellCmd);
-            }
-            testDevice.executeShellCommand(
+            return testDevice.executeShellV2Command(
                     shellCmd,
-                    outputReceiver,
-                    mMaxRunTime /* maxTimeToShellOutputResponse */,
+                    mMaxRunTime /* maxTimeoutForCommand */,
                     TimeUnit.MILLISECONDS,
                     0 /* retryAttempts */);
-            return null;
         }
 
         // Wrap adb shell command in script if command is too long for direct execution
-        return executeCommandByScript(testDevice, shellCmd, outputReceiver);
+        return executeCommandByScript(testDevice, shellCmd);
     }
 
     /** Runs a command from a temporary script. */
-    private String executeCommandByScript(
-            final ITestDevice testDevice,
-            final String cmd,
-            final IShellOutputReceiver outputReceiver)
+    private CommandResult executeCommandByScript(final ITestDevice testDevice, final String cmd)
             throws DeviceNotAvailableException {
         String tmpFileDevice = "/data/local/tmp/gbenchmarktest_script.sh";
         testDevice.pushString(String.format("#!/bin/bash\n%s", cmd), tmpFileDevice);
-        String shellOutput = null;
         try {
-            if (outputReceiver == null) {
-                // TODO(b/233709366): Migrate to executeShellV2Command for all other device command
-                //  execution.
-                if (cmd.contains(GBENCHMARK_LIST_TESTS_OPTION)) {
-                    shellOutput =
-                            testDevice
-                                    .executeShellV2Command(String.format("sh %s", tmpFileDevice))
-                                    .getStdout();
-                } else {
-                    shellOutput =
-                            testDevice.executeShellCommand(String.format("sh %s", tmpFileDevice));
-                }
-            } else {
-                testDevice.executeShellCommand(
-                        String.format("sh %s", tmpFileDevice),
-                        outputReceiver,
-                        mMaxRunTime /* maxTimeToShellOutputResponse */,
-                        TimeUnit.MILLISECONDS,
-                        0 /* retry attempts */);
-            }
+            return testDevice.executeShellV2Command(
+                    String.format("sh %s", tmpFileDevice),
+                    mMaxRunTime /* maxTimeoutForCommand */,
+                    TimeUnit.MILLISECONDS,
+                    0 /* retry attempts */);
         } finally {
             testDevice.deleteFile(tmpFileDevice);
         }
-        return shellOutput;
     }
 }

@@ -139,6 +139,20 @@ public class CommandOptions implements ICommandOptions {
     )
     private boolean mDynamicSharding = true;
 
+    @Option(
+            name = "remote-dynamic-sharding",
+            description =
+                    "Enable use of the dynamic sharding service to load balance across multiple"
+                            + " hosts.")
+    private boolean mRemoteDynamicSharding = false;
+
+    @Option(
+            name = "use-even-module-sharding",
+            description =
+                    "Enable use of a strategy that attempts to distribute number of "
+                            + "modules evenly across shards")
+    private boolean mEvenModuleSharding = false;
+
     public static final String INVOCATION_DATA = "invocation-data";
 
     @Option(
@@ -189,6 +203,16 @@ public class CommandOptions implements ICommandOptions {
                             + " parallel.")
     private boolean mUseParallelRemoteSetup = false;
 
+    @Option(
+            name = "parallel-pre-invocation-setup",
+            description = "Whether to execute pre-invocation setup in parallel.")
+    private boolean mUseParallelPreInvocationSetup = false;
+
+    @Option(
+            name = "parallel-pre-invocation-setup-timeout",
+            description = "Timeout for parallel pre-invocation setup.")
+    private Duration mParallelPreInvocationSetupTimeout = Duration.ofMinutes(30L);
+
     @Option(name = "parallel-setup", description = "Whether to attempt the setup in parallel.")
     private boolean mUseParallelSetup = false;
 
@@ -223,6 +247,16 @@ public class CommandOptions implements ICommandOptions {
                         + "to collect logs."
     )
     private Set<AutoLogCollector> mAutoCollectors = new LinkedHashSet<>();
+
+    @Option(
+            name = "experiment-enabled",
+            description = "A feature flag used to enable experimental flags.")
+    private boolean mExperimentEnabled = false;
+
+    @Option(
+            name = "experimental-flags",
+            description = "Map of experimental flags that can be used for feature gating projects.")
+    private Map<String, String> mExperimentalFlags = new LinkedHashMap<>();
 
     @Deprecated
     @Option(
@@ -294,6 +328,11 @@ public class CommandOptions implements ICommandOptions {
     private boolean mTracingEnabled = true;
 
     public static final String JDK_FOLDER_OPTION_NAME = "jdk-folder-for-subprocess";
+
+    @Option(
+            name = "parallel-dynamic-download",
+            description = "Enable parallel download of dynamic files when supported.")
+    private boolean mEnableParallelDynamicDownload = false;
 
     @Option(
             name = JDK_FOLDER_OPTION_NAME,
@@ -597,6 +636,18 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public boolean isExperimentEnabled() {
+        return mExperimentEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Map<String, String> getExperimentalFlags() {
+        return mExperimentalFlags;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean captureScreenshotOnFailure() {
         return mScreenshotOnFailure;
     }
@@ -618,13 +669,23 @@ public class CommandOptions implements ICommandOptions {
     public void setHostLogSuffix(String suffix) {
         mHostLogSuffix = suffix;
     }
-
     /** {@inheritDoc} */
     @Override
     public boolean shouldUseParallelRemoteSetup() {
         return mUseParallelRemoteSetup;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUseParallelPreInvocationSetup() {
+        return mUseParallelPreInvocationSetup;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Duration getParallelPreInvocationSetupTimeout() {
+        return mParallelPreInvocationSetupTimeout;
+    }
     /** {@inheritDoc} */
     @Override
     public boolean shouldUseParallelSetup() {
@@ -727,9 +788,6 @@ public class CommandOptions implements ICommandOptions {
         List<String> tags = new ArrayList<>();
         // Convert a few of the enabled features into easily consumable tag that can be displayed
         // to see if a feature is enabled.
-        if (filterPreviousPassedTests()) {
-            tags.add("incremental_retry");
-        }
         if (mAutoCollectors.contains(AutoLogCollector.DEVICE_TRACE)) {
             tags.add("device_tracing_enable");
         }
@@ -764,5 +822,29 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public File getJdkFolderForSubprocess() {
         return mJdkFolder;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldRemoteDynamicShard() {
+        return mRemoteDynamicSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setShouldRemoteDynamicShard(boolean shouldRemoteDynamicShard) {
+        mRemoteDynamicSharding = shouldRemoteDynamicShard;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUseEvenModuleSharding() {
+        return mEvenModuleSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding) {
+        mEvenModuleSharding = useEvenModuleSharding;
     }
 }

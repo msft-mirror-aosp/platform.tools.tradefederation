@@ -16,7 +16,6 @@
 
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.StreamUtil;
@@ -54,6 +53,8 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
     private static final String TESTCASE = "testcase";
     private static final String ERROR = "error";
     private static final String FAILURE = "failure";
+    private static final String IGNORED = "ignored";
+    private static final String ASSUMPTION_FAILURE = "assumption_failure";
     private static final String ATTR_NAME = "name";
     private static final String ATTR_TIME = "time";
     private static final String ATTR_ERRORS = "errors";
@@ -174,8 +175,21 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
         serializer.attribute(NS, ATTR_CLASSNAME, testId.getClassName());
         serializer.attribute(NS, ATTR_TIME, "0");
 
-        if (!TestStatus.PASSED.equals(testResult.getStatus())) {
-            String result = testResult.getStatus().equals(TestStatus.FAILURE) ? FAILURE : ERROR;
+        // TODO(b/322204420): Remove status downgrade and support SKIPPED in XML
+        com.android.ddmlib.testrunner.TestResult.TestStatus ddmlibStatus = testResult.getStatus();
+        TestStatus tfStatus = TestStatus.convertFromDdmlibType(ddmlibStatus);
+
+        if (TestStatus.IGNORED.equals(tfStatus)) {
+            String result = IGNORED;
+            serializer.startTag(NS, result);
+            serializer.endTag(NS, result);
+        } else if (!TestStatus.PASSED.equals(tfStatus)) {
+            String result = ERROR;
+            if (TestStatus.FAILURE.equals(tfStatus)) {
+                result = FAILURE;
+            } else if (TestStatus.ASSUMPTION_FAILURE.equals(tfStatus)) {
+                result = ASSUMPTION_FAILURE;
+            }
             serializer.startTag(NS, result);
             // TODO: get message of stack trace ?
 //            String msg = testResult.getStackTrace();
@@ -196,7 +210,7 @@ public class XmlResultReporter extends CollectingTestListener implements ILogSav
      * Returns the text in a format that is safe for use in an XML document.
      */
     private String sanitize(String text) {
-        return text.replace("\0", "<\\0>");
+        return text == null ? "" : text.replace("\0", "<\\0>");
     }
 
     /**

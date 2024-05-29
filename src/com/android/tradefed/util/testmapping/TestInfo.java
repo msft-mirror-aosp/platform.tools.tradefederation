@@ -22,6 +22,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,6 +36,8 @@ public class TestInfo {
     private List<TestOption> mOptions = new ArrayList<TestOption>();
     // A Set of locations with TEST_MAPPING files that containing the test.
     private Set<String> mSources = new HashSet<String>();
+    // A Set of import paths defined in TEST_MAPPING files.
+    private Set<String> mImportPaths = new HashSet<String>();
     // True if the test should run on host and require no device.
     private boolean mHostOnly = false;
     // A Set of keywords to be matched when filtering tests to run in a Test Mapping suite.
@@ -68,6 +71,14 @@ public class TestInfo {
         mSources.addAll(sources);
     }
 
+    public void addImportPaths(Set<String> paths) {
+        mImportPaths.addAll(paths);
+    }
+
+    public Set<String> getImportPaths() {
+        return mImportPaths;
+    }
+
     public Set<String> getSources() {
         return mSources;
     }
@@ -92,6 +103,17 @@ public class TestInfo {
     /** Get a {@link Set} of the keywords supported by the test. */
     public Set<String> getKeywords() {
         return new HashSet<>(mKeywords);
+    }
+
+    /**
+     * Get a {@link Set} of the keywords supported by the test.
+     *
+     * @param ignoreKeywords A set of {@link String} of keywords to be ignored.
+     */
+    public Set<String> getKeywords(Set<String> ignoreKeywords) {
+        Set<String> keywords = new LinkedHashSet<>(mKeywords);
+        keywords.removeAll(ignoreKeywords);
+        return keywords;
     }
 
     /**

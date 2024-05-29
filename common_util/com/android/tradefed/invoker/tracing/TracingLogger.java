@@ -20,6 +20,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 /** Class that helps to manage tracing for each test invocation. */
 public class TracingLogger {
 
@@ -33,17 +35,55 @@ public class TracingLogger {
      * @param tid Current thread id
      */
     public static ActiveTrace createActiveTrace(long pid, long tid) {
+        return createActiveTrace(pid, tid, false);
+    }
+
+    public static ActiveTrace createActiveTrace(long pid, long tid, boolean mainProcess) {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupActiveTrace) {
-            ActiveTrace trace = new ActiveTrace(pid, tid);
+            ActiveTrace trace = new ActiveTrace(pid, tid, mainProcess);
             mPerGroupActiveTrace.put(group, trace);
             return trace;
+        }
+    }
+
+    /** If it exists, returns the current trace of the Tradefed process itself. */
+    public static ActiveTrace getMainTrace() {
+        synchronized (mPerGroupActiveTrace) {
+            for (ActiveTrace t : mPerGroupActiveTrace.values()) {
+                if (t != null && t.isMainTradefedProcess()) {
+                    return t;
+                }
+            }
+            return null;
+        }
+    }
+
+    /**
+     * Sets the currently active trace for an invocation.
+     *
+     * @return the previous active trace or {@code null} if there was none.
+     */
+    @Nullable
+    static ActiveTrace setActiveTrace(ActiveTrace trace) {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupActiveTrace) {
+            return mPerGroupActiveTrace.put(group, trace);
         }
     }
 
     /** Returns the current active trace for the invocation, or null if none. */
     public static ActiveTrace getActiveTrace() {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupActiveTrace) {
+            return mPerGroupActiveTrace.get(group);
+        }
+    }
+
+    public static ActiveTrace getActiveTraceForGroup(ThreadGroup group) {
+        if (group == null) {
+            return null;
+        }
         synchronized (mPerGroupActiveTrace) {
             return mPerGroupActiveTrace.get(group);
         }

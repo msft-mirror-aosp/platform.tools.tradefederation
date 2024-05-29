@@ -16,7 +16,6 @@
 package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -28,10 +27,10 @@ import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
-import com.android.tradefed.testtype.suite.TestFailureListener;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -361,12 +360,17 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             serializer.startTag(NS, CASE_TAG);
             serializer.attribute(NS, NAME_ATTR, className);
             for (Entry<String, TestResult> individualResult : format.get(className).entrySet()) {
-                TestStatus status = individualResult.getValue().getStatus();
+                TestStatus status = individualResult.getValue().getResultStatus();
+                // TODO(b/322204420): Report skipped to XML and support parsing it
+                if (TestStatus.SKIPPED.equals(status)) {
+                    continue;
+                }
                 if (status == null) {
                     continue; // test was not executed, don't report
                 }
                 serializer.startTag(NS, TEST_TAG);
-                serializer.attribute(NS, RESULT_ATTR, getTestStatusCompatibilityString(status));
+                serializer.attribute(
+                        NS, RESULT_ATTR, TestStatus.convertToCompatibilityString(status));
                 serializer.attribute(NS, NAME_ATTR, individualResult.getKey());
                 if (TestStatus.IGNORED.equals(status)) {
                     serializer.attribute(NS, SKIPPED_ATTR, Boolean.toString(true));
@@ -439,7 +443,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         return fullStackTrace;
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Add files captured on test failures. */
     private static void HandleLoggedFiles(
             XmlSerializer serializer, Entry<String, TestResult> testResult)
             throws IllegalArgumentException, IllegalStateException, IOException {
@@ -488,29 +492,6 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static String toReadableDateString(long time) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
         return dateFormat.format(new Date(time));
-    }
-
-    /** Convert our test status to a format compatible with CTS backend. */
-    private static String getTestStatusCompatibilityString(TestStatus status) {
-        switch (status) {
-            case PASSED:
-                return "pass";
-            case FAILURE:
-                return "fail";
-            default:
-                return status.toString();
-        }
-    }
-
-    private static TestStatus getStatusFromString(String status) {
-        switch (status) {
-            case "pass":
-                return TestStatus.PASSED;
-            case "fail":
-                return TestStatus.FAILURE;
-            default:
-                return TestStatus.valueOf(status);
-        }
     }
 
     /** {@inheritDoc} */
@@ -696,7 +677,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         while (parser.nextTag() == XmlPullParser.START_TAG) {
             parser.require(XmlPullParser.START_TAG, NS, TEST_TAG);
             String methodName = parser.getAttributeValue(NS, NAME_ATTR);
-            TestStatus status = getStatusFromString(parser.getAttributeValue(NS, RESULT_ATTR));
+            TestStatus status =
+                    TestStatus.convertFromCompatibilityString(
+                            parser.getAttributeValue(NS, RESULT_ATTR));
             TestDescription description = new TestDescription(className, methodName);
             currentModule.testStarted(description);
             if (TestStatus.IGNORED.equals(status)) {
@@ -727,7 +710,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         }
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Add files captured on test failures. */
     private static void parseLoggedFiles(XmlPullParser parser, TestRunResult currentModule)
             throws XmlPullParserException, IOException {
         if (parser.getName().equals(BUGREPORT_TAG)) {

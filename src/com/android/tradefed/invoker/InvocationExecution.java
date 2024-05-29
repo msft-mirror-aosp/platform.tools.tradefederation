@@ -33,15 +33,17 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.filter.GetPreviousPassedHelper;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
-import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInvocation.Stage;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -124,6 +126,8 @@ public class InvocationExecution implements IInvocationExecution {
     private Set<IMultiTargetPreparer> mTrackMultiPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackLabPreparers = null;
     private Map<String, Set<ITargetPreparer>> mTrackTargetPreparers = null;
+    // GceManager for multi-device leasing. It's needed for releasing the devices.
+    private GceManager mMultiDeviceRequester = null;
 
     /** Timer to make sure Test Phase does not run for too long. */
     private class TestPhaseMonitor extends TimerTask {
@@ -208,6 +212,9 @@ public class InvocationExecution implements IInvocationExecution {
                     ((IInvocationContextReceiver) provider)
                             .setInvocationContext(testInfo.getContext());
                 }
+                if (provider instanceof ITestLoggerReceiver) {
+                    ((ITestLoggerReceiver) provider).setTestLogger(listener);
+                }
                 // Get the build
                 if (provider instanceof IDeviceBuildProvider) {
                     // Download a device build if the provider can handle it.
@@ -283,7 +290,9 @@ public class InvocationExecution implements IInvocationExecution {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
-        return createShardHelper().shardConfig(config, testInfo, rescheduler, logger);
+        IShardHelper helper = createShardHelper();
+        CLog.d("IShardHelper selected: %s", helper);
+        return helper.shardConfig(config, testInfo, rescheduler, logger);
     }
 
     /** Create an return the {@link IShardHelper} to be used. */
@@ -335,52 +344,57 @@ public class InvocationExecution implements IInvocationExecution {
             mTrackLabPreparers.put(deviceName, new HashSet<>());
             mTrackTargetPreparers.put(deviceName, new HashSet<>());
         }
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.pre_multi_preparer.name())) {
-            // Before all the individual setup, make the multi-pre-target-preparer devices setup
-            runMultiTargetPreparers(
-                    config.getMultiPreTargetPreparers(),
-                    listener,
-                    testInfo,
-                    "multi pre target preparer setup");
-        } finally {
-            long end = System.currentTimeMillis();
-            // Pre-multi-preparer are test specific and account toward test setup
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.TEST_SETUP_PAIR, start, end);
-        }
-        start = System.currentTimeMillis();
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
-            runLabPreparersSetup(testInfo, config, listener);
-        } finally {
-            long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_END, end);
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.SETUP_PAIR, start, end);
-        }
-        long startPreparer = System.currentTimeMillis();
-        try (CloseableTraceScope ignored =
-                new CloseableTraceScope(InvocationMetricKey.test_setup.name())) {
-            runPreparersSetup(testInfo, config, listener);
+        try {
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.pre_multi_preparer.name())) {
+                // Before all the individual setup, make the multi-pre-target-preparer devices setup
+                runMultiTargetPreparers(
+                        config.getMultiPreTargetPreparers(),
+                        listener,
+                        testInfo,
+                        "multi pre target preparer setup");
+            } finally {
+                long end = System.currentTimeMillis();
+                // Pre-multi-preparer are test specific and account toward test setup
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEST_SETUP_PAIR, start, end);
+            }
+            start = System.currentTimeMillis();
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.lab_setup.name())) {
+                runLabPreparersSetup(testInfo, config, listener);
+            } finally {
+                long end = System.currentTimeMillis();
+                InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP_END, end);
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.SETUP_PAIR, start, end);
+            }
+            long startPreparer = System.currentTimeMillis();
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope(InvocationMetricKey.test_setup.name())) {
+                runPreparersSetup(testInfo, config, listener);
 
-            // After all the individual setup, make the multi-devices setup
-            runMultiTargetPreparers(
-                    config.getMultiTargetPreparers(),
-                    listener,
-                    testInfo,
-                    "multi target preparer setup");
-            // Collect some info automatically after setup
-            collectAutoInfo(config, testInfo);
+                // After all the individual setup, make the multi-devices setup
+                runMultiTargetPreparers(
+                        config.getMultiTargetPreparers(),
+                        listener,
+                        testInfo,
+                        "multi target preparer setup");
+                // Collect some info automatically after setup
+                collectAutoInfo(config, testInfo);
+            } finally {
+                // Note: These metrics are handled in a try in case of a kernel reset or device
+                // issue.
+                // Setup timing metric. It does not include flashing time on boot tests.
+                long end = System.currentTimeMillis();
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEST_SETUP_PAIR, startPreparer, end);
+                long setupDuration = end - start;
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.SETUP, setupDuration);
+                CLog.d("Total setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
+            }
         } finally {
-            // Note: These metrics are handled in a try in case of a kernel reset or device issue.
-            // Setup timing metric. It does not include flashing time on boot tests.
-            long end = System.currentTimeMillis();
-            InvocationMetricLogger.addInvocationPairMetrics(
-                    InvocationMetricKey.TEST_SETUP_PAIR, startPreparer, end);
-            long setupDuration = end - start;
-            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, setupDuration);
-            CLog.d("Total setup duration: %s'", TimeUtil.formatElapsedTime(setupDuration));
             // Upload the setup logcat after setup is complete.
             for (ITestDevice device : testInfo.getDevices()) {
                 reportLogs(device, listener, Stage.SETUP);
@@ -433,6 +447,9 @@ public class InvocationExecution implements IInvocationExecution {
                     }
                     if (error instanceof DeviceNotAvailableException) {
                         throw (DeviceNotAvailableException) error;
+                    }
+                    if (error instanceof HarnessRuntimeException) {
+                        throw (HarnessRuntimeException) error;
                     }
                     throw new RuntimeException(error);
                 }
@@ -552,20 +569,21 @@ public class InvocationExecution implements IInvocationExecution {
                 preparer.setUp(testInfo);
             } finally {
                 testInfo.setActiveDeviceIndex(0);
-            }
+                long elapsedTime = System.currentTimeMillis() - startTime;
 
+                CLog.d(
+                        "done with lab preparer '%s' on device: '%s' in %s",
+                        preparer,
+                        device.getSerialNumber(),
+                        TimeUtil.formatElapsedTime(elapsedTime));
+
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationGroupMetricKey.LAB_PREPARER_SETUP_LATENCY,
+                        preparer.getClass().getName(),
+                        elapsedTime);
+            }
             // Track which lab preparers were executed separately from the target preparers
             trackLabPreparers.add(preparer);
-            long elapsedTime = System.currentTimeMillis() - startTime;
-
-            CLog.d(
-                    "done with lab preparer '%s' on device: '%s' in %s",
-                    preparer, device.getSerialNumber(), TimeUtil.formatElapsedTime(elapsedTime));
-
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationGroupMetricKey.LAB_PREPARER_SETUP_LATENCY,
-                    preparer.getClass().getName(),
-                    elapsedTime);
         }
     }
 
@@ -643,20 +661,57 @@ public class InvocationExecution implements IInvocationExecution {
             }
         }
         if (multiDeviceCount != null && multiDeviceCount != 1 && allVirtualDevices) {
-            runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            try (CloseableTraceScope ignore =
+                    new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
+                runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
+            } catch (TargetSetupError e) {
+                OxygenUtil util = new OxygenUtil();
+                util.downloadLaunchFailureLogs(e, logger);
+                throw e;
+            }
         } else {
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope("device_pre_invocation_setup")) {
-                for (String deviceName : context.getDeviceConfigNames()) {
-                    ITestDevice device = context.getDevice(deviceName);
-                    CLog.d(
-                            "Starting device pre invocation setup for : '%s'",
-                            device.getSerialNumber());
-                    if (device instanceof ITestLoggerReceiver) {
-                        ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+                List<String> deviceNames = context.getDeviceConfigNames();
+                if (config.getCommandOptions().shouldUseParallelPreInvocationSetup()
+                        && deviceNames.size() > 1) {
+                    CLog.d("Using parallel preInvocationSetup.");
+                    List<Callable<Void>> callableTasks = new ArrayList<>();
+                    for (String deviceName : deviceNames) {
+                        callableTasks.add(
+                                () -> {
+                                    runSingleDevicePreInvocationSetup(
+                                            deviceName, context, config, logger);
+                                    return null;
+                                });
                     }
-                    device.preInvocationSetup(
-                            context.getBuildInfo(deviceName), context.getAttributes());
+                    // The threads are also controlled by
+                    // host_options:concurrent-virtual-device-startup-limit.
+                    ParallelDeviceExecutor<Void> executor =
+                            new ParallelDeviceExecutor<>(callableTasks.size());
+                    executor.invokeAll(
+                            callableTasks,
+                            config.getCommandOptions()
+                                    .getParallelPreInvocationSetupTimeout()
+                                    .toMillis(),
+                            TimeUnit.MILLISECONDS);
+                    // TODO: Handle throwing multi-exceptions, right now throw the first one.
+                    for (Throwable error : executor.getErrors()) {
+                        if (error instanceof DeviceNotAvailableException) {
+                            throw (DeviceNotAvailableException) error;
+                        }
+                        if (error instanceof TargetSetupError) {
+                            throw (TargetSetupError) error;
+                        }
+                        throw new RuntimeException(error);
+                    }
+                } else {
+                    if (config.getCommandOptions().shouldUseParallelPreInvocationSetup()) {
+                        CLog.w("Parallel pre-invocation setup is enabled but device count <= 1.");
+                    }
+                    for (String deviceName : deviceNames) {
+                        runSingleDevicePreInvocationSetup(deviceName, context, config, logger);
+                    }
                 }
             }
         }
@@ -682,7 +737,7 @@ public class InvocationExecution implements IInvocationExecution {
         // One GceManager is needed to lease the whole device group
         String firstDeviceName = context.getDeviceConfigNames().get(0);
         ITestDevice firstDevice = context.getDevice(firstDeviceName);
-        GceManager multiDeviceRequester =
+        mMultiDeviceRequester =
                 new GceManager(
                         firstDevice.getDeviceDescriptor(),
                         firstDevice.getOptions(),
@@ -690,18 +745,26 @@ public class InvocationExecution implements IInvocationExecution {
 
         List<ITestDevice> devices = context.getDevices();
         List<IBuildInfo> buildInfos = context.getBuildInfos();
+        // Set logger on all devices first
+        for (ITestDevice device : devices) {
+            if (device instanceof ITestLoggerReceiver) {
+                ((ITestLoggerReceiver) device).setTestLogger(logger);
+            }
+        }
 
         // Start multiple devices in a group
         List<GceAvdInfo> gceAvdInfoList =
-                multiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
+                mMultiDeviceRequester.startMultiDevicesGce(buildInfos, context.getAttributes());
         for (int i = 0; i < devices.size(); i++) {
-            RemoteAndroidVirtualDevice device = (RemoteAndroidVirtualDevice) devices.get(i);
             // For each device, do setup with its GceAvdInfo
             CLog.d(
                     "Starting device pre invocation launched device setup with GceAvdInfo %s"
                             + " for : '%s'",
-                    gceAvdInfoList.get(i), device.getSerialNumber());
-            device.setAvdInfo(gceAvdInfoList.get(i));
+                    gceAvdInfoList.get(i), devices.get(i).getSerialNumber());
+            // Use the most common basic interface for device connection setup
+            NativeDevice device = (NativeDevice) devices.get(i);
+
+            device.setConnectionAvdInfo(gceAvdInfoList.get(i));
             device.preInvocationSetup(buildInfos.get(i), context.getAttributes());
 
             // Last device in the group is responsible for releasing the whole device group
@@ -713,9 +776,35 @@ public class InvocationExecution implements IInvocationExecution {
                         device.getSerialNumber());
                 device.getOptions().setSkipTearDown(true);
             }
+        }
+    }
 
-            // Every RemoteAndroidVirtualDevice is a ITestLoggerReceiver
-            ((ITestLoggerReceiver) device).setTestLogger(logger);
+    /**
+     * Run preInvocationSetup for one device.
+     *
+     * @param deviceName the name of the device to be set up.
+     * @param context the {@link IInvocationContext} of the invocation.
+     * @param config the {@link IConfiguration} of this test run.
+     * @param logger the {@link ITestLogger} to report logs.
+     * @throws DeviceNotAvailableException
+     * @throws TargetSetupError
+     */
+    private void runSingleDevicePreInvocationSetup(
+            String deviceName,
+            IInvocationContext context,
+            IConfiguration config,
+            ITestLogger logger)
+            throws DeviceNotAvailableException, TargetSetupError {
+        ITestDevice device = context.getDevice(deviceName);
+        CLog.d("Starting device pre invocation setup for : '%s'", device.getSerialNumber());
+        if (device instanceof ITestLoggerReceiver) {
+            ((ITestLoggerReceiver) context.getDevice(deviceName)).setTestLogger(logger);
+        }
+        IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
+        if (deviceConfig != null && deviceConfig.isFake()) {
+            CLog.d("Skip preInvocationSetup on fake device %s", device);
+        } else {
+            device.preInvocationSetup(context.getBuildInfo(deviceName), context.getAttributes());
         }
     }
 
@@ -738,9 +827,21 @@ public class InvocationExecution implements IInvocationExecution {
             CLog.i("--disable-invocation-setup-and-teardown, skipping post-invocation teardown.");
             return;
         }
+        // Check if device tear down is needed for multi-device tests.
+        boolean shouldTearDown = false;
         for (String deviceName : context.getDeviceConfigNames()) {
             ITestDevice device = context.getDevice(deviceName);
+            IDeviceConfiguration deviceConfig = config.getDeviceConfigByName(deviceName);
+            if (deviceConfig != null && deviceConfig.isFake()) {
+                CLog.d("Skip postInvocationTearDown on fake device %s", device);
+                continue;
+            }
+            // For multi-device tests, only the last device is flagged to be tear down if needed.
+            shouldTearDown |= !device.getOptions().shouldSkipTearDown();
             device.postInvocationTearDown(exception);
+        }
+        if (mMultiDeviceRequester != null && shouldTearDown) {
+            mMultiDeviceRequester.shutdownGce();
         }
     }
 
@@ -876,6 +977,10 @@ public class InvocationExecution implements IInvocationExecution {
 
                     deviceIndex++;
                 }
+
+                if (exception == null) {
+                    exception = deferredThrowable;
+                }
             } finally {
                 InvocationMetricLogger.addInvocationPairMetrics(
                         InvocationMetricKey.TEST_TEARDOWN_PAIR, start, System.currentTimeMillis());
@@ -905,10 +1010,10 @@ public class InvocationExecution implements IInvocationExecution {
                     deviceIndex++;
                 }
 
-                // Extra tear down step for the device
                 if (exception == null) {
                     exception = deferredThrowable;
                 }
+                // Extra tear down step for the device
                 runDevicePostInvocationTearDown(context, config, exception);
 
                 // After all, run the multi_pre_target_preparer tearDown.
@@ -969,7 +1074,8 @@ public class InvocationExecution implements IInvocationExecution {
                 ((ITestLoggerReceiver) preparer).setTestLogger(logger);
             }
             long startTime = System.currentTimeMillis();
-            try {
+            try (CloseableTraceScope remoteTest =
+                    new CloseableTraceScope(preparer.getClass().getSimpleName())) {
                 CLog.d(
                         "starting tearDown '%s' on device: '%s'",
                         preparer, device.getSerialNumber());
@@ -1108,7 +1214,9 @@ public class InvocationExecution implements IInvocationExecution {
                             || test instanceof TestsPoolPoller
                             // If test doesn't support auto-retry
                             || (!(test instanceof ITestFilterReceiver)
-                                    && !(test instanceof IAutoRetriableTest))) {
+                                    && !(test instanceof IAutoRetriableTest)
+                                    && !RetryStrategy.ITERATIONS.equals(
+                                            decision.getRetryStrategy()))) {
                         try {
                             long timeSpentOnTest =
                                     runTest(
@@ -1123,6 +1231,10 @@ public class InvocationExecution implements IInvocationExecution {
                         } finally {
                             CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                             CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                            // Clean the suite internals once done
+                            if (test instanceof BaseTestSuite) {
+                                ((BaseTestSuite) test).cleanUpSuiteSetup();
+                            }
                         }
                         remainingTests.remove(test);
                         continue;
@@ -1539,6 +1651,10 @@ public class InvocationExecution implements IInvocationExecution {
     /** Collect the logs from $TMPDIR/adb.$UID.log. */
     @VisibleForTesting
     protected void logHostAdb(IConfiguration config, ITestLogger logger) {
+        if (SystemUtil.isLocalMode()) {
+            // Skip logging host adb locally
+            return;
+        }
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Avoid relogging the adb log in a subprocess
             return;
@@ -1587,6 +1703,11 @@ public class InvocationExecution implements IInvocationExecution {
     /** Collect automatically some information on the primary device under test. */
     protected void collectAutoInfo(IConfiguration config, TestInformation info)
             throws DeviceNotAvailableException {
+        if (SystemUtil.isLocalMode()) {
+            // Avoid collecting for local modes since data collected in this method is used
+            // in CI only.
+            return;
+        }
         if (config.getCommandOptions().getInvocationData().containsKey("subprocess")) {
             // Avoid logging in the subprocess
             return;
@@ -1595,19 +1716,31 @@ public class InvocationExecution implements IInvocationExecution {
         if (device.getIDevice() instanceof StubDevice) {
             return;
         }
-        CommandResult kernelInfoResult = device.executeShellV2Command("uname -a");
-        if (kernelInfoResult != null
-                && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
-            info.getBuildInfo()
-                    .addBuildAttribute("device_kernel_info", kernelInfoResult.getStdout().trim());
-        }
-        String system_img_info = device.getProperty("ro.system.build.fingerprint");
-        if (system_img_info != null) {
-            info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
-        }
-        String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
-        if (vendor_img_info != null) {
-            info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("collect_device_info")) {
+            CommandResult kernelInfoResult = device.executeShellV2Command("uname -a");
+            if (kernelInfoResult != null
+                    && CommandStatus.SUCCESS.equals(kernelInfoResult.getStatus())) {
+                CLog.i(
+                        "Device %s kernel information: '%s'",
+                        device.getSerialNumber(), kernelInfoResult.getStdout().trim());
+                info.getBuildInfo()
+                        .addBuildAttribute(
+                                "device_kernel_info", kernelInfoResult.getStdout().trim());
+            }
+            String system_img_info = device.getProperty("ro.system.build.fingerprint");
+            if (system_img_info != null) {
+                CLog.i(
+                        "Device %s system image build information: '%s'",
+                        device.getSerialNumber(), system_img_info);
+                info.getBuildInfo().addBuildAttribute("system_img_info", system_img_info);
+            }
+            String vendor_img_info = device.getProperty("ro.vendor.build.fingerprint");
+            if (vendor_img_info != null) {
+                CLog.i(
+                        "Device %s vendor image build information: '%s'",
+                        device.getSerialNumber(), vendor_img_info);
+                info.getBuildInfo().addBuildAttribute("vendor_img_info", vendor_img_info);
+            }
         }
     }
 }

@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.ConfigurationDef;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -35,6 +36,8 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+
+import com.google.common.truth.Truth;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -76,6 +79,7 @@ public class ResultsPlayerTest {
         mPlayer = new ResultsPlayer();
         mPlayer.setConfiguration(mMockConfig);
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
+        mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
 
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
     }
@@ -89,6 +93,13 @@ public class ResultsPlayerTest {
         TestDescription testFail = new TestDescription("test.class", "fail0");
 
         mPlayer.run(mTestInfo, mMockListener);
+
+        Truth.assertThat(
+                        mContext.getBuildInfos()
+                                .get(0)
+                                .getBuildAttributes()
+                                .get(ResultsPlayer.REPLAY_DONE))
+                .isEqualTo("true");
 
         InOrder inOrder = Mockito.inOrder(mMockListener);
         inOrder.verify(mMockListener).testRunStarted("run1", 2);

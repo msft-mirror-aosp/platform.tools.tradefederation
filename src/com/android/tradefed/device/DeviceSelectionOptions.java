@@ -22,6 +22,7 @@ import com.android.tradefed.config.OptionUpdateRule;
 import com.android.tradefed.device.DeviceManager.FastbootDevice;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.base.Strings;
 
@@ -115,6 +116,12 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     @Option(name = "device-type", description = "The type of the device requested to be allocated.")
     private DeviceRequestedType mRequestedType = null;
+
+    @Option(
+            name = "base-device-type-request",
+            description =
+                    "Explicitly request a device type which will use device-type for connection.")
+    private BaseDeviceType mBaseDeviceType = null;
     // ============================ END DEVICE TYPE Related Options ============================
 
     @Option(
@@ -302,10 +309,7 @@ public class DeviceSelectionOptions implements IDeviceSelection {
     /** {@inheritDoc} */
     @Override
     public boolean tcpDeviceRequested() {
-        if (mRequestedType != null) {
-            return mRequestedType.equals(DeviceRequestedType.TCP_DEVICE);
-        }
-        return mTcpDeviceRequested;
+      return false;
     }
 
     /** {@inheritDoc} */
@@ -361,15 +365,30 @@ public class DeviceSelectionOptions implements IDeviceSelection {
      * Sets the tcp device requested flag
      */
     public void setTcpDeviceRequested(boolean tcpDeviceRequested) {
-        mTcpDeviceRequested = tcpDeviceRequested;
+        // This should never get called. Log stack trace if it does.
+        CLog.e("Ignore unexpected call: %s", StreamUtil.getStackTrace(new Exception("")));
     }
 
     public void setDeviceTypeRequested(DeviceRequestedType requestedType) {
+        if (requestedType == DeviceRequestedType.TCP_DEVICE) {
+            CLog.e("Ignore unexpected call: %s", StreamUtil.getStackTrace(new Exception("")));
+            return;
+        }
         mRequestedType = requestedType;
     }
 
     public DeviceRequestedType getDeviceTypeRequested() {
         return mRequestedType;
+    }
+
+    @Override
+    public BaseDeviceType getBaseDeviceTypeRequested() {
+        return mBaseDeviceType;
+    }
+
+    @Override
+    public void setBaseDeviceTypeRequested(BaseDeviceType type) {
+        mBaseDeviceType = type;
     }
 
     /**
@@ -410,9 +429,8 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return mMaxBatteryTemperature;
     }
 
-    /**
-     * Sets whether battery check is required for devices with unknown battery level
-     */
+    /** Sets whether battery check is required for devices with unknown battery level */
+    @Override
     public void setRequireBatteryCheck(boolean requireCheck) {
         mRequireBatteryCheck = requireCheck;
     }

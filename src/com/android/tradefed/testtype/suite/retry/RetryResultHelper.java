@@ -15,9 +15,9 @@
  */
 package com.android.tradefed.testtype.suite.retry;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.testtype.suite.retry.RetryRescheduler.RetryType;
 
 import java.util.LinkedHashSet;
@@ -44,7 +44,7 @@ public final class RetryResultHelper {
 
     /** Returns whether or not a test case should be run or not. */
     public static boolean shouldRunTest(TestResult result, List<RetryType> types) {
-        if (getStatusesToRun(types).contains(result.getStatus())) {
+        if (getStatusesToRun(types).contains(result.getResultStatus())) {
             return true;
         }
         return false;
@@ -54,10 +54,12 @@ public final class RetryResultHelper {
         Set<TestStatus> statusesToRun = new LinkedHashSet<>();
         if (types.contains(RetryType.FAILED)) {
             statusesToRun.add(TestStatus.FAILURE);
+            statusesToRun.add(TestStatus.SKIPPED);
             statusesToRun.add(TestStatus.INCOMPLETE);
         }
         if (types.contains(RetryType.NOT_EXECUTED)) {
             statusesToRun.add(TestStatus.INCOMPLETE);
+            statusesToRun.add(TestStatus.SKIPPED);
         }
         return statusesToRun;
     }

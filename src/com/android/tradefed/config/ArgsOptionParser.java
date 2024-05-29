@@ -141,6 +141,8 @@ public class ArgsOptionParser extends OptionSetter {
     static final String OPTION_NAME_PREFIX = "--";
     // For a boolean pattern match:  {device name}namespace:(no-)option-name
     static final Pattern BOOL_FALSE_DEVICE_PATTERN = Pattern.compile("(\\{.*\\})(.*:)?(no-)(.+)");
+    // For a boolean pattern match:  namespace(:idx):(no-)option-name
+    static final Pattern BOOL_FALSE_PATTERN = Pattern.compile("(.*:)(.*:)(no-)(.+)");
 
     /** the amount to indent an option field's description when displaying help */
     private static final int OPTION_DESCRIPTION_INDENT = 25;
@@ -356,19 +358,24 @@ public class ArgsOptionParser extends OptionSetter {
                         args.previous();
                     }
                 }
-
-                if (name.startsWith(BOOL_FALSE_PREFIX, idx + 1)) {
-                    if (value.equals("false")) {
-                        // if user entered "--no-boolean-flag false"
-                        throw new ConfigurationException(
-                                String.format(
-                                        "Can not use 'no-' prefix on a boolean flag with a 'false'"
-                                                + " value. Please use '--%1$s' instead of '--%2$s"
-                                                + " false'",
-                                        name.substring(BOOL_FALSE_PREFIX.length() + idx + 1), name),
-                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-                    }
+                Matcher boolNamespace = BOOL_FALSE_PATTERN.matcher(name);
+                if (boolNamespace.find()) {
                     value = "false";
+                } else {
+                    if (name.startsWith(BOOL_FALSE_PREFIX, idx + 1)) {
+                        if (value.equals("false")) {
+                            // if user entered "--no-boolean-flag false"
+                            throw new ConfigurationException(
+                                    String.format(
+                                            "Can not use 'no-' prefix on a boolean flag with a"
+                                                + " 'false' value. Please use '--%1$s' instead of"
+                                                + " '--%2$s false'",
+                                            name.substring(BOOL_FALSE_PREFIX.length() + idx + 1),
+                                            name),
+                                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                        }
+                        value = "false";
+                    }
                 }
             }
         }
