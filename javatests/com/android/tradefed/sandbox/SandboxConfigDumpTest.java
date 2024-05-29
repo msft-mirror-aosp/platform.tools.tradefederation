@@ -21,6 +21,9 @@ import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.sandbox.SandboxConfigDump.DumpCmd;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.keystore.IKeyStoreClient;
+
+import com.google.common.truth.Truth;
 
 import org.junit.After;
 import org.junit.Before;
@@ -29,6 +32,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /** Unit tests for {@link com.android.tradefed.sandbox.SandboxConfigDump}. */
 @RunWith(JUnit4.class)
@@ -106,5 +112,86 @@ public class SandboxConfigDumpTest {
                 output.contains(
                         "<result_reporter class=\"com.android.tradefed.result.proto."
                                 + "StreamProtoResultReporter\""));
+    }
+
+    public class TestKeystore implements IKeyStoreClient {
+
+        private String testKey = "key";
+        private String testValue = "testReturn";
+
+        @Override
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @Override
+        public boolean containsKey(String key) {
+            return testKey.equals(key);
+        }
+
+        @Override
+        public String fetchKey(String key) {
+            if (testKey.equals(key)) {
+                return testValue;
+            }
+            throw new RuntimeException("key: " + key + " not found");
+        }
+    }
+
+    @Test
+    public void testKeystoreReplacement() throws Exception {
+        List<String> argList =
+                new ArrayList<String>(
+                        Arrays.asList("--test", "USE_KEYSTORE@key", "--next", "value"));
+        List<String> confirm =
+                new ArrayList<String>(Arrays.asList("--test", "testReturn", "--next", "value"));
+
+        SandboxConfigDump.replaceKeystore(new TestKeystore(), argList);
+        Truth.assertThat(argList).isEqualTo(confirm);
+        ;
+    }
+
+    @Test
+    public void testKeystoreReplacement_moduleArg() throws Exception {
+        List<String> argList =
+                new ArrayList<String>(
+                        Arrays.asList(
+                                "--module-arg",
+                                "CtsGestureTestCases:instrumentation-arg:key:=USE_KEYSTORE@key",
+                                "--next",
+                                "value"));
+        List<String> confirm =
+                new ArrayList<String>(
+                        Arrays.asList(
+                                "--module-arg",
+                                "CtsGestureTestCases:instrumentation-arg:key:=testReturn",
+                                "--next",
+                                "value"));
+
+        SandboxConfigDump.replaceKeystore(new TestKeystore(), argList);
+        Truth.assertThat(argList).isEqualTo(confirm);
+        ;
+    }
+
+    @Test
+    public void testKeystoreReplacement_moduleArgKey() throws Exception {
+        List<String> argList =
+                new ArrayList<String>(
+                        Arrays.asList(
+                                "--module-arg",
+                                "CtsGestureTestCases:instrumentation-arg:USE_KEYSTORE@key:=value",
+                                "--next",
+                                "value"));
+        List<String> confirm =
+                new ArrayList<String>(
+                        Arrays.asList(
+                                "--module-arg",
+                                "CtsGestureTestCases:instrumentation-arg:testReturn:=value",
+                                "--next",
+                                "value"));
+
+        SandboxConfigDump.replaceKeystore(new TestKeystore(), argList);
+        Truth.assertThat(argList).isEqualTo(confirm);
+        ;
     }
 }
