@@ -5823,7 +5823,7 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    ContentProviderHandler getContentProvider(int userId)
+                    public ContentProviderHandler getContentProvider(int userId)
                             throws DeviceNotAvailableException {
                         return null;
                     }
