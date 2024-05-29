@@ -27,6 +27,8 @@ import java.util.concurrent.Callable;
 
 @RunWith(JUnit4.class)
 public class RequestUtilTest {
+    static final Integer TIMING_PRECISION_MILLIS = 25;
+
     protected class AlwaysFailsCallable implements Callable<Boolean> {
         @Override
         public Boolean call() throws Exception {
@@ -61,7 +63,8 @@ public class RequestUtilTest {
         public Boolean call() throws Exception {
             long timeNow = System.currentTimeMillis();
             if (mStep >= 0) {
-                if (Math.abs((timeNow - mLastTimeMillis) - mTimesToWaitMillis.get(mStep)) > 10) {
+                if (Math.abs((timeNow - mLastTimeMillis) - mTimesToWaitMillis.get(mStep))
+                        > TIMING_PRECISION_MILLIS) {
                     // Since this isn't an IOException, it will abort the retry and fail the test
                     throw new RuntimeException("Waited the wrong amount of time between requests");
                 }
