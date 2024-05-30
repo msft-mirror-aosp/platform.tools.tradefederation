@@ -439,8 +439,8 @@ public class TestInvocation implements ITestInvocation {
                             executor.invokeAll(callableTasks, 5, TimeUnit.MINUTES);
                         }
                     }
-                    reportRecoveryLogs(context.getDevices(), listener);
                 }
+                reportRecoveryLogs(context.getDevices(), listener);
             }
             try (CloseableTraceScope ignore = new CloseableTraceScope("logExecuteShellCommand")) {
                 // Save the device executeShellCommand logs
