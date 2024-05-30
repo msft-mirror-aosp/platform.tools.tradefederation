@@ -36,6 +36,9 @@ java_library_host {
         // Trace protos to do invocation tracing
         "perfetto_trace-full",
         "remote-execution-java-proto",
+        "grpc-java-api",
+        "grpc-java-stub",
+        "remote-execution-java-grpc",
     ],
     libs: [
         "ddmlib-prebuilt",
