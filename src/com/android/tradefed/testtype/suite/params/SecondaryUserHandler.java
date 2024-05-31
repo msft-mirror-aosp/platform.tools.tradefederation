@@ -15,8 +15,11 @@
  */
 package com.android.tradefed.testtype.suite.params;
 
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
+import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.CreateUserPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.RunCommandTargetPreparer;
@@ -26,7 +29,6 @@ import com.android.tradefed.testtype.ITestAnnotationFilterReceiver;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -36,11 +38,11 @@ import javax.annotation.Nullable;
 /** Handler for {@link ModuleParameters#SECONDARY_USER}. */
 public class SecondaryUserHandler implements IModuleParameterHandler {
 
+    private static final String TEST_USER_TOKEN = "%TEST_USER%";
+
     @VisibleForTesting
-    static final List<String> LOCATION_COMMANDS =
-            Arrays.asList(
-                    "settings put secure location_providers_allowed +network",
-                    "settings put secure location_providers_allowed +gps");
+    static final String CMD_SET_LOCATION_ENABLED =
+            "cmd location set-location-enabled true --user " + TEST_USER_TOKEN;
 
     private final boolean mStartUserVisibleOnBackground;
     private final @Nullable Integer mDisplayId;
@@ -80,7 +82,13 @@ public class SecondaryUserHandler implements IModuleParameterHandler {
             preparers.add(0, userPreparer);
             // Add a preparer to setup the location settings on the new user
             RunCommandTargetPreparer locationPreparer = new RunCommandTargetPreparer();
-            LOCATION_COMMANDS.forEach(cmd -> locationPreparer.addRunCommand(cmd));
+            try {
+                OptionSetter setter = new OptionSetter(locationPreparer);
+                setter.setOptionValue("test-user-token", TEST_USER_TOKEN);
+            } catch (ConfigurationException e) {
+                CLog.w(e);
+            }
+            locationPreparer.addRunCommand(CMD_SET_LOCATION_ENABLED);
             preparers.add(1, locationPreparer);
         }
     }

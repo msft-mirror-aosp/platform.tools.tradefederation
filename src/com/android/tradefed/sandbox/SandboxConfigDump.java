@@ -115,18 +115,11 @@ public class SandboxConfigDump {
         try {
             if (DumpCmd.RUN_CONFIG.equals(cmd)
                     && GlobalConfiguration.getInstance().getKeyStoreFactory() != null) {
-                Pattern USE_KEYSTORE_REGEX = Pattern.compile("USE_KEYSTORE@(.*)");
                 IKeyStoreClient keyClient =
                         GlobalConfiguration.getInstance()
                                 .getKeyStoreFactory()
                                 .createKeyStoreClient();
-                for (int i = 0; i < argList.size(); i++) {
-                    Matcher m = USE_KEYSTORE_REGEX.matcher(argList.get(i));
-                    if (m.matches() && m.groupCount() > 0) {
-                        String key = keyClient.fetchKey(m.group(1));
-                        argList.set(i, key);
-                    }
-                }
+                replaceKeystore(keyClient, argList);
             }
             IConfiguration config =
                     factory.createConfigurationFromArgs(argList.toArray(new String[0]), cmd);
@@ -216,6 +209,20 @@ public class SandboxConfigDump {
         SandboxConfigDump configDump = new SandboxConfigDump();
         int code = configDump.parse(mainArgs);
         System.exit(code);
+    }
+
+    /** Replace keystore options in place. */
+    public static void replaceKeystore(IKeyStoreClient keyClient, List<String> argList) {
+        Pattern USE_KEYSTORE_REGEX = Pattern.compile("(.*)USE_KEYSTORE@([^:]*)(.*)");
+        for (int i = 0; i < argList.size(); i++) {
+            Matcher m = USE_KEYSTORE_REGEX.matcher(argList.get(i));
+            if (m.matches() && m.groupCount() > 0) {
+                String key = m.group(2);
+                String keyValue = keyClient.fetchKey(key);
+                String newValue = argList.get(i).replaceAll("USE_KEYSTORE@" + key, keyValue);
+                argList.set(i, newValue);
+            }
+        }
     }
 
     private SandboxOptions getSandboxOptions(IConfiguration config) {

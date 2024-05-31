@@ -131,7 +131,7 @@ public class NativeDeviceTest {
         }
 
         @Override
-        ContentProviderHandler getContentProvider(int userId) throws DeviceNotAvailableException {
+        public ContentProviderHandler getContentProvider(int userId) throws DeviceNotAvailableException {
             when(mMockContentProviderHandler.getUserId()).thenReturn(userId);
             return mMockContentProviderHandler;
         }
