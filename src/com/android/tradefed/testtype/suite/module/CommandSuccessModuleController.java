@@ -42,7 +42,7 @@ public class CommandSuccessModuleController extends BaseModuleController {
                             "Skipping module %s because shell command '%s' failed with exit code"
                                     + " %d, stderr '%s'",
                             getModuleName(), cmd, result.getExitCode(), result.getStderr());
-                    return RunStrategy.SKIP_MODULE_TESTCASES;
+                    return RunStrategy.FULL_MODULE_BYPASS;
                 }
             }
         }
