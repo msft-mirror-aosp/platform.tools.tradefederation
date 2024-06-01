@@ -28,5 +28,14 @@ public interface ICacheClient {
      * @param action The action that generated the results.
      * @param actionResult The action result to associate with the {@code action}.
      */
-    void uploadCache(ExecutableAction action, ExecutableActionResult actionResult);
+    public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult);
+
+    /**
+     * Lookups the {@link ExecutableActionResult} for the {@code action}.
+     *
+     * @param action The {@link ExecutableAction} whose result should be returned.
+     * @return the {@link ExecutableActionResult} of the {@code action} if the result exists,
+     *     otherwise, null.
+     */
+    public ExecutableActionResult lookupCache(ExecutableAction action);
 }
