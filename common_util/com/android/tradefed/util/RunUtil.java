@@ -17,6 +17,9 @@
 package com.android.tradefed.util;
 
 import com.android.annotations.Nullable;
+import com.android.tradefed.cache.ExecutableAction;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.command.CommandInterrupter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -28,6 +31,8 @@ import com.google.common.base.Strings;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -192,11 +197,88 @@ public class RunUtil implements IRunUtil {
             final OutputStream stdout,
             OutputStream stderr,
             final String... command) {
-        RunnableResult osRunnable = createRunnableResult(stdout, stderr, command);
+        return runTimedCmdWithOutputMonitor(
+                timeout, idleOutputTimeout, stdout, stderr, null, command);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandResult runTimedCmdWithOutputMonitor(
+            final long timeout,
+            final long idleOutputTimeout,
+            OutputStream stdout,
+            OutputStream stderr,
+            ICacheClient cacheClient,
+            final String... command) {
+        ProcessBuilder processBuilder = createProcessBuilder(command);
+        ExecutableAction action = null;
+        if (cacheClient != null) {
+            try {
+                action =
+                        ExecutableAction.create(
+                                processBuilder.directory(),
+                                processBuilder.command(),
+                                processBuilder.environment(),
+                                timeout);
+            } catch (IOException e) {
+                CLog.e("Exception occurred when building executable action! Disabling cache...");
+                CLog.e(e);
+                // Disable caching.
+                cacheClient = null;
+            }
+        }
+
+        ExecutableActionResult cachedResult =
+                action != null && cacheClient != null ? cacheClient.lookupCache(action) : null;
+        if (cachedResult != null) {
+            try {
+                return handleCachedResult(cachedResult, stdout, stderr);
+            } catch (IOException e) {
+                CLog.e("Exception occurred when handling cached result!");
+                CLog.e(e);
+            }
+        }
+
+        File stdoutBuffer = null;
+        File stderrBuffer = null;
+        if (cacheClient != null) {
+            try {
+                stdoutBuffer = FileUtil.createTempFile("stdout-to-upload", ".txt");
+                stdoutBuffer.deleteOnExit();
+                stdout = new ForkedOutputStream(stdout, new FileOutputStream(stdoutBuffer));
+                if (stderr != null) {
+                    stderrBuffer = FileUtil.createTempFile("stderr-to-upload", ".txt");
+                    stderrBuffer.deleteOnExit();
+                    stderr = new ForkedOutputStream(stderr, new FileOutputStream(stderrBuffer));
+                }
+            } catch (IOException e) {
+                CLog.e("Failed to catch command execution output! Skipping the cache upload...");
+                CLog.e(e);
+                // Disable cache upload.
+                cacheClient = null;
+            }
+        }
+        RunnableResult osRunnable = createRunnableResult(stdout, stderr, processBuilder);
+
         CommandStatus status =
                 runTimedWithOutputMonitor(timeout, idleOutputTimeout, osRunnable, true);
         CommandResult result = osRunnable.getResult();
         result.setStatus(status);
+
+        if (CommandStatus.SUCCESS.equals(status) && action != null && cacheClient != null) {
+            ForkedOutputStream stdoutForkedStream = (ForkedOutputStream) stdout;
+            ForkedOutputStream stderrForkedStream =
+                    stderr != null ? (ForkedOutputStream) stderr : null;
+            if (stdoutForkedStream.isSuccess()
+                    && (stderr == null || stderrForkedStream.isSuccess())) {
+                cacheClient.uploadCache(
+                        action,
+                        ExecutableActionResult.create(
+                                result.getExitCode(), stdoutBuffer, stderrBuffer));
+            }
+        }
+        FileUtil.deleteFile(stdoutBuffer);
+        FileUtil.deleteFile(stderrBuffer);
         return result;
     }
 
@@ -206,10 +288,10 @@ public class RunUtil implements IRunUtil {
      */
     @VisibleForTesting
     RunnableResult createRunnableResult(
-            OutputStream stdout, OutputStream stderr, String... command) {
+            OutputStream stdout, OutputStream stderr, ProcessBuilder processBuilder) {
         return new RunnableResult(
                 /* input= */ null,
-                createProcessBuilder(command),
+                processBuilder,
                 stdout,
                 stderr,
                 /* inputRedirect= */ null,
@@ -776,10 +858,7 @@ public class RunUtil implements IRunUtil {
                 mProcessBuilder.redirectInput(mInputRedirect);
             }
 
-            mCommandResult = new CommandResult();
-            // Ensure the outputs are never null
-            mCommandResult.setStdout("");
-            mCommandResult.setStderr("");
+            mCommandResult = newCommandResult();
             mCountDown = new CountDownLatch(1);
 
             // Redirect IO, so that the outputstream for the spawn process does not fill up
@@ -1090,5 +1169,120 @@ public class RunUtil implements IRunUtil {
                     "Cannot setLinuxInterruptProcess on default RunUtil");
         }
         mLinuxInterruptProcess = interrupt;
+    }
+
+    private static CommandResult newCommandResult() {
+        CommandResult commandResult = new CommandResult();
+        // Ensure the outputs are never null
+        commandResult.setStdout("");
+        commandResult.setStderr("");
+        return commandResult;
+    }
+
+    private static CommandResult handleCachedResult(
+            ExecutableActionResult result, OutputStream stdout, OutputStream stderr)
+            throws IOException {
+
+        CommandResult commandResult = newCommandResult();
+        commandResult.setExitCode(result.exitCode());
+        // Only success run will be cached.
+        commandResult.setStatus(CommandStatus.SUCCESS);
+        commandResult.setCached(true);
+        if (result.stdOut() != null && stdout != null) {
+            FileInputStream stdoutStream = new FileInputStream(result.stdOut());
+            try {
+                StreamUtil.copyStreams(stdoutStream, stdout);
+            } finally {
+                stdoutStream.close();
+            }
+        }
+        if (result.stdErr() != null && stderr != null) {
+            FileInputStream stderrStream = new FileInputStream(result.stdErr());
+            try {
+                StreamUtil.copyStreams(stderrStream, stderr);
+            } finally {
+                stderrStream.close();
+            }
+        }
+        return commandResult;
+    }
+
+    /**
+     * Utility subclass of OutputStream that forwards the data to both underlying {@link
+     * OutputStream} and {@link FileOutputStream}.
+     */
+    private static class ForkedOutputStream extends OutputStream {
+        private final FileOutputStream mFileOutputStream;
+        private final OutputStream mOut;
+        private boolean mSuccess = true;
+
+        public ForkedOutputStream(OutputStream out, FileOutputStream fileOutputStream) {
+            mOut = out;
+            mFileOutputStream = fileOutputStream;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            mOut.write(b);
+            try {
+                mFileOutputStream.write(b);
+            } catch (IOException e) {
+                CLog.e("Failed to write to the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void write(byte[] b) throws IOException {
+            mOut.write(b);
+            try {
+                mFileOutputStream.write(b);
+            } catch (IOException e) {
+                CLog.e("Failed to write to the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            mOut.write(b, off, len);
+            try {
+                mFileOutputStream.write(b, off, len);
+            } catch (IOException e) {
+                CLog.e("Failed to write to the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void flush() throws IOException {
+            mOut.flush();
+            try {
+                mFileOutputStream.flush();
+            } catch (IOException e) {
+                CLog.e("Failed to flush the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            mOut.close();
+            try {
+                mFileOutputStream.close();
+            } catch (IOException e) {
+                CLog.e("Failed to close the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        public boolean isSuccess() {
+            return mSuccess;
+        }
     }
 }
