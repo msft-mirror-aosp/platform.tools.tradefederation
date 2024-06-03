@@ -22,11 +22,14 @@ import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.SnapuserdWaitPhase;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
@@ -53,11 +56,16 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** A utility to leverage the incremental image and device update. */
 public class IncrementalImageUtil {
+
+    private static final AtomicInteger poolNumber = new AtomicInteger(1);
 
     public static final Set<String> DYNAMIC_PARTITIONS_TO_DIFF =
             ImmutableSet.of(
@@ -75,8 +83,10 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
+    private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
+    private boolean mAllowUnzipBaseline = false;
     private boolean mBootloaderNeedsFlashing = false;
     private boolean mBasebandNeedsFlashing = false;
     private boolean mUpdateWasCompleted = false;
@@ -92,7 +102,8 @@ public class IncrementalImageUtil {
             File createSnapshot,
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
-            boolean applySnapshot)
+            boolean applySnapshot,
+            SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
         if (isIsolatedSetup && !applySnapshot) {
@@ -176,7 +187,8 @@ public class IncrementalImageUtil {
                 baseband,
                 build.getDeviceImageFile(),
                 createSnapshot,
-                applySnapshot);
+                applySnapshot,
+                waitPhase);
     }
 
     public IncrementalImageUtil(
@@ -186,12 +198,14 @@ public class IncrementalImageUtil {
             File baseband,
             File targetImage,
             File createSnapshot,
-            boolean applySnapshot) {
+            boolean applySnapshot,
+            SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
         mApplySnapshot = applySnapshot;
+        mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
         mRunUtil = new RunUtil();
@@ -281,6 +295,10 @@ public class IncrementalImageUtil {
         return mAllowSameBuildFlashing;
     }
 
+    public void allowUnzipBaseline() {
+        mAllowUnzipBaseline = true;
+    }
+
     /** Returns whether device is currently using snapshots or not. */
     public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
         CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
@@ -329,6 +347,9 @@ public class IncrementalImageUtil {
         }
         if (mParallelSetup.getError() != null) {
             mParallelSetup.cleanUpFiles();
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_FALLBACK_REASON,
+                    mParallelSetup.getError().getMessage());
             throw mParallelSetup.getError();
         }
         boolean bootComplete =
@@ -384,6 +405,8 @@ public class IncrementalImageUtil {
                 pushExec.invokeAll(pushTasks, 0, TimeUnit.MINUTES);
                 if (pushExec.hasErrors()) {
                     for (Throwable err : pushExec.getErrors()) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, err.getMessage());
                         if (err instanceof DeviceNotAvailableException) {
                             throw (DeviceNotAvailableException) err;
                         }
@@ -405,6 +428,8 @@ public class IncrementalImageUtil {
                         mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Failed apply-update");
                     throw new TargetSetupError(
                             String.format(
                                     "Failed to apply-update.\nstdout:%s\nstderr:%s",
@@ -416,6 +441,9 @@ public class IncrementalImageUtil {
                         mDevice.executeShellV2Command("snapshotctl map-snapshots /data/ndb/");
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FALLBACK_REASON,
+                            "Failed map-snapshots");
                     throw new TargetSetupError(
                             String.format(
                                     "Failed to map the snapshots.\nstdout:%s\nstderr:%s",
@@ -432,8 +460,8 @@ public class IncrementalImageUtil {
             mDevice.enableAdbRoot();
 
             if (mApplySnapshot) {
-                mDevice.notifySnapuserd();
-                mDevice.waitForSnapuserd();
+                mDevice.notifySnapuserd(mWaitPhase);
+                mDevice.waitForSnapuserd(SnapuserdWaitPhase.BLOCK_AFTER_UPDATE);
             } else {
                 // If patches are mounted, just print snapuserd once
                 CommandResult psOutput = mDevice.executeShellV2Command("ps -ef | grep snapuserd");
@@ -460,10 +488,32 @@ public class IncrementalImageUtil {
         return mTargetDirectory;
     }
 
+    /** When doing some of the apply logic, we can clean up files right after setup. */
+    public void cleanAfterSetup() {
+        if (!mApplySnapshot) {
+            return;
+        }
+        // Delete the copy we made to use the incremental update
+        FileUtil.recursiveDelete(mSourceDirectory);
+        FileUtil.recursiveDelete(mTargetDirectory);
+        FileUtil.recursiveDelete(mSrcImage);
+        FileUtil.deleteFile(mSrcBootloader);
+        FileUtil.deleteFile(mSrcBaseband);
+        // In case of same build flashing, we should clean the setup operation
+        if (mParallelSetup != null) {
+            try {
+                mParallelSetup.join();
+            } catch (InterruptedException e) {
+                CLog.e(e);
+            }
+            mParallelSetup.cleanUpFiles();
+        }
+    }
+
     /*
      * Returns the device to its original state.
      */
-    public void teardownDevice() throws DeviceNotAvailableException {
+    public void teardownDevice(TestInformation testInfo) throws DeviceNotAvailableException {
         try {
             if (mApplySnapshot) {
                 return;
@@ -475,7 +525,8 @@ public class IncrementalImageUtil {
                 }
                 mDevice.enableAdbRoot();
                 CommandResult revertOutput =
-                        mDevice.executeShellV2Command("snapshotctl revert-snapshots");
+                        mDevice.executeShellV2Command(
+                                "snapshotctl revert-snapshots", 60L, TimeUnit.SECONDS, 0);
                 if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
                     CLog.d(
                             "Failed revert-snapshots. stdout: %s, stderr: %s",
@@ -486,6 +537,17 @@ public class IncrementalImageUtil {
                 if (mSourceDirectory != null) {
                     flashStaticPartition(mSourceDirectory);
                 }
+                if (mSourceDirectory != null && mAllowUnzipBaseline) {
+                    DeviceImageTracker.getDefaultCache()
+                            .trackUpdatedDeviceImage(
+                                    mDevice.getSerialNumber(),
+                                    mSourceDirectory,
+                                    mSrcBootloader,
+                                    mSrcBaseband,
+                                    testInfo.getBuildInfo().getBuildId(),
+                                    testInfo.getBuildInfo().getBuildBranch(),
+                                    testInfo.getBuildInfo().getBuildFlavor());
+                }
             } catch (DeviceNotAvailableException e) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
@@ -495,7 +557,7 @@ public class IncrementalImageUtil {
             // Delete the copy we made to use the incremental update
             FileUtil.recursiveDelete(mSourceDirectory);
             FileUtil.recursiveDelete(mTargetDirectory);
-            FileUtil.deleteFile(mSrcImage);
+            FileUtil.recursiveDelete(mSrcImage);
             FileUtil.deleteFile(mSrcBootloader);
             FileUtil.deleteFile(mSrcBaseband);
             // In case of same build flashing, we should clean the setup operation
@@ -646,32 +708,60 @@ public class IncrementalImageUtil {
 
         @Override
         public void run() {
+            ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
+            ThreadFactory factory =
+                    new ThreadFactory() {
+                        @Override
+                        public Thread newThread(Runnable r) {
+                            Thread t =
+                                    new Thread(
+                                            currentGroup,
+                                            r,
+                                            "unzip-pool-task-" + poolNumber.getAndIncrement());
+                            t.setDaemon(true);
+                            return t;
+                        }
+                    };
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
                 mSrcDirectory = FileUtil.createTempDir("incremental_src");
                 mTargetDirectory = FileUtil.createTempDir("incremental_target");
                 Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    if (mSetupSrcImage.isDirectory()) {
-                                        return true;
-                                    }
-                                    try {
+                                    try (CloseableTraceScope unzipBaseline =
+                                            new CloseableTraceScope("unzip_baseline")) {
+                                        if (mSetupSrcImage.isDirectory()) {
+                                            FileUtil.recursiveHardlink(
+                                                    mSetupSrcImage, mSrcDirectory);
+                                            return true;
+                                        }
+
                                         ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
                                         return true;
                                     } catch (IOException ioe) {
                                         throw new RuntimeException(ioe);
                                     }
-                                });
+                                },
+                                TracePropagatingExecutorService.create(
+                                        Executors.newFixedThreadPool(1, factory)));
                 Future<Boolean> futureTargetDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    try {
+                                    try (CloseableTraceScope unzipTarget =
+                                            new CloseableTraceScope("unzip_target")) {
+                                        if (mSetupTargetImage.isDirectory()) {
+                                            FileUtil.recursiveHardlink(
+                                                    mSetupTargetImage, mTargetDirectory);
+                                            return true;
+                                        }
                                         ZipUtil2.extractZip(mSetupTargetImage, mTargetDirectory);
                                         return true;
                                     } catch (IOException ioe) {
                                         throw new RuntimeException(ioe);
                                     }
-                                });
+                                },
+                                TracePropagatingExecutorService.create(
+                                        Executors.newFixedThreadPool(1, factory)));
                 // Join the unzipping
                 futureSrcDir.get();
                 futureTargetDir.get();

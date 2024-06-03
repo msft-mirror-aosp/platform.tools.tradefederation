@@ -45,6 +45,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TcpDevice;
 import com.android.tradefed.device.TestDeviceState;
@@ -438,8 +439,8 @@ public class TestInvocation implements ITestInvocation {
                             executor.invokeAll(callableTasks, 5, TimeUnit.MINUTES);
                         }
                     }
-                    reportRecoveryLogs(context.getDevices(), listener);
                 }
+                reportRecoveryLogs(context.getDevices(), listener);
             }
             try (CloseableTraceScope ignore = new CloseableTraceScope("logExecuteShellCommand")) {
                 // Save the device executeShellCommand logs
@@ -515,6 +516,7 @@ public class TestInvocation implements ITestInvocation {
                     new CloseableTraceScope(InvocationMetricKey.test_cleanup.name())) {
                 // Clean up host.
                 invocationPath.doCleanUp(context, config, exception);
+                waitForSnapuserd(testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
                 if (mSoftStopRequestTime != null) { // soft stop occurred
                     long latency = System.currentTimeMillis() - mSoftStopRequestTime;
                     InvocationMetricLogger.addInvocationMetrics(
@@ -626,6 +628,7 @@ public class TestInvocation implements ITestInvocation {
             logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
             mTestStarted = true;
             CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
+            waitForSnapuserd(testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_TEST);
             invocationPath.runTests(testInfo, config, listener);
         } finally {
             if (mClient != null) {
@@ -1985,6 +1988,18 @@ public class TestInvocation implements ITestInvocation {
     @Override
     public void setClearcutClient(ClearcutClient client) {
         mClient = client;
+    }
+
+    /** Always complete snapuserd before proceeding into test. */
+    private void waitForSnapuserd(
+            TestInformation testInfo, IConfiguration config, SnapuserdWaitPhase currentPhase)
+            throws DeviceNotAvailableException {
+        for (ITestDevice device : testInfo.getDevices()) {
+            if (device instanceof StubDevice) {
+                continue;
+            }
+            device.waitForSnapuserd(currentPhase); // Should be inop if not waiting on any updates.
+        }
     }
 
     /** Returns true if the invocation is currently within a subprocess scope. */

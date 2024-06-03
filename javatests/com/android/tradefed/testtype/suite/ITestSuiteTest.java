@@ -1838,7 +1838,8 @@ public class ITestSuiteTest {
                         assertEquals(destDir, testsDir);
                         assertEquals(remoteFilePath, remoteFilePath);
                         assertArrayEquals(new String[] {"/test/"}, includeFilters.toArray());
-                        assertArrayEquals(new String[] {"[.]config$"}, excludeFilters.toArray());
+                        assertArrayEquals(
+                                new String[] {"[.]config$", "[.]jar$"}, excludeFilters.toArray());
                     }
                 };
         OptionSetter setter = new OptionSetter(mTestSuite);
@@ -1855,7 +1856,7 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        verify(mockBuildInfo, times(4)).getRemoteFiles();
+        verify(mockBuildInfo, times(3)).getRemoteFiles();
     }
 
     /** Test for {@link ITestSuite#reportNotExecuted(ITestInvocationListener, String)}. */

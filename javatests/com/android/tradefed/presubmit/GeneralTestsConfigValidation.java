@@ -109,7 +109,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "com.android.tradefed.testtype.binary.KernelTargetTest",
                             // Others
                             "com.google.android.deviceconfig.RebootTest",
-                            "com.android.scenario.AppSetup"));
+                            "com.android.scenario.AppSetup",
+                            "com.android.power.PowerRunner"));
 
     /**
      * List of configs that will be exempted until they are converted to use MediaPreparers.
@@ -404,6 +405,7 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
             LogUtil.CLog.w("Ignoring module %s temporarily.", config.getName());
             return;
         }
+        boolean isPerfModule = ModuleTestTypeUtil.isPerformanceModule(c);
         for (ITargetPreparer preparer : preparers) {
             if (preparer instanceof TestAppInstallSetup) {
                 List<File> apkNames = new ArrayList<>();
@@ -420,6 +422,15 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                     String apkName = apk.getName();
                     File apkFile = FileUtil.findFile(config.getParentFile(), apkName);
                     if (apkFile == null || !apkFile.exists()) {
+                        // allow performance modules to specify dynamic links
+                        if (isPerfModule) {
+                            URI uri = new URI(apk.getPath());
+                            if (uri.getScheme() != null
+                                    && (uri.getScheme().contains("gs")
+                                            || uri.getScheme().contains("http"))) {
+                                continue;
+                            }
+                        }
                         throw new ConfigurationException(
                                 String.format(
                                         "Module %s is trying to install %s which does not "
@@ -437,7 +448,6 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             String.format(
                                     "Config: %s should set cleanup=true for file pusher.", config));
                 }
-                boolean isPerfModule = ModuleTestTypeUtil.isPerformanceModule(c);
                 for (File f : pusher.getPushSpecs(null).values()) {
                     String path = f.getPath();
                     // Use findFiles to also match top-level dir, which is a valid push spec

@@ -1413,7 +1413,7 @@ public class NativeDevice
 
         try {
             if (isSdcardOrEmulated(remoteFilePath) && userId != 0) {
-                ContentProviderHandler handler = getContentProvider();
+                ContentProviderHandler handler = getContentProvider(userId);
                 if (handler != null) {
                     return handler.pullFile(remoteFilePath, localFile);
                 }
@@ -1550,7 +1550,13 @@ public class NativeDevice
     @Override
     public boolean pushFile(final File localFile, final String remoteFilePath)
             throws DeviceNotAvailableException {
-        return pushFileInternal(localFile, remoteFilePath, false);
+        return pushFile(localFile, remoteFilePath, getCurrentUserCompatible());
+    }
+
+    @Override
+    public boolean pushFile(final File localFile, final String remoteFilePath, int userId)
+            throws DeviceNotAvailableException {
+        return pushFileInternal(localFile, remoteFilePath, false, userId);
     }
 
     @Override
@@ -1560,21 +1566,26 @@ public class NativeDevice
             boolean evaluateContentProviderNeeded)
             throws DeviceNotAvailableException {
         boolean skipContentProvider = false;
+        int userId = getCurrentUserCompatible();
         if (evaluateContentProviderNeeded) {
-            skipContentProvider = getCurrentUserCompatible() == 0;
+            skipContentProvider = userId == 0;
         }
-        return pushFileInternal(localFile, remoteFilePath, skipContentProvider);
+        return pushFileInternal(localFile, remoteFilePath, skipContentProvider, userId);
     }
 
     @VisibleForTesting
-    boolean pushFileInternal(final File localFile, final String remoteFilePath,
-            boolean skipContentProvider) throws DeviceNotAvailableException {
+    boolean pushFileInternal(
+            final File localFile,
+            final String remoteFilePath,
+            boolean skipContentProvider,
+            int userId)
+            throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
             if (!skipContentProvider) {
-                if (isSdcardOrEmulated(remoteFilePath)) {
-                    ContentProviderHandler handler = getContentProvider();
+                if (isSdcardOrEmulated(remoteFilePath) && userId != 0) {
+                    ContentProviderHandler handler = getContentProvider(userId);
                     if (handler != null) {
                         return handler.pushFile(localFile, remoteFilePath);
                     }
@@ -1659,6 +1670,7 @@ public class NativeDevice
         return doesFileExist(deviceFilePath, getCurrentUserCompatible());
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath, int userId)
             throws DeviceNotAvailableException {
@@ -1666,7 +1678,7 @@ public class NativeDevice
         try {
             // Skip ContentProvider for user 0
             if (isSdcardOrEmulated(deviceFilePath) && userId != 0) {
-                ContentProviderHandler handler = getContentProvider();
+                ContentProviderHandler handler = getContentProvider(userId);
                 if (handler != null) {
                     CLog.d("Delegating check to ContentProvider doesFileExist(%s)", deviceFilePath);
                     return handler.doesFileExist(deviceFilePath);
@@ -1697,12 +1709,17 @@ public class NativeDevice
     /** {@inheritDoc} */
     @Override
     public void deleteFile(String deviceFilePath) throws DeviceNotAvailableException {
+        deleteFile(deviceFilePath, getCurrentUserCompatible());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void deleteFile(String deviceFilePath, int userId) throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
             if (isSdcardOrEmulated(deviceFilePath)) {
-                int currentUser = getCurrentUserCompatible();
-                if (currentUser != 0) {
-                    ContentProviderHandler handler = getContentProvider();
+                if (userId != 0) {
+                    ContentProviderHandler handler = getContentProvider(userId);
                     if (handler != null) {
                         if (handler.deleteFile(deviceFilePath)) {
                             return;
@@ -1953,7 +1970,8 @@ public class NativeDevice
      */
     @Override
     public boolean isDirectory(String path) throws DeviceNotAvailableException {
-        return executeShellCommand(String.format("ls -ld %s", path)).charAt(0) == 'd';
+        String output = executeShellCommand(String.format("ls -ld %s", path));
+        return output != null && output.charAt(0) == 'd';
     }
 
     /**
@@ -2008,24 +2026,37 @@ public class NativeDevice
 
     /** {@inheritDoc} */
     @Override
+    public boolean pushDir(File localFileDir, String deviceFilePath, int userId)
+            throws DeviceNotAvailableException {
+        return pushDir(localFileDir, deviceFilePath, new HashSet<>(), userId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean pushDir(
             File localFileDir, String deviceFilePath, Set<String> excludedDirectories)
+            throws DeviceNotAvailableException {
+        return pushDir(
+                localFileDir, deviceFilePath, excludedDirectories, getCurrentUserCompatible());
+    }
+
+    private boolean pushDir(
+            File localFileDir, String deviceFilePath, Set<String> excludedDirectories, int userId)
             throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
             if (isSdcardOrEmulated(deviceFilePath)) {
-                Integer currentUser = getCurrentUserCompatible();
-                if (currentUser != 0) {
-                    ContentProviderHandler handler = getContentProvider();
+                if (userId != 0) {
+                    ContentProviderHandler handler = getContentProvider(userId);
                     if (handler != null) {
                         return handler.pushDir(localFileDir, deviceFilePath, excludedDirectories);
                     }
                 } else {
                     // Remove the special handling when content provider performance is better
-                    CLog.d("Push without content provider for user '%s'", currentUser);
+                    CLog.d("Push without content provider for user '%s'", userId);
                 }
             }
-            return pushDirInternal(localFileDir, deviceFilePath, excludedDirectories);
+            return pushDirInternal(localFileDir, deviceFilePath, excludedDirectories, userId);
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.PUSH_DIR_TIME, System.currentTimeMillis() - startTime);
@@ -2034,7 +2065,7 @@ public class NativeDevice
     }
 
     private boolean pushDirInternal(
-            File localFileDir, String deviceFilePath, Set<String> excludedDirectories)
+            File localFileDir, String deviceFilePath, Set<String> excludedDirectories, int userId)
             throws DeviceNotAvailableException {
         if (!localFileDir.isDirectory()) {
             CLog.e("file %s is not a directory", localFileDir.getAbsolutePath());
@@ -2056,11 +2087,11 @@ public class NativeDevice
                     continue;
                 }
                 executeShellCommand(String.format("mkdir -p \"%s\"", remotePath));
-                if (!pushDirInternal(childFile, remotePath, excludedDirectories)) {
+                if (!pushDirInternal(childFile, remotePath, excludedDirectories, userId)) {
                     return false;
                 }
             } else if (childFile.isFile()) {
-                if (!pushFileInternal(childFile, remotePath, true)) {
+                if (!pushFileInternal(childFile, remotePath, true, userId)) {
                     return false;
                 }
             }
@@ -2068,25 +2099,29 @@ public class NativeDevice
         return true;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean pullDir(String deviceFilePath, File localDir)
             throws DeviceNotAvailableException {
+        return pullDir(deviceFilePath, localDir, getCurrentUserCompatible());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean pullDir(String deviceFilePath, File localDir, int userId)
+            throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         try {
-            int currentUser = getCurrentUserCompatible();
             if (isSdcardOrEmulated(deviceFilePath)) {
-                if (currentUser != 0) {
-                    ContentProviderHandler handler = getContentProvider();
+                if (userId != 0) {
+                    ContentProviderHandler handler = getContentProvider(userId);
                     if (handler != null) {
                         return handler.pullDir(deviceFilePath, localDir);
                     }
                 }
             }
 
-            return pullDirInternal(deviceFilePath, localDir, currentUser);
+            return pullDirInternal(deviceFilePath, localDir, userId);
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.PULL_DIR_TIME, System.currentTimeMillis() - startTime);
@@ -3558,6 +3593,8 @@ public class NativeDevice
             throw new UnsupportedOperationException(
                     String.format("Fastboot is not available and cannot reboot into %s", mode));
         }
+        // Force wait for snapuserd in progress just to be sure
+        waitForSnapuserd(SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
         long startTime = System.currentTimeMillis();
 
         try (CloseableTraceScope ignored =
@@ -5990,9 +6027,14 @@ public class NativeDevice
         return GlobalConfiguration.getInstance().getHostOptions();
     }
 
-    /** Returns the {@link ContentProviderHandler} or null if not available. */
-    @VisibleForTesting
-    ContentProviderHandler getContentProvider() throws DeviceNotAvailableException {
+    /**
+     * Returns the {@link ContentProviderHandler} or null if not available.
+     *
+     * <p>Content provider can be reused if it was constructed before with the same {@code userId}.
+     *
+     * @param userId the user id to initialize the content provider with.
+     */
+    public ContentProviderHandler getContentProvider(int userId) throws DeviceNotAvailableException {
         // If disabled at the device level, don't attempt any checks.
         if (!getOptions().shouldUseContentProvider()) {
             return null;
@@ -6002,8 +6044,9 @@ public class NativeDevice
         if (getApiLevel() < 28) {
             return null;
         }
-        if (mContentProvider == null) {
-            mContentProvider = new ContentProviderHandler(this);
+        // Construct a content provider if null, or if the current user has changed since last time.
+        if (mContentProvider == null || mContentProvider.getUserId() != userId) {
+            mContentProvider = new ContentProviderHandler(this, userId);
         }
         // Force the install if we saw an error with content provider installation.
         if (mContentProvider.contentProviderNotFound()) {

@@ -18,6 +18,7 @@ package com.android.tradefed.device.cloud;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.AcloudConfigParser.AcloudKeys;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.error.HarnessRuntimeException;
@@ -32,7 +33,6 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
-import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -41,16 +41,19 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
-import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.compute.Compute;
 import com.google.api.services.compute.Compute.Instances.GetSerialPortOutput;
 import com.google.api.services.compute.ComputeScopes;
 import com.google.api.services.compute.model.SerialPortOutput;
+import com.google.auth.Credentials;
+import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+import com.google.common.collect.Lists;
 import com.google.common.net.HostAndPort;
 
 import java.io.File;
@@ -228,7 +231,9 @@ public class GceManager {
         // If Oxygen cuttlefish is used, skip collecting serial log due to lack of access.
         mSkipSerialLogCollection =
                 (!Strings.isNullOrEmpty(ipDevice) || getTestDeviceOptions().useOxygen());
-        if (getTestDeviceOptions().useOxygen()) {
+        if (getTestDeviceOptions().useOxygen() || getTestDeviceOptions().useOxygenationDevice()) {
+            // Leasing an oxygenation device will still depend on the existing oxygen client tool
+            // with more parameters passed in.
             return startGceWithOxygenClient(logger, attributes);
         } else {
             return startGceWithAcloud(ipDevice, user, offset, attributes);
@@ -546,7 +551,7 @@ public class GceManager {
             Integer offset,
             MultiMap<String, String> attributes) {
         List<String> gceArgs =
-                ArrayUtil.list(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
+                Lists.newArrayList(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
         gceArgs.add(
                 TestDeviceOptions.getCreateCommandByInstanceType(
                         getTestDeviceOptions().getInstanceType()));
@@ -680,7 +685,7 @@ public class GceManager {
      * @return returns true if gce shutdown was requested as non-blocking.
      */
     public boolean shutdownGce() {
-        if (getTestDeviceOptions().useOxygen()) {
+        if (getTestDeviceOptions().useOxygen() || getTestDeviceOptions().useOxygenationDevice()) {
             return shutdownGceWithOxygen();
         } else {
             return shutdownGceWithAcloud();
@@ -765,7 +770,7 @@ public class GceManager {
             String instanceName,
             String hostname,
             boolean isIpPreconfigured) {
-        List<String> gceArgs = ArrayUtil.list(options.getAvdDriverBinary().getAbsolutePath());
+        List<String> gceArgs = Lists.newArrayList(options.getAvdDriverBinary().getAbsolutePath());
         gceArgs.add("delete");
         if (options.getServiceAccountJsonKeyFile() != null) {
             gceArgs.add("--service-account-json-private-key-path");
@@ -1023,8 +1028,9 @@ public class GceManager {
                 FileUtil.recursiveDelete(remoteFile);
                 return false;
             }
-            // Search log files for known failures for devices hosted by Oxygen
-            if (options.useOxygen() && remoteFile != null) {
+            // Search log files for known failures for devices hosted by Oxygen and ARM server
+            if ((options.useOxygen() || InstanceType.GCE.equals(options.getInstanceType()))
+                    && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
                     List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
@@ -1034,6 +1040,8 @@ public class GceManager {
                                 String.join(",", signatures));
                     }
                 }
+            }
+            if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectDeviceLaunchMetrics")) {
                     long[] launchMetrics = OxygenUtil.collectDeviceLaunchMetrics(remoteFile);
@@ -1157,17 +1165,18 @@ public class GceManager {
             return null;
         }
         try {
-            Credential credential = createCredential(config, jsonKeyFile);
+            Credentials credential = createCredential(config, jsonKeyFile);
             String project = config.getValueForKey(AcloudKeys.PROJECT);
             String zone = config.getValueForKey(AcloudKeys.ZONE);
             String instanceName = infos.instanceName();
+            HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credential);
             Compute compute =
                     new Compute.Builder(
                                     GoogleNetHttpTransport.newTrustedTransport(),
                                     JSON_FACTORY,
                                     null)
                             .setApplicationName(project)
-                            .setHttpRequestInitializer(credential)
+                            .setHttpRequestInitializer(requestInitializer)
                             .build();
             GetSerialPortOutput outputPort =
                     compute.instances().getSerialPortOutput(project, zone, instanceName);
@@ -1179,19 +1188,14 @@ public class GceManager {
         }
     }
 
-    private static Credential createCredential(AcloudConfigParser config, File jsonKeyFile)
+    private static Credentials createCredential(AcloudConfigParser config, File jsonKeyFile)
             throws GeneralSecurityException, IOException {
         if (jsonKeyFile != null) {
             return GoogleApiClientUtil.createCredentialFromJsonKeyFile(jsonKeyFile, SCOPES);
-        } else if (config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_JSON_PRIVATE_KEY) != null) {
+        } else {
             jsonKeyFile =
                     new File(config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_JSON_PRIVATE_KEY));
             return GoogleApiClientUtil.createCredentialFromJsonKeyFile(jsonKeyFile, SCOPES);
-        } else {
-            String serviceAccount = config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_NAME);
-            String serviceKey = config.getValueForKey(AcloudKeys.SERVICE_ACCOUNT_PRIVATE_KEY);
-            return GoogleApiClientUtil.createCredentialFromP12File(
-                    serviceAccount, new File(serviceKey), SCOPES);
         }
     }
 

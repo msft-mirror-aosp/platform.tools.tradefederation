@@ -25,6 +25,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -40,8 +41,8 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.image.DeviceImageTracker;
-import com.android.tradefed.util.image.IncrementalImageUtil;
 import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
+import com.android.tradefed.util.image.IncrementalImageUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
@@ -57,6 +58,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -762,6 +764,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 "Flashing device %s with image %s",
                 device.getSerialNumber(), deviceBuild.getDeviceImageFile().getAbsolutePath());
         // give extra time to the update cmd
+        boolean tookPermit = false;
         try (CloseableTraceScope ignored = new CloseableTraceScope("flash_system")) {
             boolean shouldFlash = true;
             if (mIncrementalFlashing != null) {
@@ -781,9 +784,30 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                     }
                 }
             }
-
+            long startWait = System.currentTimeMillis();
+            if (shouldFlash && mIncrementalFlashing != null) {
+                // Take the permit in case of fallback from incremental
+                try (CloseableTraceScope waitFor =
+                        new CloseableTraceScope("wait_for_flashing_permit")) {
+                    // Only #flash is included in the critical section
+                    getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+                    tookPermit = true;
+                    long queueTime = System.currentTimeMillis() - startWait;
+                    CLog.v(
+                            "Flashing permit obtained after %ds",
+                            TimeUnit.MILLISECONDS.toSeconds(queueTime));
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_PERMIT_LATENCY, queueTime);
+                }
+            }
             if (shouldFlash) {
-                if (getHostOptions().shouldFlashWithFuseZip() && getFuseUtil().canMountZip()) {
+                if (deviceBuild.getDeviceImageFile().isDirectory()) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.FLASHING_METHOD,
+                            FlashingMethod.FASTBOOT_FLASH_ALL.toString());
+                    flashWithAll(device, deviceBuild);
+                } else if (getHostOptions().shouldFlashWithFuseZip()
+                        && getFuseUtil().canMountZip()) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.FLASHING_METHOD,
                             FlashingMethod.FASTBOOT_FLASH_ALL_FUSE_ZIP.toString());
@@ -804,6 +828,35 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             if (mSystemFlashStatus == null) {
                 mSystemFlashStatus = CommandStatus.EXCEPTION;
             }
+            if (tookPermit) {
+                getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
+            }
+        }
+    }
+
+    /**
+     * Flash the system image on device by using an image directory with fastboot flashall command.
+     *
+     * @param device the {@link ITestDevice} to flash
+     * @param deviceBuild the {@link IDeviceBuildInfo} to flash
+     * @throws DeviceNotAvailableException if device is not available
+     * @throws TargetSetupError if fastboot command fails
+     */
+    private void flashWithAll(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws DeviceNotAvailableException, TargetSetupError {
+        try {
+            Map<String, String> systemVarMap = new HashMap<>();
+            systemVarMap.put(
+                    "ANDROID_PRODUCT_OUT", deviceBuild.getDeviceImageFile().getAbsolutePath());
+            String[] fastbootArgs = buildFastbootCommand("flashall", mShouldFlashRamdisk);
+            executeLongFastbootCmd(device, systemVarMap, fastbootArgs);
+        } catch (DeviceNotAvailableException e) {
+            // We wrap the exception from recovery if it fails to provide a clear message
+            throw new DeviceNotAvailableException(
+                    "Device became unavailable during fastboot 'flashall'. Please verify that "
+                            + "the image you are flashing can boot properly.",
+                    e,
+                    device.getSerialNumber());
         }
     }
 

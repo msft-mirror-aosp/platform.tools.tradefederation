@@ -48,6 +48,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.ddmlib.AndroidTestOrchestratorRemoteTestRunner;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -366,7 +367,7 @@ public class InstrumentationTest
     private ListInstrumentationParser mListInstrumentationParser = null;
     private GcovCodeCoverageCollector mNativeCoverageListener = null;
 
-    private List<String> mExtraDeviceListener = new ArrayList<>();
+    private Set<String> mExtraDeviceListener = new LinkedHashSet<>();
 
     private boolean mIsRerun = false;
 
@@ -638,7 +639,7 @@ public class InstrumentationTest
     }
 
     /** Allows to add more custom listeners to the runner */
-    public void addDeviceListeners(List<String> extraListeners) {
+    public void addDeviceListeners(Set<String> extraListeners) {
         mExtraDeviceListener.addAll(extraListeners);
     }
 
@@ -1095,7 +1096,7 @@ public class InstrumentationTest
         }
     }
 
-    /** Filter out "NOT_EXECUTED" for the purpose of tracking what needs to be rerun. */
+    /** Filter out "NOT_EXECUTED" and Skipped for the purpose of tracking what needs to be rerun. */
     protected static Set<TestDescription> excludeNonExecuted(TestRunResult results) {
         Set<TestDescription> completedTest = results.getCompletedTests();
         for (Entry<TestDescription, TestResult> entry : results.getTestResults().entrySet()) {
@@ -1104,6 +1105,10 @@ public class InstrumentationTest
                         entry.getValue().getFailure().getFailureStatus())) {
                     completedTest.remove(entry.getKey());
                 }
+            }
+            if (completedTest.contains(entry.getKey())
+                    && TestStatus.SKIPPED.equals(entry.getValue().getResultStatus())) {
+                completedTest.remove(entry.getKey());
             }
         }
         return completedTest;

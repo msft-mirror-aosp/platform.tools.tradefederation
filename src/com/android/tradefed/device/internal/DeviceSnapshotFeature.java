@@ -20,9 +20,7 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.cloud.GceAvdInfo;
-import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.device.connection.AdbSshConnection;
@@ -95,6 +93,7 @@ public class DeviceSnapshotFeature
         try {
             mTestInformation.setActiveDeviceIndex(index);
             AbstractConnection connection = mTestInformation.getDevice().getConnection();
+            // TODO: Support NestedRemoteDevice
             if ((mTestInformation.getDevice() instanceof RemoteAndroidVirtualDevice)
                     || (connection instanceof AdbSshConnection)) {
                 GceAvdInfo info = getAvdInfo(mTestInformation.getDevice(), connection);
@@ -111,13 +110,19 @@ public class DeviceSnapshotFeature
                 } else {
                     snapshot(responseBuilder, connection, user, offset, snapshotId);
                 }
-            } else if (mTestInformation.getDevice() instanceof RemoteAndroidDevice) {
-                responseBuilder.setResponse(" RemoteAndroidDevice has no snapshot support.");
-            } else if (mTestInformation.getDevice() instanceof NestedRemoteDevice) {
-                // TODO: Support NestedRemoteDevice
-                responseBuilder.setResponse(" NestedRemoteDevice has no snapshot support.");
+            } else {
+                String error =
+                        String.format(
+                                "Device type %s with connection type %s doesn't support"
+                                        + " snapshotting",
+                                mTestInformation.getDevice().getClass().getSimpleName(),
+                                connection != null
+                                        ? connection.getClass().getSimpleName()
+                                        : "[null]");
+                responseBuilder.setErrorInfo(ErrorInfo.newBuilder().setErrorTrace(error));
+                return responseBuilder.build();
             }
-        } catch (Exception e) {
+        } catch (DeviceNotAvailableException | TargetSetupError e) {
             String error = "Failed to snapshot device.";
             try {
                 error = SerializationUtil.serializeToString(e);

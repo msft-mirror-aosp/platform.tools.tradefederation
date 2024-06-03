@@ -76,4 +76,14 @@ public class GceRemoteCmdFormatterTest {
         assertEquals("root@127.0.0.1:/sdcard/test", res.get(11));
         assertEquals("/tmp/here", res.get(12));
     }
+
+    @Test
+    public void testFormatSshOverLHP() {
+        // TODO(easoncylee): Flesh out this section when it's ready.
+    }
+
+    @Test
+    public void testFormatScpOverLHP() {
+        // TODO(easoncylee): Flesh out this section when it's ready.
+    }
 }

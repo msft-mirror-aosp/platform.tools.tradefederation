@@ -56,9 +56,18 @@ public class MetricUtilityTest {
     private MetricUtility mMetricUtil;
     private File mResultsFile;
 
-    private static final TestDescription TEST_1_ITERATION_1 = new TestDescription("pkg$1", "test1");
-    private static final TestDescription TEST_1_ITERATION_2 = new TestDescription("pkg$2", "test1");
-    private static final TestDescription TEST_2_ITERATION_1 = new TestDescription("pkg$1", "test2");
+    private static final TestDescription TEST_1_ITERATION_1_ON_CLASS =
+            new TestDescription("pkg$1", "test1");
+    private static final TestDescription TEST_1_ITERATION_2_ON_CLASS =
+            new TestDescription("pkg$2", "test1");
+    private static final TestDescription TEST_2_ITERATION_1_ON_CLASS =
+            new TestDescription("pkg$1", "test2");
+    private static final TestDescription TEST_1_ITERATION_1_ON_METHOD =
+            new TestDescription("pkg", "test1$1");
+    private static final TestDescription TEST_1_ITERATION_2_ON_METHOD =
+            new TestDescription("pkg", "test1$2");
+    private static final TestDescription TEST_2_ITERATION_1_ON_METHOD =
+            new TestDescription("pkg", "test2$1");
     private static final TestDescription TEST_3_WITHOUT_ITERATION = new TestDescription("pkg",
             "test3");
 
@@ -73,7 +82,19 @@ public class MetricUtilityTest {
     }
 
     @Test
-    public void testStoreMultipleTestSingleIterationMetrics() {
+    public void testStoreMultipleTestSingleIterationMetrics_iterationOnClass() {
+        testStoreMultipleTestSingleIterationMetrics(
+                TEST_1_ITERATION_1_ON_CLASS, TEST_2_ITERATION_1_ON_CLASS);
+    }
+
+    @Test
+    public void testStoreMultipleTestSingleIterationMetrics_iterationOnMethod() {
+        testStoreMultipleTestSingleIterationMetrics(
+                TEST_1_ITERATION_1_ON_METHOD, TEST_2_ITERATION_1_ON_METHOD);
+    }
+
+    private void testStoreMultipleTestSingleIterationMetrics(
+            TestDescription test1, TestDescription test2) {
         mMetricUtil.setIterationSeparator("$");
 
         // Build first test metric.
@@ -90,8 +111,8 @@ public class MetricUtilityTest {
         Metric currentTestMetric2 = metricBuilder2.build();
         secondTestMetric.put("second_test_metric", currentTestMetric2);
 
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstTestMetric);
-        mMetricUtil.storeTestMetrics(TEST_2_ITERATION_1, secondTestMetric);
+        mMetricUtil.storeTestMetrics(test1, firstTestMetric);
+        mMetricUtil.storeTestMetrics(test2, secondTestMetric);
 
         Map<String, ArrayListMultimap<String, Metric>> storedTestmetrics = mMetricUtil
                 .getStoredTestMetric();
@@ -106,7 +127,19 @@ public class MetricUtilityTest {
     }
 
     @Test
-    public void testStoreSingleTestMultipleIterationMetrics() {
+    public void testStoreSingleTestMultipleIterationMetrics_iterationOnClass() {
+        testStoreSingleTestMultipleIterationMetrics(
+                TEST_1_ITERATION_1_ON_CLASS, TEST_1_ITERATION_2_ON_CLASS);
+    }
+
+    @Test
+    public void testStoreSingleTestMultipleIterationMetrics_iterationOnMethod() {
+        testStoreSingleTestMultipleIterationMetrics(
+                TEST_1_ITERATION_1_ON_METHOD, TEST_1_ITERATION_2_ON_METHOD);
+    }
+
+    private void testStoreSingleTestMultipleIterationMetrics(
+            TestDescription test1, TestDescription test2) {
         mMetricUtil.setIterationSeparator("$");
 
         // Build first test metric.
@@ -123,8 +156,8 @@ public class MetricUtilityTest {
         Metric currentTestMetric2 = metricBuilder2.build();
         secondIterationMetric.put("first_test_metric", currentTestMetric2);
 
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstIterationMetric);
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_2, secondIterationMetric);
+        mMetricUtil.storeTestMetrics(test1, firstIterationMetric);
+        mMetricUtil.storeTestMetrics(test2, secondIterationMetric);
 
         Map<String, ArrayListMultimap<String, Metric>> storedTestmetrics = mMetricUtil
                 .getStoredTestMetric();
@@ -159,8 +192,9 @@ public class MetricUtilityTest {
 
     @Test
     public void testStoreEmptyTestMetrics() {
+        mMetricUtil.setIterationSeparator("$");
         // Make sure we have the entry for the test name with empty metrics.
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, new HashMap<String, Metric>());
+        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1_ON_CLASS, new HashMap<String, Metric>());
         Map<String, ArrayListMultimap<String, Metric>> storedTestmetrics = mMetricUtil
                 .getStoredTestMetric();
 
@@ -270,7 +304,21 @@ public class MetricUtilityTest {
     }
 
     @Test
-    public void testAggregateStoredTestMetricsForMultipleIterations() throws IOException {
+    public void testAggregateStoredTestMetricsForMultipleIterations_iterationOnClass()
+            throws IOException {
+        testAggregateStoredTestMetricsForMultipleIterations(
+                TEST_1_ITERATION_1_ON_CLASS, TEST_1_ITERATION_2_ON_CLASS);
+    }
+
+    @Test
+    public void testAggregateStoredTestMetricsForMultipleIterations_iterationOnMethod()
+            throws IOException {
+        testAggregateStoredTestMetricsForMultipleIterations(
+                TEST_1_ITERATION_1_ON_METHOD, TEST_1_ITERATION_2_ON_METHOD);
+    }
+
+    private void testAggregateStoredTestMetricsForMultipleIterations(
+            TestDescription test1, TestDescription test2) throws IOException {
 
         mMetricUtil.setIterationSeparator("$");
         mMetricUtil.setPercentiles(new HashSet<>());
@@ -289,8 +337,8 @@ public class MetricUtilityTest {
         Metric currentTestMetric2 = metricBuilder2.build();
         secondIterationMetric.put("first_test_metric", currentTestMetric2);
 
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstIterationMetric);
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_2, secondIterationMetric);
+        mMetricUtil.storeTestMetrics(test1, firstIterationMetric);
+        mMetricUtil.storeTestMetrics(test2, secondIterationMetric);
 
         mResultsFile = mMetricUtil.aggregateStoredTestMetricsAndWriteToFile("run_name");
 
@@ -299,8 +347,21 @@ public class MetricUtilityTest {
     }
 
     @Test
-    public void testAggregateStoredTestMetricsForSingleIterationMultipleTest()
+    public void testAggregateStoredTestMetricsForSingleIterationMultipleTest_iterationOnClass()
             throws IOException {
+        testAggregateStoredTestMetricsForSingleIterationMultipleTest(
+                TEST_1_ITERATION_1_ON_CLASS, TEST_2_ITERATION_1_ON_CLASS);
+    }
+
+    @Test
+    public void testAggregateStoredTestMetricsForSingleIterationMultipleTest_iterationOnMethod()
+            throws IOException {
+        testAggregateStoredTestMetricsForSingleIterationMultipleTest(
+                TEST_1_ITERATION_1_ON_METHOD, TEST_2_ITERATION_1_ON_METHOD);
+    }
+
+    private void testAggregateStoredTestMetricsForSingleIterationMultipleTest(
+            TestDescription test1, TestDescription test2) throws IOException {
         mMetricUtil.setIterationSeparator("$");
         mMetricUtil.setPercentiles(new HashSet<>());
 
@@ -318,8 +379,8 @@ public class MetricUtilityTest {
         Metric currentTestMetric2 = metricBuilder2.build();
         secondTestMetric.put("second_test_metric", currentTestMetric2);
 
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstTestMetric);
-        mMetricUtil.storeTestMetrics(TEST_2_ITERATION_1, secondTestMetric);
+        mMetricUtil.storeTestMetrics(test1, firstTestMetric);
+        mMetricUtil.storeTestMetrics(test2, secondTestMetric);
 
         mResultsFile = mMetricUtil.aggregateStoredTestMetricsAndWriteToFile("run_name");
 
@@ -327,7 +388,21 @@ public class MetricUtilityTest {
     }
 
     @Test
-    public void testAggregateEmptyStoredTestMetricsForMultipleIterations() throws IOException {
+    public void testAggregateEmptyStoredTestMetricsForMultipleIterations_iterationOnClass()
+            throws IOException {
+        testAggregateEmptyStoredTestMetricsForMultipleIterations(
+                TEST_1_ITERATION_1_ON_CLASS, TEST_1_ITERATION_2_ON_CLASS);
+    }
+
+    @Test
+    public void testAggregateEmptyStoredTestMetricsForMultipleIterations_iterationOnMethod()
+            throws IOException {
+        testAggregateEmptyStoredTestMetricsForMultipleIterations(
+                TEST_1_ITERATION_1_ON_METHOD, TEST_1_ITERATION_2_ON_METHOD);
+    }
+
+    private void testAggregateEmptyStoredTestMetricsForMultipleIterations(
+            TestDescription test1, TestDescription test2) throws IOException {
 
         mMetricUtil.setIterationSeparator("$");
         mMetricUtil.setPercentiles(new HashSet<>());
@@ -338,8 +413,8 @@ public class MetricUtilityTest {
         // Build second empty test metric.
         Map<String, Metric> secondIterationMetric = new HashMap<String, Metric>();
 
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstIterationMetric);
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_2, secondIterationMetric);
+        mMetricUtil.storeTestMetrics(test1, firstIterationMetric);
+        mMetricUtil.storeTestMetrics(test2, secondIterationMetric);
 
         mResultsFile = mMetricUtil.aggregateStoredTestMetricsAndWriteToFile("run_name");
 
@@ -347,7 +422,21 @@ public class MetricUtilityTest {
     }
 
     @Test
-    public void testAggregateStoredTestMetricsWithStrictFilters() throws IOException {
+    public void testAggregateStoredTestMetricsWithStrictFilters_iterationOnClass()
+            throws IOException {
+        testAggregateStoredTestMetricsWithStrictFilters(
+                TEST_1_ITERATION_1_ON_CLASS, TEST_2_ITERATION_1_ON_CLASS);
+    }
+
+    @Test
+    public void testAggregateStoredTestMetricsWithStrictFilters_iterationOnMethod()
+            throws IOException {
+        testAggregateStoredTestMetricsWithStrictFilters(
+                TEST_1_ITERATION_1_ON_METHOD, TEST_2_ITERATION_1_ON_METHOD);
+    }
+
+    private void testAggregateStoredTestMetricsWithStrictFilters(
+            TestDescription test1, TestDescription test2) throws IOException {
         mMetricUtil.setIterationSeparator("$");
         mMetricUtil.setPercentiles(new HashSet<>());
         mMetricUtil.buildMetricFilterPatterns(
@@ -367,8 +456,8 @@ public class MetricUtilityTest {
         Metric currentTestMetric2 = metricBuilder2.build();
         secondTestMetric.put("second_test_metric", currentTestMetric2);
 
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstTestMetric);
-        mMetricUtil.storeTestMetrics(TEST_2_ITERATION_1, secondTestMetric);
+        mMetricUtil.storeTestMetrics(test1, firstTestMetric);
+        mMetricUtil.storeTestMetrics(test2, secondTestMetric);
 
         mResultsFile = mMetricUtil.aggregateStoredTestMetricsAndWriteToFile("run_name");
 
@@ -388,7 +477,7 @@ public class MetricUtilityTest {
         Metric currentTestMetric = metricBuilder1.build();
         firstTestMetric.put("first_test_metric", currentTestMetric);
 
-        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1, firstTestMetric);
+        mMetricUtil.storeTestMetrics(TEST_1_ITERATION_1_ON_CLASS, firstTestMetric);
 
         mResultsFile = mMetricUtil.aggregateStoredTestMetricsAndWriteToFile("run_name");
 

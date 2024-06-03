@@ -21,15 +21,15 @@ import com.android.tradefed.host.HostOptions;
 import com.android.tradefed.log.LogUtil.CLog;
 
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpBackOffUnsuccessfulResponseHandler;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpResponse;
 import com.google.api.client.http.HttpUnsuccessfulResponseHandler;
-import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.ExponentialBackOff;
+import com.google.auth.Credentials;
+import com.google.auth.oauth2.ComputeEngineCredentials;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
@@ -65,20 +65,16 @@ public class GoogleApiClientUtil {
      * @throws IOException
      * @throws GeneralSecurityException
      */
-    public static Credential createCredentialFromJsonKeyFile(File file, Collection<String> scopes)
+    public static Credentials createCredentialFromJsonKeyFile(File file, Collection<String> scopes)
             throws IOException, GeneralSecurityException {
         return getInstance().doCreateCredentialFromJsonKeyFile(file, scopes);
     }
 
     @VisibleForTesting
-    Credential doCreateCredentialFromJsonKeyFile(File file, Collection<String> scopes)
+    Credentials doCreateCredentialFromJsonKeyFile(File file, Collection<String> scopes)
             throws IOException, GeneralSecurityException {
-        Credential credentail =
-                GoogleCredential.fromStream(
-                                new FileInputStream(file),
-                                GoogleNetHttpTransport.newTrustedTransport(),
-                                GsonFactory.getDefaultInstance())
-                        .createScoped(scopes);
+        Credentials credentail =
+                GoogleCredentials.fromStream(new FileInputStream(file)).createScoped(scopes);
         return credentail;
     }
 
@@ -98,7 +94,7 @@ public class GoogleApiClientUtil {
      * @throws IOException
      * @throws GeneralSecurityException
      */
-    public static Credential createCredential(
+    public static Credentials createCredential(
             Collection<String> scopes,
             File primaryKeyFile,
             String hostOptionKeyFileName,
@@ -126,14 +122,14 @@ public class GoogleApiClientUtil {
      * @throws IOException
      * @throws GeneralSecurityException
      */
-    public static Credential createCredential(
-        Collection<String> scopes,
-        boolean useCredentialFactory,
-        File primaryKeyFile,
-        String hostOptionKeyFileName,
-        File... backupKeyFiles)
-          throws IOException, GeneralSecurityException {
-        Credential credential = null;
+    public static Credentials createCredential(
+            Collection<String> scopes,
+            boolean useCredentialFactory,
+            File primaryKeyFile,
+            String hostOptionKeyFileName,
+            File... backupKeyFiles)
+            throws IOException, GeneralSecurityException {
+        Credentials credential = null;
         if (useCredentialFactory) {
             credential = getInstance().doCreateCredentialFromCredentialFactory(scopes);
             // TODO(b/186766552): Throw exception once all hosts configured CredentialFactory.
@@ -147,7 +143,7 @@ public class GoogleApiClientUtil {
     }
 
     @VisibleForTesting
-    Credential doCreateCredential(
+    Credentials doCreateCredential(
             Collection<String> scopes,
             File primaryKeyFile,
             String hostOptionKeyFileName,
@@ -188,7 +184,7 @@ public class GoogleApiClientUtil {
     }
 
     @VisibleForTesting
-    Credential doCreateCredentialFromCredentialFactory(Collection<String> scopes)
+    Credentials doCreateCredentialFromCredentialFactory(Collection<String> scopes)
             throws IOException {
         try {
             if (GlobalConfiguration.getInstance().getCredentialFactory() != null) {
@@ -206,10 +202,10 @@ public class GoogleApiClientUtil {
     }
 
     @VisibleForTesting
-    Credential doCreateDefaultCredential(Collection<String> scopes) throws IOException {
+    Credentials doCreateDefaultCredential(Collection<String> scopes) throws IOException {
         try {
             CLog.d("Using local authentication.");
-            return GoogleCredential.getApplicationDefault().createScoped(scopes);
+            return ComputeEngineCredentials.getApplicationDefault().createScoped(scopes);
         } catch (IOException e) {
             CLog.e(
                     "Try 'gcloud auth application-default login' to login for "
@@ -218,31 +214,6 @@ public class GoogleApiClientUtil {
                             + "for service account.");
             throw e;
         }
-    }
-
-    /**
-     * Create credential from p12 file for service account.
-     *
-     * @deprecated It's better to use json key file, since p12 is deprecated by Google App Engine.
-     *     And json key file have more information.
-     * @param serviceAccount is the service account
-     * @param keyFile is the p12 key file
-     * @param scopes is the API's scope.
-     * @return a {@link Credential}.
-     * @throws GeneralSecurityException
-     * @throws IOException
-     */
-    @Deprecated
-    public static Credential createCredentialFromP12File(
-            String serviceAccount, File keyFile, Collection<String> scopes)
-            throws GeneralSecurityException, IOException {
-        return new GoogleCredential.Builder()
-                .setTransport(GoogleNetHttpTransport.newTrustedTransport())
-                .setJsonFactory(GsonFactory.getDefaultInstance())
-                .setServiceAccountId(serviceAccount)
-                .setServiceAccountScopes(scopes)
-                .setServiceAccountPrivateKeyFromP12File(keyFile)
-                .build();
     }
 
     /**
@@ -324,6 +295,9 @@ public class GoogleApiClientUtil {
             CLog.w(
                     "Request to %s failed: %d %s",
                     request.getUrl(), response.getStatusCode(), response.getStatusMessage());
+            if (response.getStatusCode() == 400) {
+                return false;
+            }
             return backOffHandler.handleResponse(request, response, supportsRetry);
         }
     }

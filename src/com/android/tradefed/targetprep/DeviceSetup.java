@@ -512,6 +512,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     @Option(name = "parallelize-core-setup")
     private boolean mParallelCoreSetup = false;
 
+    @Option(name = "dismiss-keyguard-via-wm", description = "Flag to dismiss keyguard via wm")
+    private boolean mDismissViaWm = false;
+
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
@@ -1050,9 +1053,19 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(InvocationMetricKey.screen_on_setup.toString())) {
                     CLog.d("Setting screen always on to true");
-                    device.executeShellCommand(String.format(cmd, "true"));
-                    // send MENU press in case keyguard needs to be dismissed again
-                    device.executeShellCommand("input keyevent 82");
+                    String cmdStayOn = String.format(cmd, "true");
+                    CommandResult stayOn = device.executeShellV2Command(cmdStayOn);
+                    CLog.d("%s output: %s", cmdStayOn, stayOn);
+                    if (mDismissViaWm) {
+                        CommandResult res =
+                                device.executeShellV2Command(
+                                        "wm dismiss-keyguard", 30000L, TimeUnit.MILLISECONDS, 0);
+                        CLog.d("Output of dismiss-keyguard: %s", res);
+                    } else {
+                        // send MENU press in case keyguard needs to be dismissed again
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 82");
+                        CLog.d("Output of input keyevent 82: %s", inputKey);
+                    }
                     // send HOME press in case keyguard was already dismissed, so we bring device
                     // back
                     // to home screen
@@ -1060,7 +1073,8 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     // instead of the home screen
                     if ((device instanceof TestDevice)
                             && !device.hasFeature("android.hardware.type.watch")) {
-                        device.executeShellCommand("input keyevent 3");
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 3");
+                        CLog.d("Output of input keyevent 3: %s", inputKey);
                     }
                     break;
                 }
