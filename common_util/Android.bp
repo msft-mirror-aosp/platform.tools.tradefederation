@@ -43,7 +43,6 @@ java_library_host {
         "tradefed-protos",
         "devtools-annotations-prebuilt",
         "auto_value_annotations",
-        "guava",
         "libprotobuf-java-full",
     ],
     plugins: [
