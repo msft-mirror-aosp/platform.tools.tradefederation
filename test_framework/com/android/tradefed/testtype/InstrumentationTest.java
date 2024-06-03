@@ -367,7 +367,7 @@ public class InstrumentationTest
     private ListInstrumentationParser mListInstrumentationParser = null;
     private GcovCodeCoverageCollector mNativeCoverageListener = null;
 
-    private List<String> mExtraDeviceListener = new ArrayList<>();
+    private Set<String> mExtraDeviceListener = new LinkedHashSet<>();
 
     private boolean mIsRerun = false;
 
@@ -639,7 +639,7 @@ public class InstrumentationTest
     }
 
     /** Allows to add more custom listeners to the runner */
-    public void addDeviceListeners(List<String> extraListeners) {
+    public void addDeviceListeners(Set<String> extraListeners) {
         mExtraDeviceListener.addAll(extraListeners);
     }
 

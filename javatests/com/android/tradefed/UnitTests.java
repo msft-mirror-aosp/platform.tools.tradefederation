@@ -30,6 +30,7 @@ import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
+import com.android.tradefed.cache.MerkleTreeTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
 import com.android.tradefed.cluster.ClusterCommandConfigBuilderTest;
@@ -523,6 +524,9 @@ import org.junit.runners.Suite.SuiteClasses;
     ArtifactDetailsTest.class,
     ContentAnalysisResultsTest.class,
     TestContentAnalyzerTest.class,
+
+    // cache
+    MerkleTreeTest.class,
 
     // clearcut
     ClearcutClientTest.class,

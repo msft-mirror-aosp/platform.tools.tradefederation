@@ -172,14 +172,13 @@ public class AndroidJUnitTest extends InstrumentationTest
     private Integer mMaxShard = 4;
 
     @Option(
-        name = "device-listeners",
-        description =
-                "Specify device side instrumentation listeners to be added for the run. "
-                        + "Can be repeated. Note that while the ordering here is followed for "
-                        + "now, future versions of AndroidJUnitRunner might not preserve the "
-                        + "listener ordering."
-    )
-    private List<String> mExtraDeviceListeners = new ArrayList<>();
+            name = "device-listeners",
+            description =
+                    "Specify device side instrumentation listeners to be added for the run. "
+                            + "Can be repeated. Note that while the ordering here is followed for "
+                            + "now, future versions of AndroidJUnitRunner might not preserve the "
+                            + "listener ordering.")
+    private Set<String> mExtraDeviceListeners = new LinkedHashSet<>();
 
     @Option(
         name = "use-new-run-listener-order",
