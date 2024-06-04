@@ -16,6 +16,8 @@
 
 package com.android.tradefed.cache;
 
+import java.io.IOException;
+
 /** An interface for a cache client. */
 public interface ICacheClient {
 
@@ -36,6 +38,9 @@ public interface ICacheClient {
      * @param action The {@link ExecutableAction} whose result should be returned.
      * @return the {@link ExecutableActionResult} of the {@code action} if the result exists,
      *     otherwise, null.
+     * @throws IOException if the client fails to lookup cache.
+     * @throws InterruptedException if the thread that lookups cache is interrupted.
      */
-    public ExecutableActionResult lookupCache(ExecutableAction action);
+    public ExecutableActionResult lookupCache(ExecutableAction action)
+            throws IOException, InterruptedException;
 }
