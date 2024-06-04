@@ -99,13 +99,6 @@ public class HostOptions implements IHostOptions {
     private List<String> mLabels = new ArrayList<>();
 
     @Option(
-            name = "known-tcp-device-ip-pool",
-            description =
-                    "known remote device available via ip associated with the "
-                            + "tcp-device placeholder.")
-    private Set<String> mKnownTcpDeviceIpPool = new HashSet<>();
-
-    @Option(
             name = "known-gce-device-ip-pool",
             description =
                     "known remote device available via ip associated with the "
@@ -245,12 +238,6 @@ public class HostOptions implements IHostOptions {
     @Override
     public List<String> getLabels() {
         return new ArrayList<>(mLabels);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public Set<String> getKnownTcpDeviceIpPool() {
-        return new HashSet<>(mKnownTcpDeviceIpPool);
     }
 
     /** {@inheritDoc} */
