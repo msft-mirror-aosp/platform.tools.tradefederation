@@ -253,6 +253,7 @@ import com.android.tradefed.suite.checker.SystemServerFileDescriptorCheckerTest;
 import com.android.tradefed.suite.checker.SystemServerStatusCheckerTest;
 import com.android.tradefed.suite.checker.TimeStatusCheckerTest;
 import com.android.tradefed.suite.checker.UserCheckerTest;
+import com.android.tradefed.suite.checker.baseline.CommandBaselineSetterTest;
 import com.android.tradefed.suite.checker.baseline.DeviceBaselineSetterTest;
 import com.android.tradefed.suite.checker.baseline.LockSettingsBaselineSetterTest;
 import com.android.tradefed.suite.checker.baseline.SettingsBaselineSetterTest;
@@ -901,6 +902,7 @@ import org.junit.runners.Suite.SuiteClasses;
     UserCheckerTest.class,
 
     // suite/checker/baseline
+    CommandBaselineSetterTest.class,
     DeviceBaselineSetterTest.class,
     LockSettingsBaselineSetterTest.class,
     SettingsBaselineSetterTest.class,
