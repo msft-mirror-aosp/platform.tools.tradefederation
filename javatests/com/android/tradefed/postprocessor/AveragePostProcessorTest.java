@@ -31,6 +31,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -43,6 +44,7 @@ public class AveragePostProcessorTest {
 
     private AveragePostProcessor mProcessor;
     @Mock ITestInvocationListener mMockListener;
+    @Captor ArgumentCaptor<HashMap<String, Metric>> mCapture;
     private ITestInvocationListener mMainListener;
     private HashMap<String, Metric> mMetrics;
 
@@ -58,15 +60,13 @@ public class AveragePostProcessorTest {
 
     @Test
     public void testAverage_double() {
-        ArgumentCaptor<HashMap<String, Metric>> captured = ArgumentCaptor.forClass(HashMap.class);
-
         mMetrics.put("key1", createDoubleListMetric());
 
         mMainListener.testRunEnded(15L, mMetrics);
 
-        verify(mMockListener).testRunEnded(Mockito.eq(15L), captured.capture());
+        verify(mMockListener).testRunEnded(Mockito.eq(15L), mCapture.capture());
 
-        HashMap<String, Metric> result = captured.getValue();
+        HashMap<String, Metric> result = mCapture.getValue();
         // We added one metric but end up with two
         assertEquals(2, result.size());
         assertTrue(result.containsKey("key1"));
@@ -80,15 +80,13 @@ public class AveragePostProcessorTest {
 
     @Test
     public void testAverage_long() {
-        ArgumentCaptor<HashMap<String, Metric>> captured = ArgumentCaptor.forClass(HashMap.class);
-
         mMetrics.put("key1", createLongListMetric());
 
         mMainListener.testRunEnded(15L, mMetrics);
 
-        verify(mMockListener).testRunEnded(Mockito.eq(15L), captured.capture());
+        verify(mMockListener).testRunEnded(Mockito.eq(15L), mCapture.capture());
 
-        HashMap<String, Metric> result = captured.getValue();
+        HashMap<String, Metric> result = mCapture.getValue();
         // We added one metric but end up with two
         assertEquals(2, result.size());
         assertTrue(result.containsKey("key1"));

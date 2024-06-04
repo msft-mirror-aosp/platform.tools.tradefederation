@@ -49,7 +49,7 @@ public class BugreportzOnTestCaseFailureCollectorTest {
     private IInvocationContext mContext;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
         mCollector = new BugreportzOnTestCaseFailureCollector();

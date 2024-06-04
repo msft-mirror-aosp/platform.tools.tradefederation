@@ -20,6 +20,10 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
@@ -56,7 +60,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /** A test runner to run ART run-tests. */
-public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceiver {
+public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceiver, ITestCollector {
 
     private static final String RUNTEST_TAG = "ArtRunTest";
 
@@ -64,11 +68,14 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
     private static final String DALVIKVM_CMD =
             "dalvikvm|#BITNESS#| -Xcompiler-option --compile-art-test -classpath |#CLASSPATH#| "
-                    + "|#MAINCLASS#|";
+                    + "|#MAINCLASS#| >|#STDOUT#| 2>|#STDERR#|";
+
+    private static final String STDOUT_FILE_NAME = "stdout.txt";
+    private static final String STDERR_FILE_NAME = "stderr.txt";
 
     // Name of the Checker Python Archive (PAR) file.
     public static final String CHECKER_PAR_FILENAME = "art-run-test-checker";
-    private static final long CHECKER_TIMEOUT_MS = 30 * 1000;
+    private static final long CHECKER_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes.
 
     @Option(
             name = "test-timeout",
@@ -88,6 +95,13 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
     private IAbi mAbi = null;
     private final Set<String> mIncludeFilters = new LinkedHashSet<>();
     private final Set<String> mExcludeFilters = new LinkedHashSet<>();
+
+    @Option(
+            name = "collect-tests-only",
+            description =
+                    "Do a dry-run of the tests in order to collect their "
+                            + "names, but do not actually run them.")
+    private boolean mCollectTestsOnly = false;
 
     /** {@inheritDoc} */
     @Override
@@ -150,6 +164,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
     /** {@inheritDoc} */
     @Override
+    public void setCollectTestsOnly(boolean shouldCollectTest) {
+        mCollectTestsOnly = shouldCollectTest;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mDevice = testInfo.getDevice();
@@ -199,7 +219,30 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         listener.testRunStarted(runName, testCount);
         listener.testStarted(testId);
 
-        try {
+        // Temporary local directory used to store files used in test.
+        File tmpTestLocalDir = null;
+        // Path to temporary remote directory used to store files used in test.
+        String tmpTestRemoteDirPath = null;
+
+        try (CloseableTraceScope ignored = new CloseableTraceScope(testId.toString())) {
+            if (mCollectTestsOnly) {
+                return;
+            }
+
+            // Create remote temporary directory and set redirections in test command.
+            String tmpTestRemoteDirPathTemplate =
+                    String.format("%s.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
+            tmpTestRemoteDirPath = createTemporaryDirectoryOnDevice(tmpTestRemoteDirPathTemplate);
+            CLog.d("Created temporary remote directory `%s` for test", tmpTestRemoteDirPath);
+
+            String remoteStdoutFilePath =
+                    String.format("%s/%s", tmpTestRemoteDirPath, STDOUT_FILE_NAME);
+            testCmd = testCmd.replace("|#STDOUT#|", remoteStdoutFilePath);
+
+            String remoteStderrFilePath =
+                    String.format("%s/%s", tmpTestRemoteDirPath, STDERR_FILE_NAME);
+            testCmd = testCmd.replace("|#STDERR#|", remoteStderrFilePath);
+
             // TODO: The "run" step should be configurable, as is the case in current ART
             // `run-test` scripts).
 
@@ -218,10 +261,28 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             }
             Integer exitCode = testResult.getExitCode();
             CLog.v("`%s` on %s returned exit code: %d", testCmd, deviceSerialNumber, exitCode);
-            String actualStdoutText = testResult.getStdout();
-            CLog.v("`%s` on %s returned stdout: %s", testCmd, deviceSerialNumber, actualStdoutText);
-            String actualStderrText = testResult.getStderr();
-            CLog.v("`%s` on %s returned stderr: %s", testCmd, deviceSerialNumber, actualStderrText);
+
+            // Create local temporary directory and pull test's outputs from the device.
+            tmpTestLocalDir = createTestLocalTempDirectory(testInfo);
+            CLog.d("Created temporary local directory `%s` for test", tmpTestLocalDir);
+
+            File localStdoutFile = new File(tmpTestLocalDir, STDOUT_FILE_NAME);
+            if (!pullAndCheckFile(remoteStdoutFilePath, localStdoutFile)) {
+                throw new IOException(
+                        String.format(
+                                "Error while pulling remote file `%s` to local file `%s`",
+                                remoteStdoutFilePath, localStdoutFile));
+            }
+            String actualStdoutText = FileUtil.readStringFromFile(localStdoutFile);
+
+            File localStderrFile = new File(tmpTestLocalDir, STDERR_FILE_NAME);
+            if (!pullAndCheckFile(remoteStderrFilePath, localStderrFile)) {
+                throw new IOException(
+                        String.format(
+                                "Error while pulling remote file `%s` to local file `%s`",
+                                remoteStderrFilePath, localStderrFile));
+            }
+            String actualStderrText = FileUtil.readStringFromFile(localStderrFile);
 
             // TODO: The "check" step should be configurable, as is the case in current ART
             // `run-test` scripts).
@@ -240,7 +301,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                             actualStdoutText,
                             /* outputShortName */ "stdout",
                             /* outputPrettyName */ "standard output");
-            stdoutError.ifPresent(e -> errors.add(e));
+            if (stdoutError.isPresent()) {
+                errors.add(stdoutError.get());
+                try (FileInputStreamSource source = new FileInputStreamSource(localStdoutFile)) {
+                    listener.testLog(STDOUT_FILE_NAME, LogDataType.TEXT, source);
+                }
+            }
 
             // Check the test's standard error.
             Optional<String> stderrError =
@@ -249,9 +315,14 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                             actualStderrText,
                             /* outputShortName */ "stderr",
                             /* outputPrettyName */ "standard error");
-            stderrError.ifPresent(e -> errors.add(e));
+            if (stderrError.isPresent()) {
+                errors.add(stderrError.get());
+                try (FileInputStreamSource source = new FileInputStreamSource(localStderrFile)) {
+                    listener.testLog(STDERR_FILE_NAME, LogDataType.TEXT, source);
+                }
+            }
 
-            // If the test us a Checker test, run Checker and check its output.
+            // If the test is a Checker test, run Checker and check its output.
             if (mRunTestName.contains("-checker-")) {
                 Optional<String> checkerError = executeCheckerTest(testInfo, listener);
                 checkerError.ifPresent(e -> errors.add(e));
@@ -262,13 +333,34 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 String errorMessage = String.join("\n", errors);
                 listener.testFailed(testId, errorMessage);
             }
+        } catch (AdbShellCommandException | IOException e) {
+            listener.testFailed(testId, String.format("Error in `ArtRunTest` test runner: %s", e));
+            throw new RuntimeException(e);
         } finally {
             HashMap<String, Metric> emptyTestMetrics = new HashMap<>();
             listener.testEnded(testId, emptyTestMetrics);
             HashMap<String, Metric> emptyTestRunMetrics = new HashMap<>();
             // TODO: Pass an actual value as `elapsedTimeMillis` argument.
             listener.testRunEnded(/* elapsedTimeMillis*/ 0, emptyTestRunMetrics);
+
+            // Clean up temporary directories on host and device.
+            FileUtil.recursiveDelete(tmpTestLocalDir);
+            if (tmpTestRemoteDirPath != null) {
+                mDevice.deleteFile(tmpTestRemoteDirPath);
+            }
         }
+    }
+
+    /**
+     * Create a local temporary directory within the test's dependencies folder, to collect test
+     * outputs pulled from the device-under-test.
+     *
+     * @param testInfo The {@link TestInformation} object associated to the executed test
+     * @return The {@link File} object pointing to the created temporary directory.
+     * @throws IOException If the creation of the temporary directory failed.
+     */
+    protected File createTestLocalTempDirectory(TestInformation testInfo) throws IOException {
+        return FileUtil.createTempDir(mRunTestName, CurrentInvocation.getWorkFolder());
     }
 
     /**
@@ -361,34 +453,24 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      */
     protected Optional<String> executeCheckerTest(
             TestInformation testInfo, ITestInvocationListener listener)
-            throws DeviceNotAvailableException {
+            throws DeviceNotAvailableException, AdbShellCommandException, IOException {
 
-        /**
-         * An internal exception class for errors related to the preparation and execution of the
-         * Checker tool.
-         */
-        class CheckerTestException extends Exception {
-            CheckerTestException(String format, Object... args) {
-                super(String.format(format, args));
-            }
-        }
-
-        // Temporary directory used to store files used in Checker test.
-        File runTestDir = null;
+        // Temporary local directory used to store files used in Checker test.
+        File tmpCheckerLocalDir = null;
+        // Path to temporary remote directory used to store files used in Checker test.
+        String tmpCheckerRemoteDirPath = null;
 
         try {
-            // TODO: Encapsulate the device temp dir creation logic in its own method.
-            String tmpCheckerDir =
-                    String.format("/data/local/tmp/%s", mRunTestName.replaceAll("/", "-"));
-            String mkdirCmd = String.format("mkdir -p \"%s\"", tmpCheckerDir);
-            CommandResult mkdirResult = mDevice.executeShellV2Command(mkdirCmd);
-            if (mkdirResult.getStatus() != CommandStatus.SUCCESS) {
-                throw new CheckerTestException(
-                        "Cannot create directory `%s` on device", mkdirResult.getStderr());
-            }
+            String tmpCheckerRemoteDirPathTemplate =
+                    String.format("%s.checker.XXXXXXXXXX", mRunTestName.replaceAll("/", "-"));
+            tmpCheckerRemoteDirPath =
+                    createTemporaryDirectoryOnDevice(tmpCheckerRemoteDirPathTemplate);
+            CLog.d(
+                    "Created temporary remote directory `%s` for Checker test",
+                    tmpCheckerRemoteDirPath);
 
-            String cfgPath = tmpCheckerDir + "/graph.cfg";
-            String oatPath = tmpCheckerDir + "/output.oat";
+            String cfgPath = tmpCheckerRemoteDirPath + "/graph.cfg";
+            String oatPath = tmpCheckerRemoteDirPath + "/output.oat";
             String abi = mAbi.getName();
             String dex2oatBinary = "dex2oat" + AbiUtils.getBitness(abi);
             Path dex2oatPath = Paths.get(ART_APEX_PATH.toString(), "bin", dex2oatBinary);
@@ -398,38 +480,29 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                             dex2oatPath, mClasspath.get(0), oatPath, cfgPath);
             CommandResult dex2oatResult = mDevice.executeShellV2Command(dex2oatCmd);
             if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
-                throw new CheckerTestException(
+                throw new AdbShellCommandException(
                         "Error while running dex2oat: %s", dex2oatResult.getStderr());
             }
 
-            try {
-                runTestDir =
-                        Files.createTempDirectory(
-                                        testInfo.dependenciesFolder().toPath(), mRunTestName)
-                                .toFile();
-            } catch (IOException e) {
-                throw new CheckerTestException("I/O error while creating test dir: %s", e);
-            }
+            tmpCheckerLocalDir =
+                    FileUtil.createTempDir(mRunTestName, CurrentInvocation.getWorkFolder());
+            CLog.d("Created temporary local directory `%s` for Checker test", tmpCheckerLocalDir);
 
-            File localCfgPath = new File(runTestDir, "graph.cfg");
+            File localCfgPath = new File(tmpCheckerLocalDir, "graph.cfg");
             if (localCfgPath.isFile()) {
                 localCfgPath.delete();
             }
 
-            if (!mDevice.pullFile(cfgPath, localCfgPath)) {
-                throw new CheckerTestException("Cannot pull CFG file from the device");
+            if (!pullAndCheckFile(cfgPath, localCfgPath)) {
+                throw new IOException("Cannot pull CFG file from the device");
             }
 
-            File tempJar = new File(runTestDir, "temp.jar");
-            if (!mDevice.pullFile(mClasspath.get(0), tempJar)) {
-                throw new CheckerTestException("Cannot pull JAR file from the device");
+            File tempJar = new File(tmpCheckerLocalDir, "temp.jar");
+            if (!pullAndCheckFile(mClasspath.get(0), tempJar)) {
+                throw new IOException("Cannot pull JAR file from the device");
             }
 
-            try {
-                extractSourcesFromJar(runTestDir, tempJar);
-            } catch (IOException e) {
-                throw new CheckerTestException("Error unpacking test JAR file: %s", e);
-            }
+            extractSourcesFromJar(tmpCheckerLocalDir, tempJar);
 
             String checkerArch = AbiUtils.getArchForAbi(mAbi.getName()).toUpperCase();
 
@@ -441,22 +514,26 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 "-q",
                 "--arch=" + checkerArch,
                 localCfgPath.getAbsolutePath(),
-                runTestDir.getAbsolutePath()
+                tmpCheckerLocalDir.getAbsolutePath()
             };
 
             Optional<String> checkerError = runChecker(checkerCommandLine);
             if (checkerError.isPresent()) {
-                listener.testLog(
-                        "graph.cfg", LogDataType.CFG, new FileInputStreamSource(localCfgPath));
+                try (FileInputStreamSource source = new FileInputStreamSource(localCfgPath)) {
+                    listener.testLog("graph.cfg", LogDataType.CFG, source);
+                }
                 CLog.i(checkerError.get());
                 return checkerError;
             }
-        } catch (CheckerTestException e) {
-            String errorMessage = e.getMessage();
-            CLog.e(errorMessage);
-            return Optional.of(errorMessage);
+        } catch (AdbShellCommandException | IOException e) {
+            CLog.e("Exception while running Checker test: " + e.getMessage());
+            throw e;
         } finally {
-            FileUtil.recursiveDelete(runTestDir);
+            // Clean up temporary directories on host and device.
+            FileUtil.recursiveDelete(tmpCheckerLocalDir);
+            if (tmpCheckerRemoteDirPath != null) {
+                mDevice.deleteFile(tmpCheckerRemoteDirPath);
+            }
         }
         return Optional.empty();
     }
@@ -482,9 +559,15 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
      * @return An optional error message, empty if the Checker invocation was successful
      */
     protected Optional<String> runChecker(String[] checkerCommandLine) {
-        CLog.d("About to run Checker command: %s", String.join(" ", checkerCommandLine));
+        String checkerCommandLineString = String.join(" ", checkerCommandLine);
+        CLog.d("About to run Checker command: %s", checkerCommandLineString);
+        long startTime = System.currentTimeMillis();
         CommandResult result =
                 RunUtil.getDefault().runTimedCmd(CHECKER_TIMEOUT_MS, checkerCommandLine);
+        long duration = System.currentTimeMillis() - startTime;
+        CLog.i("Checker command `%s` executed in %s ms", checkerCommandLineString, duration);
+        InvocationMetricLogger.addInvocationMetrics(
+            InvocationMetricKey.ART_RUN_TEST_CHECKER_COMMAND_TIME_MS, duration);
         if (result.getStatus() != CommandStatus.SUCCESS) {
             String errorMessage;
             if (result.getStatus() == CommandStatus.TIMED_OUT) {
@@ -510,10 +593,10 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         return Optional.empty();
     }
 
-    /** Extract src directory from given jar file to given directory */
-    protected void extractSourcesFromJar(File runTestDir, File jar) throws IOException {
+    /** Extract src directory from given jar file to given directory. */
+    protected void extractSourcesFromJar(File tmpCheckerLocalDir, File jar) throws IOException {
         try (ZipFile archive = new ZipFile(jar)) {
-            File srcFile = new File(runTestDir, "src");
+            File srcFile = new File(tmpCheckerLocalDir, "src");
             if (srcFile.exists()) {
                 FileUtil.recursiveDelete(srcFile);
             }
@@ -525,7 +608,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
             for (ZipEntry entry : entries) {
                 if (entry.getName().startsWith("src")) {
-                    Path entryDest = runTestDir.toPath().resolve(entry.getName());
+                    Path entryDest = tmpCheckerLocalDir.toPath().resolve(entry.getName());
                     if (entry.isDirectory()) {
                         Files.createDirectory(entryDest);
                     } else {
@@ -589,5 +672,143 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /**
+     * An exception class to report an error that occurred during the execution of an ADB shell
+     * command.
+     */
+    public static class AdbShellCommandException extends Exception {
+        AdbShellCommandException(String format, Object... args) {
+            super(String.format(format, args));
+        }
+    }
+
+    /**
+     * Retrieve a file off device and verify that file was transferred correctly by comparing the
+     * sizes and MD5 digests of the original file (on device) and its (local) copy.
+     *
+     * <p>This method is essentially a wrapper around {@link
+     * com.android.tradefed.device.INativeDevice#pullFile}, which has its own way to signal that a
+     * file was retrieved successfully or not via its return value -- which is preserved in this
+     * method. The additional checks, if they fail, are signaled via exceptions.
+     *
+     * @see com.android.tradefed.device.INativeDevice#pullFile
+     * @param remoteFilePath The absolute path to file on device.
+     * @param localFile The local file to store contents in. If non-empty, contents will be
+     *     replaced.
+     * @return <code>true</code> if file was retrieved successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException If connection with device is lost and cannot be
+     *     recovered.
+     * @throws AdbShellCommandException If any of the ADB shell commands used to extract information
+     *     from the device failed.
+     * @throws IOException If the file size check or the MD5 digest check failed.
+     */
+    private boolean pullAndCheckFile(String remoteFilePath, File localFile)
+            throws DeviceNotAvailableException, AdbShellCommandException, IOException {
+        // Get the size of the remote file on device.
+        long maxStatCmdTimeInMs = 10 * 1000; // 10 seconds.
+        String statCmd = String.format("stat --format %%s %s", remoteFilePath);
+        CommandResult statResult = executeAndCheckShellCommand(statCmd, maxStatCmdTimeInMs);
+        String remoteFileSizeStr = statResult.getStdout().strip();
+        long remoteFileSize = Long.parseLong(remoteFileSizeStr);
+        CLog.d("Size of remote file `%s` is %d bytes", remoteFilePath, remoteFileSize);
+
+        // Compute the MD5 digest of the remote file on device.
+        long maxMd5sumCmdTimeInMs = 60 * 1000; // 1 minute.
+        // Note: On Android, Toybox's implementation of `md5sum` interprets option `-b` as "emit a
+        // brief output" ("hash only, no filename") -- which is the behavior we want here -- while
+        // the GNU coreutils' implementation interprets option `-b` as "read input in binary mode".
+        String md5sumCmd = String.format("md5sum -b %s", remoteFilePath);
+        CommandResult md5sumResult = executeAndCheckShellCommand(md5sumCmd, maxMd5sumCmdTimeInMs);
+        String remoteMd5Digest = md5sumResult.getStdout().strip();
+        CLog.d("MD5 digest of remote file `%s` is %s", remoteFilePath, remoteMd5Digest);
+
+        // Pull the file.
+        boolean result = mDevice.pullFile(remoteFilePath, localFile);
+
+        // Get the size of the local file.
+        long localFileSize = localFile.length();
+        CLog.d("Size of local file `%s` is %d bytes", localFile, localFileSize);
+
+        // Compute the MD5 digest of the local file.
+        String localMd5Digest = FileUtil.calculateMd5(localFile);
+        CLog.d("MD5 digest of local file `%s` is %s", localFile, localMd5Digest);
+
+        // Check that the size of local file matches the size of the remote file.
+        if (localFileSize != remoteFileSize) {
+            String message =
+                    String.format(
+                            "Size of local file `%s` does not match size of remote file `%s` "
+                                    + "pulled from device: %d bytes vs %d bytes",
+                            localFile, remoteFilePath, localFileSize, remoteFileSize);
+            CLog.e(message);
+            throw new IOException(message);
+        }
+
+        // Check that the MD5 digest of the local file matches the MD5 digest of the remote file.
+        if (!localMd5Digest.equals(remoteMd5Digest)) {
+            String message =
+                    String.format(
+                            "MD5 digest of local file `%s` does not match MD5 digest of remote "
+                                    + "file `%s` pulled from device: %s vs %s",
+                            localFile, remoteFilePath, localMd5Digest, remoteMd5Digest);
+            CLog.e(message);
+            throw new IOException(message);
+        }
+
+        return result;
+    }
+
+    /**
+     * Helper function to execute an ADB shell command.
+     *
+     * @see com.android.tradefed.device.INativeDevice#executeShellV2Command
+     * @param command The ADB shell command to run
+     * @param maxTimeoutForCommandInMs The maximum timeout for the command to complete expressed in
+     *     milliseconds.
+     * @return The {@link CommandResult} object returned by the {@link #executeShellV2Command}
+     *     invocation.
+     * @throws DeviceNotAvailableException If connection with device is lost and cannot be
+     *     recovered.
+     * @throws AdbShellCommandException If the ADB shell command failed.
+     */
+    private CommandResult executeAndCheckShellCommand(
+            String command, final long maxTimeoutForCommandInMs)
+            throws DeviceNotAvailableException, AdbShellCommandException {
+        CommandResult result =
+                mDevice.executeShellV2Command(
+                        command,
+                        maxTimeoutForCommandInMs,
+                        TimeUnit.MILLISECONDS,
+                        /* retryAttempts */ 0);
+        if (result.getStatus() != CommandStatus.SUCCESS || result.getExitCode() != 0) {
+            String message =
+                    String.format(
+                            "Command `%s` failed with status %s: %s",
+                            command, result.getStatus(), result);
+            CLog.e(message);
+            throw new AdbShellCommandException(message);
+        }
+        return result;
+    }
+
+    /**
+     * Create a temporary directory on device.
+     *
+     * @param template String from which the name of the directory is created. This template must
+     *     include at least three consecutive <code>X</code>s in the last component (e.g.
+     *     <code>tmp.XXX</code>).
+     * @return The path to the created directory on device.
+     * @throws DeviceNotAvailableException If connection with device is lost and cannot be
+     *     recovered.
+     * @throws AdbShellCommandException If the <code>mktemp</code> ADB shell command failed.
+     */
+    private String createTemporaryDirectoryOnDevice(String template)
+            throws DeviceNotAvailableException, AdbShellCommandException {
+        long maxMktempCmdTimeInMs = 10 * 1000; // 10 seconds.
+        String mktempCmd = String.format("mktemp -d -p /data/local/tmp %s", template);
+        CommandResult mktempResult = executeAndCheckShellCommand(mktempCmd, maxMktempCmdTimeInMs);
+        return mktempResult.getStdout().strip();
     }
 }

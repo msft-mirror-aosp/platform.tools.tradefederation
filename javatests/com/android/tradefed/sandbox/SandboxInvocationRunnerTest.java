@@ -60,7 +60,7 @@ public class SandboxInvocationRunnerTest {
         mConfig.setConfigurationObject(Configuration.SANDBOX_TYPE_NAME, mMockSandbox);
         when(mMockSandbox.prepareEnvironment(mContext, mConfig, mMockListener)).thenReturn(null);
         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
-        when(mMockSandbox.run(mConfig, mMockListener)).thenReturn(res);
+        when(mMockSandbox.run(info, mConfig, mMockListener)).thenReturn(res);
 
         SandboxInvocationRunner.prepareAndRun(info, mConfig, mMockListener);
 

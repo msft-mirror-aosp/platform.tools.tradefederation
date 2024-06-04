@@ -208,7 +208,12 @@ public interface IInvocationContext extends Serializable {
     /** Serialize a the context instance into a protobuf. */
     public com.android.tradefed.invoker.proto.InvocationContext.Context toProto();
 
-    /** A convnient method for retrieving invocation context attribute as a single key-value pair */
+    /**
+     * A convenient method for retrieving invocation context attribute as a single key-value pair.
+     * Never return null.
+     *
+     * @return empty string when key doesn't exist, the value otherwise.
+     */
     public default String getAttribute(String key) {
         List<String> values = getAttributes().get(key);
         if (values == null || values.isEmpty()) {

@@ -18,6 +18,7 @@ package com.android.tradefed.result;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -127,6 +128,21 @@ public class ResultForwarder implements ITestInvocationListener {
             } catch (RuntimeException e) {
                 CLog.e(
                         "Exception while invoking %s#invocationFailed",
+                        listener.getClass().getName());
+                CLog.e(e);
+            }
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        for (ITestInvocationListener listener : mListeners) {
+            try {
+                listener.invocationSkipped(reason);
+            } catch (RuntimeException e) {
+                CLog.e(
+                        "Exception while invoking %s#invocationSkipped",
                         listener.getClass().getName());
                 CLog.e(e);
             }
@@ -302,6 +318,18 @@ public class ResultForwarder implements ITestInvocationListener {
                 listener.testFailed(test, failure);
             } catch (RuntimeException e) {
                 CLog.e("Exception while invoking %s#testFailed", listener.getClass().getName());
+                CLog.e(e);
+            }
+        }
+    }
+
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        for (ITestInvocationListener listener : mListeners) {
+            try {
+                listener.testSkipped(test, reason);
+            } catch (RuntimeException e) {
+                CLog.e("Exception while invoking %s#testSkipped", listener.getClass().getName());
                 CLog.e(e);
             }
         }

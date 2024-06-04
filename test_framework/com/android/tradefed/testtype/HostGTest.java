@@ -16,26 +16,35 @@
 
 package com.android.tradefed.testtype;
 
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
+
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.TestErrorIdentifier;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ShellOutputReceiverStream;
+import com.android.tradefed.util.TestRunnerUtil;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -44,7 +53,12 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** A Test that runs a native test package. */
@@ -53,6 +67,17 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
     private static final long DEFAULT_HOST_COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
 
     private IBuildInfo mBuildInfo = null;
+
+    @Option(
+            name = "use-updated-shard-retry",
+            description = "Whether to use the updated logic for retry with sharding.")
+    private boolean mUseUpdatedShardRetry = true;
+
+    /** Whether any incomplete test is found in the current run. */
+    private boolean mIncompleteTestFound = false;
+
+    /** List of tests that failed in the current test run when test run was complete. */
+    private Set<String> mCurFailedTests = new LinkedHashSet<>();
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -117,6 +142,24 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         runUtil.setEnvVariablePriority(EnvPriority.SET);
         runUtil.setEnvVariable("PATH", path);
 
+        // Update LD_LIBRARY_PATH
+        String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(gtestFile);
+        if (ldLibraryPath != null) {
+            runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
+        }
+
+        // Set LLVM_PROFILE_FILE for coverage.
+        File coverageDir = null;
+        if (isClangCoverageEnabled()) {
+            try {
+                coverageDir = FileUtil.createTempDir("clang");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            runUtil.setEnvVariable(
+                    "LLVM_PROFILE_FILE", coverageDir.getAbsolutePath() + "/clang-%m.profraw");
+        }
+
         // If there's a shell output receiver to pass results along to, then
         // ShellOutputReceiverStream will write that into the IShellOutputReceiver. If not, the
         // command output will just be ignored.
@@ -158,6 +201,27 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                 }
             }
             FileUtil.deleteFile(stdout);
+
+            if (isClangCoverageEnabled()) {
+                File profdata = null;
+                try {
+                    Set<String> profraws = FileUtil.findFiles(coverageDir, ".*\\.profraw");
+                    ClangProfileIndexer indexer =
+                            new ClangProfileIndexer(
+                                    getConfiguration().getCoverageOptions().getLlvmProfdataPath());
+                    profdata = FileUtil.createTempFile(gtestFile.getName(), ".profdata");
+                    indexer.index(profraws, profdata);
+
+                    try (FileInputStreamSource source = new FileInputStreamSource(profdata, true)) {
+                        logger.testLog(gtestFile.getName(), LogDataType.CLANG_COVERAGE, source);
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    FileUtil.deleteFile(profdata);
+                    FileUtil.recursiveDelete(coverageDir);
+                }
+            }
         }
         return result;
     }
@@ -245,58 +309,158 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException { // DNAE is part of IRemoteTest.
-        // Get testcases directory using the key HOST_LINKED_DIR first.
-        // If the directory is null, then get testcase directory from getTestDir() since *TS will
-        // invoke setTestDir().
-        List<File> scanDirs = new ArrayList<>();
-        File hostLinkedDir = mBuildInfo.getFile(BuildInfoFileKey.HOST_LINKED_DIR);
-        if (hostLinkedDir != null) {
-            scanDirs.add(hostLinkedDir);
-        }
-        File testsDir = ((DeviceBuildInfo) mBuildInfo).getTestsDir();
-        if (testsDir != null) {
-            scanDirs.add(testsDir);
-        }
-
-        String moduleName = getTestModule();
-        File gTestFile = null;
         try {
-            gTestFile = FileUtil.findFile(moduleName, getAbi(), scanDirs.toArray(new File[] {}));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+            // Reset flags that are used to track results of current test run.
+            mIncompleteTestFound = false;
+            mCurFailedTests = new LinkedHashSet<>();
 
-        if (gTestFile == null || gTestFile.isDirectory()) {
-            // If we ended up here we most likely failed to find the proper file as is, so we
-            // search for it with a potential suffix (which is allowed).
+            // Get testcases directory using the key HOST_LINKED_DIR first.
+            // If the directory is null, then get testcase directory from getTestDir() since *TS
+            // will invoke setTestDir().
+            List<File> scanDirs = new ArrayList<>();
+            File hostLinkedDir = mBuildInfo.getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+            if (hostLinkedDir != null) {
+                scanDirs.add(hostLinkedDir);
+            }
+            File testsDir = ((DeviceBuildInfo) mBuildInfo).getTestsDir();
+            if (testsDir != null) {
+                scanDirs.add(testsDir);
+            }
+
+            String moduleName = getTestModule();
+            Set<File> gTestFiles;
             try {
-                File byBaseName =
-                        FileUtil.findFile(
-                                moduleName + ".*", getAbi(), scanDirs.toArray(new File[] {}));
-                if (byBaseName != null && byBaseName.isFile()) {
-                    gTestFile = byBaseName;
-                }
+                gTestFiles =
+                        FileUtil.findFiles(
+                                moduleName, getAbi(), false, scanDirs.toArray(new File[] {}));
+                gTestFiles = applyFileExclusionFilters(gTestFiles);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-        }
+            if (gTestFiles == null || gTestFiles.isEmpty()) {
+                // If we ended up here we most likely failed to find the proper file as is, so we
+                // search for it with a potential suffix (which is allowed).
+                try {
+                    gTestFiles =
+                            FileUtil.findFiles(
+                                    moduleName + ".*",
+                                    getAbi(),
+                                    false,
+                                    scanDirs.toArray(new File[] {}));
+                    gTestFiles = applyFileExclusionFilters(gTestFiles);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
 
-        if (gTestFile == null) {
-            throw new RuntimeException(
-                    String.format(
-                            "Fail to find native test %s in directory %s.", moduleName, scanDirs));
-        }
+            if (gTestFiles == null || gTestFiles.isEmpty()) {
+                throw new RuntimeException(
+                        String.format(
+                                "Fail to find native test %s in directory %s.",
+                                moduleName, scanDirs));
+            }
+            // Since we searched files in multiple directories, it is possible that we may have the
+            // same file in different source directories. Exclude duplicates.
+            gTestFiles = excludeDuplicateFiles(gTestFiles);
+            for (File gTestFile : gTestFiles) {
+                if (!gTestFile.canExecute()) {
+                    CLog.i("%s is not executable! Skipping.", gTestFile.getAbsolutePath());
+                    continue;
+                }
 
-        if (!gTestFile.canExecute()) {
-            throw new RuntimeException(
-                    String.format("%s is not executable!", gTestFile.getAbsolutePath()));
+                listener = getGTestListener(listener);
+                // TODO: Need to support XML test output based on isEnableXmlOutput
+                IShellOutputReceiver resultParser =
+                        createResultParser(gTestFile.getName(), listener);
+                String flags = getAllGTestFlags(gTestFile.getName());
+                CLog.i("Running gtest %s %s", gTestFile.getName(), flags);
+                try {
+                    runTest(resultParser, gTestFile, flags, listener);
+                } finally {
+                    if (resultParser instanceof GTestResultParser) {
+                        if (((GTestResultParser) resultParser).isTestRunIncomplete()) {
+                            mIncompleteTestFound = true;
+                        } else {
+                            // if test run is complete, collect the failed tests so that they can be
+                            // retried
+                            mCurFailedTests.addAll(
+                                    ((GTestResultParser) resultParser).getFailedTests());
+                        }
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            // if we encounter any errors, count it as test Incomplete so that retry attempts
+            // during sharding uses a full retry.
+            mIncompleteTestFound = true;
+            throw t;
+        } finally {
+            if (mUseUpdatedShardRetry) {
+                // notify of test execution will enable the new sharding retry behavior since Gtest
+                // will be aware of retries.
+                notifyTestExecution(mIncompleteTestFound, mCurFailedTests);
+            }
         }
+    }
 
-        listener = getGTestListener(listener);
-        // TODO: Need to support XML test output based on isEnableXmlOutput
-        IShellOutputReceiver resultParser = createResultParser(gTestFile.getName(), listener);
-        String flags = getAllGTestFlags(gTestFile.getName());
-        CLog.i("Running gtest %s %s", gTestFile.getName(), flags);
-        runTest(resultParser, gTestFile, flags, listener);
+    private void reportFailure(
+            ITestInvocationListener listener, String runName, RuntimeException exception) {
+        listener.testRunStarted(runName, 0);
+        listener.testRunFailed(createFailure(exception));
+        listener.testRunEnded(0L, new HashMap<String, Metric>());
+    }
+
+    private FailureDescription createFailure(Exception e) {
+        return TestInvocation.createFailureFromException(e, FailureStatus.TEST_FAILURE);
+    }
+
+    /**
+     * Apply exclusion filters and return the remaining files.
+     *
+     * @param filesToFilterFrom a set of files which need to be filtered.
+     * @return a set of files
+     */
+    private Set<File> applyFileExclusionFilters(Set<File> filesToFilterFrom) {
+        Set<File> retFiles = new LinkedHashSet<>();
+        List<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
+        for (File file : filesToFilterFrom) {
+            boolean matchedRegex = false;
+            for (String regex : fileExclusionFilterRegex) {
+                if (file.getPath().matches(regex)) {
+                    CLog.i(
+                            "File %s matches exclusion file regex %s, skipping",
+                            file.getPath(), regex);
+                    matchedRegex = true;
+                    break;
+                }
+            }
+            if (!matchedRegex) {
+                retFiles.add(file);
+            }
+        }
+        return retFiles;
+    }
+
+    /** exclude files with same names */
+    private Set<File> excludeDuplicateFiles(Set<File> files) {
+        Map<String, File> seen = new LinkedHashMap<>();
+        for (File file : files) {
+            if (seen.containsKey(file.getName())) {
+                CLog.i(
+                        "File %s already exists in location %s. skipping %s.",
+                        file.getName(),
+                        seen.get(file.getName()).getAbsolutePath(),
+                        file.getAbsolutePath());
+            } else {
+                seen.put(file.getName(), file);
+            }
+        }
+        return new LinkedHashSet(seen.values());
+    }
+
+    /** Returns whether Clang code coverage is enabled. */
+    private boolean isClangCoverageEnabled() {
+        return getConfiguration().getCoverageOptions().isCoverageEnabled()
+                && getConfiguration().getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 }

@@ -18,6 +18,7 @@ package com.android.tradefed.sandbox;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.NoOpConfigOptionValueTransformer;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -44,6 +45,13 @@ public class SandboxConfigUtil {
 
     private static final long DUMP_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
+    // For backward compatibility
+    public static File dumpConfigForVersion(
+            String classpath, IRunUtil runUtil, String[] args, DumpCmd dump, File globalConfig)
+            throws SandboxConfigurationException, IOException {
+        return dumpConfigForVersion(classpath, runUtil, args, dump, globalConfig, false);
+    }
+
     /**
      * Create a subprocess based on the Tf jars from any version, and dump the xml {@link
      * IConfiguration} based on the command line args.
@@ -53,11 +61,17 @@ public class SandboxConfigUtil {
      * @param args the command line args.
      * @param dump the {@link DumpCmd} driving some of the outputs.
      * @param globalConfig the file describing the global configuration to be used.
+     * @param skipJavaCheck whether or not to skip the java version check
      * @return A {@link File} containing the xml dump from the command line.
      * @throws SandboxConfigurationException if the dump is not successful.
      */
     public static File dumpConfigForVersion(
-            String classpath, IRunUtil runUtil, String[] args, DumpCmd dump, File globalConfig)
+            String classpath,
+            IRunUtil runUtil,
+            String[] args,
+            DumpCmd dump,
+            File globalConfig,
+            boolean skipJavaCheck)
             throws SandboxConfigurationException, IOException {
         if (Strings.isNullOrEmpty(classpath)) {
             throw new SandboxConfigurationException(
@@ -84,7 +98,7 @@ public class SandboxConfigUtil {
         CommandResult result = null;
         try {
             List<String> mCmdArgs = new ArrayList<>();
-            mCmdArgs.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+            mCmdArgs.add(SystemUtil.getRunningJavaBinaryPath(skipJavaCheck).getAbsolutePath());
             mCmdArgs.add(String.format("-Djava.io.tmpdir=%s", tmpDir.getAbsolutePath()));
             mCmdArgs.add("-cp");
             mCmdArgs.add(classpath);
@@ -118,6 +132,15 @@ public class SandboxConfigUtil {
         if (result.getStderr().contains(InfraErrorIdentifier.KEYSTORE_CONFIG_ERROR.name())) {
             error = InfraErrorIdentifier.KEYSTORE_CONFIG_ERROR;
         }
+        if (result.getStderr().contains(InfraErrorIdentifier.CLASS_NOT_FOUND.name())) {
+            error = InfraErrorIdentifier.CLASS_NOT_FOUND;
+        }
+        if (result.getStderr().contains(InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR.name())) {
+            error = InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR;
+        }
+        if (result.getStderr().contains(InfraErrorIdentifier.GCS_ERROR.name())) {
+            error = InfraErrorIdentifier.GCS_ERROR;
+        }
         throw new SandboxConfigurationException(errorMessage, error);
     }
 
@@ -140,11 +163,13 @@ public class SandboxConfigUtil {
         String classpath = "";
         Set<String> jarFiles = FileUtil.findFiles(rootDir, ".*.jar");
         classpath = String.join(":", jarFiles);
-        return dumpConfigForVersion(classpath, runUtil, args, dump, globalConfig);
+        return dumpConfigForVersion(classpath, runUtil, args, dump, globalConfig, false);
     }
 
     /** Create a global config with only the keystore to make it available in subprocess. */
     public static File dumpFilteredGlobalConfig(Set<String> exclusionPatterns) throws IOException {
-        return GlobalConfiguration.getInstance().cloneConfigWithFilter(exclusionPatterns);
+        return GlobalConfiguration.getInstance()
+                .cloneConfigWithFilter(
+                        exclusionPatterns, new NoOpConfigOptionValueTransformer(), false);
     }
 }

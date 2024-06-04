@@ -46,7 +46,8 @@ public final class CoverageOptions {
     public enum Toolchain {
         CLANG,
         GCOV,
-        JACOCO;
+        JACOCO,
+        GCOV_KERNEL;
     }
 
     @Option(
@@ -60,6 +61,9 @@ public final class CoverageOptions {
         description = "Name of processes to collect coverage data from."
     )
     private List<String> mCoverageProcesses = new ArrayList<>();
+
+    @Option(name = "merge-coverage", description = "Merge coverage measurements before logging.")
+    private boolean mMergeCoverage = false;
 
     @Option(
             name = "reset-coverage-before-test",
@@ -75,6 +79,21 @@ public final class CoverageOptions {
                     "The regex of profraw files to merge for coverage measurements.  E.g."
                             + " \"foo.*\\.profraw\".  Default: \".*\\.profraw\"")
     private String mProfrawFilter = ".*\\.profraw";
+
+    @Option(
+            name = "pull-timeout",
+            isTimeVal = true,
+            description = "Timeout in milliseconds to pull coverage metrics from the device.")
+    private long mPullTimeout = 20 * 60 * 1000;
+
+    @Option(name = "jacocoagent-path", description = "Path to jacocoagent.jar.")
+    private File mJaCoCoAgentPath = null;
+
+    @Option(
+            name = "device-coverage-path",
+            description = "Path to coverage measurements on devices.")
+    private List<String> mDeviceCoveragePaths =
+            new ArrayList<>(ImmutableList.of("/data/misc/trace", "/data/local/tmp"));
 
     /**
      * Returns whether coverage measurements should be collected from this run.
@@ -113,6 +132,11 @@ public final class CoverageOptions {
         return ImmutableList.copyOf(mCoverageProcesses);
     }
 
+    /** Returns whether to merge coverage measurements together before logging. */
+    public boolean shouldMergeCoverage() {
+        return mMergeCoverage;
+    }
+
     /**
      * Returns whether coverage measurements should be reset before each test.
      *
@@ -140,5 +164,32 @@ public final class CoverageOptions {
      */
     public String getProfrawFilter() {
         return mProfrawFilter;
+    }
+
+    /**
+     * Returns the timeout in milliseconds for pulling coverage metrics from the device.
+     *
+     * @return a {@link long} as timeout in milliseconds.
+     */
+    public long getPullTimeout() {
+        return mPullTimeout;
+    }
+
+    /**
+     * Returns jacocoagent.jar.
+     *
+     * @return a {@link File} pointing to jacocoagent.jar.
+     */
+    public File getJaCoCoAgentPath() {
+        return mJaCoCoAgentPath;
+    }
+
+    /**
+     * Returns the locations on the device where coverage measurements are stored.
+     *
+     * @return a {link List} containing the device coverage paths
+     */
+    public List<String> getDeviceCoveragePaths() {
+        return ImmutableList.copyOf(mDeviceCoveragePaths);
     }
 }

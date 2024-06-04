@@ -33,7 +33,6 @@ import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.guice.InvocationScope;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -44,7 +43,6 @@ import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.FileUtil;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -80,17 +78,9 @@ public class AndroidJUnitTestTest {
     @Mock ITestInvocationListener mMockListener;
     private TestInformation mTestInfo;
 
-    // Guice scope
-    private InvocationScope mScope;
-
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-
-        // Start with the Guice scope setup
-        mScope = new InvocationScope();
-        mScope.enter();
-
         when(mMockTestDevice.getIDevice()).thenReturn(mMockIDevice);
         when(mMockTestDevice.getSerialNumber()).thenReturn("serial");
 
@@ -98,7 +88,10 @@ public class AndroidJUnitTestTest {
                 new AndroidJUnitTest() {
                     @Override
                     IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
-                            String packageName, String runnerName, IDevice device) {
+                            String packageName,
+                            String runnerName,
+                            IDevice device,
+                            TestInformation testInformation) {
                         return mMockRemoteRunner;
                     }
                 };
@@ -121,12 +114,6 @@ public class AndroidJUnitTestTest {
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
     }
 
-    @After
-    public void tearDown() {
-        // Always exit the scope at the end.
-        mScope.exit();
-    }
-
     /** Test list of tests to run is filtered by include filters. */
     @Test
     public void testRun_includeFilterClass() throws Exception {
@@ -141,6 +128,23 @@ public class AndroidJUnitTestTest {
         verifyRunTestExpectations();
     }
 
+    /** Test list of tests to run is filtered by include filters by input sequence order. */
+    @Test
+    public void testRun_MultipleIncludeFilterClassByOrder() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c.Class3");
+        mAndroidJUnitTest.addIncludeFilter("a.b.c.Class1");
+        mAndroidJUnitTest.addIncludeFilter("a.b.c.Class2");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner)
+                .addInstrumentationArg("class", "a.b.c.Class3,a.b.c.Class1,a.b.c.Class2");
+        verifyRunTestExpectations();
+    }
+
     /** Test list of tests to run is filtered by exclude filters. */
     @Test
     public void testRun_excludeFilterClass() throws Exception {
@@ -152,6 +156,23 @@ public class AndroidJUnitTestTest {
         mAndroidJUnitTest.run(mTestInfo, mMockListener);
 
         verify(mMockRemoteRunner).addInstrumentationArg("notClass", TEST1.toString());
+        verifyRunTestExpectations();
+    }
+
+    /** Test list of tests to run is filtered by exclude filters by input sequence order. */
+    @Test
+    public void testRun_MultipleExcludeFilterClassByOrder() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addExcludeFilter("a.b.c.Class3");
+        mAndroidJUnitTest.addExcludeFilter("a.b.c.Class1");
+        mAndroidJUnitTest.addExcludeFilter("a.b.c.Class2");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner)
+                .addInstrumentationArg("notClass", "a.b.c.Class3,a.b.c.Class1,a.b.c.Class2");
         verifyRunTestExpectations();
     }
 
@@ -243,6 +264,48 @@ public class AndroidJUnitTestTest {
         verifyRunTestExpectations();
     }
 
+    /** Test list of parameterized tests to run is filtered by include filters. */
+    @Test
+    public void testRun_includeFilterParameterizedTestWithBrackets() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[a-b_c(1)]");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner).addInstrumentationArg("class", "a.b.c#myTestClass[a-b_c(1)]");
+        verifyRunTestExpectations();
+    }
+
+    /** Test list of parameterized tests to run is filtered by include filters. */
+    @Test
+    public void testRun_includeFilterParameterizedTestWithList() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[[2,3],3.14]");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner).addInstrumentationArg("class", "a.b.c#myTestClass[[2,3],3.14]");
+        verifyRunTestExpectations();
+    }
+
+    /** Test list of tests to run is filtered by using regex due to not end with ]. */
+    @Test
+    public void testRun_includeFilterEndWithStarNotParameterizedTest() throws Exception {
+        // expect this call
+
+        setRunTestExpectations();
+
+        mAndroidJUnitTest.addIncludeFilter("a.b.c#myTestClass[a-b]*");
+        mAndroidJUnitTest.run(mTestInfo, mMockListener);
+
+        verify(mMockRemoteRunner).addInstrumentationArg("tests_regex", "a.b.c#myTestClass[a-b]*");
+        verifyRunTestExpectations();
+    }
+
     /** Test list of tests to run is filtered by include filters using invalid regex. */
     @Test
     public void testRun_includeFilterInvalidTestsRegex() throws Exception {
@@ -285,7 +348,7 @@ public class AndroidJUnitTestTest {
     public void testRun_includeFile() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -309,7 +372,7 @@ public class AndroidJUnitTestTest {
     public void testRun_includeFileWithChown() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(false);
@@ -333,7 +396,7 @@ public class AndroidJUnitTestTest {
     public void testRun_excludeFile() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -359,7 +422,7 @@ public class AndroidJUnitTestTest {
     public void testRun_testFileAndFilters() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -374,7 +437,8 @@ public class AndroidJUnitTestTest {
             mAndroidJUnitTest.setIncludeTestFile(tmpFileInclude);
             mAndroidJUnitTest.setExcludeTestFile(tmpFileExclude);
             mAndroidJUnitTest.run(mTestInfo, mMockListener);
-            verify(mMockTestDevice, times(2)).pushFile(Mockito.<File>any(), Mockito.<String>any());
+            verify(mMockTestDevice, times(2))
+                    .pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true));
             verify(mMockRemoteRunner)
                     .addInstrumentationArg(Mockito.eq("testFile"), Mockito.<String>any());
             verify(mMockRemoteRunner)
@@ -396,7 +460,7 @@ public class AndroidJUnitTestTest {
     @Test
     public void testRun_testFileAndFilters_fails() throws Exception {
         mMockRemoteRunner = mock(IRemoteAndroidTestRunner.class);
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenThrow(new DeviceNotAvailableException("failed to push", "device1"));
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
 
@@ -431,7 +495,7 @@ public class AndroidJUnitTestTest {
     public void testRun_setTestFileOptions() throws Exception {
 
         setRunTestExpectations();
-        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any()))
+        when(mMockTestDevice.pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true)))
                 .thenReturn(Boolean.TRUE);
         when(mMockTestDevice.executeShellCommand(Mockito.<String>any())).thenReturn("");
         when(mMockTestDevice.doesFileExist(Mockito.<String>any())).thenReturn(true);
@@ -445,7 +509,8 @@ public class AndroidJUnitTestTest {
             setter.setOptionValue("test-file-include-filter", tmpFileInclude.getAbsolutePath());
             setter.setOptionValue("test-file-exclude-filter", tmpFileExclude.getAbsolutePath());
             mAndroidJUnitTest.run(mTestInfo, mMockListener);
-            verify(mMockTestDevice, times(2)).pushFile(Mockito.<File>any(), Mockito.<String>any());
+            verify(mMockTestDevice, times(2))
+                    .pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true));
             verify(mMockRemoteRunner)
                     .addInstrumentationArg(Mockito.eq("testFile"), Mockito.<String>any());
             verify(mMockRemoteRunner)

@@ -20,5 +20,15 @@ android_test_helper_app {
     name: "WifiUtil",
     srcs: ["src/**/*.java"],
     min_sdk_version: "7",
+    target_sdk_version: "31",
+    sdk_version: "current",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     manifest: "src/com/android/tradefed/utils/wifi/AndroidManifest.xml",
+    optimize: {
+        enabled: false,
+    },
+    visibility: [
+        "//tools/tradefederation/core"
+    ],
 }
