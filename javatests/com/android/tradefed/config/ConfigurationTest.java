@@ -39,6 +39,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ILeveledLogOutput;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TextResultReporter;
+import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
@@ -798,5 +799,40 @@ public class ConfigurationTest {
                 copy.getDeviceConfig().get(0).getTargetPreparers().get(0));
         assertNotEquals(original.getTests().get(0), copy.getTests().get(0));
         copy.validateOptions();
+    }
+
+    @Test
+    public void testDeepClone_configReceiver() throws Exception {
+        Configuration original = new Configuration("test", "test");
+        ConfigReceiverPreparer oriReceiver = new ConfigReceiverPreparer();
+        oriReceiver.setConfiguration(original);
+        original.setTargetPreparer(oriReceiver);
+        assertNotNull(oriReceiver.getConfiguration());
+
+        IConfiguration copy =
+                original.partialDeepClone(
+                        Arrays.asList(Configuration.TARGET_PREPARER_TYPE_NAME), null);
+        assertNotEquals(
+                original.getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME),
+                copy.getDeviceConfigByName(ConfigurationDef.DEFAULT_DEVICE_NAME));
+        assertNotEquals(original.getTargetPreparers().get(0), copy.getTargetPreparers().get(0));
+        ConfigReceiverPreparer copyReceiver =
+                (ConfigReceiverPreparer) copy.getTargetPreparers().get(0);
+        assertNotNull(copyReceiver.getConfiguration());
+    }
+
+    public static class ConfigReceiverPreparer extends BaseTargetPreparer
+            implements IConfigurationReceiver {
+
+        private IConfiguration mConfig;
+
+        @Override
+        public void setConfiguration(IConfiguration configuration) {
+            mConfig = configuration;
+        }
+
+        public IConfiguration getConfiguration() {
+            return mConfig;
+        }
     }
 }

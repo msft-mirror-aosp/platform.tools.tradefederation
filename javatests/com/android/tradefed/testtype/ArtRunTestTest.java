@@ -61,8 +61,11 @@ public class ArtRunTestTest {
     private ArtRunTest mArtRunTest;
     private OptionSetter mSetter;
     private TestInformation mTestInfo;
-    // Test dependencies directory on host.
+    // Temporary test dependencies directory on host (e.g. for the expectation files).
     private File mTmpDepsDir;
+    // Local temporary directory within the test's dependencies folder, to collect test
+    // outputs pulled from the device-under-test.
+    private File mTmpTestLocalDir;
     // Expected standard output file (within the dependencies directory).
     private File mTmpExpectedStdoutFile;
     // Expected standard error file (within the dependencies directory).
@@ -73,14 +76,21 @@ public class ArtRunTestTest {
         mMockInvocationListener = mock(ITestInvocationListener.class);
         mMockAbi = mock(IAbi.class);
         mMockITestDevice = mock(ITestDevice.class);
-        mArtRunTest = new ArtRunTest();
+        mTmpDepsDir = FileUtil.createTempDir("art-run-test-deps");
+        mTmpTestLocalDir = FileUtil.createTempDir("tmp-test-local", mTmpDepsDir);
+        mArtRunTest =
+                new ArtRunTest() {
+                    @Override
+                    protected File createTestLocalTempDirectory(TestInformation testInfo)
+                            throws IOException {
+                        return mTmpTestLocalDir;
+                    }
+                };
         mArtRunTest.setAbi(mMockAbi);
         mSetter = new OptionSetter(mArtRunTest);
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockITestDevice);
 
-        // Temporary test directory (e.g. for the expectation files).
-        mTmpDepsDir = FileUtil.createTempDir("art-run-test-deps");
         mTestInfo =
                 TestInformation.newBuilder()
                         .setInvocationContext(context)
@@ -162,21 +172,76 @@ public class ArtRunTestTest {
         when(mMockAbi.getName()).thenReturn("abi");
         when(mMockITestDevice.getSerialNumber()).thenReturn("");
         String runName = "ArtRunTest_abi";
+
         // Beginning of test.
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd =
-                String.format(
-                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
-                        classpath);
+        final String stdoutFileName = "stdout.txt";
+        final String stderrFileName = "stderr.txt";
+
+        String tmpTestRemoteDirPath = "/data/local/tmp/test.0123456789";
+        String remoteStdoutFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stdoutFileName);
+        String remoteStderrFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stderrFileName);
+
+        // Create remote temporary directory.
+        String mktempCmd = "mktemp -d -p /data/local/tmp test.XXXXXXXXXX";
+        CommandResult mktempResult =
+                createMockCommandResult(
+                        String.format("%s\n", tmpTestRemoteDirPath), "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(mktempCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(mktempResult);
+
         // Test execution.
-        CommandResult result = createMockCommandResult("output\n", "no error\n", /* exitCode */ 0);
-        when(mMockITestDevice.executeShellV2Command(cmd, 60000L, TimeUnit.MILLISECONDS, 0))
-                .thenReturn(result);
-        // End of test.
+        String dalvikvmCmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main "
+                                + ">%s 2>%s",
+                        classpath, remoteStdoutFilePath, remoteStderrFilePath);
+        CommandResult dalvikvmResult =
+                createMockCommandResult(/* stdout */ "", /* stderr */ "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(dalvikvmCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(dalvikvmResult);
+
+        // Pull and check standard output file from device.
+        String statStdoutCmd = String.format("stat --format %%s %s", remoteStdoutFilePath);
+        File localStdoutFile = new File(mTmpTestLocalDir, stdoutFileName);
+        try (FileWriter fw = new FileWriter(localStdoutFile)) {
+            fw.write("output\n");
+        }
+        CommandResult statStdoutResult = createMockCommandResult("7\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStdoutCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStdoutResult);
+        String md5sumStdoutCmd = String.format("md5sum -b %s", remoteStdoutFilePath);
+        CommandResult md5sumStdoutResult =
+                createMockCommandResult("838337db0b65bfd3a542f0c5ca047ae2\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStdoutCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStdoutResult);
+        when(mMockITestDevice.pullFile(remoteStdoutFilePath, localStdoutFile)).thenReturn(true);
+
+        // Pull and check standard error file from device.
+        String statStderrCmd = String.format("stat --format %%s %s", remoteStderrFilePath);
+        File localStderrFile = new File(mTmpTestLocalDir, stderrFileName);
+        try (FileWriter fw = new FileWriter(localStderrFile)) {
+            fw.write("no error\n");
+        }
+        CommandResult statStderrResult = createMockCommandResult("9\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStderrCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStderrResult);
+        String md5sumStderrCmd = String.format("md5sum -b %s", remoteStderrFilePath);
+        CommandResult md5sumStderrResult =
+                createMockCommandResult("9b5e419ddbb557f83aa0dcba66128358\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStderrCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStderrResult);
+        when(mMockITestDevice.pullFile(remoteStderrFilePath, localStderrFile)).thenReturn(true);
 
         mArtRunTest.run(mTestInfo, mMockInvocationListener);
+
+        // End of test.
 
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
@@ -184,6 +249,8 @@ public class ArtRunTestTest {
                 .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
         verify(mMockInvocationListener)
                 .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+
+        verify(mMockITestDevice).deleteFile(tmpTestRemoteDirPath);
     }
 
     /** Helper containing testing logic for a (single) test expected not to run. */
@@ -228,20 +295,76 @@ public class ArtRunTestTest {
         when(mMockAbi.getName()).thenReturn("abi");
         when(mMockITestDevice.getSerialNumber()).thenReturn("");
         String runName = "ArtRunTest_abi";
+
         // Beginning of test.
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd =
-                String.format(
-                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
-                        classpath);
+        final String stdoutFileName = "stdout.txt";
+        final String stderrFileName = "stderr.txt";
+
+        String tmpTestRemoteDirPath = "/data/local/tmp/test.0123456789";
+        String remoteStdoutFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stdoutFileName);
+        String remoteStderrFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stderrFileName);
+
+        // Create remote temporary directory.
+        String mktempCmd = "mktemp -d -p /data/local/tmp test.XXXXXXXXXX";
+        CommandResult mktempResult =
+                createMockCommandResult(
+                        String.format("%s\n", tmpTestRemoteDirPath), "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(mktempCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(mktempResult);
+
         // Test execution.
-        CommandResult result = createMockCommandResult("output\n", "no error\n", /* exitCode */ 1);
-        when(mMockITestDevice.executeShellV2Command(cmd, 60000L, TimeUnit.MILLISECONDS, 0))
-                .thenReturn(result);
+        String dalvikvmCmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main "
+                                + ">%s 2>%s",
+                        classpath, remoteStdoutFilePath, remoteStderrFilePath);
+        CommandResult dalvikvmResult =
+                createMockCommandResult(/* stdout */ "", /* stderr */ "", /* exitCode */ 1);
+        when(mMockITestDevice.executeShellV2Command(dalvikvmCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(dalvikvmResult);
+
+        // Pull and check standard output file from device.
+        String statStdoutCmd = String.format("stat --format %%s %s", remoteStdoutFilePath);
+        File localStdoutFile = new File(mTmpTestLocalDir, stdoutFileName);
+        try (FileWriter fw = new FileWriter(localStdoutFile)) {
+            fw.write("output\n");
+        }
+        CommandResult statStdoutResult = createMockCommandResult("7\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStdoutCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStdoutResult);
+        String md5sumStdoutCmd = String.format("md5sum -b %s", remoteStdoutFilePath);
+        CommandResult md5sumStdoutResult =
+                createMockCommandResult("838337db0b65bfd3a542f0c5ca047ae2\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStdoutCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStdoutResult);
+        when(mMockITestDevice.pullFile(remoteStdoutFilePath, localStdoutFile)).thenReturn(true);
+
+        // Pull and check standard error file from device.
+        String statStderrCmd = String.format("stat --format %%s %s", remoteStderrFilePath);
+        File localStderrFile = new File(mTmpTestLocalDir, stderrFileName);
+        try (FileWriter fw = new FileWriter(localStderrFile)) {
+            fw.write("no error\n");
+        }
+        CommandResult statStderrResult = createMockCommandResult("9\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStderrCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStderrResult);
+        String md5sumStderrCmd = String.format("md5sum -b %s", remoteStderrFilePath);
+        CommandResult md5sumStderrResult =
+                createMockCommandResult("9b5e419ddbb557f83aa0dcba66128358\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStderrCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStderrResult);
+        when(mMockITestDevice.pullFile(remoteStderrFilePath, localStderrFile)).thenReturn(true);
 
         mArtRunTest.run(mTestInfo, mMockInvocationListener);
+
+        // End of test.
 
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
@@ -250,6 +373,8 @@ public class ArtRunTestTest {
                 .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
         verify(mMockInvocationListener)
                 .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+
+        verify(mMockITestDevice).deleteFile(tmpTestRemoteDirPath);
     }
 
     /**
@@ -270,20 +395,73 @@ public class ArtRunTestTest {
         when(mMockAbi.getName()).thenReturn("abi");
         when(mMockITestDevice.getSerialNumber()).thenReturn("");
         String runName = "ArtRunTest_abi";
+
         // Beginning of test.
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd =
-                String.format(
-                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
-                        classpath);
+        final String stdoutFileName = "stdout.txt";
+        final String stderrFileName = "stderr.txt";
+
+        String tmpTestRemoteDirPath = "/data/local/tmp/test.0123456789";
+        String remoteStdoutFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stdoutFileName);
+        String remoteStderrFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stderrFileName);
+
+        // Create remote temporary directory.
+        String mktempCmd = "mktemp -d -p /data/local/tmp test.XXXXXXXXXX";
+        CommandResult mktempResult =
+                createMockCommandResult(
+                        String.format("%s\n", tmpTestRemoteDirPath), "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(mktempCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(mktempResult);
+
         // Test execution.
-        CommandResult result =
-                createMockCommandResult("unexpected\n", "no error\n", /* exitCode */ 0);
-        when(mMockITestDevice.executeShellV2Command(cmd, 60000L, TimeUnit.MILLISECONDS, 0))
-                .thenReturn(result);
-        // End of test.
+        String dalvikvmCmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main "
+                                + ">%s 2>%s",
+                        classpath, remoteStdoutFilePath, remoteStderrFilePath);
+        CommandResult dalvikvmResult =
+                createMockCommandResult(/* stdout */ "", /* stderr */ "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(dalvikvmCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(dalvikvmResult);
+
+        // Pull and check standard output file from device.
+        String statStdoutCmd = String.format("stat --format %%s %s", remoteStdoutFilePath);
+        File localStdoutFile = new File(mTmpTestLocalDir, stdoutFileName);
+        try (FileWriter fw = new FileWriter(localStdoutFile)) {
+            fw.write("unexpected\n");
+        }
+        CommandResult statStdoutResult = createMockCommandResult("11\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStdoutCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStdoutResult);
+        String md5sumStdoutCmd = String.format("md5sum -b %s", remoteStdoutFilePath);
+        CommandResult md5sumStdoutResult =
+                createMockCommandResult("7410410022642e7ed1af5e31cb69cddb\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStdoutCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStdoutResult);
+        when(mMockITestDevice.pullFile(remoteStdoutFilePath, localStdoutFile)).thenReturn(true);
+
+        // Pull and check standard error file from device.
+        String statStderrCmd = String.format("stat --format %%s %s", remoteStderrFilePath);
+        File localStderrFile = new File(mTmpTestLocalDir, stderrFileName);
+        try (FileWriter fw = new FileWriter(localStderrFile)) {
+            fw.write("no error\n");
+        }
+        CommandResult statStderrResult = createMockCommandResult("9\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStderrCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStderrResult);
+        String md5sumStderrCmd = String.format("md5sum -b %s", remoteStderrFilePath);
+        CommandResult md5sumStderrResult =
+                createMockCommandResult("9b5e419ddbb557f83aa0dcba66128358\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStderrCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStderrResult);
+        when(mMockITestDevice.pullFile(remoteStderrFilePath, localStderrFile)).thenReturn(true);
+
         String errorMessage =
                 "The actual standard output does not match the expected standard output"
                         + " for test `test`:\n"
@@ -295,6 +473,8 @@ public class ArtRunTestTest {
 
         mArtRunTest.run(mTestInfo, mMockInvocationListener);
 
+        // End of test.
+
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
         verify(mMockInvocationListener).testFailed(testId, errorMessage);
@@ -302,6 +482,8 @@ public class ArtRunTestTest {
                 .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
         verify(mMockInvocationListener)
                 .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+
+        verify(mMockITestDevice).deleteFile(tmpTestRemoteDirPath);
     }
 
     /**
@@ -322,20 +504,73 @@ public class ArtRunTestTest {
         when(mMockAbi.getName()).thenReturn("abi");
         when(mMockITestDevice.getSerialNumber()).thenReturn("");
         String runName = "ArtRunTest_abi";
+
         // Beginning of test.
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd =
-                String.format(
-                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
-                        classpath);
+        final String stdoutFileName = "stdout.txt";
+        final String stderrFileName = "stderr.txt";
+
+        String tmpTestRemoteDirPath = "/data/local/tmp/test.0123456789";
+        String remoteStdoutFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stdoutFileName);
+        String remoteStderrFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stderrFileName);
+
+        // Create remote temporary directory.
+        String mktempCmd = "mktemp -d -p /data/local/tmp test.XXXXXXXXXX";
+        CommandResult mktempResult =
+                createMockCommandResult(
+                        String.format("%s\n", tmpTestRemoteDirPath), "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(mktempCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(mktempResult);
+
         // Test execution.
-        CommandResult result =
-                createMockCommandResult("output\n", "unexpected error\n", /* exitCode */ 0);
-        when(mMockITestDevice.executeShellV2Command(cmd, 60000L, TimeUnit.MILLISECONDS, 0))
-                .thenReturn(result);
-        // End of test.
+        String dalvikvmCmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main "
+                                + ">%s 2>%s",
+                        classpath, remoteStdoutFilePath, remoteStderrFilePath);
+        CommandResult dalvikvmResult =
+                createMockCommandResult(/* stdout */ "", /* stderr */ "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(dalvikvmCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(dalvikvmResult);
+
+        // Pull and check standard output file from device.
+        String statStdoutCmd = String.format("stat --format %%s %s", remoteStdoutFilePath);
+        File localStdoutFile = new File(mTmpTestLocalDir, stdoutFileName);
+        try (FileWriter fw = new FileWriter(localStdoutFile)) {
+            fw.write("output\n");
+        }
+        CommandResult statStdoutResult = createMockCommandResult("7\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStdoutCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStdoutResult);
+        String md5sumStdoutCmd = String.format("md5sum -b %s", remoteStdoutFilePath);
+        CommandResult md5sumStdoutResult =
+                createMockCommandResult("838337db0b65bfd3a542f0c5ca047ae2\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStdoutCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStdoutResult);
+        when(mMockITestDevice.pullFile(remoteStdoutFilePath, localStdoutFile)).thenReturn(true);
+
+        // Pull and check standard error file from device.
+        String statStderrCmd = String.format("stat --format %%s %s", remoteStderrFilePath);
+        File localStderrFile = new File(mTmpTestLocalDir, stderrFileName);
+        try (FileWriter fw = new FileWriter(localStderrFile)) {
+            fw.write("unexpected error\n");
+        }
+        CommandResult statStderrResult = createMockCommandResult("17\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStderrCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStderrResult);
+        String md5sumStderrCmd = String.format("md5sum -b %s", remoteStderrFilePath);
+        CommandResult md5sumStderrResult =
+                createMockCommandResult("93b32fd3183049b3427b319330ccd7bc\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStderrCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStderrResult);
+        when(mMockITestDevice.pullFile(remoteStderrFilePath, localStderrFile)).thenReturn(true);
+
         String errorMessage =
                 "The actual standard error does not match the expected standard error"
                         + " for test `test`:\n"
@@ -347,6 +582,8 @@ public class ArtRunTestTest {
 
         mArtRunTest.run(mTestInfo, mMockInvocationListener);
 
+        // End of test.
+
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
         verify(mMockInvocationListener).testFailed(testId, errorMessage);
@@ -354,6 +591,8 @@ public class ArtRunTestTest {
                 .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
         verify(mMockInvocationListener)
                 .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+
+        verify(mMockITestDevice).deleteFile(tmpTestRemoteDirPath);
     }
 
     /**
@@ -374,20 +613,73 @@ public class ArtRunTestTest {
         when(mMockAbi.getName()).thenReturn("abi");
         when(mMockITestDevice.getSerialNumber()).thenReturn("");
         String runName = "ArtRunTest_abi";
+
         // Beginning of test.
 
         TestDescription testId = new TestDescription(runName, runTestName);
 
-        String cmd =
-                String.format(
-                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main",
-                        classpath);
+        final String stdoutFileName = "stdout.txt";
+        final String stderrFileName = "stderr.txt";
+
+        String tmpTestRemoteDirPath = "/data/local/tmp/test.0123456789";
+        String remoteStdoutFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stdoutFileName);
+        String remoteStderrFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stderrFileName);
+
+        // Create remote temporary directory.
+        String mktempCmd = "mktemp -d -p /data/local/tmp test.XXXXXXXXXX";
+        CommandResult mktempResult =
+                createMockCommandResult(
+                        String.format("%s\n", tmpTestRemoteDirPath), "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(mktempCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(mktempResult);
+
         // Test execution.
-        CommandResult result =
-                createMockCommandResult("unexpected\n", "unexpected error\n", /* exitCode */ 2);
-        when(mMockITestDevice.executeShellV2Command(cmd, 60000L, TimeUnit.MILLISECONDS, 0))
-                .thenReturn(result);
-        // End of test.
+        String dalvikvmCmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main "
+                                + ">%s 2>%s",
+                        classpath, remoteStdoutFilePath, remoteStderrFilePath);
+        CommandResult dalvikvmResult =
+                createMockCommandResult(/* stdout */ "", /* stderr */ "", /* exitCode */ 2);
+        when(mMockITestDevice.executeShellV2Command(dalvikvmCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(dalvikvmResult);
+
+        // Pull and check standard output file from device.
+        String statStdoutCmd = String.format("stat --format %%s %s", remoteStdoutFilePath);
+        File localStdoutFile = new File(mTmpTestLocalDir, stdoutFileName);
+        try (FileWriter fw = new FileWriter(localStdoutFile)) {
+            fw.write("unexpected\n");
+        }
+        CommandResult statStdoutResult = createMockCommandResult("11\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStdoutCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStdoutResult);
+        String md5sumStdoutCmd = String.format("md5sum -b %s", remoteStdoutFilePath);
+        CommandResult md5sumStdoutResult =
+                createMockCommandResult("7410410022642e7ed1af5e31cb69cddb\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStdoutCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStdoutResult);
+        when(mMockITestDevice.pullFile(remoteStdoutFilePath, localStdoutFile)).thenReturn(true);
+
+        // Pull and check standard error file from device.
+        String statStderrCmd = String.format("stat --format %%s %s", remoteStderrFilePath);
+        File localStderrFile = new File(mTmpTestLocalDir, stderrFileName);
+        try (FileWriter fw = new FileWriter(localStderrFile)) {
+            fw.write("unexpected error\n");
+        }
+        CommandResult statStderrResult = createMockCommandResult("17\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStderrCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStderrResult);
+        String md5sumStderrCmd = String.format("md5sum -b %s", remoteStderrFilePath);
+        CommandResult md5sumStderrResult =
+                createMockCommandResult("93b32fd3183049b3427b319330ccd7bc\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStderrCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStderrResult);
+        when(mMockITestDevice.pullFile(remoteStderrFilePath, localStderrFile)).thenReturn(true);
+
         String errorMessage =
                 "Test `test` exited with code 2\n"
                         + "The actual standard output does not match the expected standard output"
@@ -408,6 +700,8 @@ public class ArtRunTestTest {
 
         mArtRunTest.run(mTestInfo, mMockInvocationListener);
 
+        // End of test.
+
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
         verify(mMockInvocationListener).testFailed(testId, errorMessage);
@@ -415,6 +709,8 @@ public class ArtRunTestTest {
                 .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
         verify(mMockInvocationListener)
                 .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+
+        verify(mMockITestDevice).deleteFile(tmpTestRemoteDirPath);
     }
 
     /** Test the run method for a (single) test contained in an include filter. */

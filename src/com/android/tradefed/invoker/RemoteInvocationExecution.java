@@ -32,12 +32,15 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceSelectionOptions;
+import com.android.tradefed.device.DeviceSelectionOptions.DeviceRequestedType;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteFileUtil;
+import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -145,7 +148,8 @@ public class RemoteInvocationExecution extends InvocationExecution {
         super.customizeDevicePreInvocation(config, context);
 
         if (config.getCommandOptions().getShardCount() != null
-                && config.getCommandOptions().getShardIndex() == null) {
+                && config.getCommandOptions().getShardIndex() == null
+                && !config.getCommandOptions().isRemoteInvocationDeviceless()) {
             ITestDevice device = context.getDevices().get(0);
             TestDeviceOptions options = device.getOptions();
             // Trigger the multi-tenant start in the VM
@@ -162,7 +166,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
             TestInformation info, IConfiguration config, ITestInvocationListener listener)
             throws Throwable {
         ManagedRemoteDevice device = (ManagedRemoteDevice) info.getDevice();
-        GceAvdInfo gceInfo = device.getRemoteAvdInfo();
+        GceAvdInfo gceInfo = ((AdbSshConnection) device.getConnection()).getAvdInfo();
 
         // Run remote TF (new tests?)
         IRunUtil runUtil = new RunUtil();
@@ -258,7 +262,7 @@ public class RemoteInvocationExecution extends InvocationExecution {
                 globalConfig =
                         GlobalConfiguration.getInstance()
                                 .cloneConfigWithFilter(
-                                        new HashSet<>(), fileTransformer, allowListConfigs);
+                                        new HashSet<>(), fileTransformer, true, allowListConfigs);
             } catch (IOException e) {
                 listener.invocationFailed(createInvocationFailure(e, FailureStatus.INFRA_FAILURE));
                 return;
@@ -703,6 +707,14 @@ public class RemoteInvocationExecution extends InvocationExecution {
             if (deviceConfig.getDeviceRequirements() instanceof DeviceSelectionOptions) {
                 ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
                         .setDeviceTypeRequested(null);
+                if (config.getCommandOptions().isRemoteInvocationDeviceless()) {
+                    ((DeviceSelectionOptions) deviceConfig.getDeviceRequirements())
+                            .setDeviceTypeRequested(DeviceRequestedType.NULL_DEVICE);
+                }
+            }
+            // For deviceless reset instance type so remote has right type
+            if (config.getCommandOptions().isRemoteInvocationDeviceless()) {
+                deviceConfig.getDeviceOptions().setInstanceType(InstanceType.GCE);
             }
         }
 

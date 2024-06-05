@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.ConfigurationDef;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -35,6 +36,8 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+
+import com.google.common.truth.Truth;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -76,6 +79,7 @@ public class ResultsPlayerTest {
         mPlayer = new ResultsPlayer();
         mPlayer.setConfiguration(mMockConfig);
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
+        mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
 
         when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
     }
@@ -90,6 +94,13 @@ public class ResultsPlayerTest {
 
         mPlayer.run(mTestInfo, mMockListener);
 
+        Truth.assertThat(
+                        mContext.getBuildInfos()
+                                .get(0)
+                                .getBuildAttributes()
+                                .get(ResultsPlayer.REPLAY_DONE))
+                .isEqualTo("true");
+
         InOrder inOrder = Mockito.inOrder(mMockListener);
         inOrder.verify(mMockListener).testRunStarted("run1", 2);
         inOrder.verify(mMockListener).testStarted(Mockito.eq(test), Mockito.anyLong());
@@ -97,14 +108,14 @@ public class ResultsPlayerTest {
                 .testEnded(
                         Mockito.eq(test),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         inOrder.verify(mMockListener).testStarted(Mockito.eq(testFail), Mockito.anyLong());
         inOrder.verify(mMockListener).testFailed(testFail, "fail0");
         inOrder.verify(mMockListener)
                 .testEnded(
                         Mockito.eq(testFail),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         inOrder.verify(mMockListener).testRunEnded(500L, new HashMap<String, Metric>());
 
         verify(mMockDevice, times(1)).waitForDeviceAvailable();
@@ -114,14 +125,14 @@ public class ResultsPlayerTest {
                 .testEnded(
                         Mockito.eq(test),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testStarted(Mockito.eq(testFail), Mockito.anyLong());
         verify(mMockListener).testFailed(testFail, "fail0");
         verify(mMockListener)
                 .testEnded(
                         Mockito.eq(testFail),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testRunEnded(500L, new HashMap<String, Metric>());
     }
 
@@ -149,14 +160,14 @@ public class ResultsPlayerTest {
                 .testEnded(
                         Mockito.eq(test),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener, times(2)).testStarted(Mockito.eq(testFail), Mockito.anyLong());
         verify(mMockListener, times(2)).testFailed(testFail, "fail0");
         verify(mMockListener, times(2))
                 .testEnded(
                         Mockito.eq(testFail),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener, times(2)).testRunEnded(500L, new HashMap<String, Metric>());
         verify(mMockListener, times(2)).testModuleEnded();
         // Second module
@@ -188,7 +199,7 @@ public class ResultsPlayerTest {
                 .testEnded(
                         Mockito.eq(test),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testRunEnded(500L, new HashMap<String, Metric>());
     }
 
@@ -226,14 +237,14 @@ public class ResultsPlayerTest {
                 .testEnded(
                         Mockito.eq(test),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testStarted(Mockito.eq(test2), Mockito.anyLong());
         verify(mMockListener).testFailed(test2, "fail0");
         verify(mMockListener)
                 .testEnded(
                         Mockito.eq(test2),
                         Mockito.anyLong(),
-                        Mockito.eq(new HashMap<String, Metric>()));
+                        Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testRunEnded(500L, new HashMap<String, Metric>());
     }
 

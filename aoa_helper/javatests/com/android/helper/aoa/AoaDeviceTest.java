@@ -77,6 +77,7 @@ public class AoaDeviceTest {
     private static final int INVALID_VID = 0x0000;
     private static final int ADB_DISABLED_PID = 0x2D00;
     private static final int ADB_ENABLED_PID = 0x2D01;
+    private static final int AUDIO_ENABLED_PID = 0x2D05;
 
     private AoaDevice mDevice;
 
@@ -190,6 +191,18 @@ public class AoaDeviceTest {
         when(mDelegate.getVendorId()).thenReturn(GOOGLE_VID);
         when(mDelegate.getProductId()).thenReturn(ADB_ENABLED_PID);
         assertTrue(mDevice.isAdbEnabled());
+    }
+
+    @Test
+    public void testIsAudioEnabled() {
+        mDevice = createDevice();
+
+        // invalid PID
+        assertFalse(mDevice.isAudioEnabled());
+
+        // both valid
+        when(mDelegate.getProductId()).thenReturn(AUDIO_ENABLED_PID);
+        assertTrue(mDevice.isAudioEnabled());
     }
 
     @Test

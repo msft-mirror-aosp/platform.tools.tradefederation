@@ -15,9 +15,9 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.MergeStrategy;
 
 import java.util.ArrayList;
@@ -35,6 +35,7 @@ public class TestResult {
 
     private TestStatus mStatus;
     private FailureDescription mFailureDescription;
+    private SkipReason mSkipReason;
     private Map<String, String> mMetrics;
     private HashMap<String, Metric> mProtoMetrics;
     private Map<String, LogFile> mLoggedFiles;
@@ -51,7 +52,12 @@ public class TestResult {
     }
 
     /** Get the {@link TestStatus} result of the test. */
-    public TestStatus getStatus() {
+    public com.android.ddmlib.testrunner.TestResult.TestStatus getStatus() {
+        return TestStatus.convertToDdmlibType(mStatus);
+    }
+
+    /** Get the {@link TestStatus} result of the test. */
+    public TestStatus getResultStatus() {
         return mStatus;
     }
 
@@ -72,6 +78,10 @@ public class TestResult {
      */
     public FailureDescription getFailure() {
         return mFailureDescription;
+    }
+
+    public SkipReason getSkipReason() {
+        return mSkipReason;
     }
 
     /** Get the associated test metrics. */
@@ -128,6 +138,11 @@ public class TestResult {
         return mEndTime;
     }
 
+    public TestResult setStatus(com.android.ddmlib.testrunner.TestResult.TestStatus ddmlibStatus) {
+        mStatus = TestStatus.convertFromDdmlibType(ddmlibStatus);
+        return this;
+    }
+
     /** Set the {@link TestStatus}. */
     public TestResult setStatus(TestStatus status) {
         mStatus = status;
@@ -142,6 +157,10 @@ public class TestResult {
     /** Set the stack trace. */
     public void setFailure(FailureDescription failureDescription) {
         mFailureDescription = failureDescription;
+    }
+
+    public void setSkipReason(SkipReason reason) {
+        mSkipReason = reason;
     }
 
     /** Sets the end time */
@@ -202,6 +221,7 @@ public class TestResult {
         long latestEndTime = Long.MIN_VALUE;
 
         List<FailureDescription> errors = new ArrayList<>();
+        List<SkipReason> skipReasons = new ArrayList<>();
         int pass = 0;
         int fail = 0;
         int assumption_failure = 0;
@@ -215,7 +235,7 @@ public class TestResult {
             mergedResult.mLoggedFiles.putAll(attempt.getLoggedFiles());
             earliestStartTime = Math.min(attempt.getStartTime(), earliestStartTime);
             latestEndTime = Math.max(attempt.getEndTime(), latestEndTime);
-            switch (attempt.getStatus()) {
+            switch (attempt.getResultStatus()) {
                 case PASSED:
                     pass++;
                     break;
@@ -238,8 +258,11 @@ public class TestResult {
                 case IGNORED:
                     ignored++;
                     break;
+                case SKIPPED:
+                    skipReasons.add(attempt.getSkipReason());
+                    break;
             }
-            lastStatus = attempt.getStatus();
+            lastStatus = attempt.mStatus;
         }
 
         switch (strategy) {
@@ -258,6 +281,9 @@ public class TestResult {
                         mergedResult.setStatus(TestStatus.ASSUMPTION_FAILURE);
                     } else if (incomplete > 0) {
                         mergedResult.setStatus(TestStatus.INCOMPLETE);
+                    } else if (!skipReasons.isEmpty()) {
+                        mergedResult.setStatus(TestStatus.SKIPPED);
+                        mergedResult.setSkipReason(skipReasons.get(0));
                     }
                 } else {
                     if (TestStatus.ASSUMPTION_FAILURE.equals(lastStatus)) {
@@ -280,6 +306,9 @@ public class TestResult {
                         mergedResult.setStatus(TestStatus.ASSUMPTION_FAILURE);
                     } else if (incomplete > 0) {
                         mergedResult.setStatus(TestStatus.INCOMPLETE);
+                    } else if (!skipReasons.isEmpty()) {
+                        mergedResult.setStatus(TestStatus.SKIPPED);
+                        mergedResult.setSkipReason(skipReasons.get(0));
                     } else {
                         mergedResult.setStatus(TestStatus.PASSED);
                     }

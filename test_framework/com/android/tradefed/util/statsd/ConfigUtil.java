@@ -41,6 +41,17 @@ import java.util.stream.Collectors;
  * <p>TODO(b/118635164): Merge with device-side configuration utilities.
  */
 public class ConfigUtil {
+    public enum LogSource {
+        AID_BLUETOOTH,
+        AID_GRAPHICS,
+        AID_INCIDENTD,
+        AID_RADIO,
+        AID_ROOT,
+        AID_STATSD,
+        AID_SYSTEM,
+        AID_MEDIA,
+    }
+
     private static final String REMOVE_CONFIG_CMD = "cmd stats config remove";
     private static final String UPDATE_CONFIG_CMD = "cmd stats config update";
 
@@ -53,7 +64,22 @@ public class ConfigUtil {
      */
     public static long pushStatsConfig(ITestDevice device, List<Integer> eventAtomIds)
             throws IOException, DeviceNotAvailableException {
-        StatsdConfig config = generateStatsdConfig(eventAtomIds);
+        return pushStatsConfig(device, eventAtomIds, commonLogSources());
+    }
+
+    /**
+     * Pushes an event-based configuration file to collect atoms provided in {@code eventAtomIds}
+     * from {@code logSources}
+     *
+     * @param device where to push the configuration
+     * @param eventAtomIds a list of event atom IDs to collect
+     * @param logSources a list of log sources from where atoms can be collected
+     * @return ID of the newly pushed configuration file
+     */
+    public static long pushStatsConfig(
+            ITestDevice device, List<Integer> eventAtomIds, List<LogSource> logSources)
+            throws IOException, DeviceNotAvailableException {
+        StatsdConfig config = generateStatsdConfig(eventAtomIds, logSources);
         CLog.d(
                 "Collecting atoms [%s] with the following config: %s",
                 eventAtomIds.stream().map(String::valueOf).collect(Collectors.joining(", ")),
@@ -139,17 +165,20 @@ public class ConfigUtil {
 
     /**
      * Creates an statsd configuration file that will collect the event atoms provided in {@code
-     * eventAtomIds}. Note this only accepts data from the list of {@code #commonLogSources} now.
+     * eventAtomIds} from {@code logSources}.
      *
      * @param eventAtomIds a list of event atom IDs to collect
+     * @param logSources a list of log sources from where atoms can be collected
      * @return the {@code StatsdConfig} device configuration
      */
-    private static StatsdConfig generateStatsdConfig(List<Integer> eventAtomIds) {
+    private static StatsdConfig generateStatsdConfig(
+            List<Integer> eventAtomIds, List<LogSource> logSources) {
         long configId = UUID.randomUUID().hashCode();
         StatsdConfig.Builder configBuilder =
                 StatsdConfig.newBuilder()
                         .setId(configId)
-                        .addAllAllowedLogSource(commonLogSources());
+                        .addAllAllowedLogSource(
+                                logSources.stream().map(Enum::name).collect(Collectors.toList()));
         // Add all event atom matchers.
         for (Integer id : eventAtomIds) {
             long atomMatcherId = UUID.randomUUID().hashCode();
@@ -170,14 +199,15 @@ public class ConfigUtil {
     }
 
     /** Returns a list of common trusted log sources. */
-    private static List<String> commonLogSources() {
+    private static List<LogSource> commonLogSources() {
         return Arrays.asList(
-                "AID_BLUETOOTH",
-                "AID_GRAPHICS",
-                "AID_INCIENTD",
-                "AID_RADIO",
-                "AID_ROOT",
-                "AID_STATSD",
-                "AID_SYSTEM");
+                LogSource.AID_BLUETOOTH,
+                LogSource.AID_GRAPHICS,
+                LogSource.AID_INCIDENTD,
+                LogSource.AID_RADIO,
+                LogSource.AID_ROOT,
+                LogSource.AID_STATSD,
+                LogSource.AID_SYSTEM);
     }
 }
+

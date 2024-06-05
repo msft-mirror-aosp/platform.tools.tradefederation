@@ -2,6 +2,7 @@ package com.android.tradefed.targetprep;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -116,6 +117,7 @@ public class AllTestAppsInstallSetupTest {
 
     @Test
     public void testSetupForceQueryable() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(false);
         when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
         File testDir = FileUtil.createTempDir("TestAppSetupForceQueryableTest");
         // fake hierarchy of directory and files
@@ -129,6 +131,31 @@ public class AllTestAppsInstallSetupTest {
                     .thenReturn(null);
 
             mPrep.setUp(mTestInfo);
+            verify(mMockTestDevice, atLeastOnce())
+                    .installPackage(
+                            (File) Mockito.any(),
+                            Mockito.eq(true),
+                            Mockito.eq("--force-queryable"));
+        } finally {
+            FileUtil.recursiveDelete(testDir);
+        }
+    }
+
+    @Test
+    public void testSetupDeviceApi34ForceQueryableIsFalse() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(true);
+        when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
+        File testDir = FileUtil.createTempDir("TestAppSetupForceQueryableTest");
+        // fake hierarchy of directory and files
+        FileUtil.createTempFile("fakeApk", ".apk", testDir);
+        try {
+            when(mMockBuildInfo.getTestsDir()).thenReturn(testDir);
+            when(mMockTestDevice.installPackage((File) Mockito.any(), Mockito.eq(true)))
+                    .thenReturn(null);
+
+            mPrep.setUp(mTestInfo);
+            verify(mMockTestDevice, atLeastOnce())
+                    .installPackage((File) Mockito.any(), Mockito.eq(true));
         } finally {
             FileUtil.recursiveDelete(testDir);
         }

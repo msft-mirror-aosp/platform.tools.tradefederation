@@ -104,7 +104,7 @@ public class SandboxConfigUtilTest {
     public void testDumpVersion_badClasspath() throws Exception {
         try {
             SandboxConfigUtil.dumpConfigForVersion(
-                    "", mMockRunUtil, new String[] {"empty"}, DumpCmd.FULL_XML, null);
+                    "", mMockRunUtil, new String[] {"empty"}, DumpCmd.FULL_XML, null, true);
             fail("Should have thrown an exception.");
         } catch (SandboxConfigurationException expected) {
             assertEquals(

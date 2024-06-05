@@ -51,9 +51,9 @@ public class GTestListTestParserTest extends GTestParserTestBase {
         parser.flush();
 
         // 11 passing test cases in this run
-        verify(mockRunListener).testRunStarted(TEST_MODULE_NAME, 23);
-        verify(mockRunListener, times(23)).testStarted((TestDescription) Mockito.any());
-        verify(mockRunListener, times(23))
+        verify(mockRunListener).testRunStarted(TEST_MODULE_NAME, 24);
+        verify(mockRunListener, times(24)).testStarted((TestDescription) Mockito.any());
+        verify(mockRunListener, times(24))
                 .testEnded((TestDescription) Mockito.any(), Mockito.<HashMap<String, Metric>>any());
         verify(mockRunListener)
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());

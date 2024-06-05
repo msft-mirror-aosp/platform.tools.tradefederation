@@ -17,14 +17,16 @@ package com.android.tradefed.cluster;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.log.LogUtil.CLog;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 /** A class to model a TestEnvironment message returned by TFC API. */
 public class TestEnvironment {
@@ -44,6 +46,7 @@ public class TestEnvironment {
     String mLogLevel = null;
     final List<TradefedConfigObject> mTradefedConfigObjects = new ArrayList<>();
     boolean mUseParallelSetup = false;
+    private final List<String> mExcludedFilesInJavaClasspath = new ArrayList<>();
 
     /**
      * Adds an environment variable.
@@ -131,7 +134,9 @@ public class TestEnvironment {
         mUseSubprocessReporting = f;
     }
 
-    /** @return maximum millis to wait for an invocation */
+    /**
+     * @return maximum millis to wait for an invocation
+     */
     public long getInvocationTimeout() {
         return mInvocationTimeout;
     }
@@ -140,7 +145,9 @@ public class TestEnvironment {
         mInvocationTimeout = value;
     }
 
-    /** @return maximum millis to wait for an idle subprocess */
+    /**
+     * @return maximum millis to wait for an idle subprocess
+     */
     public long getOutputIdleTimeout() {
         return mOutputIdleTimeout;
     }
@@ -195,7 +202,9 @@ public class TestEnvironment {
         mExtraContextFiles.add(path);
     }
 
-    /** @return list of additional file paths to append to context file */
+    /**
+     * @return list of additional file paths to append to context file
+     */
     public List<String> getExtraContextFiles() {
         return Collections.unmodifiableList(mExtraContextFiles);
     }
@@ -233,6 +242,19 @@ public class TestEnvironment {
 
     public void setUseParallelSetup(boolean f) {
         mUseParallelSetup = f;
+    }
+
+    public void addExcludedFileInJavaClasspath(final String s) {
+        mExcludedFilesInJavaClasspath.add(s);
+    }
+
+    /**
+     * Returns a list of excluded files in java classpath
+     *
+     * @return unmodifiable list of files
+     */
+    public List<String> getExcludedFilesInJavaClasspath() {
+        return Collections.unmodifiableList(mExcludedFilesInJavaClasspath);
     }
 
     public static TestEnvironment fromJson(JSONObject json) throws JSONException {
@@ -304,6 +326,14 @@ public class TestEnvironment {
             obj.mTradefedConfigObjects.addAll(TradefedConfigObject.fromJsonArray(arr));
         }
         obj.mUseParallelSetup = json.optBoolean("use_parallel_setup", true);
+        JSONArray excludedFiles = json.optJSONArray("excluded_files_in_java_classpath");
+        if (excludedFiles != null) {
+            for (int i = 0; i < excludedFiles.length(); i++) {
+                obj.addExcludedFileInJavaClasspath(excludedFiles.getString(i));
+            }
+        } else {
+            CLog.w("exclude_files_in_java_classpath is null");
+        }
         return obj;
     }
 }

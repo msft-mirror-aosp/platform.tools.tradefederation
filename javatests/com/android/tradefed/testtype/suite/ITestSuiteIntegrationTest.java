@@ -51,6 +51,7 @@ import com.android.tradefed.result.suite.SuiteResultReporter;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.testtype.Abi;
+import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.FileUtil;
@@ -630,6 +631,9 @@ public class ITestSuiteIntegrationTest {
             if (test instanceof IInvocationContextReceiver) {
                 ((IInvocationContextReceiver) test).setInvocationContext(mContext);
             }
+            if (test instanceof IDeviceTest) {
+                ((IDeviceTest) test).setDevice(mMockDevice);
+            }
             test.run(mTestInfo, new ResultForwarder(config.getTestInvocationListeners()));
         }
         new ResultForwarder(config.getTestInvocationListeners()).invocationEnded(500);
@@ -657,6 +661,17 @@ public class ITestSuiteIntegrationTest {
         assertEquals(0, mListener.getFailedTests());
     }
 
+    @Test
+    public void testRun_intraModuleSharding_shard0_even() throws Exception {
+        helperTestShardIndex(2, 0, true);
+        // Only a subpart of the module runs. 2 out of 3 tests.
+        assertEquals(1, mListener.getTotalModules());
+        assertEquals(1, mListener.getCompleteModules());
+        assertEquals(2, mListener.getTotalTests());
+        assertEquals(2, mListener.getPassedTests());
+        assertEquals(0, mListener.getFailedTests());
+    }
+
     /**
      * Test when sharding a single module into several shard and requesting only a subset to run.
      */
@@ -671,7 +686,23 @@ public class ITestSuiteIntegrationTest {
         assertEquals(0, mListener.getFailedTests());
     }
 
+    @Test
+    public void testRun_intraModuleSharding_shard1_even() throws Exception {
+        helperTestShardIndex(2, 1, true);
+        // Only a subpart of the module runs. 1 out of 3 tests.
+        assertEquals(1, mListener.getTotalModules());
+        assertEquals(1, mListener.getCompleteModules());
+        assertEquals(1, mListener.getTotalTests());
+        assertEquals(1, mListener.getPassedTests());
+        assertEquals(0, mListener.getFailedTests());
+    }
+
     private void helperTestShardIndex(int shardCount, int shardIndex) throws Exception {
+        helperTestShardIndex(shardCount, shardIndex, false);
+    }
+
+    private void helperTestShardIndex(int shardCount, int shardIndex, boolean useEvenModuleSharding)
+            throws Exception {
         List<TestDescription> tests = new ArrayList<>();
         tests.add(new TestDescription("class1", "test1"));
         tests.add(new TestDescription("class1", "test2"));
@@ -691,6 +722,7 @@ public class ITestSuiteIntegrationTest {
         config.setTestInvocationListener(mListener);
         config.getCommandOptions().setShardCount(shardCount);
         config.getCommandOptions().setShardIndex(shardIndex);
+        config.getCommandOptions().setShouldUseEvenModuleSharding(useEvenModuleSharding);
         // invocation context
         mMockBuildInfo = new BuildInfo("9999", "test-target");
         mContext = new InvocationContext();
@@ -709,6 +741,9 @@ public class ITestSuiteIntegrationTest {
             }
             if (test instanceof IInvocationContextReceiver) {
                 ((IInvocationContextReceiver) test).setInvocationContext(mContext);
+            }
+            if (test instanceof IDeviceTest) {
+                ((IDeviceTest) test).setDevice(mMockDevice);
             }
             test.run(mTestInfo, new ResultForwarder(config.getTestInvocationListeners()));
         }
