@@ -158,6 +158,67 @@ public class XmlResultReporterTest {
     }
 
     /**
+     * A simple test to ensure expected output is generated for test run with a single ignored test.
+     */
+    @Test
+    public void testSingleIgnored() {
+        HashMap<String, Metric> emptyMap = new HashMap<>();
+        final TestDescription testId = new TestDescription("FooTest", "testFoo");
+        IInvocationContext context = new InvocationContext();
+        context.addDeviceBuildInfo("fakeDevice", new BuildInfo());
+        context.setTestTag("stub");
+        mResultReporter.invocationStarted(context);
+        mResultReporter.testRunStarted("run", 1);
+        mResultReporter.testStarted(testId);
+        mResultReporter.testIgnored(testId);
+        mResultReporter.testEnded(testId, emptyMap);
+        mResultReporter.testRunEnded(3, emptyMap);
+        mResultReporter.invocationEnded(1);
+        String output = getOutput();
+        // TODO: consider doing xml based compare
+        assertTrue(output.contains("tests=\"1\" failures=\"0\" errors=\"0\""));
+        final String testCaseTag =
+                String.format(
+                        "<testcase name=\"%s\" classname=\"%s\"",
+                        testId.getTestName(), testId.getClassName());
+        assertTrue(output.contains(testCaseTag));
+        final String ignoredTag = String.format("<ignored />");
+        assertTrue(output.contains(ignoredTag));
+    }
+
+    /**
+     * A simple test to ensure expected output is generated for test run with a single assumption
+     * failure test.
+     */
+    @Test
+    public void testSingleAssumptionFailure() {
+        HashMap<String, Metric> emptyMap = new HashMap<>();
+        final TestDescription testId = new TestDescription("FooTest", "testFoo");
+        final String trace = "this is a trace";
+        IInvocationContext context = new InvocationContext();
+        context.addDeviceBuildInfo("fakeDevice", new BuildInfo());
+        context.setTestTag("stub");
+        mResultReporter.invocationStarted(context);
+        mResultReporter.testRunStarted("run", 1);
+        mResultReporter.testStarted(testId);
+        mResultReporter.testAssumptionFailure(testId, trace);
+        mResultReporter.testEnded(testId, emptyMap);
+        mResultReporter.testRunEnded(3, emptyMap);
+        mResultReporter.invocationEnded(1);
+        String output = getOutput();
+        // TODO: consider doing xml based compare
+        assertTrue(output.contains("tests=\"1\" failures=\"0\" errors=\"0\""));
+        final String testCaseTag =
+                String.format(
+                        "<testcase name=\"%s\" classname=\"%s\"",
+                        testId.getTestName(), testId.getClassName());
+        assertTrue(output.contains(testCaseTag));
+        final String assumptionfailureTag =
+                String.format("<assumption_failure>%s</assumption_failure>", trace);
+        assertTrue(output.contains(assumptionfailureTag));
+    }
+
+    /**
      * Gets the output produced, stripping it of extraneous whitespace characters.
      */
     private String getOutput() {

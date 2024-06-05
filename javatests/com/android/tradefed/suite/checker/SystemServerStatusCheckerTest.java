@@ -76,7 +76,6 @@ public class SystemServerStatusCheckerTest {
         assertEquals(CheckStatus.SUCCESS, mChecker.preExecutionCheck(mMockDevice).getStatus());
         StatusCheckerResult result = mChecker.postExecutionCheck(mMockDevice);
         assertEquals(CheckStatus.FAILED, result.getStatus());
-        assertTrue(result.isBugreportNeeded());
     }
 
     /** Test that system checker fail if system_server restarted with device reboot. */

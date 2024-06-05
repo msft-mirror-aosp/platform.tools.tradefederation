@@ -17,14 +17,20 @@
 package com.android.tradefed.util;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import static java.util.Arrays.asList;
+
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.targetprep.TargetSetupError;
 
 import org.junit.After;
 import org.junit.Before;
@@ -38,6 +44,8 @@ import org.mockito.MockitoAnnotations;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Unit tests for {@link BundletoolUtil} */
 @RunWith(JUnit4.class)
@@ -80,7 +88,7 @@ public class BundletoolUtilTest {
     }
 
     @Test
-    public void testGetBundletoolFile() throws Exception {
+    public void testGetBundletoolFile() {
         mBundletoolUtil = new BundletoolUtil(mBundletoolJar);
 
         assertEquals(mBundletoolUtil.getBundletoolFile(), mBundletoolJar);
@@ -88,18 +96,7 @@ public class BundletoolUtilTest {
 
     @Test
     public void testGenerateDeviceSpecFile() throws Exception {
-        CommandResult res = new CommandResult();
-        res.setStatus(CommandStatus.SUCCESS);
-        when(mMockRuntil.runTimedCmd(
-                        (Long) Mockito.anyLong(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any()))
-                .thenReturn(res);
+        mockRunCmd(CommandStatus.SUCCESS);
         Path expectedSpecFilePath =
                 Paths.get(mBundletoolJar.getParentFile().getAbsolutePath(), "serial.json");
 
@@ -120,19 +117,7 @@ public class BundletoolUtilTest {
     @Test
     public void testextractSplitsFromApks() throws Exception {
         File fakeApks = File.createTempFile("fakeApks", ".apks");
-
-        CommandResult res = new CommandResult();
-        res.setStatus(CommandStatus.SUCCESS);
-        when(mMockRuntil.runTimedCmd(
-                        (Long) Mockito.anyLong(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any()))
-                .thenReturn(res);
+        mockRunCmd(CommandStatus.SUCCESS);
 
         File splits =
                 mBundletoolUtil.extractSplitsFromApks(
@@ -150,25 +135,14 @@ public class BundletoolUtilTest {
 
         FileUtil.deleteFile(fakeApks);
         FileUtil.deleteFile(splits);
-        assertTrue(!fakeApks.exists());
-        assertTrue(!splits.exists());
+        assertFalse(fakeApks.exists());
+        assertFalse(splits.exists());
     }
 
     @Test
     public void test_extractSplitsFromApksFail() throws Exception {
         File fakeApks = File.createTempFile("fakeApks", ".apks");
-        CommandResult res = new CommandResult();
-        res.setStatus(CommandStatus.FAILED);
-        when(mMockRuntil.runTimedCmd(
-                        (Long) Mockito.anyLong(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any(),
-                        (String) Mockito.any()))
-                .thenReturn(res);
+        mockRunCmd(CommandStatus.FAILED);
 
         File splits = null;
 
@@ -188,5 +162,80 @@ public class BundletoolUtilTest {
 
         FileUtil.deleteFile(fakeApks);
         assertNull(splits);
+    }
+
+    @Test
+    public void test_installApksFromZip() throws Exception {
+        File fakeApksZip = File.createTempFile("fakeApks", ".zip");
+        String fileInput = "--apks-zip=" + fakeApksZip.getAbsolutePath();
+        mockRunCmd(CommandStatus.SUCCESS);
+        List<String> extraArgs = new ArrayList<String>();
+        extraArgs.add("--update-only");
+        extraArgs.add("--enable-rollback");
+
+        mBundletoolUtil.installApksFromZip(fakeApksZip, mMockDevice, extraArgs);
+        verify(mMockRuntil, times(1))
+                .runTimedCmd(
+                        120000,
+                        "java",
+                        "-jar",
+                        mBundletoolJar.getAbsolutePath(),
+                        "install-multi-apks",
+                        fileInput,
+                        "--device-id=serial",
+                        "--update-only",
+                        "--enable-rollback",
+                        "--adb=adb");
+        FileUtil.deleteFile(fakeApksZip);
+    }
+
+    @Test
+    public void test_installApksFromZip_changeTimeout() throws Exception {
+        File fakeApksZip = File.createTempFile("fakeApks", ".zip");
+        String fileInput = "--apks-zip=" + fakeApksZip.getAbsolutePath();
+        mockRunCmd(CommandStatus.SUCCESS);
+        List<String> extraArgs = new ArrayList<String>();
+        extraArgs.add("--update-only");
+        extraArgs.add("--enable-rollback");
+        extraArgs.add("--timeout-millis=180000");
+
+        mBundletoolUtil.installApksFromZip(fakeApksZip, mMockDevice, extraArgs);
+        verify(mMockRuntil, times(1))
+                .runTimedCmd(
+                        180000,
+                        "java",
+                        "-jar",
+                        mBundletoolJar.getAbsolutePath(),
+                        "install-multi-apks",
+                        fileInput,
+                        "--device-id=serial",
+                        "--update-only",
+                        "--enable-rollback",
+                        "--timeout-millis=180000",
+                        "--adb=adb");
+        FileUtil.deleteFile(fakeApksZip);
+    }
+
+    @Test
+    public void parseCmdTimeout_expectedResults() throws Exception {
+        assertEquals(
+                120000,
+                BundletoolUtil.parseCmdTimeout(
+                        asList("key1", "value1", "--timeout-millis=120000"), 60000));
+        assertEquals(
+                60000,
+                BundletoolUtil.parseCmdTimeout(
+                        asList("key1", "value1", "--timeout-millis=-120000"), 60000));
+        assertThrows(
+                TargetSetupError.class,
+                () ->
+                        BundletoolUtil.parseCmdTimeout(
+                                asList("key1", "value1", "--timeout-millis=invalid"), 60000));
+    }
+
+    private void mockRunCmd(CommandStatus status) {
+        CommandResult res = new CommandResult();
+        res.setStatus(status);
+        when(mMockRuntil.runTimedCmd(anyLong(), any(String.class))).thenReturn(res);
     }
 }

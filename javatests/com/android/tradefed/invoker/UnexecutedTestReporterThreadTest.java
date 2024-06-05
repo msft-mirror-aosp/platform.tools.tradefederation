@@ -47,6 +47,7 @@ public class UnexecutedTestReporterThreadTest {
         mReporterThread = new UnexecutedTestReporterThread(mMockListener, mTests);
     }
 
+    @SuppressWarnings("DoNotCall")
     @Test
     public void testNoTests() {
         mReporterThread.run();
@@ -54,6 +55,7 @@ public class UnexecutedTestReporterThreadTest {
         verify(mMockListener, Mockito.times(0)).testRunStarted(Mockito.any(), Mockito.anyInt());
     }
 
+    @SuppressWarnings("DoNotCall")
     @Test
     public void testOneTests() {
         IRemoteTest test = new TestReport();
@@ -64,6 +66,7 @@ public class UnexecutedTestReporterThreadTest {
     }
 
     /** Tests that do not implement IReportNotExecuted are not reported. */
+    @SuppressWarnings("DoNotCall")
     @Test
     public void testSeveralTests_oneReporter() {
         IRemoteTest test = new TestReport();

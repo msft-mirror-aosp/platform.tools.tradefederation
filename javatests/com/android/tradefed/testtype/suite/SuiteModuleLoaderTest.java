@@ -1091,4 +1091,66 @@ public class SuiteModuleLoaderTest {
                 mRepo.isInAlphabeticalOrder(
                         "com.android.permission.apex+com.android.ipsec.apex+com.android.cellbroadcast.apex"));
     }
+
+    /** Test that when no include-filter are given we fallback to default loading. */
+    @Test
+    public void testLoadConfigsWithNoIncludeFilters() throws Exception {
+        createModuleConfig("module1");
+        createModuleConfig("module2");
+
+        mRepo =
+                new SuiteModuleLoader(
+                        new LinkedHashMap<String, LinkedHashSet<SuiteTestFilter>>(),
+                        new LinkedHashMap<String, LinkedHashSet<SuiteTestFilter>>(),
+                        new ArrayList<>(),
+                        new ArrayList<>());
+
+        mRepo.setLoadConfigsWithIncludeFilters(true);
+        List<String> patterns = new ArrayList<>();
+        patterns.add(".*.config");
+        patterns.add(".*.xml");
+        LinkedHashMap<String, IConfiguration> res =
+                mRepo.loadConfigsFromDirectory(
+                        Arrays.asList(mTestsDir), mAbis, null, null, patterns);
+
+        // When no filter exists, fallback to load everything
+        assertEquals(2, res.size());
+    }
+
+    /** Test that the test config is loaded based on the given include-filter. */
+    @Test
+    public void testLoadConfigsWithIncludeFilters() throws Exception {
+        createModuleConfig("module1");
+        createModuleConfig("module2");
+
+        Map<String, LinkedHashSet<SuiteTestFilter>> includeFilters = new LinkedHashMap<>();
+        SuiteTestFilter filter = SuiteTestFilter.createFrom("armeabi-v7a module1");
+        LinkedHashSet<SuiteTestFilter> mapFilter = new LinkedHashSet<>();
+        mapFilter.add(filter);
+        includeFilters.put("armeabi-v7a module1", mapFilter);
+
+        mRepo =
+            new SuiteModuleLoader(
+                includeFilters,
+                new LinkedHashMap<String, LinkedHashSet<SuiteTestFilter>>(),
+                new ArrayList<>(),
+                new ArrayList<>());
+
+        mRepo.setLoadConfigsWithIncludeFilters(false);
+        List<String> patterns = new ArrayList<>();
+        patterns.add(".*.config");
+        patterns.add(".*.xml");
+        LinkedHashMap<String, IConfiguration> res =
+            mRepo.loadConfigsFromDirectory(
+                Arrays.asList(mTestsDir), mAbis, null, null, patterns);
+
+        // Ensure only module1.config is loaded.
+        assertEquals(1, res.size());
+
+        IConfiguration module = res.get("armeabi-v7a module1");
+        assertNotNull(module);
+
+        module = res.get("armeabi-v7a module2");
+        assertNull(module);
+    }
 }

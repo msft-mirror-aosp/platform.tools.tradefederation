@@ -31,10 +31,12 @@ import com.android.tradefed.device.IDeviceMonitor.DeviceLister;
 import com.android.tradefed.device.IManagedTestDevice.DeviceEventResponse;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -135,10 +137,11 @@ public class DeviceManager implements IDeviceManager {
     private int mNumEmulatorSupported = 1;
     @Option(name = "max-null-devices",
             description = "the maximum number of no device runs that can be allocated at one time.")
-    private int mNumNullDevicesSupported = 5;
+    private int mNumNullDevicesSupported = 7;
+    @Deprecated
     @Option(name = "max-tcp-devices",
             description = "the maximum number of tcp devices that can be allocated at one time")
-    private int mNumTcpDevicesSupported = 1;
+    private int mNumTcpDevicesSupported = 0;
 
     @Option(
         name = "max-gce-devices",
@@ -274,9 +277,6 @@ public class DeviceManager implements IDeviceManager {
             // don't set fastboot enabled bit until mFastbootListeners has been initialized
             mFastbootEnabled = true;
             deviceFactory.setFastbootEnabled(mFastbootEnabled);
-            // Populate the fastboot devices
-            // TODO: remove when refactoring fastboot handling
-            addFastbootDevices();
             CLog.d("Using Fastboot from: '%s'", getFastbootPath());
         } else {
             CLog.w("Fastboot is not available.");
@@ -287,7 +287,10 @@ public class DeviceManager implements IDeviceManager {
         }
 
         // don't start adding devices until fastboot support has been established
-        startAdbBridgeAndDependentServices();
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("startAdbBridgeAndDependentServices")) {
+            startAdbBridgeAndDependentServices();
+        }
         // We change the state of some mutable properties quite often so we can't keep this caching
         // for our invocations.
         PropertyFetcher.enableCachingMutableProps(false);
@@ -320,13 +323,15 @@ public class DeviceManager implements IDeviceManager {
         }
 
         mAdbBridge.init(false /* client support */, mAdbPath);
-        addEmulators();
-        addNullDevices();
-        addTcpDevices();
-        addGceDevices();
-        addRemoteDevices();
-        addLocalVirtualDevices();
-        addNetworkDevices();
+        try (CloseableTraceScope add = new CloseableTraceScope("add_devices")) {
+            addEmulators();
+            addNullDevices();
+            addTcpDevices();
+            addGceDevices();
+            addRemoteDevices();
+            addLocalVirtualDevices();
+            addNetworkDevices();
+        }
 
         List<IMultiDeviceRecovery> recoverers = getGlobalConfig().getMultiDeviceRecoveryHandlers();
         if (recoverers != null && !recoverers.isEmpty()) {
@@ -440,6 +445,12 @@ public class DeviceManager implements IDeviceManager {
         if (mGlobalDeviceFilter != null && !mGlobalDeviceFilter.matches(testDevice.getIDevice())) {
             CLog.logAndDisplay(LogLevel.INFO, "device %s doesn't match global filter, ignoring",
                     testDevice.getSerialNumber());
+            Map<String, String> reasons = mGlobalDeviceFilter.getNoMatchReason();
+            for (Map.Entry<String, String> reason : reasons.entrySet()) {
+                CLog.logAndDisplay(
+                        LogLevel.INFO,
+                        "Match failed because " + reason.getKey() + ": " + reason.getValue());
+            }
             mManagedDeviceList.handleDeviceEvent(testDevice, DeviceEvent.AVAILABLE_CHECK_IGNORED);
             return;
         }
@@ -548,20 +559,17 @@ public class DeviceManager implements IDeviceManager {
             //  hostname.google.com:vsoc-1
             String[] parts = preconfigureDevice.split(":", 2);
             preconfigureHostUsers.putIfAbsent(parts[0], new ArrayList<>());
-            preconfigureHostUsers.get(parts[0]).add(parts[1]);
+            preconfigureHostUsers.get(parts[0]).add(parts.length > 1 ? parts[1] : null);
         }
         for (Map.Entry<String, List<String>> hostUsers : preconfigureHostUsers.entrySet()) {
             for (int i = 0; i < hostUsers.getValue().size(); i++) {
-                addAvailableDevice(
-                        new RemoteAvdIDevice(
-                                String.format(
-                                        "%s-%s-%s",
-                                        GCE_DEVICE_SERIAL_PREFIX,
-                                        hostUsers.getKey(),
-                                        hostUsers.getValue().get(i)),
-                                hostUsers.getKey(),
-                                hostUsers.getValue().get(i),
-                                i));
+                String user = hostUsers.getValue().get(i);
+                String serial =
+                        String.format("%s-%s-%d", GCE_DEVICE_SERIAL_PREFIX, hostUsers.getKey(), i);
+                if (user != null) {
+                    serial += "-" + user;
+                }
+                addAvailableDevice(new RemoteAvdIDevice(serial, hostUsers.getKey(), user, i));
             }
         }
 
@@ -576,7 +584,16 @@ public class DeviceManager implements IDeviceManager {
         for (int i = 0; i < mNumLocalVirtualDevicesSupported; i++) {
             addAvailableDevice(
                     new StubLocalAndroidVirtualDevice(
-                            String.format("%s-%s", LOCAL_VIRTUAL_DEVICE_SERIAL_PREFIX, i)));
+                            String.format("%s-%s", LOCAL_VIRTUAL_DEVICE_SERIAL_PREFIX, i), i));
+        }
+    }
+
+    public void addFastbootDevice(FastbootDevice fastbootDevice) {
+        IManagedTestDevice d = mManagedDeviceList.findOrCreateFastboot(fastbootDevice);
+        if (d != null) {
+            mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FASTBOOT_DETECTED);
+        } else {
+            CLog.e("Could not create stub device");
         }
     }
 
@@ -586,17 +603,6 @@ public class DeviceManager implements IDeviceManager {
             mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FORCE_AVAILABLE);
         } else {
             CLog.e("Could not create stub device");
-        }
-    }
-
-    private void addFastbootDevices() {
-        final FastbootHelper fastboot = new FastbootHelper(getRunUtil(), getFastbootPath());
-        Set<String> serials = fastboot.getDevices();
-        for (String serial : serials) {
-            FastbootDevice d = new FastbootDevice(serial);
-            if (mGlobalDeviceFilter != null && mGlobalDeviceFilter.matches(d)) {
-                addAvailableDevice(d);
-            }
         }
     }
 
@@ -669,7 +675,16 @@ public class DeviceManager implements IDeviceManager {
             addAvailableDevice(new NullDevice(serial, true));
             options.setSerial(serial);
         }
-        return mManagedDeviceList.allocate(options);
+        ITestDevice device = mManagedDeviceList.allocate(options);
+        int maxRetry = 6;
+        while (device == null
+                && System.getenv(TradefedSandbox.SANDBOX_ENABLED) != null
+                && maxRetry != 0) {
+            RunUtil.getDefault().sleep(500); // Give up to 30 seconds to detect a device in sandbox
+            device = mManagedDeviceList.allocate(options);
+            maxRetry--;
+        }
+        return device;
     }
 
     /**
@@ -706,7 +721,9 @@ public class DeviceManager implements IDeviceManager {
     @Override
     public void freeDevice(ITestDevice device, FreeDeviceState deviceState) {
         checkInit();
-        IManagedTestDevice managedDevice = (IManagedTestDevice)device;
+        IManagedTestDevice managedDevice = (IManagedTestDevice) device;
+        // Reset fastboot path to original one no matter what
+        managedDevice.setFastbootPath(getFastbootPath());
         // force stop capturing logcat just to be sure
         managedDevice.stopLogcat();
         IDevice ideviceToReturn = device.getIDevice();
@@ -1163,11 +1180,8 @@ public class DeviceManager implements IDeviceManager {
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    public List<DeviceDescriptor> listAllDevices() {
+    public List<DeviceDescriptor> listAllDevices(boolean shortDescriptor) {
         final List<DeviceDescriptor> serialStates = new ArrayList<DeviceDescriptor>();
         if (mAdbBridgeNeedRestart) {
             return serialStates;
@@ -1176,7 +1190,7 @@ public class DeviceManager implements IDeviceManager {
             if (d == null) {
                 continue;
             }
-            DeviceDescriptor desc = d.getCachedDeviceDescriptor();
+            DeviceDescriptor desc = d.getCachedDeviceDescriptor(shortDescriptor);
             if (desc != null) {
                 serialStates.add(desc);
             }
@@ -1186,12 +1200,18 @@ public class DeviceManager implements IDeviceManager {
 
     /** {@inheritDoc} */
     @Override
+    public List<DeviceDescriptor> listAllDevices() {
+        return listAllDevices(false);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public DeviceDescriptor getDeviceDescriptor(String serial) {
         IManagedTestDevice device = mManagedDeviceList.find(serial);
         if (device == null) {
             return null;
         }
-        return device.getDeviceDescriptor();
+        return device.getDeviceDescriptor(false);
     }
 
     @Override
@@ -1484,7 +1504,7 @@ public class DeviceManager implements IDeviceManager {
                             d.setFastbootd(true);
                         }
                         if (mGlobalDeviceFilter != null && mGlobalDeviceFilter.matches(d)) {
-                            addAvailableDevice(d);
+                            addFastbootDevice(d);
                         }
                     }
                 }

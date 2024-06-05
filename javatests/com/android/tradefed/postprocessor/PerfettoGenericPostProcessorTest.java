@@ -76,6 +76,8 @@ public class PerfettoGenericPostProcessorTest {
 
     File perfettoMetricProtoFile = null;
 
+    private static final Boolean DEBUG = false;
+
     @Before
     public void setUp() throws ConfigurationException {
         initMocks(this);
@@ -331,6 +333,32 @@ public class PerfettoGenericPostProcessorTest {
                 15120269);
     }
 
+    /** Test metrics enabled with multiple key and string value prefixing. */
+    @Test
+    public void testParsingWithMultipleKeyAndStringValuePrefixing()
+            throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION,
+                "perfetto.protos.ProcessRenderInfo.process_name");
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION,
+                "perfetto.protos.ProcessRenderInfo.rt_cpu_time_ms");
+        mOptionSetter.setOptionValue(ALL_METRICS_OPTION, "true");
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(
+                PREFIX_OPTION_VALUE,
+                new LogFile(
+                        perfettoMetricProtoFile.getAbsolutePath(), "some.url", LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics = mProcessor
+                .processRunMetricsAndLogs(new HashMap<>(), testLogs);
+
+        assertMetricsContain(
+                parsedMetrics,
+                "perfetto_android_hwui_metric-process_info-process_name-com.android.systemui-"
+                + "rt_cpu_time_ms-2481-all_mem_min",
+                15120269);
+    }
+
     /** Test metrics enabled with key and integer value prefixing. */
     @Test
     public void testParsingWithKeyAndIntegerValuePrefixing()
@@ -448,6 +476,79 @@ public class PerfettoGenericPostProcessorTest {
         if (null != metricProtoFile) {
             metricProtoFile.delete();
         }
+    }
+
+    /**
+     * Test metrics are parsed correctly when there are files with and without corresponding proto
+     * definition
+     */
+    @Test
+    public void testMetricsWithPrefixInnerMessageField()
+            throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION,
+                "perfetto.protos.AndroidJankCujMetric.Cuj.name");
+        mOptionSetter.setOptionValue("perfetto-prefix-inner-message-key-field",
+                "perfetto.protos.AndroidProcessMetadata.name");
+        mOptionSetter.setOptionValue(ALL_METRICS_OPTION, "true");
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(
+                PREFIX_OPTION_VALUE,
+                new LogFile(
+                        perfettoMetricProtoFile.getAbsolutePath(), "some.url", LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics = mProcessor
+                .processRunMetricsAndLogs(new HashMap<>(), testLogs);
+
+        assertMetricsContain(
+                parsedMetrics,
+                "android_jank_cuj-cuj-name-com.android.systemui-name-NOTIFICATION_ADD-timeline_"
+                + "metrics-frame_dur_avg",
+                5040562);
+    }
+
+    @Test
+    public void testBlockingCallsMetric() throws ConfigurationException, IOException {
+        setupPerfettoMetricFile(METRIC_FILE_FORMAT.text, true, true);
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(KEY_PREFIX_OPTION, "perfetto.protos.AndroidBlockingCall.name");
+
+        mOptionSetter.setOptionValue(REPLACE_REGEX_OPTION, "android_blocking_calls_cuj_metric",
+                "android_blocking_call");
+        mOptionSetter.setOptionValue(REGEX_OPTION_VALUE,
+                "android_blocking_calls_cuj_metric.*calls-name-.*"
+                        + "(min_dur_ms|max_dur|total_dur|cnt).*");
+
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(PREFIX_OPTION_VALUE,
+                new LogFile(perfettoMetricProtoFile.getAbsolutePath(), "some.url",
+                        LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedMetrics = mProcessor.processRunMetricsAndLogs(
+                new HashMap<>(), testLogs);
+
+        if (DEBUG) {
+            printOutputMetricsForDebug(parsedMetrics);
+        }
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-TASKBAR_EXPAND-blocking_calls-name-AIDL"
+                        + "::java::ITrustManager::isDeviceSecure::server-total_dur_ms", 1);
+
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-TASKBAR_EXPAND-blocking_calls-name-AIDL"
+                        + "::java::ITrustManager::isDeviceSecure::server-min_dur_ms", 0);
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-TASKBAR_EXPAND-blocking_calls-name-AIDL"
+                        + "::java::ITrustManager::isDeviceSecure::server-max_dur_ms", 1);
+
+        assertMetricsContain(parsedMetrics,
+                "perfetto_android_blocking_call-cuj-name-ACTION_REQUEST_IME_HIDDEN"
+                        + "::HIDE_SOFT_INPUT-blocking_calls-name-AIDL::java::ITrustManager"
+                        + "::isDeviceSecure::server-total_dur_ms", 1);
+    }
+
+    private void printOutputMetricsForDebug(Map<String, Metric.Builder> metrics) {
+        System.out.println("\n\noutput metrics:\n\n");
+        metrics.forEach((k, v) -> System.out.println(k + " value: " + v));
     }
 
     /** Test that post processor runtime is reported if metrics are present. */
@@ -601,7 +702,45 @@ public class PerfettoGenericPostProcessorTest {
                         + "    all_mem_min: 15120269\n"
                         + "    all_mem_avg: 24468104.289592762\n"
                         + "  }\n"
-                        + "}"
+                        + "}\n"
+                        + "android_jank_cuj {\n"
+                        + "  cuj {\n"
+                        + "    id: 1\n"
+                        + "    name: \"NOTIFICATION_ADD\"\n"
+                        + "    process {\n"
+                        + "      name: \"com.android.systemui\"\n"
+                        + "      uid: 10240\n"
+                        + "    }\n"
+                        + "    ts: 70088466677776\n"
+                        + "    dur: 460793302\n"
+                        + "     counter_metrics {\n"
+                        + "      }\n"
+                        + "      trace_metrics {\n"
+                        + "        total_frames: 54\n"
+                        + "        missed_frames: 0\n"
+                        + "        missed_app_frames: 0\n"
+                        + "        missed_sf_frames: 0\n"
+                        + "        frame_dur_max: 9845520\n"
+                        + "        frame_dur_avg: 6003033\n"
+                        + "        frame_dur_p50: 5871663\n"
+                        + "        frame_dur_p90: 7130112\n"
+                        + "        frame_dur_p95: 7406218\n"
+                        + "        frame_dur_p99: 9188145\n"
+                        + "     }\n"
+                        + "      timeline_metrics {\n"
+                        + "        total_frames: 54\n"
+                        + "        missed_frames: 0\n"
+                        + "        missed_app_frames: 0\n"
+                        + "        missed_sf_frames: 0\n"
+                        + "        frame_dur_max: 9111735\n"
+                        + "        frame_dur_avg: 5040562\n"
+                        + "        frame_dur_p50: 4961384\n"
+                        + "        frame_dur_p90: 6045320\n"
+                        + "        frame_dur_p95: 6621224\n"
+                        + "        frame_dur_p99: 7827968\n"
+                        + "      }\n"
+                        + "    }\n"
+                        + " }\n"
                         + "android_cpu {\n"
                         + "  process_info {\n"
                         + "    name: \"com.google.android.apps.messaging\"\n"
@@ -649,6 +788,44 @@ public class PerfettoGenericPostProcessorTest {
                         + "      }\n"
                         + "    }\n"
                         + " }\n"
+                        + "}\n"
+                        + "android_blocking_calls_cuj_metric {\n"
+                        + "  cuj {\n"
+                        + "    id: 1\n"
+                        + "    name: \"TASKBAR_EXPAND\"\n"
+                        + "    process {\n"
+                        + "      name: \"com.google.android.apps.nexuslauncher\"\n"
+                        + "      uid: 10248\n"
+                        + "      pid: 8834\n"
+                        + "    }\n"
+                        + "    ts: 5124565418314\n"
+                        + "    dur: 215758545\n"
+                        + "    blocking_calls {\n"
+                        + "      name: \"AIDL::java::ITrustManager::isDeviceSecure::server\"\n"
+                        + "      cnt: 3\n"
+                        + "      total_dur_ms: 1\n"
+                        + "      max_dur_ms: 1\n"
+                        + "      min_dur_ms: 0\n"
+                        + "    }\n"
+                        + "  }\n"
+                        + "  cuj {\n"
+                        + "    id: 2\n"
+                        + "    name: \"ACTION_REQUEST_IME_HIDDEN::HIDE_SOFT_INPUT\"\n"
+                        + "    process {\n"
+                        + "      name: \"com.google.android.apps.nexuslauncher\"\n"
+                        + "      uid: 10248\n"
+                        + "      pid: 8834\n"
+                        + "    }\n"
+                        + "    ts: 5125365576395\n"
+                        + "    dur: 306844\n"
+                        + "    blocking_calls {\n"
+                        + "      name: \"AIDL::java::ITrustManager::isDeviceSecure::server\"\n"
+                        + "      cnt: 3\n"
+                        + "      total_dur_ms: 1\n"
+                        + "      max_dur_ms: 1\n"
+                        + "      min_dur_ms: 0\n"
+                        + "    }\n"
+                        + "  }\n"
                         + "}";
 
         String perfettoTextContentWithoutMetricProto =
