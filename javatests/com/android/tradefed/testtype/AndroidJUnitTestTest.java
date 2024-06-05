@@ -540,7 +540,7 @@ public class AndroidJUnitTestTest {
      * not for <package>.
      */
     @Test
-    public void testIsClassOrMethod() throws Exception {
+    public void c() throws Exception {
         assertFalse("String was just package", mAndroidJUnitTest.isClassOrMethod("android.test"));
         assertTrue("String was class", mAndroidJUnitTest.isClassOrMethod("android.test.Foo"));
         assertTrue("String was method", mAndroidJUnitTest.isClassOrMethod("android.test.Foo#bar"));
@@ -611,5 +611,25 @@ public class AndroidJUnitTestTest {
         // Make sure shards cannot be re-sharded
         assertNull(((AndroidJUnitTest) res.get(0)).split(2));
         assertNull(((AndroidJUnitTest) res.get(0)).split());
+    }
+
+    /** Test runner raises exception if filters mixing regex and class/method are used. */
+    @Test
+    public void testRun_includeFilterMixRegex() throws Exception {
+        setRunTestExpectations();
+
+        // regex filter
+        mAndroidJUnitTest.addIncludeFilter("some.*testName");
+        mAndroidJUnitTest.addIncludeFilter("justtestName");
+        try {
+            mAndroidJUnitTest.run(mTestInfo, mMockListener);
+        } catch (IllegalArgumentException expected) {
+            // expected.
+            // don't verify test run either since it should fail out
+            return;
+        }
+        fail(
+                "IllegalArgumentException not raised for filters with mixing regex and class/method"
+                        + " name.");
     }
 }
