@@ -17,6 +17,7 @@
 package com.android.tradefed.cache;
 
 import build.bazel.remote.execution.v2.Digest;
+import build.bazel.remote.execution.v2.DigestFunction;
 import com.google.common.base.Preconditions;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
@@ -31,6 +32,7 @@ import java.nio.file.Files;
 
 /** Utility methods to compute {@link Digest}. */
 public class DigestCalculator {
+    public static final DigestFunction.Value DIGEST_FUNCTION = DigestFunction.Value.SHA256;
     private static final HashFunction HASH_FUNCTION = Hashing.sha256();
 
     /**

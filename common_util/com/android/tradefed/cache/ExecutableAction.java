@@ -19,6 +19,7 @@ package com.android.tradefed.cache;
 import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.Command;
 import build.bazel.remote.execution.v2.Command.EnvironmentVariable;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Platform;
 import build.bazel.remote.execution.v2.Platform.Property;
 import com.google.auto.value.AutoValue;
@@ -70,10 +71,13 @@ public abstract class ExecutableAction {
             actionBuilder.setTimeout(Duration.newBuilder().setSeconds(timeout).build());
         }
 
-        return new AutoValue_ExecutableAction(actionBuilder.build(), command);
+        Action action = actionBuilder.build();
+        return new AutoValue_ExecutableAction(action, DigestCalculator.compute(action), command);
     }
 
     public abstract Action action();
+
+    public abstract Digest actionDigest();
 
     public abstract Command command();
 }

@@ -25,6 +25,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -228,8 +229,16 @@ public class RunUtil implements IRunUtil {
             }
         }
 
-        ExecutableActionResult cachedResult =
-                action != null && cacheClient != null ? cacheClient.lookupCache(action) : null;
+        ExecutableActionResult cachedResult = null;
+        try {
+            cachedResult =
+                    action != null && cacheClient != null ? cacheClient.lookupCache(action) : null;
+        } catch (IOException e) {
+            CLog.e("Failed to lookup cache!");
+            CLog.e(e);
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+        }
         if (cachedResult != null) {
             try {
                 return handleCachedResult(cachedResult, stdout, stderr);
