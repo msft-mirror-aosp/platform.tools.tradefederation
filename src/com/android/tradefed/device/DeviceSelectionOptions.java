@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Android Open Source Project
+ * Copyright (C) 201040 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import com.android.tradefed.config.OptionUpdateRule;
 import com.android.tradefed.device.DeviceManager.FastbootDevice;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.base.Strings;
 
@@ -49,8 +48,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         NULL_DEVICE(NullDevice.class),
         /** Allocate an emulator running locally for the test. */
         LOCAL_EMULATOR(StubDevice.class),
-        /** Use a placeholder for a remote device that will be connected later. */
-        TCP_DEVICE(TcpDevice.class),
         /** Use a placeholder for a remote device nested in a virtualized environment. */
         GCE_DEVICE(RemoteAvdIDevice.class),
         /** Use a placeholder for a remote device in virtualized environment. */
@@ -104,10 +101,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
     @Option(name = "null-device", shortName = 'n', description =
         "do not allocate a device for this test.")
     private boolean mNullDeviceRequested = false;
-
-    @Option(name = "tcp-device", description =
-            "start a placeholder for a tcp device that will be connected later.")
-    private boolean mTcpDeviceRequested = false;
 
     @Option(
             name = "gce-device",
@@ -308,12 +301,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     /** {@inheritDoc} */
     @Override
-    public boolean tcpDeviceRequested() {
-      return false;
-    }
-
-    /** {@inheritDoc} */
-    @Override
     public boolean gceDeviceRequested() {
         if (mRequestedType != null) {
             return mRequestedType.equals(DeviceRequestedType.GCE_DEVICE);
@@ -361,19 +348,7 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         mNullDeviceRequested = nullDeviceRequested;
     }
 
-    /**
-     * Sets the tcp device requested flag
-     */
-    public void setTcpDeviceRequested(boolean tcpDeviceRequested) {
-        // This should never get called. Log stack trace if it does.
-        CLog.e("Ignore unexpected call: %s", StreamUtil.getStackTrace(new Exception("")));
-    }
-
     public void setDeviceTypeRequested(DeviceRequestedType requestedType) {
-        if (requestedType == DeviceRequestedType.TCP_DEVICE) {
-            CLog.e("Ignore unexpected call: %s", StreamUtil.getStackTrace(new Exception("")));
-            return;
-        }
         mRequestedType = requestedType;
     }
 
@@ -680,7 +655,7 @@ public class DeviceSelectionOptions implements IDeviceSelection {
                         deviceSerial, "device is null-device while requested type was not");
                 return false;
             }
-            if (tcpDeviceRequested() != TcpDevice.class.equals(device.getClass())) {
+            if (TcpDevice.class.equals(device.getClass())) {
                 // We only match an exact TcpDevice here, no child class.
                 addNoMatchReason(deviceSerial, "device is tcp-device while requested type was not");
                 return false;
