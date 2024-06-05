@@ -22,9 +22,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
+import com.google.auth.Credentials;
+import com.google.auth.oauth2.GoogleCredentials;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -32,7 +31,6 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -52,16 +50,13 @@ public class ServiceAccountKeyCredentialFactory implements ICredentialFactory {
 
     /** {@inheritDoc} */
     @Override
-    public Credential createCredential(Collection<String> scopes) throws IOException {
+    public Credentials createCredential(Collection<String> scopes) throws IOException {
         try {
-            GoogleCredential credential =
-                    GoogleCredential.fromStream(
-                                    new FileInputStream(mKeyFile),
-                                    GoogleNetHttpTransport.newTrustedTransport(),
-                                    GsonFactory.getDefaultInstance())
+            GoogleCredentials credential =
+                    GoogleCredentials.fromStream(new FileInputStream(mKeyFile))
                             .createScoped(scopes);
             return credential;
-        } catch (GeneralSecurityException e) {
+        } catch (IOException e) {
             throw new IOException(e);
         }
     }

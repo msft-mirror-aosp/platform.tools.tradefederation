@@ -96,11 +96,6 @@ public class ClusterOptions implements IClusterOptions {
     private Map<String, String> mDeviceTag = new HashMap<>();
 
     @Option(
-            name = "check-flashing-permits-on-lease",
-            description = "Check available flashing permits when leasing tasks")
-    private boolean mCheckFlashingPermitsOnLease = true;
-
-    @Option(
             name = "check-permits-on-lease",
             description = "Check all available permits types when leasing tasks")
     private boolean mCheckPermitsOnLease = true;
@@ -172,12 +167,6 @@ public class ClusterOptions implements IClusterOptions {
 
     /** {@inheritDoc} */
     @Override
-    public boolean checkFlashingPermitsOnLease() {
-        return mCheckFlashingPermitsOnLease;
-    }
-
-    /** {@inheritDoc} */
-    @Override
     public boolean checkPermitsOnLease() {
         return mCheckPermitsOnLease;
     }
@@ -243,15 +232,6 @@ public class ClusterOptions implements IClusterOptions {
      */
     void setDeviceMonitorSnapshotInterval(long interval) {
         mDeviceMonitorSnapshotInterval = interval;
-    }
-
-    /**
-     * Set whether the scheduler should check if there are available flashing permits.
-     *
-     * <p>Exposed for testing.
-     */
-    void setCheckFlashingPermitsLease(boolean checkFlashingPermitsLease) {
-        mCheckFlashingPermitsOnLease = checkFlashingPermitsLease;
     }
 
     /**

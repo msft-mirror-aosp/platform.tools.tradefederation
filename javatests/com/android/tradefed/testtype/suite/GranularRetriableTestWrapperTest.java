@@ -37,6 +37,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
+import com.android.tradefed.device.connection.AdbSshConnection;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
@@ -311,7 +312,7 @@ public class GranularRetriableTestWrapperTest {
             ModuleDefinition module)
             throws Exception {
         GranularRetriableTestWrapper granularTestWrapper =
-                new GranularRetriableTestWrapper(test, module, null, null, null, maxRunCount);
+                new GranularRetriableTestWrapper(test, module, null, null, maxRunCount);
         granularTestWrapper.setModuleId("test module");
         granularTestWrapper.setMarkTestsSkipped(false);
         granularTestWrapper.setMetricCollectors(collectors);
@@ -350,8 +351,12 @@ public class GranularRetriableTestWrapperTest {
         Mockito.doThrow(new DeviceNotAvailableException("fake message", "serial"))
                 .when(mockTest)
                 .run(Mockito.any(), Mockito.any(ITestInvocationListener.class));
+        ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module.shouldRecoverVirtualDevice()).thenReturn(false);
+        Mockito.when(module.getModuleInvocationContext()).thenReturn(mModuleInvocationContext);
 
-        GranularRetriableTestWrapper granularTestWrapper = createGranularTestWrapper(mockTest, 1);
+        GranularRetriableTestWrapper granularTestWrapper =
+                createGranularTestWrapper(mockTest, 1, new ArrayList<>(), module);
         try {
             granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
             fail("Should have thrown an exception.");
@@ -1025,7 +1030,8 @@ public class GranularRetriableTestWrapperTest {
         test.setRunFailure("I failed!");
 
         RemoteAndroidVirtualDevice avdDevice = Mockito.mock(RemoteAndroidVirtualDevice.class);
-        Mockito.when(avdDevice.powerwashGce()).thenReturn(true);
+        AdbSshConnection avdConnection = Mockito.mock(AdbSshConnection.class);
+        Mockito.when(avdDevice.getConnection()).thenReturn(avdConnection);
 
         ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
         // Suite level preparers failed.
@@ -1073,7 +1079,8 @@ public class GranularRetriableTestWrapperTest {
         test.setRunFailure("I failed!");
 
         RemoteAndroidVirtualDevice device = Mockito.mock(RemoteAndroidVirtualDevice.class);
-        Mockito.when(device.powerwashGce()).thenReturn(false);
+        AdbSshConnection avdConnection = Mockito.mock(AdbSshConnection.class);
+        Mockito.when(device.getConnection()).thenReturn(avdConnection);
         Mockito.when(device.getSerialNumber()).thenReturn("device1");
 
         test.setDevice(device);
@@ -1121,6 +1128,24 @@ public class GranularRetriableTestWrapperTest {
                                 "%s defined in [%s] took 100 seconds while timeout is %s seconds",
                                 mModuleName, mTestMappingPath, mTimeout.getSeconds())));
         assertFalse(listener.getCurrentRunResults().getRunFailureDescription().isRetriable());
+    }
+
+    /** Test to get test-mapping sources when initializing MainGranularRunListener. */
+    @Test
+    public void testInitializeGranularRunListener_GetTestMappingSources() throws Exception {
+        ModuleDefinition module = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module.getModuleInvocationContext()).thenReturn(mModuleInvocationContext);
+        IRemoteTest mIRemoteTest = new FakeTest();
+        List<String> mTestMappingSources = Arrays.asList("a/b", "c/d");
+        String mModuleName = "module";
+        Mockito.when(module.getId()).thenReturn(mModuleName);
+        mConfigurationDescriptor.addMetadata(
+                Integer.toString(mIRemoteTest.hashCode()), mTestMappingSources);
+
+        GranularRetriableTestWrapper granularTestWrapper =
+                createGranularTestWrapper(mIRemoteTest, 3, new ArrayList<>(), module);
+        ModuleListener listener = granularTestWrapper.getResultListener();
+        assertEquals(listener.getTestMappingSources(), mTestMappingSources);
     }
 
     /** Collector that track if it was called or not */

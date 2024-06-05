@@ -28,6 +28,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 
 import java.io.File;
@@ -39,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,20 +48,30 @@ import java.util.regex.Pattern;
 public class ModulePusher {
     private static final String APEX_SUFFIX = ".apex";
     private static final String APK_SUFFIX = ".apk";
+    private static final String CAPEX_SUFFIX = ".capex";
     private static final String APEX_DIR = "/system/apex/";
+
+    // Constants for adb commands.
     private static final String DISABLE_VERITY = "disable-verity";
     private static final String ENABLE_TESTHARNESS = "cmd testharness enable";
-    private static final String GET_APEX_PACKAGE_VERSION =
-            "cmd package list packages --apex-only --show-versioncode| grep ";
-    private static final String GET_APK_PACKAGE_VERSION =
-            "cmd package list packages --show-versioncode| grep ";
+    private static final String RM_PACKAGE_CACHE = "rm -Rf /data/system/package_cache/";
+    private static final String GET_APEX_PACKAGE_VERSIONS =
+            "cmd package list packages --apex-only --show-versioncode| grep 'com.google'";
+    private static final String GET_APK_PACKAGE_VERSIONS =
+            "cmd package list packages --show-versioncode| grep 'com.google'";
     private static final String REMOUNT_COMMAND = "remount";
-    private static final int HEAD_LENGTH = "package:".length();
     private static final String GET_GOOGLE_MODULES = "pm get-moduleinfo | grep 'com.google'";
+    private static final String LS_SYSTEM_APEX = "ls /system/apex/";
+
+    private static final String PACKAGE_HEAD = "package:";
+    private static final Pattern VERSION_CODE_PATTERN =
+            Pattern.compile("package:(?<package>.+) versionCode:(?<versionCode>.+)");
+    public static final String LINE_BREAK = "\\r?\\n";
 
     private final long mWaitTimeMs;
     private final long mDelayWaitingTimeMs;
     private final ITestDevice mDevice;
+    private ImmutableMap<String, Path> mApexPathsUnderSystem;
 
     /** Fatal error during Mainline module push. */
     public static class ModulePushError extends HarnessException {
@@ -136,15 +148,21 @@ public class ModulePusher {
      *
      * @param moduleFiles a multimap from package names to the package files. In split case, the
      *     base package should be the first in iteration order.
-     * @param factory_reset if reload via factory reset.
+     * @param factoryReset if reload via factory reset.
      */
-    public void installModules(ImmutableMultimap<String, File> moduleFiles, boolean factory_reset)
+    public void installModules(
+            ImmutableMultimap<String, File> moduleFiles,
+            boolean factoryReset,
+            boolean disablePackageCache)
             throws TargetSetupError, DeviceNotAvailableException, ModulePushError {
         ITestDevice device = mDevice;
         setupDevice(device);
         checkPreloadModules(device);
         List<ModuleInfo> pushedModules = pushModulesToDevice(device, moduleFiles);
-        reloadAllModules(device, factory_reset);
+        if (disablePackageCache) {
+            cleanPackageCache(device);
+        }
+        reloadAllModules(device, factoryReset);
         waitForDeviceToBeResponsive(mWaitTimeMs);
         checkApexActivated(device, pushedModules);
         LogUtil.CLog.i("Check pushed module version code after device reboot");
@@ -222,7 +240,7 @@ public class ModulePusher {
         LogUtil.CLog.i("Preloaded modules:");
         String out = device.executeShellV2Command(GET_GOOGLE_MODULES).getStdout();
         if (out != null) {
-            LogUtil.CLog.i("Preload modules are as below: \n %s", out);
+            LogUtil.CLog.i("Preload modules are as below: \n%s", out);
         } else {
             throw new ModulePushError(
                     "no modules preloaded", DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
@@ -240,9 +258,23 @@ public class ModulePusher {
             ITestDevice device, ImmutableMultimap<String, File> moduleFiles)
             throws DeviceNotAvailableException, ModulePushError {
         List<ModuleInfo> pushedModules = new ArrayList<>();
+        int apiLevel = device.getApiLevel();
+        ImmutableMap<String, String> versionCodes = getGooglePackageVersionCodesOnDevice(device);
+        // Checking the existence of version codes before any push avoids exceptions in the middle
+        // of the push.
+        for (String packageName : moduleFiles.keySet()) {
+            if (!versionCodes.containsKey(packageName)) {
+                throw new ModulePushError(
+                        String.format(
+                                "Can't get version code of %s on the device %s.",
+                                packageName, device.getSerialNumber()),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+        }
         for (String packageName : moduleFiles.keySet()) {
             File[] toPush = moduleFiles.get(packageName).toArray(new File[0]);
-            pushedModules.add(pushFile(toPush, device, packageName));
+            pushedModules.add(
+                    pushFile(toPush, device, packageName, apiLevel, versionCodes.get(packageName)));
         }
         return pushedModules;
     }
@@ -251,29 +283,34 @@ public class ModulePusher {
      * Push files of one package to the {@code device} directly.
      *
      * <p>The files should require no further unzip before pushing. Push files to /system/apex/ for
-     * apex or /system/** for apk
+     * apex or /system/** for apk. The package should be installed on the device already.
      *
      * @param moduleFiles an array of module files for one package
      * @param device under test
      * @param packageName of the mainline package
+     * @param apiLevel of the device
+     * @param preloadVersion of the package on the device
      * @return info of the module to push
      * @throws ModulePushError if expected behavior during push
      * @throws DeviceNotAvailableException if device not available
      */
-    ModuleInfo pushFile(File[] moduleFiles, ITestDevice device, String packageName)
+    ModuleInfo pushFile(
+            File[] moduleFiles,
+            ITestDevice device,
+            String packageName,
+            int apiLevel,
+            String preloadVersion)
             throws DeviceNotAvailableException, ModulePushError {
         if (moduleFiles.length == 0) {
             throw new ModulePushError("No file to push.", DeviceErrorIdentifier.FAIL_PUSH_FILE);
         }
 
-        boolean isAPK = hasExtension(APK_SUFFIX, moduleFiles[0]);
-        String preloadVersion = getPackageVersioncodeOnDevice(device, packageName, isAPK);
         ModuleInfo moduleInfo = retrieveModuleInfo(moduleFiles[0]);
         LogUtil.CLog.i(
                 "To update module %s from version %s to %s",
                 packageName, preloadVersion, moduleInfo.versionCode());
 
-        Path[] preloadPaths = getPreloadPaths(device, moduleFiles, packageName);
+        Path[] preloadPaths = getPreloadPaths(device, moduleFiles, packageName, apiLevel);
         Path packagePath = preloadPaths[0];
         Path toRename;
         boolean isDir = preloadPaths.length > 1;
@@ -305,40 +342,44 @@ public class ModulePusher {
     }
 
     /**
-     * Check the version of installed package on device.
+     * Check the versions of all installed packages whose package name starts with "com.google".
+     *
+     * <p>We assume all mainline modules are Google packages.
      *
      * @param device under test.
-     * @param packageName pushed package name
-     * @return the package version.
+     * @return a map from package names to the version codes.
      * @throws DeviceNotAvailableException throws exception if device not found.
      */
-    @VisibleForTesting
-    protected String getPackageVersioncodeOnDevice(
-            ITestDevice device, String packageName, boolean isAPK)
-            throws DeviceNotAvailableException, ModulePushError {
-        String outputs =
-                isAPK
-                        ? device.executeShellV2Command(GET_APK_PACKAGE_VERSION + packageName)
-                                .getStdout()
-                        : device.executeShellV2Command(GET_APEX_PACKAGE_VERSION + packageName)
-                                .getStdout();
-
+    private ImmutableMap<String, String> getGooglePackageVersionCodesOnDevice(ITestDevice device)
+            throws DeviceNotAvailableException {
+        ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+        String outputs = device.executeShellV2Command(GET_APEX_PACKAGE_VERSIONS).getStdout();
         // TODO(liuyg@): add wait-time to get output info and try to fix flakiness
         waitForDeviceToBeResponsive(mDelayWaitingTimeMs);
-        LogUtil.CLog.i("Output string is %s", outputs);
-        String removeHead = outputs.split(String.format("package:%s versionCode:", packageName))[1];
-        Pattern pattern = Pattern.compile("\\w+");
-        Matcher matcher = pattern.matcher(removeHead);
-        String packageVersion;
-        if (matcher.lookingAt()) {
-            packageVersion = matcher.group();
-            LogUtil.CLog.i("Package '%s' version code is %s", packageName, packageVersion);
-        } else {
-            throw new ModulePushError(
-                    String.format("The output %s doesn't match the version code pattern.", outputs),
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        LogUtil.CLog.i("Apex version code output string is:\n%s", outputs);
+        builder.putAll(parsePackageVersionCodes(outputs));
+        outputs = device.executeShellV2Command(GET_APK_PACKAGE_VERSIONS).getStdout();
+        waitForDeviceToBeResponsive(mDelayWaitingTimeMs);
+        LogUtil.CLog.i("Apk version code output string is:\n%s", outputs);
+        builder.putAll(parsePackageVersionCodes(outputs));
+        return builder.build();
+    }
+
+    /** Parses lines of "package:{key} versionCode:{value}" into a map. */
+    @VisibleForTesting
+    protected ImmutableMap<String, String> parsePackageVersionCodes(String output) {
+        ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+        for (String line : output.split(LINE_BREAK)) {
+            Matcher matcher = VERSION_CODE_PATTERN.matcher(line.trim());
+            if (matcher.matches()) {
+                builder.put(matcher.group("package"), matcher.group("versionCode"));
+            } else {
+                LogUtil.CLog.w(
+                        "The line %s doesn't match the pattern of version code. Skip the line.",
+                        line);
+            }
         }
-        return packageVersion;
+        return builder.build();
     }
 
     /**
@@ -351,12 +392,27 @@ public class ModulePusher {
      * @param device under test
      * @param moduleFiles local modules files to install
      * @param packageName of the module
+     * @param apiLevel of the device
      * @return the paths of the preload files.
      */
     @VisibleForTesting
-    protected Path[] getPreloadPaths(ITestDevice device, File[] moduleFiles, String packageName)
+    protected Path[] getPreloadPaths(
+            ITestDevice device, File[] moduleFiles, String packageName, int apiLevel)
             throws DeviceNotAvailableException, ModulePushError {
-        String[] paths = getPathsOnDevice(device, packageName);
+        String[] paths;
+        try {
+            paths = getPathsOnDevice(device, packageName);
+        } catch (ModulePushError e) {
+            if (apiLevel < 31 /* Build.VERSION_CODES.S */
+                    && hasExtension(APEX_SUFFIX, moduleFiles[0])) {
+                // The Q and R build may not show apex path.
+                // But we know the system apex path is always /system/apex/...
+                return new Path[] {Paths.get(APEX_DIR, packageName + APEX_SUFFIX)};
+            }
+            LogUtil.CLog.w(
+                    "Failed to get path of package %s on API level %d", packageName, apiLevel);
+            throw e;
+        }
         if (paths.length > 1) {
             // Split case.
             List<Path> res = new ArrayList<>();
@@ -374,21 +430,17 @@ public class ModulePusher {
                 res.add(Paths.get(filePath));
             }
             return res.toArray(new Path[0]);
-        } else if (hasExtension(APK_SUFFIX, moduleFiles[0])) {
-            return new Path[] {Paths.get(paths[0])};
-        } else { // apex
-            // The Q build may not show apex path.
-            if (paths.length == 0) {
-                return new Path[] {Paths.get(APEX_DIR, packageName + APEX_SUFFIX)};
-            }
+        } else { // paths.length == 1
             // There is an issue that some system apex are provided as decompressed file under
             // /data/apex/decompressed. We assume that the apex under /system/apex will
             // get decompressed and overwrite the decompressed variant in reload.
             // Log the cases for debugging.
-            if (!paths[0].startsWith(APEX_DIR)) {
+            if (hasExtension(APEX_SUFFIX, moduleFiles[0]) && !paths[0].startsWith(APEX_DIR)) {
                 LogUtil.CLog.w(
-                        "The path of the system apex is not /system/apex. Actual paths are: %s",
-                        Arrays.toString(paths));
+                        "The path of the system apex is not /system/apex. Actual source paths are:"
+                                + " %s. Expect to override them with packages in %s after reboot.",
+                        Arrays.toString(paths), APEX_DIR);
+                return new Path[] {getApexPathUnderSystem(device, packageName)};
             }
             return new Path[] {Paths.get(paths[0])};
         }
@@ -405,7 +457,7 @@ public class ModulePusher {
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
         // All files in the dir should be the package files.
-        return packageFileNum == lsResult.getStdout().split("\n").length;
+        return packageFileNum == lsResult.getStdout().split(LINE_BREAK).length;
     }
 
     /**
@@ -420,8 +472,8 @@ public class ModulePusher {
     protected String[] getPathsOnDevice(ITestDevice device, String packageName)
             throws DeviceNotAvailableException, ModulePushError {
         String output = device.executeShellV2Command("pm path " + packageName).getStdout();
-        String[] lines = output.split("\n");
-        if (!output.contains("package") || lines.length == 0) {
+        String[] lines = output.split(LINE_BREAK);
+        if (!output.contains(PACKAGE_HEAD) || lines.length == 0) {
             throw new ModulePushError(
                     String.format(
                             "Failed to find file paths of %s on the device %s. Error log\n '%s'",
@@ -430,9 +482,51 @@ public class ModulePusher {
         }
         List<String> paths = new ArrayList<>();
         for (String line : lines) {
-            paths.add(line.substring(HEAD_LENGTH).trim());
+            paths.add(line.substring(PACKAGE_HEAD.length()).trim());
         }
         return paths.toArray(new String[0]);
+    }
+
+    @VisibleForTesting
+    protected Path getApexPathUnderSystem(ITestDevice device, String packageName)
+            throws ModulePushError, DeviceNotAvailableException {
+        Map<String, Path> apexPaths = getApexPaths(device);
+        if (apexPaths.containsKey(packageName)) {
+            return apexPaths.get(packageName);
+        }
+        throw new ModulePushError(
+                String.format(
+                        "No apex under /system/apex available for %s. Print ls results %s",
+                        packageName, apexPaths),
+                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    private ImmutableMap<String, Path> getApexPaths(ITestDevice device)
+            throws DeviceNotAvailableException {
+        if (mApexPathsUnderSystem == null) {
+            ImmutableMap.Builder<String, Path> builder = ImmutableMap.builder();
+            String outputs = device.executeShellV2Command(LS_SYSTEM_APEX).getStdout();
+            LogUtil.CLog.i("ls /system/apex/ output string is:\n%s", outputs);
+            for (String line : outputs.split(LINE_BREAK)) {
+                String fileName = line.trim();
+                int endIndex = -1;
+                // The package name is contained as a prefix of the file name.
+                if (fileName.contains("_")) {
+                    endIndex = fileName.indexOf('_');
+                } else if (fileName.contains(APEX_SUFFIX)) {
+                    endIndex = fileName.indexOf(APEX_SUFFIX);
+                } else if (fileName.contains(CAPEX_SUFFIX)) {
+                    endIndex = fileName.indexOf(CAPEX_SUFFIX);
+                }
+                if (endIndex > 0) {
+                    builder.put(fileName.substring(0, endIndex), Paths.get(APEX_DIR, fileName));
+                } else {
+                    LogUtil.CLog.w("Got unexpected filename %s under /system/apex/", fileName);
+                }
+            }
+            mApexPathsUnderSystem = builder.build();
+        }
+        return mApexPathsUnderSystem;
     }
 
     void pushPackageToDevice(
@@ -460,6 +554,16 @@ public class ModulePusher {
     protected void waitForDeviceToBeResponsive(long waitTime) {
         // Wait for device to be responsive.
         RunUtil.getDefault().sleep(waitTime);
+    }
+
+    /**
+     * Clean up the package cache dir so that the package manager will update the package info.
+     *
+     * @param device under test.
+     * @throws DeviceNotAvailableException
+     */
+    void cleanPackageCache(ITestDevice device) throws DeviceNotAvailableException {
+        device.executeShellV2Command(RM_PACKAGE_CACHE);
     }
 
     /**
@@ -556,19 +660,21 @@ public class ModulePusher {
      */
     void checkModuleVersions(ITestDevice device, List<ModuleInfo> pushedModules)
             throws DeviceNotAvailableException, ModulePushError {
-        String newVersionCode;
+        Map<String, String> newVersionCodes = getGooglePackageVersionCodesOnDevice(device);
         for (ModuleInfo moduleInfo : pushedModules) {
-            newVersionCode =
-                    getPackageVersioncodeOnDevice(
-                            device, moduleInfo.packageName(), moduleInfo.isApk());
-            if (newVersionCode.isEmpty() || !newVersionCode.equals(moduleInfo.versionCode())) {
+            if (!newVersionCodes.containsKey(moduleInfo.packageName())
+                    || !moduleInfo
+                            .versionCode()
+                            .equals(newVersionCodes.get(moduleInfo.packageName()))) {
                 throw new ModulePushError(
                         "Failed to install package " + moduleInfo.packageName(),
                         DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
             LogUtil.CLog.i(
                     "Packages %s pushed! The expected version code is: %s, the actual is: %s",
-                    moduleInfo.packageName(), moduleInfo.versionCode(), newVersionCode);
+                    moduleInfo.packageName(),
+                    moduleInfo.versionCode(),
+                    newVersionCodes.get(moduleInfo.packageName()));
         }
     }
 

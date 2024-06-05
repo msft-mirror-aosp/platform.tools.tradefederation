@@ -24,6 +24,7 @@ import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.Option;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.PushFilePreparer;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
@@ -59,6 +60,11 @@ import java.util.Set;
  */
 @RunWith(DeviceJUnit4ClassRunner.class)
 public class HostUnitTestsConfigValidation implements IBuildReceiver {
+
+    @Option(
+            name = "disallowed-test-type",
+            description = "The disallowed test type for configs in host-unit-tests.zip")
+    private List<String> mDisallowedTestTypes = new ArrayList<>();
 
     private IBuildInfo mBuild;
 
@@ -104,6 +110,9 @@ public class HostUnitTestsConfigValidation implements IBuildReceiver {
                 checkPreparers(c.getTargetPreparers(), "host-unit-tests");
                 // Check that all the tests runners are well supported.
                 checkRunners(c.getTests(), "host-unit-tests");
+
+                // Check for disallowed test types
+                GeneralTestsConfigValidation.checkDisallowedTestType(c, mDisallowedTestTypes);
 
                 // Add more checks if necessary
             } catch (ConfigurationException e) {
@@ -185,9 +194,14 @@ public class HostUnitTestsConfigValidation implements IBuildReceiver {
         // We need the test mapping files for this test.
         Assume.assumeNotNull(mBuild.getFile("test_mappings.zip"));
 
+        TestMapping testMapping = new TestMapping();
         Set<TestInfo> testInfosToRun =
-                TestMapping.getTests(
-                        mBuild, group, /* host */ true, /* keywords */ new HashSet<>());
+                testMapping.getTests(
+                        mBuild,
+                        group, /* host */
+                        true, /* keywords */
+                        new HashSet<>(), /* ignoreKeywords */
+                        new HashSet<>());
 
         List<String> errors = new ArrayList<>();
         List<String> configs = new ArrayList<>();
@@ -207,10 +221,12 @@ public class HostUnitTestsConfigValidation implements IBuildReceiver {
                                         + "need the test mapping config: %s",
                                 moduleName, infos.get(moduleName)));
             } else if (infos.containsKey(moduleName) && !FINAL_MODULE_LIST.contains(moduleName)) {
-                errors.add(String.format(
-                        "Target '%s' is attempted to be added to host test mapping."
-                        + " We do not currently allow new addition, consider using unit_tests "
-                        + " setup instead.", moduleName));
+                errors.add(
+                        String.format(
+                                "Target '%s' is attempted to be added to host test mapping. We do"
+                                    + " not currently allow new addition, consider using unit_tests"
+                                    + "  setup instead.",
+                                moduleName));
             }
         }
         return errors;

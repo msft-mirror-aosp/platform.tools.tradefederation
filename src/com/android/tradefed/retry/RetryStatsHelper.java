@@ -32,8 +32,16 @@ final class RetryStatsHelper {
 
     /** Add the results from the latest run to be tracked for statistics purpose. */
     public void addResultsFromRun(List<TestRunResult> mLatestResults) {
+        addResultsFromRun(mLatestResults, 0L, 0);
+    }
+
+    /** Add the results from the latest run to be tracked for statistics purpose. */
+    public void addResultsFromRun(List<TestRunResult> mLatestResults, long timeForIsolation, int attempt) {
         if (!mResults.isEmpty()) {
             updateSuccess(mResults.get(mResults.size() - 1), mLatestResults);
+        }
+        if (timeForIsolation != 0L) {
+            mStats.mAttemptIsolationCost.put(attempt, timeForIsolation);
         }
         mResults.add(mLatestResults);
     }

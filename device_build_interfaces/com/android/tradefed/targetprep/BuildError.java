@@ -58,6 +58,23 @@ public class BuildError extends HarnessException {
         setCallerClass(StackWalker.getInstance(Option.RETAIN_CLASS_REFERENCE).getCallerClass());
     }
 
+    /**
+     * Constructs a new (@link BuildError} with a detailed error message.
+     *
+     * @param reason an error message giving more details on the build error
+     * @param descriptor the descriptor of the device concerned
+     * @param cause The original cause of the exception
+     * @param errorId the error identifier for this error.
+     */
+    public BuildError(
+            String reason, DeviceDescriptor descriptor, Throwable cause, ErrorIdentifier errorId) {
+        super(reason + " " + descriptor, cause, errorId);
+        if (descriptor != null) {
+            mDeviceSerial = descriptor.getSerial();
+        }
+        setCallerClass(StackWalker.getInstance(Option.RETAIN_CLASS_REFERENCE).getCallerClass());
+    }
+
     /** Return the serial of the device impacted by the BuildError. */
     public String getDeviceSerial() {
         return mDeviceSerial;

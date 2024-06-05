@@ -16,10 +16,10 @@
 
 package com.android.tradefed.device.internal;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.any;
-import static org.junit.Assert.assertEquals;
 
 import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.ITestDevice;
@@ -57,13 +57,11 @@ public class DeviceReleaseReporterTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        mDeviceReleaseReporter = new DeviceReleaseReporter();
+        mDeviceReleaseReporter = new DeviceReleaseReporter(mTradefedFeatureClient);
     }
 
     @Test
     public void releaseDevices_oneDevice() {
-        mDeviceReleaseReporter.setTradefedFeatureClient(mTradefedFeatureClient);
-
         when(mInvocationContext.getDeviceName(mTestDevice1)).thenReturn(DEVICE_1_NAME);
         when(mTradefedFeatureClient.triggerFeature(any(), any()))
                 .thenReturn(FeatureResponse.newBuilder().build());
@@ -82,8 +80,6 @@ public class DeviceReleaseReporterTest {
 
     @Test
     public void releaseDevices_multipleDevices() {
-        mDeviceReleaseReporter.setTradefedFeatureClient(mTradefedFeatureClient);
-
         when(mInvocationContext.getDeviceName(mTestDevice1)).thenReturn(DEVICE_1_NAME);
         when(mInvocationContext.getDeviceName(mTestDevice2)).thenReturn(DEVICE_2_NAME);
         when(mTradefedFeatureClient.triggerFeature(any(), any()))

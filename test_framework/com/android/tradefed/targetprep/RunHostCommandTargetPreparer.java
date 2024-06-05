@@ -31,11 +31,13 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.PythonVirtualenvHelper;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -99,6 +101,15 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             description = "Acquire a flashing permit before running commands.")
     private boolean mUseFlashingPermit = false;
 
+    @Option(
+            name = "python-virtualenv",
+            description =
+                "Activate existing python virtualenv created by"
+                          + "PythonVirtualenvPreparer if set to True."
+                          + "Do not activate otherwise"
+    )
+    private boolean mUseVenv = false;
+
     private List<Process> mBgProcesses = new ArrayList<>();
     private List<BgCommandLog> mBgCommandLogs = new ArrayList<>();
     private ITestLogger mLogger;
@@ -161,6 +172,15 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
         ITestDevice device = testInfo.getDevice();
         IBuildInfo buildInfo = testInfo.getBuildInfo();
 
+        if (mUseVenv) {
+            File venvDir = buildInfo.getFile("VIRTUAL_ENV");
+            if (venvDir != null && venvDir.exists()) {
+                PythonVirtualenvHelper.activate(getRunUtil(), venvDir);
+            } else {
+                CLog.d("No virtualenv configured.");
+            }
+        }
+
         replaceSerialNumber(mSetUpCommands, device);
         replaceExtraFile(mSetUpCommands, buildInfo);
         try {
@@ -177,10 +197,13 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
         try {
             mBgCommandLogs = createBgCommandLogs();
             replaceSerialNumber(mBgCommands, device);
-            replaceExtraFile(mSetUpCommands, buildInfo);
+            replaceExtraFile(mBgCommands, buildInfo);
             runBgCommandList(mBgCommands, mBgCommandLogs);
         } catch (IOException e) {
-            throw new TargetSetupError(e.toString(), device.getDeviceDescriptor());
+            throw new TargetSetupError(
+                    e.toString(),
+                    device.getDeviceDescriptor(),
+                    TestErrorIdentifier.HOST_COMMAND_FAILED);
         }
     }
 
@@ -245,19 +268,23 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
                             String.format(
                                     "Command %s failed, stdout = [%s], stderr = [%s].",
                                     command, result.getStdout(), result.getStderr()),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            TestErrorIdentifier.HOST_COMMAND_FAILED);
                 case TIMED_OUT:
                     throw new TargetSetupError(
                             String.format(
                                     "Command %s timed out, stdout = [%s], stderr = [%s].",
                                     command, result.getStdout(), result.getStderr()),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            TestErrorIdentifier.HOST_COMMAND_FAILED);
                 case EXCEPTION:
                     throw new TargetSetupError(
                             String.format(
-                                    "Exception occurred when running command %s, stdout = [%s], stderr = [%s].",
+                                    "Exception occurred when running command %s, stdout = [%s],"
+                                            + " stderr = [%s].",
                                     command, result.getStdout(), result.getStderr()),
-                            device.getDeviceDescriptor());
+                            device.getDeviceDescriptor(),
+                            TestErrorIdentifier.HOST_COMMAND_FAILED);
             }
         }
     }

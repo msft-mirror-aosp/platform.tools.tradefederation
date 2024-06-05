@@ -72,22 +72,18 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
     private IRunUtil mRunUtil = RunUtil.getDefault();
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener) {
-        super.init(context, listener);
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+        super.extraInit(context, listener);
 
         if (isGcovCoverageEnabled()) {
             for (ITestDevice device : getRealDevices()) {
                 // Clear coverage measurements on the device.
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                     getCoverageFlusher(device).resetCoverage();
-                } catch (DeviceNotAvailableException e) {
-                    throw new RuntimeException(e);
                 }
             }
         }
-
-        return this;
     }
 
     @VisibleForTesting
@@ -111,9 +107,7 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
 
     private NativeCodeCoverageFlusher getCoverageFlusher(ITestDevice device) {
         if (mFlusher == null) {
-            mFlusher =
-                    new NativeCodeCoverageFlusher(
-                            device, mConfiguration.getCoverageOptions().getCoverageProcesses());
+            mFlusher = new NativeCodeCoverageFlusher(device, mConfiguration.getCoverageOptions());
             mFlusher.setRunUtil(mRunUtil);
         }
         return mFlusher;
@@ -130,7 +124,8 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @Override
-    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics)
+            throws DeviceNotAvailableException {
         if (!isGcovCoverageEnabled()) {
             return;
         }
@@ -143,7 +138,8 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     /** Pulls native coverage measurements from the device and logs them. */
-    public void logCoverageMeasurements(ITestDevice device, String runName) {
+    public void logCoverageMeasurements(ITestDevice device, String runName)
+            throws DeviceNotAvailableException {
         File coverageTar = null;
         File coverageZip = null;
 
@@ -171,7 +167,7 @@ public final class GcovCodeCoverageCollector extends BaseDeviceMetricCollector
 
             // Delete coverage files on the device.
             device.executeShellCommand(DELETE_COVERAGE_FILES_COMMAND);
-        } catch (DeviceNotAvailableException | IOException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
             FileUtil.deleteFile(coverageTar);

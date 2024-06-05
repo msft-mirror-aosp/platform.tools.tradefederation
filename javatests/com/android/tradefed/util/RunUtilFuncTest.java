@@ -109,7 +109,7 @@ public class RunUtilFuncTest {
             assertTrue("Failed at iteration " + i,
                     CommandStatus.SUCCESS.equals(result.getStatus()));
             CLog.d(result.getStdout());
-            assertTrue(result.getStdout().trim().equals("hello"));
+            assertEquals("hello\n", result.getStdout());
         }
     }
 

@@ -16,9 +16,7 @@
 <configuration description="Android test suite config for tests defined in TEST_MAPPING files">
     <system_checker class="com.android.tradefed.suite.checker.KeyguardStatusChecker" />
     <system_checker class="com.android.tradefed.suite.checker.TimeStatusChecker" />
-    <system_checker class="com.android.tradefed.suite.checker.DeviceBaselineChecker">
-        <option name="enable-device-baseline-settings" value="false"/>
-    </system_checker>
+    <system_checker class="com.android.tradefed.suite.checker.DeviceBaselineChecker" />
     <system_checker class="com.android.tradefed.suite.checker.DeviceSettingChecker" />
     <system_checker class="com.android.tradefed.suite.checker.DeviceStorageStatusChecker" >
         <option name="partition" value="/data" />
@@ -26,6 +24,7 @@
     </system_checker>
     <system_checker class="com.android.tradefed.suite.checker.SystemServerStatusChecker" />
     <system_checker class="com.android.tradefed.suite.checker.SystemServerFileDescriptorChecker" />
+    <system_checker class="com.android.tradefed.suite.checker.ShellStatusChecker" />
 
     <target_preparer class="com.android.tradefed.targetprep.RootTargetPreparer">
         <option name="force-root" value="false" />

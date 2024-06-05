@@ -19,6 +19,13 @@ import com.android.ddmlib.IDevice;
 
 /**
  * Provides facilities for monitoring the state of a {@link IDevice}.
+ *
+ * <p>A device is currently considered "available" if and only if four events are true:
+ *     1. Device is online aka visible via DDMS/adb ({@link #waitForDeviceOnline()}
+ *     2. Device has dev.bootcomplete flag set (@link #waitForBootComplete(long)}
+ *     3. Device's package manager is responsive (may be inop)
+ *     4. Device's external storage is mounted
+ * 3. & 4. being part of {@link #waitForDeviceAvailable()}.
  */
 public interface IDeviceStateMonitor {
 
@@ -101,6 +108,17 @@ public interface IDeviceStateMonitor {
     public IDevice waitForDeviceAvailable();
 
     /**
+     * Special variant of {@link #waitForDeviceAvailable(long)} to be called during recovery path to
+     * tailor the handling.
+     *
+     * @throws DeviceNotAvailableException if the device turns unavailable.
+     */
+    public default IDevice waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException {
+        return waitForDeviceAvailable(waitTime);
+    }
+
+    /**
      * Waits for the device to be in bootloader.
      *
      * @param waitTime the maximum time in ms to wait
@@ -161,16 +179,16 @@ public interface IDeviceStateMonitor {
 
     /**
      * Returns a mount point.
-     * <p/>
-     * Queries the device directly if the cached info in {@link IDevice} is not available.
-     * <p/>
-     * TODO: move this behavior to {@link IDevice#getMountPoint(String)}
+     *
+     * <p>Queries the device directly if the cached info in {@link IDevice} is not available.
+     *
+     * <p>TODO: move this behavior to {@link IDevice#getMountPoint(String)}
      *
      * @param mountName the name of the mount point
      * @return the mount point or <code>null</code>
      * @see IDevice#getMountPoint(String)
      */
-    public String getMountPoint(String mountName);
+    public String getMountPoint(String mountName) throws DeviceNotAvailableException;
 
     /**
      * Updates the current IDevice.

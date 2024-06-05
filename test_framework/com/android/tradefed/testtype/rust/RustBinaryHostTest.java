@@ -38,6 +38,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.TestRunnerUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,7 +60,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     private Set<String> mBinaryNames = new HashSet<>();
 
     private IBuildInfo mBuildInfo;
-    private IRunUtil mRunUtil;
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -69,18 +69,25 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     @Override
     public final void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        List<File> rustFilesList = findFiles();
-        for (File file : rustFilesList) {
-            if (!file.exists()) {
-                CLog.d("ignoring %s which doesn't look like a test file.", file.getAbsolutePath());
-                continue;
+        try {
+            List<File> rustFilesList = findFiles();
+            for (File file : rustFilesList) {
+                if (!file.exists()) {
+                    CLog.d(
+                            "ignoring %s which doesn't look like a test file.",
+                            file.getAbsolutePath());
+                    continue;
+                }
+                file.setExecutable(true);
+                runSingleRustFile(listener, file);
             }
-            file.setExecutable(true);
-            runSingleRustFile(listener, file);
+        } catch (IOException e) {
+            // Report run failures instead
+            throw new RuntimeException(e);
         }
     }
 
-    private List<File> findFiles() {
+    protected List<File> findFiles() throws IOException {
         File testsDir = mBuildInfo.getFile(BuildInfoFileKey.HOST_LINKED_DIR);
         if (testsDir == null && mBuildInfo instanceof IDeviceBuildInfo) {
             testsDir = ((IDeviceBuildInfo) mBuildInfo).getTestsDir();
@@ -119,8 +126,24 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 if (res == null) {
                     // When fileName is a simple file name, or its path cannot be found
                     // look up the first matching baseName under testsDir.
-                    res = FileUtil.findFile(testsDir, baseName);
+                    res = FileUtil.findFile(baseName, getAbi(), new File[] {testsDir});
+                    if (res != null && res.isDirectory()) {
+                        File currentDir = res;
+                        // Search the exact file in subdir
+                        res = FileUtil.findFile(baseName, getAbi(), currentDir);
+                        if (res == null) {
+                            // If we ended up here we most likely failed to find the proper file as
+                            // is, so we search for it with a potential suffix (which is allowed).
+                            File byBaseName =
+                                    FileUtil.findFile(
+                                            baseName + ".*", getAbi(), new File[] {currentDir});
+                            if (byBaseName != null && byBaseName.isFile()) {
+                                res = byBaseName;
+                            }
+                        }
+                    }
                 }
+
             }
             if (res == null) {
                 throw new RuntimeException(
@@ -191,8 +214,21 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     private CommandResult runInvocation(final Invocation invocation, final String... extraArgs) {
         IRunUtil runUtil = getRunUtil();
         runUtil.setWorkingDir(invocation.workingDir);
+        runUtil.unsetEnvVariable(
+                "TERM"); // Environment TERM can affect output format and fail parser
+        boolean ldLibraryPathSetInEnv = false;
         for (EnvPair envPair : invocation.env) {
             runUtil.setEnvVariable(envPair.key, envPair.val);
+            if ("LD_LIBRARY_PATH".equals(envPair.key)) {
+                ldLibraryPathSetInEnv = true;
+            }
+        }
+        // Update LD_LIBRARY_PATH if it's not set already through command line args.
+        if (!ldLibraryPathSetInEnv) {
+            String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(new File(invocation.command[0]));
+            if (ldLibraryPath != null) {
+                runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
+            }
         }
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));

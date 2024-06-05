@@ -15,25 +15,35 @@
  */
 package com.android.tradefed.device.metric;
 
-import org.mockito.ArgumentMatchers;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyLong;
-import static org.mockito.Mockito.argThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.mockito.MockitoAnnotations.initMocks;
 
-import com.android.os.AtomsProto.Atom;
 import com.android.os.AtomsProto.AppCrashOccurred;
+import com.android.os.AtomsProto.Atom;
 import com.android.os.StatsLog.EventMetricData;
 import com.android.os.StatsLog.StatsdStatsReport;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
+
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.Spy;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -43,14 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.Spy;
 
 /** Unit tests for {@link RuntimeRestartCollector}. */
 @RunWith(JUnit4.class)
@@ -618,7 +620,8 @@ public class RuntimeRestartCollectorTest {
 
     private ITestDevice mockTestDevice(String serial) {
         ITestDevice device = mock(ITestDevice.class);
-        doReturn(serial).when(device).getSerialNumber();
+        when(device.getSerialNumber()).thenReturn(serial);
+        when(device.getDeviceState()).thenReturn(TestDeviceState.ONLINE);
         return device;
     }
 }
