@@ -150,7 +150,7 @@ public class NoisyDryRunTest implements IRemoteTest {
                 commands.size());
         StoreAndForwardTestCases forwarder = new StoreAndForwardTestCases(listener);
         ParallelDeviceExecutor<Boolean> executor =
-                new ParallelDeviceExecutor<Boolean>(Math.min(4, commands.size()));
+                new ParallelDeviceExecutor<Boolean>(Math.min(20, commands.size()));
         List<Callable<Boolean>> callableTasks = new ArrayList<>();
         for (int i = 0; i < commands.size(); ++i) {
             final int j = i;
