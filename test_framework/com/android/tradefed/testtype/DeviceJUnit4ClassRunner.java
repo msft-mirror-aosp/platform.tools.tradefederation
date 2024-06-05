@@ -21,6 +21,7 @@ import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -51,6 +52,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -179,7 +181,7 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
     }
 
     private Set<File> resolveRemoteFileForObject(Object obj) {
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("junit4:resolveRemoteFiles")) {
             OptionSetter setter = new OptionSetter(obj);
             return setter.validateRemoteFilePath(createResolver());
         } catch (BuildRetrievalError | ConfigurationException e) {
@@ -273,6 +275,23 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
         public Class<? extends Annotation> annotationType() {
             return null;
         }
+
+        @Override
+        public boolean equals(Object other) {
+            if (other == this) {
+                return true;
+            }
+            if (!(other instanceof MetricAnnotation)) {
+                return false;
+            }
+            MetricAnnotation o = (MetricAnnotation) other;
+            return Objects.equals(mMetrics, o.mMetrics);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mMetrics);
+        }
     }
 
     /**
@@ -332,6 +351,23 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
         @Override
         public Class<? extends Annotation> annotationType() {
             return null;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (other == this) {
+                return true;
+            }
+            if (!(other instanceof LogAnnotation)) {
+                return false;
+            }
+            TestLogData o = (TestLogData) other;
+            return Objects.equals(mLogs, o.mLogs);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mLogs);
         }
     }
 }

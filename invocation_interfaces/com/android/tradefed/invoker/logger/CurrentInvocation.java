@@ -16,6 +16,7 @@
 package com.android.tradefed.invoker.logger;
 
 import com.android.tradefed.invoker.ExecutionFiles;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ActionInProgress;
 import com.android.tradefed.result.FailureDescription;
@@ -68,6 +69,7 @@ public class CurrentInvocation {
         public ActionInProgress mActionInProgress = ActionInProgress.UNSET;
         public IsolationGrade mIsModuleIsolated = IsolationGrade.FULLY_ISOLATED;
         public IsolationGrade mIsRunIsolated = IsolationGrade.FULLY_ISOLATED;
+        public IInvocationContext mContext;
     }
 
     /**
@@ -79,6 +81,18 @@ public class CurrentInvocation {
 
     private static final Map<ThreadGroup, Map<InvocationLocal<?>, Optional<?>>> mInvocationLocals =
             new ConcurrentHashMap<>();
+
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
 
     /**
      * Add one key-value to be tracked at the invocation level.
@@ -100,6 +114,9 @@ public class CurrentInvocation {
     public static File getInfo(InvocationInfo key) {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupInfo) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
             if (mPerGroupInfo.get(group) == null) {
                 mPerGroupInfo.put(group, new InternalInvocationTracking());
             }
@@ -176,6 +193,28 @@ public class CurrentInvocation {
                 return null;
             }
             return mPerGroupInfo.get(group).mActionInProgress;
+        }
+    }
+
+    /** Sets the {@link IInvocationContext} for the invocation. */
+    public static void setInvocationContext(IInvocationContext context) {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupInfo) {
+            if (mPerGroupInfo.get(group) == null) {
+                mPerGroupInfo.put(group, new InternalInvocationTracking());
+            }
+            mPerGroupInfo.get(group).mContext = context;
+        }
+    }
+
+    /** Returns the current {@link IInvocationContext} for the invocation. Can be null. */
+    public static @Nullable IInvocationContext getInvocationContext() {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupInfo) {
+            if (mPerGroupInfo.get(group) == null) {
+                return null;
+            }
+            return mPerGroupInfo.get(group).mContext;
         }
     }
 

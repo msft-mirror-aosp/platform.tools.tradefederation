@@ -21,7 +21,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -66,7 +65,8 @@ public final class CollectingTestListenerTest {
         assertThat(runResult.isRunComplete()).isTrue();
         assertThat(runResult.isRunFailure()).isFalse();
         assertThat(mCollectingTestListener.getNumTotalTests()).isEqualTo(1);
-        assertThat(runResult.getTestResults().get(test).getStatus()).isEqualTo(TestStatus.PASSED);
+        assertThat(runResult.getTestResults().get(test).getResultStatus())
+                .isEqualTo(TestStatus.PASSED);
         assertThat(runResult.getTestResults().get(test).getStartTime()).isGreaterThan(0L);
         assertThat(runResult.getTestResults().get(test).getEndTime())
                 .isGreaterThan(runResult.getTestResults().get(test).getStartTime() - 1);
@@ -114,8 +114,10 @@ public final class CollectingTestListenerTest {
 
         assertThat(runResult1.getName()).isEqualTo("run1");
         assertThat(runResult2.getName()).isEqualTo("run2");
-        assertThat(runResult1.getTestResults().get(test1).getStatus()).isEqualTo(TestStatus.PASSED);
-        assertThat(runResult2.getTestResults().get(test2).getStatus()).isEqualTo(TestStatus.PASSED);
+        assertThat(runResult1.getTestResults().get(test1).getResultStatus())
+                .isEqualTo(TestStatus.PASSED);
+        assertThat(runResult2.getTestResults().get(test2).getResultStatus())
+                .isEqualTo(TestStatus.PASSED);
         assertThat(runResult1.getRunMetrics().get(RUN_KEY)).isEqualTo(METRIC_VALUE);
         assertThat(runResult1.getTestResults().get(test1).getMetrics().get(TEST_KEY))
                 .isEqualTo(METRIC_VALUE);

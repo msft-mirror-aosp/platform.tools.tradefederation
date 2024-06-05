@@ -23,10 +23,10 @@ Other test harnesses like Compatibility Test Suite (CTS) and Vendor Test Suite
 ### More information
 
 More information at:
-https://source.android.com/devices/tech/test_infra/tradefed/
+https://source.android.com/docs/core/tests/tradefed/
 
 See more details about Tradefed Architecture at:
-https://source.android.com/devices/tech/test_infra/tradefed/architecture
+https://source.android.com/docs/core/tests/tradefed/architecture
 
 If you are a tests writer you should start looking in the test_framework/
 component which contains everything needed to write a tests in Tradefed.

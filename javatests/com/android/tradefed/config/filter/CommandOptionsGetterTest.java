@@ -72,10 +72,15 @@ public class CommandOptionsGetterTest {
         OptionSetter setter = new OptionSetter(mConfiguration.getCommandOptions());
         setter.setOptionValue("filter-previous-passed", "true");
         setter.setOptionValue("test-tag", "mytag");
-        FeatureResponse response = mGetter.execute(FeatureRequest.newBuilder()
-                .setName(CommandOptionsGetter.COMMAND_OPTIONS_GETTER)
-                .putArgs(CommandOptionsGetter.OPTION_NAME, "filter-previous-passed,test-tag")
-                .build());
+        FeatureResponse response =
+                mGetter.execute(
+                        FeatureRequest.newBuilder()
+                                .setName(CommandOptionsGetter.COMMAND_OPTIONS_GETTER)
+                                .putArgs(
+                                        CommandOptionsGetter.OPTION_NAME,
+                                        "filter-previous-passed,test-tag,auto-collect")
+                                .build());
+        assertEquals(2, response.getMultiPartResponse().getResponsePartList().size());
 
         PartResponse part1 = response.getMultiPartResponse().getResponsePart(0);
         assertEquals("filter-previous-passed", part1.getKey());
@@ -84,5 +89,39 @@ public class CommandOptionsGetterTest {
         PartResponse part2 = response.getMultiPartResponse().getResponsePart(1);
         assertEquals("test-tag", part2.getKey());
         assertEquals("mytag", part2.getValue());
+    }
+
+    @Test
+    public void getCommandOptionsValue_set() throws Exception {
+        OptionSetter setter = new OptionSetter(mConfiguration.getCommandOptions());
+        setter.setOptionValue("filter-previous-passed", "true");
+        setter.setOptionValue("test-tag", "mytag");
+        setter.setOptionValue("auto-collect", "DEVICE_TRACE");
+        setter.setOptionValue("auto-collect", "LOGCAT_ON_FAILURE");
+        FeatureResponse response =
+                mGetter.execute(
+                        FeatureRequest.newBuilder()
+                                .setName(CommandOptionsGetter.COMMAND_OPTIONS_GETTER)
+                                .putArgs(
+                                        CommandOptionsGetter.OPTION_NAME,
+                                        "filter-previous-passed,test-tag,auto-collect")
+                                .build());
+        assertEquals(4, response.getMultiPartResponse().getResponsePartList().size());
+
+        PartResponse part1 = response.getMultiPartResponse().getResponsePart(0);
+        assertEquals("filter-previous-passed", part1.getKey());
+        assertEquals("true", part1.getValue());
+
+        PartResponse part2 = response.getMultiPartResponse().getResponsePart(1);
+        assertEquals("test-tag", part2.getKey());
+        assertEquals("mytag", part2.getValue());
+
+        PartResponse part3 = response.getMultiPartResponse().getResponsePart(2);
+        assertEquals("auto-collect", part3.getKey());
+        assertEquals("DEVICE_TRACE", part3.getValue());
+
+        PartResponse part4 = response.getMultiPartResponse().getResponsePart(3);
+        assertEquals("auto-collect", part4.getKey());
+        assertEquals("LOGCAT_ON_FAILURE", part4.getValue());
     }
 }

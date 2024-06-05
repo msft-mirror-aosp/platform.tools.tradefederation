@@ -16,6 +16,7 @@
 package com.android.tradefed.result;
 
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.build.DeviceBuildDescriptor;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -76,10 +77,6 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
             importance = Importance.ALWAYS)
     private String mPostingEndpoint;
 
-    @Option(name = "disable", description =
-            "flag to skip reporting of all the results")
-    private boolean mSkipReporting = false;
-
     @Option(name = "reporting-unit-key-suffix",
             description = "suffix to append after the regular reporting unit key")
     private String mReportingUnitKeySuffix = null;
@@ -108,9 +105,6 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
     public void invocationStarted(IInvocationContext context) {
         super.invocationStarted(context);
         mInvocationContext = context;
-        if (mDeviceDetails) {
-            parseAdditionalDeviceDetails(getDevice(context));
-        }
     }
 
     @Override
@@ -123,12 +117,13 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
     public void invocationEnded(long elapsedTime) {
         super.invocationEnded(elapsedTime);
 
-        if (mSkipReporting) {
-            CLog.d("Skipping reporting because it's disabled.");
-        } else if (mHasInvocationFailures) {
+        if (mHasInvocationFailures) {
             CLog.d("Skipping reporting beacuse there are invocation failures.");
         } else {
             try {
+                if (mDeviceDetails) {
+                    parseAdditionalDeviceDetails(getDevice(mInvocationContext));
+                }
                 postResults(convertMetricsToJson(getMergedTestRunResults()));
             } catch (JSONException e) {
                 CLog.e("JSONException while converting test metrics.");
@@ -186,9 +181,7 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
                 // log an error but don't do any explicit exceptions if response code is not 2xx
                 CLog.e("Posting failure. code: %d, response: %s", responseCode, response);
             } else {
-                IBuildInfo buildInfo = mInvocationContext.getBuildInfos().get(0);
-                CLog.d("Successfully posted results, build: %s, raw data: %s",
-                        buildInfo.getBuildId(), postData);
+                CLog.d("Successfully posted results, raw data: %s", postData);
             }
         } catch (IOException e) {
             CLog.e("IOException occurred while reporting to HTTP endpoint: %s", mPostingEndpoint);
@@ -254,13 +247,21 @@ public class JsonHttpTestResultReporter extends CollectingTestListener {
             throw new IllegalArgumentException("There is no build info");
         }
         IBuildInfo buildInfo = buildInfos.get(0);
+        String buildBranch = buildInfo.getBuildBranch();
+        String buildFlavor = buildInfo.getBuildFlavor();
+        String buildId = buildInfo.getBuildId();
+        if (DeviceBuildDescriptor.describesDeviceBuild(buildInfo)) {
+            DeviceBuildDescriptor deviceBuild = new DeviceBuildDescriptor(buildInfo);
+            buildBranch = deviceBuild.getDeviceBuildBranch();
+            buildFlavor = deviceBuild.getDeviceBuildFlavor();
+            buildId = deviceBuild.getDeviceBuildId();
+        }
         JSONObject result = new JSONObject();
         result.put(KEY_RESULTS_NAME, resultsName);
         result.put(KEY_METRICS, allTestMetrics);
-        result.put(KEY_BRANCH, buildInfo.getBuildBranch());
-        result.put(KEY_BUILD_FLAVOR, buildInfo.getBuildFlavor());
-        result.put(KEY_BUILD_ID, buildInfo.getBuildId());
-
+        result.put(KEY_BRANCH, buildBranch);
+        result.put(KEY_BUILD_FLAVOR, buildFlavor);
+        result.put(KEY_BUILD_ID, buildId);
         if(mDeviceDetails) {
             result.put(KEY_DEVICE_NAME, mDeviceName);
             result.put(KEY_SDK_RELEASE_NAME, mSdkBuildId);

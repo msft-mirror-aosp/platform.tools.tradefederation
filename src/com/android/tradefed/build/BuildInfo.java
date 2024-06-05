@@ -23,6 +23,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -33,6 +34,7 @@ import com.android.tradefed.util.UniqueMultiMap;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
+import com.google.common.base.Strings;
 import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
@@ -73,6 +75,8 @@ public class BuildInfo implements IBuildInfo {
 
     /** File handling properties: Some files of the BuildInfo might requires special handling */
     private final Set<BuildInfoProperties> mProperties = new HashSet<>();
+    /** Whether to stage remote files. */
+    private boolean mStageRemoteFile = true;
 
     private static final String[] FILE_NOT_TO_CLONE =
             new String[] {
@@ -233,6 +237,13 @@ public class BuildInfo implements IBuildInfo {
         for (Map.Entry<String, VersionedFile> fileEntry : build.getVersionedFileMap().entrySet()) {
             File origFile = fileEntry.getValue().getFile();
             if (applyBuildProperties(fileEntry.getValue(), build, this)) {
+                continue;
+            }
+            if (fileEntry.getKey().startsWith(IBuildInfo.REMOTE_FILE_PREFIX)) {
+                setFile(
+                        fileEntry.getKey(),
+                        new File(fileEntry.getValue().getFile().getPath()),
+                        fileEntry.getValue().getVersion());
                 continue;
             }
             File copyFile;
@@ -597,7 +608,7 @@ public class BuildInfo implements IBuildInfo {
             buildFile.setBuildFileKey(fileKey);
             for (VersionedFile vFile : mVersionedFileMultiMap.get(fileKey)) {
                 BuildFile.Builder fileInformation = BuildFile.newBuilder();
-                fileInformation.setVersion(vFile.getVersion());
+                fileInformation.setVersion(Strings.nullToEmpty(vFile.getVersion()));
                 if (fileKey.startsWith(IBuildInfo.REMOTE_FILE_PREFIX)) {
                     // Remote file doesn't exist on local cache, so don't save absolute path.
                     fileInformation.setLocalPath(vFile.getFile().toString());
@@ -704,6 +715,10 @@ public class BuildInfo implements IBuildInfo {
     /** {@inheritDoc} */
     @Override
     public File stageRemoteFile(String fileName, File workingDir) {
+        if (!mStageRemoteFile) {
+            CLog.w("Staging remote files is disabled. Skip staging file: %s", fileName);
+            return null;
+        }
         if (getRemoteFiles().isEmpty()) {
             return null;
         }
@@ -711,21 +726,26 @@ public class BuildInfo implements IBuildInfo {
                 InvocationMetricKey.STAGE_TESTS_INDIVIDUAL_DOWNLOADS, fileName);
         List<String> includeFilters = Arrays.asList(String.format("/%s?($|/)", fileName));
 
-        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+        try (CloseableTraceScope stage = new CloseableTraceScope("stageRemoteFile:" + fileName);
+                TradefedFeatureClient client = new TradefedFeatureClient()) {
             Map<String, String> args = new HashMap<>();
             args.put(ResolvePartialDownload.DESTINATION_DIR, workingDir.getAbsolutePath());
             args.put(ResolvePartialDownload.INCLUDE_FILTERS, String.join(";", includeFilters));
             // TODO: Remove exclude filter when we support not specifying it. For now put a
             // placeholder that will exclude nothing.
             args.put(ResolvePartialDownload.EXCLUDE_FILTERS, "doesntmatch");
+            args.put("use-cas", "false");
             String remotePaths =
                     getRemoteFiles().stream()
                             .map(p -> p.toString())
                             .collect(Collectors.joining(";"));
             args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+            long startTime = System.currentTimeMillis();
             FeatureResponse rep =
                     client.triggerFeature(
                             ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME, args);
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.STAGE_REMOTE_TIME, startTime, System.currentTimeMillis());
             if (rep.hasErrorInfo()) {
                 throw new HarnessRuntimeException(
                         rep.getErrorInfo().getErrorTrace(),
@@ -734,5 +754,11 @@ public class BuildInfo implements IBuildInfo {
         }
 
         return FileUtil.findFile(workingDir, fileName);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void allowStagingRemoteFile(boolean stageRemoteFile) {
+        mStageRemoteFile = stageRemoteFile;
     }
 }

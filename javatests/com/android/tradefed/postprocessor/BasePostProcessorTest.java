@@ -39,11 +39,15 @@ import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.common.collect.ListMultimap;
 
+import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -101,7 +105,7 @@ public class BasePostProcessorTest {
             for (String dataName : testLogs.keySet()) {
                 newMap.put(
                         FILE_PREFIX + dataName,
-                        TfMetricProtoUtil.stringToMetric(testLogs.get(dataName).getPath())
+                        TfMetricProtoUtil.stringToMetric(testLogs.get(dataName).getUrl())
                                 .toBuilder());
             }
             if (mSavesFile) {
@@ -133,7 +137,7 @@ public class BasePostProcessorTest {
             for (String dataName : runLogs.keySet()) {
                 newMap.put(
                         FILE_PREFIX + dataName,
-                        TfMetricProtoUtil.stringToMetric(runLogs.get(dataName).getPath())
+                        TfMetricProtoUtil.stringToMetric(runLogs.get(dataName).getUrl())
                                 .toBuilder());
             }
             if (mSavesFile) {
@@ -171,7 +175,7 @@ public class BasePostProcessorTest {
                     newMap.put(
                             FILE_PREFIX + String.join("-", test.toString(), dataName),
                             TfMetricProtoUtil.stringToMetric(
-                                    allTestLogs.get(test).get(dataName).getPath())
+                                    allTestLogs.get(test).get(dataName).getUrl())
                                     .toBuilder());
                 }
             }
@@ -212,40 +216,68 @@ public class BasePostProcessorTest {
 
     // A few constants used for testing log file post processing.
     private static final String TEST_DATA_NAME_1 = "test-log-1";
-    private static final LogFile TEST_LOG_1 =
-            new LogFile("test-log-path-1", "url", LogDataType.TEXT);
     private static final String TEST_DATA_NAME_2 = "test-log-2";
-    private static final LogFile TEST_LOG_2 =
-            new LogFile("test-log-path-2", "url", LogDataType.TEXT);
     private static final String RUN_DATA_NAME_1 = "run-log-1";
-    private static final LogFile RUN_LOG_1 = new LogFile("run-log-path-1", "url", LogDataType.TEXT);
     private static final String RUN_DATA_NAME_2 = "run-log-2";
-    private static final LogFile RUN_LOG_2 = new LogFile("run-log-path-2", "url", LogDataType.TEXT);
+    private LogFile mTestLog1;
+    private LogFile mTestLog2;
+    private LogFile mRunLog1;
+    private LogFile mRunLog2;
 
     private TestablePostProcessor mProcessor;
     @Mock ILogSaverListener mMockListener;
+    @Captor ArgumentCaptor<HashMap<String, Metric>> mCapture;
+    @Captor ArgumentCaptor<HashMap<String, Metric>> mTestCapture;
 
     // A mocked ILogSaver instance to simulate log saving events, used along with an acutal instance
     // of LogSaverResultForwarder to generate logAssociation() callbacks upon calls to testLog().
     @Mock ILogSaver mMockLogSaver;
 
+    @Rule public TemporaryFolder folder = new TemporaryFolder();
+
     @Before
     public void setUp() throws IOException {
         MockitoAnnotations.initMocks(this);
 
+        mTestLog1 =
+                new LogFile(
+                        folder.newFile("test-log-path-1").getPath(),
+                        "test-log-path-1",
+                        LogDataType.TEXT);
+        mTestLog2 =
+                new LogFile(
+                        folder.newFile("test-log-path-2").getPath(),
+                        "test-log-path-2",
+                        LogDataType.TEXT);
+        mRunLog1 =
+                new LogFile(
+                        folder.newFile("run-log-path-1").getPath(),
+                        "run-log-path-1",
+                        LogDataType.TEXT);
+        mRunLog2 =
+                new LogFile(
+                        folder.newFile("run-log-path-2").getPath(),
+                        "run-log-path-2",
+                        LogDataType.TEXT);
+
         mProcessor = new TestablePostProcessor();
 
         when(mMockLogSaver.saveLogData(Mockito.eq(TEST_DATA_NAME_1), Mockito.any(), Mockito.any()))
-                .thenReturn(TEST_LOG_1);
+                .thenReturn(mTestLog1);
         when(mMockLogSaver.saveLogData(Mockito.eq(TEST_DATA_NAME_2), Mockito.any(), Mockito.any()))
-                .thenReturn(TEST_LOG_2);
+                .thenReturn(mTestLog2);
         when(mMockLogSaver.saveLogData(Mockito.eq(RUN_DATA_NAME_1), Mockito.any(), Mockito.any()))
-                .thenReturn(RUN_LOG_1);
+                .thenReturn(mRunLog1);
         when(mMockLogSaver.saveLogData(Mockito.eq(RUN_DATA_NAME_2), Mockito.any(), Mockito.any()))
-                .thenReturn(RUN_LOG_2);
+                .thenReturn(mRunLog2);
 
         // A nice mock is used here as this test involves more complex interactions with the
         // listener but only cares about a subset of it.
+    }
+
+    @After
+    public void tearDown() {
+        mProcessor.cleanUp();
     }
 
     /** Test that the run-level post processing metrics are found in the final callback. */
@@ -255,13 +287,11 @@ public class BasePostProcessorTest {
         HashMap<String, Metric> initialMetrics = new HashMap<>();
         initialMetrics.put("test", TfMetricProtoUtil.stringToMetric("value"));
 
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
-
         listener.testRunEnded(0L, initialMetrics);
 
-        verify(mMockListener).testRunEnded(Mockito.anyLong(), capture.capture());
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> finalMetrics = capture.getValue();
+        HashMap<String, Metric> finalMetrics = mCapture.getValue();
         // Check that original key is still here
         assertTrue(finalMetrics.containsKey("test"));
         // Check that original key still has the original value
@@ -275,8 +305,6 @@ public class BasePostProcessorTest {
     /** Test that metrics from run logs are found in the final callback. */
     @Test
     public void testRunLogsPostProcessing_processRunLogs() {
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
-
         // A LogSaverResultForwarder is used here so that testLog() calls generate logAssociation()
         // callbacks.
         LogSaverResultForwarder listener =
@@ -289,12 +317,12 @@ public class BasePostProcessorTest {
                 new ByteArrayInputStreamSource("run-log-1".getBytes()));
         listener.testRunEnded(0L, new HashMap<String, Metric>());
 
-        verify(mMockListener).testRunEnded(Mockito.anyLong(), capture.capture());
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> finalMetrics = capture.getValue();
+        HashMap<String, Metric> finalMetrics = mCapture.getValue();
         assertTrue(finalMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1));
         assertEquals(
-                RUN_LOG_1.getPath(),
+                mRunLog1.getUrl(),
                 finalMetrics
                         .get(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1)
                         .getMeasurements()
@@ -309,8 +337,6 @@ public class BasePostProcessorTest {
     public void testRunLevelPostProcessing_processRunLogsOnly() {
         TestDescription test1 = new TestDescription("class", "test1");
         TestDescription test2 = new TestDescription("class", "test2");
-
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
 
         // A LogSaverResultForwarder is used here so that testLog() calls generate logAssociation()
         // callbacks.
@@ -341,9 +367,9 @@ public class BasePostProcessorTest {
                 new ByteArrayInputStreamSource("run-log-2".getBytes()));
         listener.testRunEnded(0L, new HashMap<String, Metric>());
 
-        verify(mMockListener).testRunEnded(Mockito.anyLong(), capture.capture());
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> finalMetrics = capture.getValue();
+        HashMap<String, Metric> finalMetrics = mCapture.getValue();
         // Both run-level logs should be in the metrics.
         assertTrue(finalMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1));
         assertTrue(finalMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_2));
@@ -361,14 +387,11 @@ public class BasePostProcessorTest {
         ITestInvocationListener listener = mProcessor.init(mMockListener);
         HashMap<String, Metric> initialMetrics = new HashMap<>();
         initialMetrics.put("test", TfMetricProtoUtil.stringToMetric("value"));
-
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
-
         listener.testEnded(null, 0L, initialMetrics);
 
-        verify(mMockListener).testEnded(Mockito.any(), Mockito.anyLong(), capture.capture());
+        verify(mMockListener).testEnded(Mockito.any(), Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> processedMetrics = capture.getValue();
+        HashMap<String, Metric> processedMetrics = mCapture.getValue();
         // Check that original key is still here
         assertTrue(processedMetrics.containsKey("test"));
         // Check that original key still has the original value
@@ -385,9 +408,6 @@ public class BasePostProcessorTest {
     @Test
     public void testPerTestLogPostProcessing_processTestLogs() {
         TestDescription test = new TestDescription("class", "test");
-
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
-
         // A LogSaverResultForwarder is used here so that testLog() calls generate logAssociation()
         // callbacks.
         LogSaverResultForwarder listener =
@@ -405,14 +425,14 @@ public class BasePostProcessorTest {
                 new ByteArrayInputStreamSource("test-log-2".getBytes()));
         listener.testEnded(test, 0L, new HashMap<String, Metric>());
 
-        verify(mMockListener).testEnded(Mockito.any(), Mockito.anyLong(), capture.capture());
+        verify(mMockListener).testEnded(Mockito.any(), Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> processedMetrics = capture.getValue();
+        HashMap<String, Metric> processedMetrics = mCapture.getValue();
         // Check that the both test logs end up being in the metrics.
         assertTrue(
                 processedMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
         assertEquals(
-                TEST_LOG_1.getPath(),
+                mTestLog1.getUrl(),
                 processedMetrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1)
                         .getMeasurements()
@@ -420,7 +440,7 @@ public class BasePostProcessorTest {
         assertTrue(
                 processedMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
         assertEquals(
-                TEST_LOG_2.getPath(),
+                mTestLog2.getUrl(),
                 processedMetrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2)
                         .getMeasurements()
@@ -431,9 +451,6 @@ public class BasePostProcessorTest {
     @Test
     public void testPerTestLogPostProcessing_processTestLogsOnly() {
         TestDescription test = new TestDescription("class", "test");
-
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
-
         // A LogSaverResultForwarder is used here so that testLog() calls generate logAssociation()
         // callbacks.
         LogSaverResultForwarder listener =
@@ -451,9 +468,9 @@ public class BasePostProcessorTest {
                 LogDataType.PB,
                 new ByteArrayInputStreamSource("run-log".getBytes()));
 
-        verify(mMockListener).testEnded(Mockito.any(), Mockito.anyLong(), capture.capture());
+        verify(mMockListener).testEnded(Mockito.any(), Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> processedMetrics = capture.getValue();
+        HashMap<String, Metric> processedMetrics = mCapture.getValue();
         // Check that the test log ends up being in the metrics.
         assertTrue(
                 processedMetrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
@@ -470,9 +487,7 @@ public class BasePostProcessorTest {
         TestDescription test1 = new TestDescription("class", "test1");
         TestDescription test2 = new TestDescription("class", "test2");
 
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
         // Two calls are expected since there are two tests.
-
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
                         mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
@@ -491,14 +506,14 @@ public class BasePostProcessorTest {
         listener.testEnded(test2, 0L, new HashMap<String, Metric>());
 
         verify(mMockListener, times(2))
-                .testEnded(Mockito.any(), Mockito.anyLong(), capture.capture());
+                .testEnded(Mockito.any(), Mockito.anyLong(), mCapture.capture());
 
         // Check that the processed metrics out of te first test only has the first log file.
-        HashMap<String, Metric> test1Metrics = capture.getAllValues().get(0);
+        HashMap<String, Metric> test1Metrics = mCapture.getAllValues().get(0);
         // Check that the first log file ends up being in the metrics.
         assertTrue(test1Metrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
         assertEquals(
-                TEST_LOG_1.getPath(),
+                mTestLog1.getUrl(),
                 test1Metrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1)
                         .getMeasurements()
@@ -507,11 +522,11 @@ public class BasePostProcessorTest {
         assertFalse(test1Metrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
 
         // Check that the processed metrics out of te first test only has the first log file.
-        HashMap<String, Metric> test2Metrics = capture.getAllValues().get(1);
+        HashMap<String, Metric> test2Metrics = mCapture.getAllValues().get(1);
         // Check that the first log file ends up being in the metrics.
         assertTrue(test2Metrics.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
         assertEquals(
-                TEST_LOG_2.getPath(),
+                mTestLog2.getUrl(),
                 test2Metrics
                         .get(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2)
                         .getMeasurements()
@@ -534,21 +549,16 @@ public class BasePostProcessorTest {
         HashMap<String, Metric> runMetrics = new HashMap<>();
         runMetrics.put("test", TfMetricProtoUtil.stringToMetric("should not change"));
 
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
-        // I put this dummyCapture in since I can't specify a matcher for HashMap<String, Metric>
-        // in EasyMock (not doing so causes the compiler to complain about ambiguous references).
-        ArgumentCaptor<HashMap<String, Metric>> dummyCapture =
-                ArgumentCaptor.forClass(HashMap.class);
-
         listener.testEnded(null, 0L, test1Metrics);
         listener.testEnded(null, 0L, test2Metrics);
         listener.testRunEnded(0L, runMetrics);
 
         verify(mMockListener, times(2))
-                .testEnded(Mockito.any(), Mockito.anyLong(), dummyCapture.capture());
-        verify(mMockListener).testRunEnded(Mockito.anyLong(), capture.capture());
+                .testEnded(
+                        Mockito.any(), Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> processedMetrics = capture.getValue();
+        HashMap<String, Metric> processedMetrics = mCapture.getValue();
         // Check that the original run metric key is still there and
         // that it corresponds to the original value.
         assertTrue(processedMetrics.containsKey("test"));
@@ -575,8 +585,6 @@ public class BasePostProcessorTest {
         TestDescription test1 = new TestDescription("class", "test1");
         TestDescription test2 = new TestDescription("class", "test2");
 
-        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
-
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
                         mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
@@ -596,9 +604,9 @@ public class BasePostProcessorTest {
         listener.testEnded(test2, 0L, new HashMap<String, Metric>());
         listener.testRunEnded(0L, new HashMap<String, Metric>());
 
-        verify(mMockListener).testRunEnded(Mockito.anyLong(), capture.capture());
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), mCapture.capture());
 
-        HashMap<String, Metric> processedMetrics = capture.getValue();
+        HashMap<String, Metric> processedMetrics = mCapture.getValue();
         // Check that the metrics out of the two log files are in the metrics.
         assertTrue(
                 processedMetrics.entrySet().stream()
@@ -610,7 +618,7 @@ public class BasePostProcessorTest {
                                                 && e.getValue()
                                                         .getMeasurements()
                                                         .getSingleString()
-                                                        .equals(TEST_LOG_1.getPath())));
+                                                        .equals(mTestLog1.getUrl())));
         assertTrue(
                 processedMetrics.entrySet().stream()
                         .anyMatch(
@@ -621,7 +629,7 @@ public class BasePostProcessorTest {
                                                 && e.getValue()
                                                         .getMeasurements()
                                                         .getSingleString()
-                                                        .equals(TEST_LOG_2.getPath())));
+                                                        .equals(mTestLog2.getUrl())));
     }
 
     /** Test that during each test run the post processor only access logs from the current run. */
@@ -630,13 +638,7 @@ public class BasePostProcessorTest {
         TestDescription test = new TestDescription("class", "test");
         String runName = "test-run";
 
-        ArgumentCaptor<HashMap<String, Metric>> testMetricsCapture =
-                ArgumentCaptor.forClass(HashMap.class);
-        ArgumentCaptor<HashMap<String, Metric>> runMetricsCapture =
-                ArgumentCaptor.forClass(HashMap.class);
-
         // Two sets of expected captures for two test runs.
-
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
                         mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
@@ -669,20 +671,19 @@ public class BasePostProcessorTest {
         listener.testRunEnded(0L, new HashMap<String, Metric>());
 
         verify(mMockListener, times(2))
-                .testEnded(Mockito.any(), Mockito.anyLong(), testMetricsCapture.capture());
-        verify(mMockListener, times(2))
-                .testRunEnded(Mockito.anyLong(), runMetricsCapture.capture());
+                .testEnded(Mockito.any(), Mockito.anyLong(), mTestCapture.capture());
+        verify(mMockListener, times(2)).testRunEnded(Mockito.anyLong(), mCapture.capture());
 
         // Each capture should have two sets of captured values from the two runs.
-        assertEquals(2, testMetricsCapture.getAllValues().size());
-        assertEquals(2, runMetricsCapture.getAllValues().size());
+        assertEquals(2, mTestCapture.getAllValues().size());
+        assertEquals(2, mCapture.getAllValues().size());
         // Check that metrics from each run only has info from log file in that run.
         // Run 1.
-        HashMap<String, Metric> testMetrics1 = testMetricsCapture.getAllValues().get(0);
+        HashMap<String, Metric> testMetrics1 = mTestCapture.getAllValues().get(0);
         // Checking results of processTestMetrics().
         assertTrue(testMetrics1.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
         assertFalse(testMetrics1.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
-        HashMap<String, Metric> runMetrics1 = runMetricsCapture.getAllValues().get(0);
+        HashMap<String, Metric> runMetrics1 = mCapture.getAllValues().get(0);
         // Checking results of processRunMetrics().
         assertTrue(runMetrics1.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1));
         assertFalse(runMetrics1.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_2));
@@ -702,11 +703,11 @@ public class BasePostProcessorTest {
                                                 && e.getKey().contains(test.toString())
                                                 && e.getKey().contains(TEST_DATA_NAME_2)));
         // Run 2.
-        HashMap<String, Metric> testMetrics2 = testMetricsCapture.getAllValues().get(1);
+        HashMap<String, Metric> testMetrics2 = mTestCapture.getAllValues().get(1);
         // Checking results of processTestMetrics().
         assertFalse(testMetrics2.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_1));
         assertTrue(testMetrics2.containsKey(TestablePostProcessor.FILE_PREFIX + TEST_DATA_NAME_2));
-        HashMap<String, Metric> runMetrics2 = runMetricsCapture.getAllValues().get(1);
+        HashMap<String, Metric> runMetrics2 = mCapture.getAllValues().get(1);
         // Checking results of processRunMetrics().
         assertFalse(runMetrics2.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_1));
         assertTrue(runMetrics2.containsKey(TestablePostProcessor.FILE_PREFIX + RUN_DATA_NAME_2));
@@ -731,7 +732,7 @@ public class BasePostProcessorTest {
     public void testLogsFilesFromPostProcessing() throws IOException {
         mProcessor.setSavesFile();
         ArgumentCaptor<String> savedLogsCapture = ArgumentCaptor.forClass(String.class);
-        captureSavedFiles(mMockLogSaver, savedLogsCapture);
+        captureSavedFiles(savedLogsCapture);
 
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
@@ -760,10 +761,10 @@ public class BasePostProcessorTest {
     }
 
     @Test
-    public void testNoDoubleLoggingFilesFromOutsideLogSaverForwarder() throws IOException {
+    public void testNoDoubleLoggingFilesFromOutsideLogSaverForwarder() throws Exception {
         mProcessor.setSavesFile();
         ArgumentCaptor<String> savedLogsCapture = ArgumentCaptor.forClass(String.class);
-        captureSavedFiles(mMockLogSaver, savedLogsCapture);
+        captureSavedFiles(savedLogsCapture);
 
         // Create a metric collector that wraps around a LogSaverResultForwarder; we expect that
         // files saved from the metric collector will only be saved once.
@@ -806,7 +807,7 @@ public class BasePostProcessorTest {
     public void testNoDoubleLoggingFilesToSubsequentPostProcessors() throws IOException {
         mProcessor.setSavesFile();
         ArgumentCaptor<String> savedLogsCapture = ArgumentCaptor.forClass(String.class);
-        captureSavedFiles(mMockLogSaver, savedLogsCapture);
+        captureSavedFiles(savedLogsCapture);
 
         String innerProcessorDataName = "inner-post-processor-data-name";
         BasePostProcessor innerProcessor =
@@ -850,14 +851,12 @@ public class BasePostProcessorTest {
     @Test
     public void testNoAssociatingNewlyLoggedFileWithinSelf() throws IOException {
         mProcessor.setSavesFile();
-        expectAnyFiles(mMockLogSaver);
+        expectAnyFiles();
 
         // ArgumentCaptor the run metrics. The file logged from the test within the post processor
         // should
         // not be processed by ProcessAllTestMetricsAndLogs() and result in run metrics, as the post
         // processor itself should not track it in logAssociation(), but only forward it.
-        ArgumentCaptor<HashMap<String, Metric>> runMetricsCapture =
-                ArgumentCaptor.forClass(HashMap.class);
 
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
@@ -867,9 +866,9 @@ public class BasePostProcessorTest {
         listener.testEnded(TEST_DESCRIPTION, new HashMap<String, Metric>());
         listener.testRunEnded(0L, new HashMap<String, Metric>());
 
-        verify(mMockListener).testRunEnded(Mockito.anyLong(), runMetricsCapture.capture());
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), mCapture.capture());
 
-        Map<String, Metric> runMetrics = runMetricsCapture.getValue();
+        Map<String, Metric> runMetrics = mCapture.getValue();
         assertFalse(
                 runMetrics.keySet().stream()
                         .anyMatch(s -> s.contains(TestablePostProcessor.TEST_DATA_NAME)));
@@ -878,7 +877,7 @@ public class BasePostProcessorTest {
     @Test
     public void testLogsFromPostProcessorsAreForwarded() throws IOException {
         mProcessor.setSavesFile();
-        expectAnyFiles(mMockLogSaver);
+        expectAnyFiles();
 
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
@@ -905,7 +904,7 @@ public class BasePostProcessorTest {
     }
 
     @Test
-    public void testLogsFromPostProcessorsAreOnlyForwardedWhenNoLogSaverIsSet() throws IOException {
+    public void testLogsFromPostProcessorsAreOnlyForwardedWhenNoLogSaverIsSet() {
         mProcessor.setSavesFile();
 
         mProcessor.init(mMockListener);
@@ -931,9 +930,9 @@ public class BasePostProcessorTest {
     }
 
     @Test
-    public void testLogsFromOutsidePostProcessorsAreForwarded() throws IOException {
+    public void testLogsFromOutsidePostProcessorsAreForwarded() throws Exception {
         mProcessor.setSavesFile();
-        expectAnyFiles(mMockLogSaver);
+        expectAnyFiles();
 
         // Create a metric collector that wraps around a LogSaverResultForwarder; we expect that
         // files saved from the metric collector will only be saved once.
@@ -964,7 +963,7 @@ public class BasePostProcessorTest {
                         Mockito.any());
     }
 
-    private void expectAnyFiles(ILogSaver mockSaver) throws IOException {
+    private void expectAnyFiles() throws IOException {
         when(mMockLogSaver.saveLogData(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenAnswer(
                         invocation ->
@@ -974,8 +973,7 @@ public class BasePostProcessorTest {
                                         LogDataType.TEXT));
     }
 
-    private void captureSavedFiles(ILogSaver mockSaver, ArgumentCaptor<String> capture)
-            throws IOException {
+    private void captureSavedFiles(ArgumentCaptor<String> capture) throws IOException {
         when(mMockLogSaver.saveLogData(capture.capture(), Mockito.any(), Mockito.any()))
                 .thenAnswer(
                         invocation ->

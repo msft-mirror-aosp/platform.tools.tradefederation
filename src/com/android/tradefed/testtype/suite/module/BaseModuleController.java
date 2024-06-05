@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype.suite.module;
 
 import com.android.tradefed.config.Option;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
@@ -49,7 +50,8 @@ public abstract class BaseModuleController implements IModuleController {
     private IInvocationContext mContext;
 
     @Override
-    public final RunStrategy shouldRunModule(IInvocationContext context) {
+    public final RunStrategy shouldRunModule(IInvocationContext context)
+            throws DeviceNotAvailableException {
         mContext = context;
         return shouldRun(context);
     }
@@ -60,7 +62,8 @@ public abstract class BaseModuleController implements IModuleController {
      * @param context the {@link IInvocationContext} of the module
      * @return True if the module should run, false otherwise.
      */
-    public abstract RunStrategy shouldRun(IInvocationContext context);
+    public abstract RunStrategy shouldRun(IInvocationContext context)
+            throws DeviceNotAvailableException;
 
     /** Helper method to get the module abi. */
     public final IAbi getModuleAbi() {

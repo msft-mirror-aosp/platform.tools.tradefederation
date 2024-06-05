@@ -33,7 +33,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -55,6 +57,12 @@ public class GTestXmlResultParser {
     private int mNumTestsExpected = 0;
     private long mTotalRunTime = 0;
     private final Collection<ITestInvocationListener> mTestListeners;
+
+    /** Whether the test run was incomplete(test crashed or failed to parse test results). */
+    private boolean mTestRunIncomplete = false;
+
+    /** List of tests that failed in the current run */
+    private Set<String> mFailedTests = new LinkedHashSet<>();
 
     /**
      * Creates the GTestXmlResultParser.
@@ -89,6 +97,8 @@ public class GTestXmlResultParser {
      * @param output The output collected from the execution run to complete the logs if necessary
      */
     public void parseResult(File f, CollectingOutputReceiver output) {
+        mTestRunIncomplete = false;
+        mFailedTests = new LinkedHashSet<>();
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         Document result = null;
         try {
@@ -129,6 +139,7 @@ public class GTestXmlResultParser {
         }
 
         if (mNumTestsExpected > mNumTestsRun) {
+            mTestRunIncomplete = true;
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testRunFailed(
                         String.format("Test run incomplete. Expected %d tests, received %d",
@@ -193,6 +204,7 @@ public class GTestXmlResultParser {
         }
         // If there is a failure tag report failure
         if (testcase.getElementsByTagName("failure").getLength() != 0) {
+            mFailedTests.add(String.format("%s.%s", testId.getClassName(), testId.getTestName()));
             String trace = ((Element)testcase.getElementsByTagName("failure").item(0))
                     .getAttribute("message");
             if (!trace.contains("Failed")) {
@@ -211,6 +223,20 @@ public class GTestXmlResultParser {
         for (ITestInvocationListener listener : mTestListeners) {
             listener.testEnded(testId, endTimeMs, TfMetricProtoUtil.upgradeConvert(map));
         }
+    }
+
+    /**
+     * Whether the test run was incomplete or not.
+     *
+     * @return true, if the test run was incomplete due to parsing issues or crashes.
+     */
+    public boolean isTestRunIncomplete() {
+        return mTestRunIncomplete;
+    }
+
+    /** Returns a list of tests that failed during the current test run. */
+    public Set<String> getFailedTests() {
+        return mFailedTests;
     }
 
     /** Internal helper struct to store parsed test info. */
