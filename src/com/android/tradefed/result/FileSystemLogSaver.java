@@ -21,27 +21,20 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.StreamUtil;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 /**
  * Save logs to a file system.
  */
 @OptionClass(alias = "file-system-log-saver")
 public class FileSystemLogSaver implements ILogSaver {
-
-    private static final int BUFFER_SIZE = 64 * 1024;
 
     @Option(name = "log-file-path", description = "root file system path to store log files.")
     private File mRootReportDir = new File(System.getProperty("java.io.tmpdir"));
@@ -60,6 +53,7 @@ public class FileSystemLogSaver implements ILogSaver {
     private boolean mCompressFiles = true;
 
     private File mLogReportDir = null;
+    private LogFileSaver mFileSaver = null;
 
     /**
      * A counter to control access to methods which modify this class's directories. Acting as a
@@ -82,6 +76,7 @@ public class FileSystemLogSaver implements ILogSaver {
         synchronized (this) {
             if (mShardingLock == 0) {
                 mLogReportDir = createLogReportDir(info, mRootReportDir, mLogRetentionDays);
+                mFileSaver = new LogFileSaver(mLogReportDir);
             }
             mShardingLock++;
         }
@@ -114,58 +109,25 @@ public class FileSystemLogSaver implements ILogSaver {
     @Override
     public LogFile saveLogData(String dataName, LogDataType dataType, InputStream dataStream)
             throws IOException {
-        if (!mCompressFiles || dataType.isCompressed()) {
-            File log = saveLogDataInternal(dataName, dataType.getFileExt(), dataStream);
+        if (!mCompressFiles) {
+            File log = mFileSaver.saveLogData(dataName, dataType, dataStream);
             return new LogFile(log.getAbsolutePath(), getUrl(log), dataType);
         }
-        BufferedInputStream bufferedDataStream = null;
-        ZipOutputStream outputStream = null;
-        // add underscore to end of data name to make generated name more readable
-        final String saneDataName = sanitizeFilename(dataName);
-        File log = FileUtil.createTempFile(saneDataName + "_", "." + LogDataType.ZIP.getFileExt(),
-                mLogReportDir);
-
-        boolean setPerms = FileUtil.chmodGroupRWX(log);
-        if (!setPerms) {
-            CLog.w(String.format("Failed to set dir %s to be group accessible.", log));
-        }
-
-        try {
-            bufferedDataStream = new BufferedInputStream(dataStream);
-            outputStream = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(log),
-                    BUFFER_SIZE));
-            outputStream.putNextEntry(new ZipEntry(saneDataName + "." + dataType.getFileExt()));
-            StreamUtil.copyStreams(bufferedDataStream, outputStream);
-            CLog.d("Saved log file %s", log.getAbsolutePath());
-            return new LogFile(log.getAbsolutePath(), getUrl(log), true, dataType, log.length());
-        } finally {
-            StreamUtil.close(bufferedDataStream);
-            StreamUtil.close(outputStream);
-        }
+        // saveAndGZip already handles dataType that do not need compression.
+        File log = mFileSaver.saveAndGZipLogData(dataName, dataType, dataStream);
+        return new LogFile(log.getAbsolutePath(), getUrl(log), true, dataType, log.length());
     }
 
-    /** {@inheritDoc} */
     @Override
-    public LogFile saveLogDataRaw(String dataName, LogDataType dataType, InputStream dataStream)
+    public LogFile saveLogFile(String dataName, LogDataType dataType, File fileToLog)
             throws IOException {
-        File log = saveLogDataInternal(dataName, dataType.getFileExt(), dataStream);
-        return new LogFile(log.getAbsolutePath(), getUrl(log), dataType);
-    }
-
-    private File saveLogDataInternal(String dataName, String ext, InputStream dataStream)
-            throws IOException {
-        final String saneDataName = sanitizeFilename(dataName);
-        // add underscore to end of data name to make generated name more readable
-        File log = FileUtil.createTempFile(saneDataName + "_", "." + ext, mLogReportDir);
-
-        boolean setPerms = FileUtil.chmodGroupRWX(log);
-        if (!setPerms) {
-            CLog.w(String.format("Failed to set dir %s to be group accessible.", log));
+        if (!mCompressFiles) {
+            File log = mFileSaver.saveLogFile(dataName, dataType, fileToLog);
+            return new LogFile(log.getAbsolutePath(), getUrl(log), dataType);
         }
-
-        FileUtil.writeToFile(dataStream, log);
-        CLog.d("Saved raw log file %s", log.getAbsolutePath());
-        return log;
+        // saveAndGZip already handles dataType that do not need compression.
+        File log = mFileSaver.saveAndGZipLogFile(dataName, dataType, fileToLog);
+        return new LogFile(log.getAbsolutePath(), getUrl(log), true, dataType, log.length());
     }
 
     /**
@@ -281,15 +243,11 @@ public class FileSystemLogSaver implements ILogSaver {
             return FileUtil.createTempDir("inv_");
         } catch (IOException e) {
             // Abort tradefed if a temp directory cannot be created
-            throw new FatalHostError("Cannot create tmp directory.", e);
+            throw new FatalHostError(
+                    "Cannot create tmp directory.",
+                    e,
+                    InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
         }
-    }
-
-    /**
-     * A helper function that translates a string into something that can be used as a filename
-     */
-    private static String sanitizeFilename(String name) {
-        return name.replace(File.separatorChar, '_');
     }
 
     /**

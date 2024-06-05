@@ -23,8 +23,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -38,7 +40,7 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.guice.InvocationScope;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.sandbox.SandboxedInvocationExecution;
 import com.android.tradefed.log.ILogRegistry;
@@ -115,12 +117,6 @@ public class SandboxedInvocationExecutionTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     public IInvocationExecution createInvocationExec(RunMode mode) {
                         mSpyExec =
                                 (InvocationExecution) Mockito.spy(super.createInvocationExec(mode));
@@ -131,10 +127,16 @@ public class SandboxedInvocationExecutionTest {
         mConfig = new Configuration("test", "test");
         mConfig.getConfigurationDescription().setSandboxed(true);
         mContext = new InvocationContext();
+
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(mMockDevice.getOptions()).thenReturn(options);
 
         doReturn(new ByteArrayInputStreamSource("".getBytes())).when(mMockDevice).getLogcat();
+        when(mMockDevice.waitForDeviceAvailable(TestInvocation.AVAILABILITY_CHECK_TIMEOUT))
+                .thenReturn(true);
 
         mExecution = new SandboxedInvocationExecution();
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
@@ -186,12 +188,6 @@ public class SandboxedInvocationExecutionTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     public IInvocationExecution createInvocationExec(RunMode mode) {
                         return new InvocationExecution() {
                             @Override
@@ -232,7 +228,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         mInvocation.invoke(mContext, mConfig, mMockRescheduler, mMockListener);
     }
@@ -259,7 +255,7 @@ public class SandboxedInvocationExecutionTest {
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setExitCode(0);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         doReturn(new BuildInfo()).when(mMockProvider).getBuild();
 
@@ -289,12 +285,6 @@ public class SandboxedInvocationExecutionTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     public IInvocationExecution createInvocationExec(RunMode mode) {
                         mSpyExec =
                                 (InvocationExecution) Mockito.spy(super.createInvocationExec(mode));
@@ -317,7 +307,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         doReturn(new BuildInfo()).when(mMockProvider).getBuild();
 
@@ -352,12 +342,6 @@ public class SandboxedInvocationExecutionTest {
                     }
 
                     @Override
-                    InvocationScope getInvocationScope() {
-                        // Avoid re-entry in the current TF invocation scope for unit tests.
-                        return new InvocationScope();
-                    }
-
-                    @Override
                     public IInvocationExecution createInvocationExec(RunMode mode) {
                         mSpyExec =
                                 (InvocationExecution) Mockito.spy(super.createInvocationExec(mode));
@@ -380,7 +364,7 @@ public class SandboxedInvocationExecutionTest {
                 .saveLogData(any(), any(), any());
 
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        doReturn(result).when(mMockSandbox).run(any(), any());
+        doReturn(result).when(mMockSandbox).run(any(), any(), any());
 
         IBuildInfo info = new BuildInfo();
         doReturn(info).when(mMockProvider).getBuild();

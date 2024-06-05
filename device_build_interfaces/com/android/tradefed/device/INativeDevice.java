@@ -23,11 +23,11 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.ITestDevice.MountPointInfo;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.targetprep.TargetSetupError;
-import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ProcessInfo;
@@ -36,7 +36,6 @@ import com.android.tradefed.util.TimeUtil;
 import com.google.errorprone.annotations.MustBeClosed;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Date;
@@ -476,15 +475,32 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
-     * Helper method which executes a fastboot command as a system command with a default timeout
-     * of 2 minutes.
-     * <p/>
-     * Expected to be used when device is already in fastboot mode.
+     * Helper method which executes a adb command as a system command with a specified timeout.
+     *
+     * <p>{@link #executeShellCommand(String)} should be used instead wherever possible, as that
+     * method provides better failure detection and performance.
+     *
+     * @param timeout the time in milliseconds before the device is considered unresponsive, 0L for
+     *     no timeout
+     * @param envMap environment to set for the command
+     * @param commandArgs the adb command and arguments to run
+     * @return the stdout from command. <code>null</code> if command failed to execute.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public String executeAdbCommand(long timeout, Map<String, String> envMap, String... commandArgs)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Helper method which executes a fastboot command as a system command with a default timeout of
+     * 2 minutes.
+     *
+     * <p>Expected to be used when device is already in fastboot mode.
      *
      * @param commandArgs the fastboot command and arguments to run
      * @return the CommandResult containing output of command
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
      */
     public CommandResult executeFastbootCommand(String... commandArgs)
             throws DeviceNotAvailableException;
@@ -514,6 +530,22 @@ public interface INativeDevice {
      * recovered.
      */
     public CommandResult executeLongFastbootCommand(String... commandArgs)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Helper method which executes a long running fastboot command as a system command with system
+     * environment variables.
+     *
+     * <p>Identical to {@link #executeFastbootCommand(String...)} except uses a longer timeout.
+     *
+     * @param envVarMap the system environment variables that the fastboot command run with
+     * @param commandArgs the fastboot command and arguments to run
+     * @return the CommandResult containing output of command
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public CommandResult executeLongFastbootCommand(
+            Map<String, String> envVarMap, String... commandArgs)
             throws DeviceNotAvailableException;
 
     /**
@@ -619,6 +651,14 @@ public interface INativeDevice {
     public boolean isAppEnumerationSupported() throws DeviceNotAvailableException;
 
     /**
+     * Check whether platform on device supports bypassing low target sdk block on app installs
+     *
+     * @return True if bypass low target sdk block is supported, false otherwise
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isBypassLowTargetSdkBlockSupported() throws DeviceNotAvailableException;
+
+    /**
      * Retrieves a file off device.
      *
      * @param remoteFilePath the absolute path to file on device.
@@ -705,15 +745,58 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
-     * Push a file to device
+     * Recursively pull directory contents from device.
+     *
+     * @param deviceFilePath the absolute file path of the remote source
+     * @param localDir the local directory to pull files into
+     * @param userId the user id to pull from
+     * @return <code>true</code> if file was pulled successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pullDir(String deviceFilePath, File localDir, int userId)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Push a file to device. By default using a content provider.
      *
      * @param localFile the local file to push
      * @param deviceFilePath the remote destination absolute file path
      * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
      */
     public boolean pushFile(File localFile, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Push a file to device. By default using a content provider.
+     *
+     * @param localFile the local file to push
+     * @param deviceFilePath the remote destination absolute file path
+     * @param userId the userId to push to
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushFile(File localFile, String deviceFilePath, int userId)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Variant of {@link #pushFile(File, String)} which can optionally consider evaluating the need
+     * for the content provider.
+     *
+     * @param localFile the local file to push
+     * @param deviceFilePath the remote destination absolute file path
+     * @param evaluateContentProviderNeeded whether to check if we need the content provider
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushFile(
+            final File localFile,
+            final String deviceFilePath,
+            boolean evaluateContentProviderNeeded)
             throws DeviceNotAvailableException;
 
     /**
@@ -738,6 +821,19 @@ public interface INativeDevice {
      * recovered.
      */
     public boolean pushDir(File localDir, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Recursively push directory contents to device.
+     *
+     * @param localDir the local directory to push
+     * @param deviceFilePath the absolute file path of the remote destination
+     * @param userId the user id to push to
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushDir(File localDir, String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
 
     /**
@@ -794,6 +890,15 @@ public interface INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public void deleteFile(String deviceFilePath) throws DeviceNotAvailableException;
+
+    /**
+     * Helper method to delete a file or directory on the device.
+     *
+     * @param deviceFilePath The absolute path of the file on the device.
+     * @param userId The user id to delete from
+     * @throws DeviceNotAvailableException
+     */
+    public void deleteFile(String deviceFilePath, int userId) throws DeviceNotAvailableException;
 
     /**
      * Retrieve a reference to a remote file on device.
@@ -1158,16 +1263,28 @@ public interface INativeDevice {
      *
      * @param waitTime the time in ms to wait
      * @throws DeviceNotAvailableException if device is still unresponsive after waitTime expires.
+     * @return True if device is available, False if recovery is disabled and unavailable.
      */
-    public void waitForDeviceAvailable(final long waitTime) throws DeviceNotAvailableException;
+    public boolean waitForDeviceAvailable(final long waitTime) throws DeviceNotAvailableException;
 
     /**
-     * Waits for the device to be responsive and available for testing.  Uses default timeout.
+     * Waits for the device to be responsive and available for testing. Uses default timeout.
      *
      * @throws DeviceNotAvailableException if connection with device is lost and cannot be
-     * recovered.
+     *     recovered.
+     * @return True if device is available, False if recovery is disabled and unavailable.
      */
-    public void waitForDeviceAvailable() throws DeviceNotAvailableException;
+    public boolean waitForDeviceAvailable() throws DeviceNotAvailableException;
+
+    /**
+     * Waits for the device to be responsive and available without considering recovery path.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     * @return True if device is available, False if unavailable.
+     */
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException;
 
     /**
      * Blocks until device is visible via adb.
@@ -1200,6 +1317,14 @@ public interface INativeDevice {
      *         <code>false</code> otherwise
      */
     public boolean waitForDeviceNotAvailable(final long waitTime);
+
+    /**
+     * Blocks until device is visible via fastboot. Use default timeout.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public void waitForDeviceBootloader() throws DeviceNotAvailableException;
 
     /**
      * Blocks for the device to be in the 'adb recovery' state (note this is distinct from
@@ -1369,6 +1494,20 @@ public interface INativeDevice {
     public void remountVendorWritable() throws DeviceNotAvailableException;
 
     /**
+     * Make the system partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountSystemReadOnly() throws DeviceNotAvailableException;
+
+    /**
+     * Make the vendor partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountVendorReadOnly() throws DeviceNotAvailableException;
+
+    /**
      * Returns the key type used to sign the device image
      * <p>
      * Typically Android devices may be signed with test-keys (like in AOSP) or release-keys
@@ -1379,44 +1518,12 @@ public interface INativeDevice {
     public String getBuildSigningKeys() throws DeviceNotAvailableException;
 
     /**
-     * Retrieves a bugreport from the device.
-     * <p/>
-     * The implementation of this is guaranteed to continue to work on a device without an sdcard
-     * (or where the sdcard is not yet mounted).
+     * Collects and log ANRs from the device.
      *
-     * @return An {@link InputStreamSource} which will produce the bugreport contents on demand.  In
-     *         case of failure, the {@code InputStreamSource} will produce an empty
-     *         {@link InputStream}.
-     */
-    public InputStreamSource getBugreport();
-
-    /**
-     * Retrieves a bugreportz from the device. Zip format bugreport contains the main bugreport
-     * and other log files that are useful for debugging.
-     * <p/>
-     * Only supported for 'adb version' > 1.0.36
-     *
-     * @return a {@link InputStreamSource} of the zip file containing the bugreportz, return null
-     *         in case of failure.
-     */
-    public InputStreamSource getBugreportz();
-
-    /**
-     * Helper method to take a bugreport and log it to the reporters.
-     *
-     * @param dataName name under which the bugreport will be reported.
-     * @param listener an {@link ITestLogger} to log the bugreport.
+     * @param logger an {@link ITestLogger} to log the ANRs.
      * @return True if the logging was successful, false otherwise.
      */
-    public boolean logBugreport(String dataName, ITestLogger listener);
-
-    /**
-     * Take a bugreport and returns it inside a {@link Bugreport} object to handle it. Return null
-     * in case of issue.
-     * </p>
-     * File referenced in the Bugreport object need to be cleaned via {@link Bugreport#close()}.
-     */
-    public Bugreport takeBugreport();
+    public boolean logAnrs(ITestLogger logger) throws DeviceNotAvailableException;
 
     /**
      * Get the device class.
@@ -1470,10 +1577,26 @@ public interface INativeDevice {
     public DeviceDescriptor getDeviceDescriptor();
 
     /**
+     * Return a {@link DeviceDescriptor} from the device information to get info on it without
+     * passing the actual device object.
+     *
+     * @param shortDescriptor Whether or not to limit descriptor to bare minimum info
+     */
+    public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor);
+
+    /**
      * Returns a cached {@link DeviceDescriptor} if the device is allocated, otherwise returns the
      * current {@link DeviceDescriptor}.
      */
     public DeviceDescriptor getCachedDeviceDescriptor();
+
+    /**
+     * Returns a cached {@link DeviceDescriptor} if the device is allocated, otherwise returns the
+     * current {@link DeviceDescriptor}.
+     *
+     * @param shortDescriptor Whether or not to limit descriptor to bare minimum info
+     */
+    public DeviceDescriptor getCachedDeviceDescriptor(boolean shortDescriptor);
 
     /**
      * Helper method runs the "pidof" and "stat" command and returns {@link ProcessInfo} object with
@@ -1573,5 +1696,28 @@ public interface INativeDevice {
      */
     public List<File> getTombstones() throws DeviceNotAvailableException;
 
+    /** Returns the connection associated with the device. */
+    public AbstractConnection getConnection();
 
+    /**
+     * Check if debugfs is mounted.
+     *
+     * @return {@code true} if debugfs is mounted
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isDebugfsMounted() throws DeviceNotAvailableException;
+
+    /**
+     * Mount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void mountDebugfs() throws DeviceNotAvailableException;
+
+    /**
+     * Unmount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void unmountDebugfs() throws DeviceNotAvailableException;
 }

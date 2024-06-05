@@ -16,6 +16,8 @@
 package com.android.tradefed.testtype;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doAnswer;
@@ -30,6 +32,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -38,6 +41,9 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -49,10 +55,13 @@ import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Unit tests for {@link InstalledInstrumentationsTest}. */
 @RunWith(JUnit4.class)
@@ -105,8 +114,7 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(TEST_RUNNER, mockInstrumentationTest.getRunnerName());
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
-        verifyShellResponse(
-                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
+        verifyShellResponse(1);
     }
 
     @Test
@@ -118,15 +126,18 @@ public class InstalledInstrumentationsTestTest {
         p.parse("--size", "small", "--force-abi", ABI);
         List<TestRunResult> previousResults = new ArrayList<>();
         TestRunResult result = new TestRunResult();
-        result.testRunStarted(TEST_PKG, 1);
+        result.testRunStarted(TEST_PKG, 2);
         TestDescription testDesc = new TestDescription("com.example.tests.class", "testMethod");
         result.testStarted(testDesc);
         result.testFailed(testDesc, "failed");
         result.testEnded(testDesc, new HashMap<String, Metric>());
+        TestDescription testDesc2 = new TestDescription("com.example.tests.class", "testMethod2");
+        result.testStarted(testDesc2);
+        result.testEnded(testDesc2, new HashMap<String, Metric>());
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
 
-        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
+        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults, new HashSet<>()));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);
@@ -135,10 +146,41 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(TEST_RUNNER, mockInstrumentationTest.getRunnerName());
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
-        assertEquals(1, mockInstrumentationTest.getIncludeFilters().size());
-        assertTrue(mockInstrumentationTest.getIncludeFilters().contains(testDesc.toString()));
-        verifyShellResponse(
+
+        File excludeFile = mockInstrumentationTest.getExcludeTestFile();
+        assertNotNull(excludeFile);
+        try {
+            String excludeContent = FileUtil.readStringFromFile(excludeFile);
+            assertTrue(excludeContent.contains(testDesc2.toString()));
+            verifyShellResponse(1);
+        } finally {
+            FileUtil.deleteFile(excludeFile);
+        }
+    }
+
+    @Test
+    public void testRun_retry_skipList() throws Exception {
+        injectShellResponse(
                 String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
+
+        ArgsOptionParser p = new ArgsOptionParser(mInstalledInstrTest);
+        p.parse("--size", "small", "--force-abi", ABI);
+        List<TestRunResult> previousResults = new ArrayList<>();
+        TestRunResult result = new TestRunResult();
+        result.testRunStarted(TEST_PKG, 2);
+        TestDescription testDesc = new TestDescription("com.example.tests.class", "testMethod");
+        result.testStarted(testDesc);
+        result.testFailed(testDesc, "failed");
+        result.testEnded(testDesc, new HashMap<String, Metric>());
+        TestDescription testDesc2 = new TestDescription("com.example.tests.class", "testMethod2");
+        result.testStarted(testDesc2);
+        result.testEnded(testDesc2, new HashMap<String, Metric>());
+        result.testRunEnded(5L, new HashMap<String, Metric>());
+        previousResults.add(result);
+
+        Set<String> skipList = new HashSet<>();
+        skipList.add(testDesc.toString());
+        assertFalse(mInstalledInstrTest.shouldRetry(0, previousResults, skipList));
     }
 
     @Test
@@ -159,7 +201,7 @@ public class InstalledInstrumentationsTestTest {
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
 
-        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
+        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults, new HashSet<>()));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(1, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);
@@ -170,8 +212,7 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
         // No filter will be set, we retry everything
         assertEquals(0, mockInstrumentationTest.getIncludeFilters().size());
-        verifyShellResponse(
-                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
+        verifyShellResponse(1);
     }
 
     @Test
@@ -197,7 +238,7 @@ public class InstalledInstrumentationsTestTest {
         result.testRunEnded(5L, new HashMap<String, Metric>());
         previousResults.add(result);
 
-        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults));
+        assertTrue(mInstalledInstrTest.shouldRetry(0, previousResults, new HashSet<>()));
         mInstalledInstrTest.run(mTestInfo, mMockListener);
         assertEquals(2, mMockInstrumentationTests.size());
         MockInstrumentationTest mockInstrumentationTest = mMockInstrumentationTests.get(0);
@@ -206,8 +247,6 @@ public class InstalledInstrumentationsTestTest {
         assertEquals(TEST_RUNNER, mockInstrumentationTest.getRunnerName());
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
-        assertEquals(1, mockInstrumentationTest.getIncludeFilters().size());
-        assertTrue(mockInstrumentationTest.getIncludeFilters().contains(testDesc.toString()));
 
         MockInstrumentationTest mockInstrumentationTest2 = mMockInstrumentationTests.get(1);
         assertEquals(mMockListener, mockInstrumentationTest2.getListener());
@@ -216,7 +255,7 @@ public class InstalledInstrumentationsTestTest {
         assertEquals("small", mockInstrumentationTest2.getTestSize());
         assertEquals(ABI, mockInstrumentationTest2.getForceAbi());
         assertEquals(0, mockInstrumentationTest2.getIncludeFilters().size());
-        verifyShellResponse(shellResponse, 1);
+        verifyShellResponse(1);
     }
 
     /** Tests the run of sharded InstalledInstrumentationsTests. */
@@ -283,8 +322,7 @@ public class InstalledInstrumentationsTestTest {
         assertEquals("1", mMockInstrumentationTests.get(1).getInstrumentationArg("shardIndex"));
         assertEquals("2", mMockInstrumentationTests.get(1).getInstrumentationArg("numShards"));
 
-        verifyShellResponse(
-                String.format("%s%s%s", shardableInstr, nonshardableInstr1, nonshardableInstr2), 2);
+        verifyShellResponse(2);
     }
 
     @Test
@@ -307,8 +345,7 @@ public class InstalledInstrumentationsTestTest {
         assertEquals("small", mockInstrumentationTest.getTestSize());
         assertEquals(ABI, mockInstrumentationTest.getForceAbi());
         assertEquals(1, mockInstrumentationTest.getCollectors().size());
-        verifyShellResponse(
-                String.format(INSTR_OUTPUT_FORMAT, TEST_PKG, TEST_RUNNER, TEST_COVERAGE_TARGET), 1);
+        verifyShellResponse(1);
     }
 
     /**
@@ -323,30 +360,24 @@ public class InstalledInstrumentationsTestTest {
         Answer<Object> shellAnswer =
                 new Answer<Object>() {
                     @Override
-                    public String answer(InvocationOnMock invocation) throws Throwable {
-                        return shellResponse;
+                    public CommandResult answer(InvocationOnMock invocation) throws Throwable {
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(shellResponse);
+                        return res;
                     }
                 };
-        doAnswer(shellAnswer).when(mMockTestDevice).executeShellCommand(Mockito.<String>any());
+        doAnswer(shellAnswer).when(mMockTestDevice).executeShellV2Command(Mockito.<String>any());
     }
 
     /**
      * Method to mock the executeShellCommand response
      *
-     * @param shellResponse value to be returned by executeShellCommand
      * @param numExpectedCalls number of invocation expected
      * @throws DeviceNotAvailableException
      */
-    private void verifyShellResponse(final String shellResponse, int numExpectedCalls)
-            throws DeviceNotAvailableException {
-        Answer<Object> shellAnswer =
-                new Answer<Object>() {
-                    @Override
-                    public String answer(InvocationOnMock invocation) throws Throwable {
-                        return shellResponse;
-                    }
-                };
-        verify(mMockTestDevice, times(numExpectedCalls)).executeShellCommand(Mockito.<String>any());
+    private void verifyShellResponse(int numExpectedCalls) throws DeviceNotAvailableException {
+        verify(mMockTestDevice, times(numExpectedCalls))
+                .executeShellV2Command(Mockito.<String>any());
     }
 
     /**
@@ -391,7 +422,7 @@ public class InstalledInstrumentationsTestTest {
         try {
             mInstalledInstrTest.run(mTestInfo, mMockListener);
             fail("IllegalArgumentException not thrown");
-        } catch (IllegalArgumentException e) {
+        } catch (HarnessRuntimeException e) {
             // expected
         }
     }

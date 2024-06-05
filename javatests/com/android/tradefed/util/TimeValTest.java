@@ -108,7 +108,7 @@ public class TimeValTest {
 
         // 2**64 + 1 should be a positive value after an overflow.  Make sure we can still detect
         // this non-negative overflow
-        long l = 1<<62;
+        long l = 1L<<62;
         l *= 2;
         l *= 2;
         l += 1;

@@ -573,7 +573,7 @@ public class HostTestTest {
             assertTrue(mHelloWorld != null && mFoobar != null);
             assertTrue(
                     "Expects 'hello' value to be 'hello:world'", mHelloWorld.equals("hello:world"));
-            assertTrue("Expects 'foobar' value to be 'baz:qux'", mFoobar.equals("baz:qux"));
+            assertTrue("Expects 'foobar' value to be 'baz:qux=wap'", mFoobar.equals("baz:qux=wap"));
 
             metrics.addTestMetric("hello", mHelloWorld);
             metrics.addTestMetric("foobar", mFoobar);
@@ -2480,7 +2480,8 @@ public class HostTestTest {
                         + ":gcs-bucket-file:gs\\://bucket/path/file");
         setter.setOptionValue("set-option", "hello:hello\\:world");
         setter.setOptionValue(
-                "set-option", OptionEscapeColonTestCase.class.getName() + ":foobar:baz\\:qux");
+                "set-option",
+                OptionEscapeColonTestCase.class.getName() + ":foobar:baz\\:qux\\=wap");
         TestDescription testGcsBucket =
                 new TestDescription(OptionEscapeColonTestCase.class.getName(), "testGcsBucket");
         TestDescription testEscapeStrings =
@@ -2491,9 +2492,12 @@ public class HostTestTest {
 
         verify(mListener).testRunStarted((String) Mockito.any(), Mockito.eq(2));
         verify(mListener).testStarted(Mockito.eq(testGcsBucket));
+        verify(mListener, times(0)).testFailed(Mockito.eq(testGcsBucket), (String) Mockito.any());
         verify(mListener)
                 .testEnded(Mockito.eq(testGcsBucket), (HashMap<String, Metric>) Mockito.any());
         verify(mListener).testStarted(Mockito.eq(testEscapeStrings));
+        verify(mListener, times(0))
+                .testFailed(Mockito.eq(testEscapeStrings), (String) Mockito.any());
         verify(mListener)
                 .testEnded(Mockito.eq(testEscapeStrings), (HashMap<String, Metric>) Mockito.any());
         verify(mListener).testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());

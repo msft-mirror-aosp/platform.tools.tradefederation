@@ -20,6 +20,7 @@ import com.android.tradefed.config.OptionClass;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -43,6 +44,16 @@ public final class SandboxOptions {
     private static final String ENABLE_DEFAULT_TESTS_ZIPS_OPTIONS = "sandbox-default-zips";
     private static final String DUMP_TEST_TEMPLATE = "dump-test-template";
     private static final String START_AVD_IN_PARENT = "avd-in-parent";
+    private static final String PARALLEL_SANDBOX_SETUP = "parallel-sandbox-setup";
+    private static final String UPDATED_FLAG_ORDER = "update-flag-orders";
+    private static final String SANDBOX_USE_TEST_DISCOVERY = "sandbox-use-test-discovery";
+    private static final String SANDBOX_FORCE_PARTIAL_DOWNLOAD_FILE_REGEX =
+            "sandbox-force-partial-download-file-regex";
+    private static final String SANDBOX_PARTIAL_DOWNLOAD_CACHE =
+            "sandbox-use-partial-download-cache";
+    private static final String SANDBOX_SPLIT_DISCOVERY = "sandbox-split-discovery";
+    private static final String SANDBOX_PARALLEL_DOWNLOAD = "sandbox-parallel-download";
+    private static final String DELAY_DOWNLOAD_AFTER_SHARDING = "delay-download-after-sharding";
 
     @Option(
         name = TF_LOCATION,
@@ -126,6 +137,50 @@ public final class SandboxOptions {
                     "Whether or not to start the avd device in the parent sandbox")
     private boolean mStartAvdInParent = true;
 
+    @Option(
+            name = PARALLEL_SANDBOX_SETUP,
+            description = "Execute the sandbox setup step in parallel")
+    private boolean mParallelSandboxSetup = true;
+
+    /** Deprecated */
+    @Option(name = UPDATED_FLAG_ORDER, description = "Feature flag to test safely new flags order")
+    private boolean mNewFlagOrder = true;
+
+    @Option(
+            name = SANDBOX_USE_TEST_DISCOVERY,
+            description =
+                    "Feature flag to use observatory to discovery test modules for staging jars")
+    private boolean mUseTestDiscovery = false;
+
+    @Option(
+            name = SANDBOX_FORCE_PARTIAL_DOWNLOAD_FILE_REGEX,
+            description =
+                    "The set of regex to force sandbox partial download always stage the files"
+                            + " that match any of the regex in the list")
+    private Set<String> mSandboxForcePartialDownloadFileRegexList = new HashSet<>();
+
+    @Option(
+            name = SANDBOX_PARTIAL_DOWNLOAD_CACHE,
+            description = "Feature flag to use partial download cache")
+    private boolean mUsePartialDownloadCache = true;
+
+    @Option(
+            name = SANDBOX_SPLIT_DISCOVERY,
+            description = "Enable setup where discovery is done independently.")
+    private boolean mUseSandboxSplitDiscovery = true;
+
+    @Option(
+            name = SANDBOX_PARALLEL_DOWNLOAD,
+            description = "Enable parallel download during sandbox setup.")
+    private boolean mUseSandboxParallelDownload = true;
+
+    @Option(
+            name = DELAY_DOWNLOAD_AFTER_SHARDING,
+            description =
+                    "Feature to delegate most of the heavy download after sharding to reduce"
+                            + " downloaded size.")
+    private boolean mDelayDownloadAfterSharding = true;
+
     /**
      * Returns the provided directories containing the Trade Federation version to use for
      * sandboxing the run.
@@ -199,5 +254,43 @@ public final class SandboxOptions {
      */
     public boolean startAvdInParent() {
         return mStartAvdInParent;
+    }
+
+    /** Returns whether or not to execute the sandbox setup in parallel. */
+    public boolean shouldParallelSetup() {
+        return mParallelSandboxSetup;
+    }
+
+    /** Returns whether or not to use tradefed observatory to optimize jar staging */
+    public boolean shouldUseTestDiscovery() {
+        return mUseTestDiscovery;
+    }
+
+    /** Returns whether or not to use partial download caching */
+    public boolean shouldUsePartialDownload() {
+        return mUsePartialDownloadCache;
+    }
+
+    /**
+     * Returns a set of regex, sandbox partial download will always download those files that match
+     * the regex
+     */
+    public Set<String> getForcePartialDownloadFileRegexList() {
+        return mSandboxForcePartialDownloadFileRegexList;
+    }
+
+    /** Returns whether to use setup with independent discovery. */
+    public boolean shouldUseSplitDiscovery() {
+        return mUseSandboxSplitDiscovery;
+    }
+
+    /** Returns whether or not to use parallel download during setup. */
+    public boolean shouldUseParallelDownload() {
+        return mUseSandboxParallelDownload;
+    }
+
+    /** Returns whether or not to delay download after the sharding. */
+    public boolean delayDownloadAfterSharding() {
+        return mDelayDownloadAfterSharding;
     }
 }

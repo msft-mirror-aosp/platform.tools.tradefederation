@@ -20,6 +20,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -137,11 +138,12 @@ public class DeviceImageZipFlashingTargetPreparer extends DeviceUpdateTargetPrep
                 case SUCCESS:
                     break;
                 case FAILED:
-                    throw new TargetSetupError(message, device.getDeviceDescriptor());
                 case EXCEPTION:
-                    throw new TargetSetupError(message, device.getDeviceDescriptor());
                 case TIMED_OUT:
-                    throw new TargetSetupError(message, device.getDeviceDescriptor());
+                    throw new TargetSetupError(
+                            message,
+                            device.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
                 default:
                     throw new IllegalStateException("Failsafe: not expected");
             }

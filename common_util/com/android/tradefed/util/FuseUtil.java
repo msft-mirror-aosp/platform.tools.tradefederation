@@ -51,10 +51,11 @@ public class FuseUtil {
             CommandResult res =
                     getRunUtil().runTimedCmd(FUSE_ZIP_TIMEOUT_MILLIS, "test", "-c", "/dev/fuse");
             CommandResult res2 =
-                    getRunUtil().runTimedCmd(FUSE_ZIP_TIMEOUT_MILLIS, "fuse-zip", "-h");
+                    getRunUtil().runTimedCmd(FUSE_ZIP_TIMEOUT_MILLIS, "which", "fuse-zip");
             sCanMountZip =
                     res.getStatus().equals(CommandStatus.SUCCESS)
-                            && res2.getStatus().equals(CommandStatus.SUCCESS);
+                            && res2.getStatus().equals(CommandStatus.SUCCESS)
+                            && !res2.getStdout().isEmpty();
         }
         return sCanMountZip.booleanValue();
     }

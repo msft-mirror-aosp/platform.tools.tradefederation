@@ -17,11 +17,11 @@ package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.TestSummary;
 import com.android.tradefed.result.TestSummary.Type;
 import com.android.tradefed.result.TestSummary.TypedString;
@@ -41,17 +41,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Collect test results for an entire suite invocation and output the final results. */
 public class SuiteResultReporter extends CollectingTestListener {
 
     public static final String SUITE_REPORTER_SOURCE = SuiteResultReporter.class.getName();
 
-    private long mStartTime = 0L;
+    private Long mStartTime = null;
     private long mEndTime = 0L;
 
-    private int mTotalModules = 0;
-    private int mCompleteModules = 0;
+    private AtomicInteger mTotalModules = new AtomicInteger(0);
+    private AtomicInteger mCompleteModules = new AtomicInteger(0);
 
     private long mTotalTests = 0L;
     private long mPassedTests = 0L;
@@ -85,7 +86,9 @@ public class SuiteResultReporter extends CollectingTestListener {
     @Override
     public void invocationStarted(IInvocationContext context) {
         super.invocationStarted(context);
-        mStartTime = getCurrentTime();
+        if (mStartTime == null) {
+            mStartTime = getCurrentTime();
+        }
     }
 
     @Override
@@ -122,11 +125,11 @@ public class SuiteResultReporter extends CollectingTestListener {
         Collection<TestRunResult> results = getMergedTestRunResults();
         List<TestRunResult> moduleCheckers = extractModuleCheckers(results);
 
-        mTotalModules = results.size();
+        mTotalModules.set(results.size());
 
         for (TestRunResult moduleResult : results) {
             if (!moduleResult.isRunFailure()) {
-                mCompleteModules++;
+                mCompleteModules.incrementAndGet();
             } else {
                 mFailedModule.put(moduleResult.getName(), moduleResult.getRunFailureMessage());
             }
@@ -134,6 +137,8 @@ public class SuiteResultReporter extends CollectingTestListener {
             mPassedTests += moduleResult.getNumTestsInState(TestStatus.PASSED);
             mFailedTests += moduleResult.getNumAllFailedTests();
             mSkippedTests += moduleResult.getNumTestsInState(TestStatus.IGNORED);
+            // TODO(b/322204420): differentiate SKIPPED and IGNORED
+            mSkippedTests += moduleResult.getNumTestsInState(TestStatus.SKIPPED);
             mAssumeFailureTests += moduleResult.getNumTestsInState(TestStatus.ASSUMPTION_FAILURE);
 
             // Get the module metrics for target preparation
@@ -174,6 +179,9 @@ public class SuiteResultReporter extends CollectingTestListener {
         printModuleRetriesInformation();
         mSummary.append("=============== Summary ===============\n");
         // Print the time from invocation start to end
+        if (mStartTime == null) {
+            mStartTime = 0L;
+        }
         mSummary.append(
                 String.format(
                         "Total Run time: %s\n", TimeUtil.formatElapsedTime(mEndTime - mStartTime)));
@@ -196,7 +204,7 @@ public class SuiteResultReporter extends CollectingTestListener {
             mSummary.append(String.format("ASSUMPTION_FAILURE: %s\n", mAssumeFailureTests));
         }
 
-        if (mCompleteModules != mTotalModules) {
+        if (mCompleteModules.get() != mTotalModules.get()) {
             mSummary.append(
                     "IMPORTANT: Some modules failed to run to completion, tests counts "
                             + "may be inaccurate.\n");
@@ -247,9 +255,12 @@ public class SuiteResultReporter extends CollectingTestListener {
     private void printTopSlowModules(Collection<TestRunResult> results) {
         List<TestRunResult> moduleTime = new ArrayList<>();
         moduleTime.addAll(results);
-        // We don't consider module which runs in less than 5 sec.
+        // We don't consider module which runs in less than 5 sec or that didn't run tests
         for (TestRunResult t : results) {
             if (t.getElapsedTime() < 5000) {
+                moduleTime.remove(t);
+            }
+            if (t.getNumTests() == 0) {
                 moduleTime.remove(t);
             }
         }
@@ -363,11 +374,11 @@ public class SuiteResultReporter extends CollectingTestListener {
     }
 
     public int getTotalModules() {
-        return mTotalModules;
+        return mTotalModules.get();
     }
 
     public int getCompleteModules() {
-        return mCompleteModules;
+        return mCompleteModules.get();
     }
 
     public long getTotalTests() {

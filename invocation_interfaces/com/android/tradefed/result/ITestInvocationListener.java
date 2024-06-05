@@ -17,6 +17,7 @@ package com.android.tradefed.result;
 
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.ITestLogger;
+import com.android.tradefed.result.skipped.SkipReason;
 
 /**
  * Listener for test results from the test invocation.
@@ -71,6 +72,9 @@ public interface ITestInvocationListener extends ITestLogger, ITestLifeCycleRece
      * @param cause the {@link Throwable} cause of the failure
      */
     default public void invocationFailed(Throwable cause) { }
+
+    /** Reports an invocation as skipped */
+    public default void invocationSkipped(SkipReason reason) {}
 
     /**
      * Reports an incomplete invocation due to some error condition.

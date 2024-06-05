@@ -18,7 +18,6 @@ package com.android.tradefed.device.metric;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -56,6 +55,7 @@ import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** Unit tests for {@link BaseDeviceMetricCollector}. */
 @RunWith(JUnit4.class)
@@ -77,7 +77,7 @@ public class BaseDeviceMetricCollectorTest {
     }
 
     @Test
-    public void testInitAndForwarding() {
+    public void testInitAndForwarding() throws Exception {
         mBase.init(mContext, mMockListener);
         mBase.invocationStarted(mContext);
         mBase.testModuleStarted(mContext);
@@ -126,7 +126,7 @@ public class BaseDeviceMetricCollectorTest {
 
     /** Test that multiple call to init are rejected. */
     @Test
-    public void testMultiInit() {
+    public void testMultiInit() throws Exception {
         mBase.init(mContext, mMockListener);
         try {
             mBase.init(mContext, mMockListener);
@@ -141,7 +141,7 @@ public class BaseDeviceMetricCollectorTest {
      * collection.
      */
     @Test
-    public void testForwarding_withException() {
+    public void testForwarding_withException() throws Exception {
         mBase =
                 new BaseDeviceMetricCollector() {
                     @Override
@@ -328,7 +328,8 @@ public class BaseDeviceMetricCollectorTest {
      * of the test case.
      */
     private void verifyFiltering(
-            BaseDeviceMetricCollector base, TestAnnotation annot, boolean hasMetric) {
+            BaseDeviceMetricCollector base, TestAnnotation annot, boolean hasMetric)
+            throws Exception {
         base.init(mContext, mMockListener);
         base.invocationStarted(mContext);
         base.testRunStarted("testRun", 1);
@@ -383,6 +384,23 @@ public class BaseDeviceMetricCollectorTest {
         @Override
         public String group() {
             return mGroup;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (other == this) {
+                return true;
+            }
+            if (!(other instanceof TestAnnotation)) {
+                return false;
+            }
+            TestAnnotation o = (TestAnnotation) other;
+            return Objects.equals(mGroup, o.mGroup);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mGroup);
         }
     }
 

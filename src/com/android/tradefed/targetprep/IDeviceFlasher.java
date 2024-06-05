@@ -99,6 +99,20 @@ public interface IDeviceFlasher {
     public void setForceSystemFlash(boolean forceSystemFlash);
 
     /**
+     * All setup operations & checks that must occur before actual flashing critical section. None
+     * of those operations will be included in the concurrency-controlled critical section.
+     *
+     * @param device the {@link ITestDevice} to flash
+     * @param deviceBuild the {@link IDeviceBuildInfo} to flash
+     * @throws TargetSetupError if any setup fails
+     * @throws DeviceNotAvailableException if device becomes unresponsive
+     */
+    public default void preFlashOperations(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws TargetSetupError, DeviceNotAvailableException {
+        // Empty by default
+    }
+
+    /**
      * Flashes build on device.
      * <p/>
      * Returns immediately after flashing is complete. Callers should wait for device to be
@@ -112,6 +126,20 @@ public interface IDeviceFlasher {
      */
     public void flash(ITestDevice device, IDeviceBuildInfo deviceBuild) throws TargetSetupError,
             DeviceNotAvailableException;
+
+    /**
+     * All clean up operations & checks that must occur after actual flashing critical section. None
+     * of those operations will be included in the concurrency-controlled critical section.
+     *
+     * @param device the {@link ITestDevice} to flash
+     * @param deviceBuild the {@link IDeviceBuildInfo} to flash
+     * @throws TargetSetupError if any setup fails
+     * @throws DeviceNotAvailableException if device becomes unresponsive
+     */
+    public default void postFlashOperations(ITestDevice device, IDeviceBuildInfo deviceBuild)
+            throws TargetSetupError, DeviceNotAvailableException {
+        // Empty by default
+    }
 
     /**
      * Retrieve the command execution status for flashing primary system partitions.
