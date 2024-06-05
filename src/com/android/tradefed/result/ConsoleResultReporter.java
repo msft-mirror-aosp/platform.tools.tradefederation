@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -89,10 +88,10 @@ public class ConsoleResultReporter extends TestResultListener
     @Override
     public void testResult(TestDescription test, TestResult result) {
         mResultCountListener.testResult(test, result);
-        if (mSuppressPassedTest && TestStatus.PASSED.equals(result.getStatus())) {
+        if (mSuppressPassedTest && TestStatus.PASSED.equals(result.getResultStatus())) {
             return;
         }
-        if (mDisplayFailureSummary && TestStatus.FAILURE.equals(result.getStatus())) {
+        if (mDisplayFailureSummary && TestStatus.FAILURE.equals(result.getResultStatus())) {
             mFailures.put(test, result);
         }
         print(getTestSummary(mTestTag, test, result));
@@ -154,6 +153,11 @@ public class ConsoleResultReporter extends TestResultListener
             sb.append(" ");
             sb.append(results[TestStatus.IGNORED.ordinal()]);
             sb.append(" Ignored");
+        }
+        if (results[TestStatus.SKIPPED.ordinal()] > 0) {
+            sb.append(" ");
+            sb.append(results[TestStatus.SKIPPED.ordinal()]);
+            sb.append(" Skipped");
         }
         if (results[TestStatus.ASSUMPTION_FAILURE.ordinal()] > 0) {
             sb.append(" ");

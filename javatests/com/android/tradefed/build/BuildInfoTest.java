@@ -27,6 +27,8 @@ import com.android.tradefed.build.proto.BuildInformation;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.SerializationUtil;
 
+import com.google.common.truth.Truth;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -65,6 +67,10 @@ public class BuildInfoTest {
     @Test
     public void testClone() throws Exception {
         mBuildInfo.setDeviceSerial("tobecloned");
+        mBuildInfo.setFile(
+                IBuildInfo.REMOTE_FILE_PREFIX + "general-tests.zip",
+                new File("ab:/branch/suites/android-cts.zip"),
+                "1");
         BuildInfo copy = (BuildInfo) mBuildInfo.clone();
         assertEquals(mBuildInfo.getBuildAttributes().get(ATTRIBUTE_KEY),
                 copy.getBuildAttributes().get(ATTRIBUTE_KEY));
@@ -74,6 +80,8 @@ public class BuildInfoTest {
             assertTrue(!mFile.getAbsolutePath().equals(copy.getFile(FILE_KEY).getAbsolutePath()));
             assertTrue(FileUtil.compareFileContents(mFile, copy.getFile(FILE_KEY)));
             assertEquals("tobecloned", copy.getDeviceSerial());
+            Truth.assertThat(copy.getRemoteFiles())
+                    .containsExactly(new File("ab:/branch/suites/android-cts.zip"));
         } finally {
             FileUtil.deleteFile(copy.getFile(FILE_KEY));
         }

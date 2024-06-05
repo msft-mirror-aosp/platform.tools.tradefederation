@@ -21,7 +21,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 
 import org.junit.Test;
@@ -287,9 +286,9 @@ public class TestRunResultTest {
         TestResult test2Result = testResult.get(testcase2);
         TestResult test3Result = testResult.get(testcase3);
 
-        assertEquals(TestStatus.PASSED, test1Result.getStatus());
-        assertEquals(TestStatus.PASSED, test2Result.getStatus());
-        assertEquals(TestStatus.FAILURE, test3Result.getStatus());
+        assertEquals(TestStatus.PASSED, test1Result.getResultStatus());
+        assertEquals(TestStatus.PASSED, test2Result.getResultStatus());
+        assertEquals(TestStatus.FAILURE, test3Result.getResultStatus());
 
         assertEquals(null, test1Result.getStackTrace());
         assertEquals("There were 2 failures:\n  flaky 1\n  flaky 2", test2Result.getStackTrace());
@@ -343,7 +342,7 @@ public class TestRunResultTest {
         Map<TestDescription, TestResult> testRunResult = result.getTestResults();
         assertTrue(testRunResult.containsKey(testcase));
         TestResult testResult = testRunResult.get(testcase);
-        assertEquals(TestStatus.PASSED, testResult.getStatus());
+        assertEquals(TestStatus.PASSED, testResult.getResultStatus());
 
         assertEquals(
                 "There were 2 failures:\n  Second run failed.\n  Fourth run failed.",
@@ -609,7 +608,7 @@ public class TestRunResultTest {
         Map<TestDescription, TestResult> testRunResult = result.getTestResults();
         assertTrue(testRunResult.containsKey(testcase));
         TestResult testResult = testRunResult.get(testcase);
-        assertEquals(TestStatus.PASSED, testResult.getStatus());
+        assertEquals(TestStatus.PASSED, testResult.getResultStatus());
 
         assertEquals(
                 "There were 2 failures:\n  Second run failed.\n  third run failed.",

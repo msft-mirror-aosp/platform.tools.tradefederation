@@ -16,9 +16,11 @@
 package com.android.tradefed.testtype;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.JUnitToInvocationResultForwarder;
 import com.android.tradefed.testtype.MetricTestCase.LogHolder;
+import com.android.tradefed.testtype.junit4.CarryInterruptedException;
 import com.android.tradefed.util.StreamUtil;
 
 import junit.framework.AssertionFailedError;
@@ -38,6 +40,8 @@ import java.util.List;
  */
 public class DeviceTestResult extends TestResult {
 
+    private TestInformation mTestInfo;
+
     @SuppressWarnings("serial")
     public class RuntimeDeviceNotAvailableException extends RuntimeException {
         private DeviceNotAvailableException mException;
@@ -50,6 +54,10 @@ public class DeviceTestResult extends TestResult {
         DeviceNotAvailableException getDeviceException() {
             return mException;
         }
+    }
+
+    public void setTestInfo(TestInformation testInfo) {
+        mTestInfo = testInfo;
     }
 
     /**
@@ -73,8 +81,10 @@ public class DeviceTestResult extends TestResult {
         catch (DeviceNotAvailableException e) {
             addError(test, e);
             throw new RuntimeDeviceNotAvailableException(e);
-        }
-        catch (Throwable e) {
+        } catch (InterruptedException e) {
+            addError(test, e);
+            throw new CarryInterruptedException(e);
+        } catch (Throwable e) {
             addError(test, e);
         }
     }
@@ -83,7 +93,6 @@ public class DeviceTestResult extends TestResult {
     protected void run(final TestCase test) {
         // this is a copy of the superclass run code, with the extra finally clause
         // to ensure endTest is called when RuntimeDeviceNotAvailableException occurs
-        startTest(test);
         Protectable p = new Protectable() {
             @Override
             public void protect() throws Throwable {
@@ -91,9 +100,20 @@ public class DeviceTestResult extends TestResult {
             }
         };
         try {
+            startTest(test);
             runProtected(test, p);
         } finally {
             endTest(test);
+        }
+    }
+
+    @Override
+    public void startTest(Test test) {
+        super.startTest(test);
+        if (mTestInfo != null && mTestInfo.isTestTimedOut()) {
+            InterruptedException e = new InterruptedException();
+            addError(test, e);
+            throw new CarryInterruptedException(e);
         }
     }
 

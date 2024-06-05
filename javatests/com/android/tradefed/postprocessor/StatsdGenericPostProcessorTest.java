@@ -31,6 +31,8 @@ import com.android.os.StatsLog.ConfigMetricsReport;
 import com.android.os.StatsLog.ConfigMetricsReportList;
 import com.android.os.StatsLog.EventMetricData;
 import com.android.os.StatsLog.StatsLogReport;
+import com.android.os.sdksandbox.SandboxApiCalled;
+import com.android.os.sdksandbox.SdksandboxExtensionAtoms;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
@@ -82,14 +84,19 @@ public class StatsdGenericPostProcessorTest {
     private static final String APP_CRASH_FILENAME = "app-crash.pb";
     private static final String BAD_REPORT_FILENAME = "bad-report.pb";
 
+    private static final String EXTENSION_ATOM_REPORT_FILENAME = "extension-atom-report.pb";
     private static final String REPORT_PREFIX_APP_START = "app-start";
     private static final String REPORT_PREFIX_APP_CRASH = "app-crash";
     private static final String REPORT_PREFIX_BAD = "bad";
 
+    private static final String REPORT_PREFIX_EXTENSION_ATOM = "extension-atom";
     private static final ConfigMetricsReportList APP_STARTUP_REPORT =
             generateReportListProto(generateAppStartupData());
     private static final ConfigMetricsReportList APP_CRASH_REPORT =
             generateReportListProto(generateAppCrashData());
+
+    private static final ConfigMetricsReportList EXTENSION_ATOM_REPORT =
+            generateReportListProto(generateSandboxApiCalledData());
 
     // A few constants that stand in for metric values, to increase readability of the assertions.
     private static final long APP_START_NANOS = 7;
@@ -97,10 +104,15 @@ public class StatsdGenericPostProcessorTest {
     private static final int APP_START_DURATION = 500;
     private static final long APP_CRASH_NANOS = 11;
     private static final String APP_CRASH_PACKAGE = "crash.package";
+    private static final int EXTENSION_ATOM_NANOS = 10;
+    private static final int EXTENSION_ATOM_UID = 10101;
+    private static final int EXTENSION_ATOM_LATENCY_MILLIS = 15;
+    private static final boolean EXTENSION_ATOM_SUCCESS = true;
 
     private File mAppStartupReportFile;
     private File mAppCrashReportFile;
     private File mBadReportFile;
+    private File mExtensionAtomReportFile;
 
     @Before
     public void setUp() throws IOException, ConfigurationException {
@@ -117,6 +129,9 @@ public class StatsdGenericPostProcessorTest {
 
         mBadReportFile = testDir.newFile(BAD_REPORT_FILENAME);
         Files.write(mBadReportFile.toPath(), "not a report".getBytes());
+
+        mExtensionAtomReportFile = testDir.newFile(EXTENSION_ATOM_REPORT_FILENAME);
+        Files.write(mExtensionAtomReportFile.toPath(), EXTENSION_ATOM_REPORT.toByteArray());
     }
 
     /** Test that the post processor can parse reports from test metrics. */
@@ -156,6 +171,42 @@ public class StatsdGenericPostProcessorTest {
         assertMetricsContain(
                 parsedMetrics, APP_START_PACKAGE, Arrays.asList("app_start_occurred", "pkg_name"));
         assertMetricsContain(parsedMetrics, "COLD", Arrays.asList("app_start_occurred", "type"));
+    }
+
+    /** Test that the post processor can parse reports for a exntension atoms. */
+    @Test
+    public void testParsingExtensionAtom() throws ConfigurationException {
+        mOptionSetter.setOptionValue(PREFIX_OPTION, REPORT_PREFIX_EXTENSION_ATOM);
+        Map<String, LogFile> runLogs = new HashMap<>();
+        runLogs.put(
+                REPORT_PREFIX_EXTENSION_ATOM + "-report",
+                new LogFile(
+                        mExtensionAtomReportFile.getAbsolutePath(), "some.url", LogDataType.PB));
+        Map<String, Metric.Builder> parsedMetrics =
+                mProcessor.processRunMetricsAndLogs(new HashMap<>(), runLogs);
+
+        assertMetricsContain(
+                parsedMetrics,
+                SandboxApiCalled.Method.LOAD_SDK,
+                Arrays.asList("sandbox_api_called", "method"));
+
+        assertMetricsContain(
+                parsedMetrics,
+                EXTENSION_ATOM_LATENCY_MILLIS,
+                Arrays.asList("sandbox_api_called", "latency_millis"));
+
+        assertMetricsContain(
+                parsedMetrics,
+                EXTENSION_ATOM_SUCCESS,
+                Arrays.asList("sandbox_api_called", "success"));
+
+        assertMetricsContain(
+                parsedMetrics,
+                SandboxApiCalled.Stage.SANDBOX,
+                Arrays.asList("sandbox_api_called", "stage"));
+
+        assertMetricsContain(
+                parsedMetrics, EXTENSION_ATOM_UID, Arrays.asList("sandbox_api_called", "uid"));
     }
 
     @Test
@@ -635,6 +686,24 @@ public class StatsdGenericPostProcessorTest {
                                                 .setPkgName(APP_START_PACKAGE)
                                                 .setType(AppStartOccurred.TransitionType.COLD)
                                                 .setWindowsDrawnDelayMillis(APP_START_DURATION)))
+                .build();
+    }
+
+    /** Generates a Sandbox Api Called (extension atom proto) event for testing purposes. */
+    private static EventMetricData generateSandboxApiCalledData() {
+        return EventMetricData.newBuilder()
+                .setElapsedTimestampNanos(EXTENSION_ATOM_NANOS)
+                .setAtom(
+                        Atom.newBuilder()
+                                .setExtension(
+                                        SdksandboxExtensionAtoms.sandboxApiCalled,
+                                        SandboxApiCalled.newBuilder()
+                                                .setMethod(SandboxApiCalled.Method.LOAD_SDK)
+                                                .setLatencyMillis(EXTENSION_ATOM_LATENCY_MILLIS)
+                                                .setSuccess(EXTENSION_ATOM_SUCCESS)
+                                                .setStage(SandboxApiCalled.Stage.SANDBOX)
+                                                .setUid(EXTENSION_ATOM_UID)
+                                                .build()))
                 .build();
     }
 

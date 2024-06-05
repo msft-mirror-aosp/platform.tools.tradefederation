@@ -34,6 +34,7 @@ import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -44,6 +45,7 @@ import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.host.PrettyTestEventLogger;
 import com.android.tradefed.testtype.junit4.CarryDnaeError;
+import com.android.tradefed.testtype.junit4.ExceptionThrowingRunnerWrapper;
 import com.android.tradefed.testtype.junit4.JUnit4ResultForwarder;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
@@ -131,13 +133,13 @@ public class HostTest
 
     public static final String SET_OPTION_NAME = "set-option";
     public static final String SET_OPTION_DESC =
-            "Options to be passed down to the class under test, key and value should be "
-                    + "separated by colon \":\"; for example, if class under test supports "
-                    + "\"--iteration 1\" from a command line, it should be passed in as"
-                    + " \"--set-option iteration:1\" or \"--set-option iteration:key=value\" for "
-                    + "passing options to map; escaping of \"=\" is currently not supported."
-                    + "A particular class can be targetted by specifying it. "
-                    + "\" --set-option <fully qualified class>:<option name>:<option value>\"";
+            "Options to be passed down to the class under test, key and value should be separated"
+                + " by colon \":\"; for example, if class under test supports \"--iteration 1\""
+                + " from a command line, it should be passed in as \"--set-option iteration:1\" or"
+                + " \"--set-option iteration:key=value\" for passing options to map. Values that"
+                + " contain \":\" or \"=\" can be escaped with a backslash. A particular class can"
+                + " be targeted by specifying it. \" --set-option <fully qualified class>:<option"
+                + " name>:<option value>\"";
 
     @Option(name = SET_OPTION_NAME, description = SET_OPTION_DESC)
     private List<String> mKeyValueOptions = new ArrayList<>();
@@ -150,6 +152,28 @@ public class HostTest
             description = "The set of annotations to exclude tests from running. A test must have "
                     + "none of the annotations in this list to run.")
     private Set<String> mExcludeAnnotations = new HashSet<>();
+
+    /**
+     * It is strongly recommended that clients set include and exclude filters at the suite level
+     * via the ITestFilter interface rather than relying on include-filter and
+     * exclude-filter @Options.
+     */
+    @Option(
+            name = "include-filter",
+            description = "The set of annotations a test must have to be run.")
+    private Set<String> mIncludeFilters = new HashSet<>();
+
+    /**
+     * It is strongly recommended that clients set include and exclude filters at the suite level
+     * via the ITestFilter interface rather than relying on include-filter and
+     * exclude-filter @Options.
+     */
+    @Option(
+            name = "exclude-filter",
+            description =
+                    "The set of annotations to exclude tests from running. A test must have "
+                            + "none of the annotations in this list to run.")
+    private Set<String> mExcludeFilters = new HashSet<>();
 
     @Option(name = "collect-tests-only",
             description = "Only invoke the instrumentation to collect list of applicable test "
@@ -210,8 +234,9 @@ public class HostTest
     private List<File> mDownloadedFiles = new ArrayList<>();
 
     public HostTest() {
-        mFilterHelper = new TestFilterHelper(new ArrayList<String>(), new ArrayList<String>(),
-                mIncludeAnnotations, mExcludeAnnotations);
+        mFilterHelper =
+                new TestFilterHelper(
+                        mIncludeFilters, mExcludeFilters, mIncludeAnnotations, mExcludeAnnotations);
     }
 
     public void setTestInformation(TestInformation testInfo) {
@@ -356,6 +381,8 @@ public class HostTest
         // Ensure filters are set in the helper
         mFilterHelper.addAllIncludeAnnotation(mIncludeAnnotations);
         mFilterHelper.addAllExcludeAnnotation(mExcludeAnnotations);
+        mFilterHelper.addAllIncludeFilters(mIncludeFilters);
+        mFilterHelper.addAllExcludeFilters(mExcludeFilters);
 
         int count = 0;
         for (Class<?> classObj : getClasses()) {
@@ -525,6 +552,8 @@ public class HostTest
         // Ensure filters are set in the helper
         mFilterHelper.addAllIncludeAnnotation(mIncludeAnnotations);
         mFilterHelper.addAllExcludeAnnotation(mExcludeAnnotations);
+        mFilterHelper.addAllIncludeFilters(mIncludeFilters);
+        mFilterHelper.addAllExcludeFilters(mExcludeFilters);
 
         try {
             try {
@@ -702,7 +731,9 @@ public class HostTest
                         new TestTimeoutEnforcer(
                                 mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, listener);
             }
-            return JUnitRunUtil.runTest(listener, junitTest, className);
+            try (CloseableTraceScope ignored = new CloseableTraceScope(className)) {
+                return JUnitRunUtil.runTest(listener, junitTest, className, mTestInfo);
+            }
         }
     }
 
@@ -722,12 +753,14 @@ public class HostTest
             // If no tests are remaining after filtering, it returns an Error Runner.
             long startTime = System.currentTimeMillis();
             listener.testRunStarted(className, checkRunner.testCount());
-            try {
+            try (CloseableTraceScope ignore = new CloseableTraceScope(className)) {
                 if (mCollectTestsOnly) {
                     fakeDescriptionExecution(checkRunner.getDescription(), list);
                 } else {
                     setTestObjectInformation(checkRunner);
-                    runnerCore.run(checkRunner);
+                    ExceptionThrowingRunnerWrapper runnerWrapper =
+                            new ExceptionThrowingRunnerWrapper(checkRunner, mTestInfo);
+                    runnerCore.run(runnerWrapper);
                 }
             } catch (CarryDnaeError e) {
                 throw e.getDeviceNotAvailableException();
@@ -1154,18 +1187,24 @@ public class HostTest
 
     private static void injectOption(OptionSetter setter, String origItem, String key, String value)
             throws ConfigurationException {
-        if (value.contains("=")) {
-            String[] values = value.split("=");
-            if (values.length != 2) {
-                throw new RuntimeException(
-                        String.format(
-                                "set-option provided '%s' format is invalid. Only one "
-                                        + "'=' is allowed",
-                                origItem));
-            }
-            setter.setOptionValue(key, values[0], values[1]);
+        String esc = "\\";
+        String delim = "=";
+        String regex = "(?<!" + Pattern.quote(esc) + ")" + Pattern.quote(delim);
+        String escDelim = Pattern.quote(esc) + Pattern.quote(delim);
+        String[] values = value.split(regex);
+        if (values.length == 1) {
+            setter.setOptionValue(key, values[0].replaceAll(escDelim, delim));
+        } else if (values.length == 2) {
+            setter.setOptionValue(
+                    key,
+                    values[0].replaceAll(escDelim, delim),
+                    values[1].replaceAll(escDelim, delim));
         } else {
-            setter.setOptionValue(key, value);
+            throw new RuntimeException(
+                    String.format(
+                            "set-option provided '%s' format is invalid. Only one "
+                                    + "'=' is allowed",
+                            origItem));
         }
     }
 
@@ -1371,7 +1410,7 @@ public class HostTest
     }
 
     private Set<File> resolveRemoteFileForObject(Object obj) {
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("infra:resolveRemoteFiles")) {
             OptionSetter setter = new OptionSetter(obj);
             return setter.validateRemoteFilePath(createResolver());
         } catch (BuildRetrievalError | ConfigurationException e) {

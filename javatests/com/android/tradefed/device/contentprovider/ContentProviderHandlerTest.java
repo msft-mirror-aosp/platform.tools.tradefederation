@@ -17,6 +17,7 @@ package com.android.tradefed.device.contentprovider;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -46,13 +47,15 @@ import java.util.HashMap;
 @RunWith(JUnit4.class)
 public class ContentProviderHandlerTest {
 
+    private static final int TEST_USER_ID = 99;
+
     private ContentProviderHandler mProvider;
     private ITestDevice mMockDevice;
 
     @Before
     public void setUp() {
         mMockDevice = Mockito.mock(ITestDevice.class);
-        mProvider = new ContentProviderHandler(mMockDevice);
+        mProvider = new ContentProviderHandler(mMockDevice, TEST_USER_ID);
     }
 
     @After
@@ -60,10 +63,30 @@ public class ContentProviderHandlerTest {
         mProvider.tearDown();
     }
 
+    @Test
+    public void testGetUserId() {
+        assertTrue(mProvider.getUserId() == TEST_USER_ID);
+    }
+
+    @Test
+    public void testGetEffectiveUserId() throws Exception {
+        assertEquals(mProvider.getEffectiveUserId(), TEST_USER_ID);
+    }
+
+    @Test
+    public void testGetEffectiveUserId_returnsCurrentUserIdIfNotSpecified() throws Exception {
+        int currentUserId = 100;
+        when(mMockDevice.getCurrentUser()).thenReturn(currentUserId);
+        ContentProviderHandler cph = new ContentProviderHandler(mMockDevice);
+        // doReturn(currentUserId).when(mMockDevice).getCurrentUser();
+
+        assertNull(cph.getUserId());
+        assertEquals(cph.getEffectiveUserId(), currentUserId);
+    }
+
     /** Test the install flow. */
     @Test
     public void testSetUp_install() throws Exception {
-        doReturn(1).when(mMockDevice).getCurrentUser();
         doReturn(null).when(mMockDevice).installPackage(any(), eq(true), eq(true));
         CommandResult resSet = new CommandResult(CommandStatus.SUCCESS);
         doReturn(resSet)
@@ -84,17 +107,16 @@ public class ContentProviderHandlerTest {
 
     @Test
     public void testSetUp_alreadyInstalled() throws Exception {
-        doReturn(0).when(mMockDevice).getCurrentUser();
         doReturn(true)
                 .when(mMockDevice)
-                .isPackageInstalled(ContentProviderHandler.PACKAGE_NAME, "0");
+                .isPackageInstalled(
+                        ContentProviderHandler.PACKAGE_NAME, String.valueOf(TEST_USER_ID));
 
         assertTrue(mProvider.setUp());
     }
 
     @Test
     public void testSetUp_installFail() throws Exception {
-        doReturn(1).when(mMockDevice).getCurrentUser();
         doReturn("fail").when(mMockDevice).installPackage(any(), eq(true), eq(true));
 
         assertFalse(mProvider.setUp());
@@ -104,12 +126,13 @@ public class ContentProviderHandlerTest {
     @Test
     public void testDeleteFile() throws Exception {
         String devicePath = "path/somewhere/file.txt";
-        doReturn(99).when(mMockDevice).getCurrentUser();
         doReturn(mockSuccess())
                 .when(mMockDevice)
                 .executeShellV2Command(
                         eq(
-                                "content delete --user 99 --uri "
+                                "content delete --user "
+                                        + TEST_USER_ID
+                                        + " --uri "
                                         + ContentProviderHandler.createEscapedContentUri(
                                                 devicePath)));
         assertTrue(mProvider.deleteFile(devicePath));
@@ -122,12 +145,13 @@ public class ContentProviderHandlerTest {
         CommandResult result = new CommandResult(CommandStatus.FAILED);
         result.setStdout("");
         result.setStderr("couldn't find the file");
-        doReturn(99).when(mMockDevice).getCurrentUser();
         doReturn(result)
                 .when(mMockDevice)
                 .executeShellV2Command(
                         eq(
-                                "content delete --user 99 --uri "
+                                "content delete --user "
+                                        + TEST_USER_ID
+                                        + " --uri "
                                         + ContentProviderHandler.createEscapedContentUri(
                                                 devicePath)));
         assertFalse(mProvider.deleteFile(devicePath));
@@ -139,12 +163,13 @@ public class ContentProviderHandlerTest {
         String devicePath = "path/somewhere/file.txt";
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setStdout("[ERROR] Unsupported operation: delete");
-        doReturn(99).when(mMockDevice).getCurrentUser();
         doReturn(result)
                 .when(mMockDevice)
                 .executeShellV2Command(
                         eq(
-                                "content delete --user 99 --uri "
+                                "content delete --user "
+                                        + TEST_USER_ID
+                                        + " --uri "
                                         + ContentProviderHandler.createEscapedContentUri(
                                                 devicePath)));
         assertFalse(mProvider.deleteFile(devicePath));
@@ -156,12 +181,13 @@ public class ContentProviderHandlerTest {
         File toPush = FileUtil.createTempFile("content-provider-test", ".txt");
         try {
             String devicePath = "path/somewhere/file.txt";
-            doReturn(99).when(mMockDevice).getCurrentUser();
             doReturn(mockSuccess())
                     .when(mMockDevice)
                     .executeShellV2Command(
                             eq(
-                                    "content write --user 99 --uri "
+                                    "content write --user "
+                                            + TEST_USER_ID
+                                            + " --uri "
                                             + ContentProviderHandler.createEscapedContentUri(
                                                     devicePath)),
                             eq(toPush));
@@ -203,7 +229,6 @@ public class ContentProviderHandlerTest {
     public void testPullFile_verifyShellCommand() throws Exception {
         File pullTo = FileUtil.createTempFile("content-provider-test", ".txt");
         String devicePath = "path/somewhere/file.txt";
-        doReturn(99).when(mMockDevice).getCurrentUser();
         mockPullFileSuccess();
 
         try {
@@ -217,7 +242,9 @@ public class ContentProviderHandlerTest {
             // Verify the command.
             assertEquals(
                     shellCommandCaptor.getValue(),
-                    "content read --user 99 --uri "
+                    "content read --user "
+                            + TEST_USER_ID
+                            + " --uri "
                             + ContentProviderHandler.createEscapedContentUri(devicePath));
         } finally {
             FileUtil.deleteFile(pullTo);
@@ -311,21 +338,24 @@ public class ContentProviderHandlerTest {
         String subDirPath = devicePath + "/" + subDirName;
         String fileName = "test-file.txt";
 
-        doReturn(99).when(mMockDevice).getCurrentUser();
         // Mock the result for the directory.
         doReturn(createMockDirRow(subDirName, subDirPath))
                 .when(mMockDevice)
                 .executeShellCommand(
-                        "content query --user 99 --uri "
+                        "content query --user "
+                                + TEST_USER_ID
+                                + " --uri "
                                 + ContentProviderHandler.createEscapedContentUri(devicePath));
 
         // Mock the result for the subdir.
         doReturn(createMockFileRow(fileName, subDirPath + "/" + fileName, "text/plain"))
                 .when(mMockDevice)
                 .executeShellCommand(
-                        "content query --user 99 --uri "
+                        "content query --user "
+                                + TEST_USER_ID
+                                + " --uri "
                                 + ContentProviderHandler.createEscapedContentUri(
-                                devicePath + "/" + subDirName));
+                                        devicePath + "/" + subDirName));
 
         mockPullFileSuccess();
 
@@ -363,9 +393,10 @@ public class ContentProviderHandlerTest {
     public void testDoesFileExist() throws Exception {
         String devicePath = "path/somewhere/file.txt";
 
-        when(mMockDevice.getCurrentUser()).thenReturn(99);
         when(mMockDevice.executeShellCommand(
-                        "content query --user 99 --uri "
+                        "content query --user "
+                                + TEST_USER_ID
+                                + " --uri "
                                 + ContentProviderHandler.createEscapedContentUri(devicePath)))
                 .thenReturn("");
 
@@ -380,9 +411,10 @@ public class ContentProviderHandlerTest {
     public void testDoesFileExist_NotExists() throws Exception {
         String devicePath = "path/somewhere/";
 
-        when(mMockDevice.getCurrentUser()).thenReturn(99);
         when(mMockDevice.executeShellCommand(
-                        "content query --user 99 --uri "
+                        "content query --user "
+                                + TEST_USER_ID
+                                + " --uri "
                                 + ContentProviderHandler.createEscapedContentUri(devicePath)))
                 .thenReturn("No result found.\n");
         assertFalse(mProvider.doesFileExist(devicePath));

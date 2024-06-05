@@ -19,7 +19,7 @@ package com.android.tradefed.util;
 import com.android.tradefed.auth.ICredentialFactory;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.OptionSetter;
-import com.google.api.client.auth.oauth2.Credential;
+import com.google.auth.Credentials;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -57,16 +57,16 @@ public class GoogleApiClientUtilTest {
         boolean mDefaultCredentialUsed = false;
 
         @Override
-        Credential doCreateCredentialFromJsonKeyFile(File file, Collection<String> scopes)
+        Credentials doCreateCredentialFromJsonKeyFile(File file, Collection<String> scopes)
                 throws IOException, GeneralSecurityException {
             mKeyFiles.add(file);
-            return Mockito.mock(Credential.class);
+            return Mockito.mock(Credentials.class);
         }
 
         @Override
-        Credential doCreateDefaultCredential(Collection<String> scopes) throws IOException {
+        Credentials doCreateDefaultCredential(Collection<String> scopes) throws IOException {
             mDefaultCredentialUsed = true;
-            return Mockito.mock(Credential.class);
+            return Mockito.mock(Credentials.class);
         }
     }
 
@@ -95,10 +95,10 @@ public class GoogleApiClientUtilTest {
                         GlobalConfiguration.CREDENTIAL_FACTORY_TYPE_NAME,
                         new ICredentialFactory() {
                             @Override
-                            public Credential createCredential(Collection<String> scopes)
+                            public Credentials createCredential(Collection<String> scopes)
                                     throws IOException {
                                 mCredentialFactoryUsed = true;
-                                return Mockito.mock(Credential.class);
+                                return Mockito.mock(Credentials.class);
                             }
 
                             @Override
@@ -121,7 +121,7 @@ public class GoogleApiClientUtilTest {
 
     @Test
     public void testCreateCredential() throws Exception {
-        Credential credential = mUtil.doCreateCredential(SCOPES, mKey, null);
+        Credentials credential = mUtil.doCreateCredential(SCOPES, mKey, null);
         Assert.assertNotNull(credential);
         Assert.assertEquals(1, mUtil.mKeyFiles.size());
         Assert.assertEquals(mKey, mUtil.mKeyFiles.get(0));
@@ -137,7 +137,7 @@ public class GoogleApiClientUtilTest {
                 "host_options:service-account-json-key-file",
                 HOST_OPTION_JSON_KEY,
                 mKey.getAbsolutePath());
-        Credential credential = mUtil.doCreateCredential(SCOPES, null, HOST_OPTION_JSON_KEY);
+        Credentials credential = mUtil.doCreateCredential(SCOPES, null, HOST_OPTION_JSON_KEY);
         Assert.assertNotNull(credential);
         Assert.assertEquals(1, mUtil.mKeyFiles.size());
         Assert.assertEquals(mKey, mUtil.mKeyFiles.get(0));
@@ -147,7 +147,7 @@ public class GoogleApiClientUtilTest {
 
     @Test
     public void testCreateCredential_useFallbackKeyFile() throws Exception {
-        Credential credential = mUtil.doCreateCredential(SCOPES, null, "not-exist-key", mKey);
+        Credentials credential = mUtil.doCreateCredential(SCOPES, null, "not-exist-key", mKey);
         Assert.assertNotNull(credential);
         Assert.assertEquals(1, mUtil.mKeyFiles.size());
         Assert.assertEquals(mKey, mUtil.mKeyFiles.get(0));
@@ -157,7 +157,7 @@ public class GoogleApiClientUtilTest {
 
     @Test
     public void testCreateCredential_useDefault() throws Exception {
-        Credential credential = mUtil.doCreateCredential(SCOPES, null, "not-exist-key");
+        Credentials credential = mUtil.doCreateCredential(SCOPES, null, "not-exist-key");
         Assert.assertNotNull(credential);
         Assert.assertEquals(0, mUtil.mKeyFiles.size());
         Assert.assertTrue(mUtil.mDefaultCredentialUsed);
@@ -166,7 +166,7 @@ public class GoogleApiClientUtilTest {
 
     @Test
     public void testCreateCredential_useCredentialFactory() throws Exception {
-        Credential credential = mUtil.doCreateCredentialFromCredentialFactory(SCOPES);
+        Credentials credential = mUtil.doCreateCredentialFromCredentialFactory(SCOPES);
         Assert.assertNotNull(credential);
         Assert.assertEquals(0, mUtil.mKeyFiles.size());
         Assert.assertFalse(mUtil.mDefaultCredentialUsed);

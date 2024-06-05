@@ -49,7 +49,7 @@ import java.util.regex.Pattern;
  * https://source.android.com/setup/build/gsi for details.
  */
 @OptionClass(alias = "gsi-device-flash-preparer")
-public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
+public class GsiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPreparer {
 
     private static final int DYNAMIC_PARTITION_API_LEVEL = 29;
     // Wait time for device state to stablize in millisecond
@@ -201,6 +201,7 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
         // Don't allow interruptions during flashing operations.
         getRunUtil().allowInterrupt(false);
         try {
+            executeFastbootCmd(device, "-w");
             if (mVbmetaImg != null) {
                 executeFastbootCmd(
                         device,
@@ -224,7 +225,6 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer {
                                 "delete-logical-partition", "product" + currSlot);
                     }
                 }
-                executeFastbootCmd(device, "-w");
                 executeFastbootCmd(device, "erase", "system" + currSlot);
                 executeFastbootCmd(device, "flash", "system", mSystemImg.getAbsolutePath());
             }

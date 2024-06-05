@@ -28,6 +28,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -37,6 +38,7 @@ import com.android.tradefed.util.StreamUtil;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -64,12 +66,27 @@ public class FileDownloadCacheTest {
     private FileDownloadCache mCache;
     private boolean mFailCopy = false;
 
+    @BeforeClass
+    public static void setUpBeforeClass() throws Exception {
+        try {
+            GlobalConfiguration.getInstance();
+        } catch (IllegalStateException e) {
+            GlobalConfiguration.createGlobalConfiguration(new String[] {});
+        }
+    }
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
         mCacheDir = FileUtil.createTempDir("unittest");
-        mCache = new FileDownloadCache(mCacheDir);
+        mCache =
+                new FileDownloadCache(mCacheDir) {
+                    @Override
+                    File getWorkFolder() {
+                        return null;
+                    }
+                };
     }
 
     @After
@@ -249,6 +266,11 @@ public class FileDownloadCacheTest {
                         }
                         return super.copyFile(remotePath, cachedFile, desFile);
                     }
+
+                    @Override
+                    File getWorkFolder() {
+                        return null;
+                    }
                 };
         // perform successful download
         setDownloadExpectations(REMOTE_PATH);
@@ -293,7 +315,13 @@ public class FileDownloadCacheTest {
         FileUtil.writeToFile("test", file);
         File cacheFile = null;
         try {
-            mCache = new FileDownloadCache(cacheDir);
+            mCache =
+                    new FileDownloadCache(cacheDir) {
+                        @Override
+                        File getWorkFolder() {
+                            return null;
+                        }
+                    };
             setFreshnessExpectations(true);
 
             cacheFile =
@@ -320,7 +348,13 @@ public class FileDownloadCacheTest {
             assertNotNull(cachedFile);
 
             // Now rebuild the cache and try to find our file
-            mCache = new FileDownloadCache(mCacheDir);
+            mCache =
+                    new FileDownloadCache(mCacheDir) {
+                        @Override
+                        File getWorkFolder() {
+                            return null;
+                        }
+                    };
             File cachedFileRebuilt = mCache.getCachedFile(gsPath);
             assertNotNull(cachedFileRebuilt);
 

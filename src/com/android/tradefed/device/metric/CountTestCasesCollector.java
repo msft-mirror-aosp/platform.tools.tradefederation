@@ -17,6 +17,7 @@ package com.android.tradefed.device.metric;
 
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.testtype.IRemoteTest;
 
@@ -49,6 +50,8 @@ public class CountTestCasesCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestRunEnd(DeviceMetricData runData, Map<String, Metric> currentRunMetrics) {
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.TOTAL_TEST_COUNT, mTestCount);
         if (mTestType == null) {
             return;
         }

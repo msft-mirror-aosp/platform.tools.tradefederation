@@ -16,17 +16,19 @@
 
 package com.android.tradefed.device.metric;
 
-import static com.android.tradefed.device.metric.JavaCodeCoverageCollector.MERGE_COVERAGE_MEASUREMENTS_TEST_NAME;
-
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -42,18 +44,26 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.JavaCodeCoverageFlusher;
+import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.jacoco.core.tools.ExecFileLoader;
 import org.jacoco.core.data.ExecutionData;
 import org.jacoco.core.data.ExecutionDataStore;
 import org.jacoco.core.data.ExecutionDataWriter;
 import org.jacoco.core.internal.data.CRC64;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -68,14 +78,17 @@ import org.mockito.Spy;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /** Unit tests for {@link JavaCodeCoverageCollector}. */
 @RunWith(JUnit4.class)
@@ -105,6 +118,7 @@ public class JavaCodeCoverageCollectorTest {
 
     CoverageOptions mCoverageOptions = null;
     OptionSetter mCoverageOptionsSetter = null;
+    List<File> mFilesToClean;
 
     @Before
     public void setUp() throws Exception {
@@ -112,10 +126,14 @@ public class JavaCodeCoverageCollectorTest {
 
         mCoverageOptions = new CoverageOptions();
         mCoverageOptionsSetter = new OptionSetter(mCoverageOptions);
+        mFilesToClean = new ArrayList<>();
 
         when(mMockConfiguration.getCoverageOptions()).thenReturn(mCoverageOptions);
 
         when(mMockContext.getDevices()).thenReturn(ImmutableList.of(mMockDevice));
+        when(mMockContext.getAttributes())
+                .thenReturn(
+                        new MultiMap(ImmutableMap.of(ModuleDefinition.MODULE_NAME, "myModule")));
 
         // Mock an unrooted device that has no issues enabling or disabling root.
         when(mMockDevice.isAdbRoot()).thenReturn(false);
@@ -124,6 +142,13 @@ public class JavaCodeCoverageCollectorTest {
 
         mCodeCoverageCollector = new JavaCodeCoverageCollector();
         mCodeCoverageCollector.setConfiguration(mMockConfiguration);
+    }
+
+    @After
+    public void cleanUp() throws IOException {
+        for (File file : mFilesToClean) {
+            file.delete();
+        }
     }
 
     @Test
@@ -144,12 +169,46 @@ public class JavaCodeCoverageCollectorTest {
     @Test
     public void testRunEnded_rootEnabled_logsCoverageMeasurement() throws Exception {
         enableJavaCoverage();
+        mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
 
         // Setup mocks.
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
         mockCoverageFileOnDevice(DEVICE_PATH);
         when(mMockDevice.isAdbRoot()).thenReturn(true);
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
+
+        // Verify timeout is set.
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/misc/trace -name '*.ec' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        eq(314159L),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+
+        // Verify testLog(..) was called with the coverage file.
+        verify(mFakeListener)
+                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+    }
+
+    @Test
+    public void testRunEnded_rootEnabled_noModuleName_logsCoverageMeasurement() throws Exception {
+        enableJavaCoverage();
+
+        // Setup mocks.
+        HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
+        mockCoverageFileOnDevice(DEVICE_PATH);
+        when(mMockDevice.isAdbRoot()).thenReturn(true);
+        when(mMockContext.getAttributes()).thenReturn(new MultiMap(ImmutableMap.of()));
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
 
         // Simulate a test run.
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
@@ -159,9 +218,6 @@ public class JavaCodeCoverageCollectorTest {
         // Verify testLog(..) was called with the coverage file.
         verify(mFakeListener)
                 .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
-
-        // Verify the device coverage file was deleted.
-        verify(mMockDevice).deleteFile(anyString());
     }
 
     @Test
@@ -170,6 +226,7 @@ public class JavaCodeCoverageCollectorTest {
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
         doReturn(null).when(mMockDevice).pullFile(DEVICE_PATH);
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
 
         // Simulate a test run.
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
@@ -187,6 +244,7 @@ public class JavaCodeCoverageCollectorTest {
         mockCoverageFileOnDevice(DEVICE_PATH);
         when(mMockDevice.isAdbRoot()).thenReturn(false);
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
 
         // Simulate a test run.
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
@@ -196,7 +254,6 @@ public class JavaCodeCoverageCollectorTest {
         InOrder inOrder = inOrder(mMockDevice);
         inOrder.verify(mMockDevice).enableAdbRoot();
         inOrder.verify(mMockDevice).pullFile(anyString());
-        inOrder.verify(mMockDevice).deleteFile(anyString());
     }
 
     @Test
@@ -226,6 +283,7 @@ public class JavaCodeCoverageCollectorTest {
         mockCoverageFileOnDevice(DEVICE_PATH);
         when(mMockDevice.isAdbRoot()).thenReturn(false);
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
 
         // Simulate a test run.
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
@@ -234,92 +292,32 @@ public class JavaCodeCoverageCollectorTest {
 
         InOrder inOrder = inOrder(mMockDevice);
         inOrder.verify(mMockDevice).pullFile(anyString());
-        inOrder.verify(mMockDevice).deleteFile(anyString());
         inOrder.verify(mMockDevice).disableAdbRoot();
-    }
-
-    @Test
-    public void testMerge_producesSingleMeasurement() throws Exception {
-        enableJavaCoverage();
-
-        // Setup mocks.
-        File coverageFile1 = folder.newFile("coverage1.ec");
-        try (OutputStream out = new FileOutputStream(coverageFile1)) {
-            ByteString measurement = measurement(fullyCovered(JavaCodeCoverageCollector.class));
-            measurement.writeTo(out);
-        }
-
-        File coverageFile2 = folder.newFile("coverage2.ec");
-        try (OutputStream out = new FileOutputStream(coverageFile2)) {
-            ByteString measurement =
-                    measurement(
-                            partiallyCovered(JavaCodeCoverageCollector.class),
-                            partiallyCovered(JavaCodeCoverageCollectorTest.class));
-            measurement.writeTo(out);
-        }
-
-        mCodeCoverageCollector.setMergeMeasurements(true);
-
-        Map<String, String> metric = new HashMap<>();
-        metric.put("coverageFilePath", DEVICE_PATH);
-
-        // Simulate a test run.
-        doReturn("").when(mMockDevice).executeShellCommand(anyString());
-        doReturn(coverageFile1).doReturn(coverageFile2).when(mMockDevice).pullFile(DEVICE_PATH);
-
-        mCodeCoverageCollector.init(mMockContext, mFakeListener);
-        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
-        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
-        mCodeCoverageCollector.testRunStarted(RUN_NAME + "2", TEST_COUNT);
-        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
-        mCodeCoverageCollector.testRunStarted(MERGE_COVERAGE_MEASUREMENTS_TEST_NAME, TEST_COUNT);
-        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, new HashMap<String, Metric>());
-
-        // Capture the merged coverage measurements that were passed to the fake listener.
-        ArgumentCaptor<ByteString> stream = ArgumentCaptor.forClass(ByteString.class);
-        verify(mFakeListener).testLog(anyString(), eq(LogDataType.COVERAGE), stream.capture());
-
-        // Check the contents of the merged file.
-        ExecFileLoader execLoader = new ExecFileLoader();
-        execLoader.load(stream.getValue().newInput());
-
-        ExecutionDataStore execData = execLoader.getExecutionDataStore();
-        boolean[] fullyCovered = new boolean[PROBE_COUNT];
-        Arrays.fill(fullyCovered, Boolean.TRUE);
-
-        assertThat(execData.contains(vmName(JavaCodeCoverageCollector.class))).isTrue();
-        assertThat(getProbes(JavaCodeCoverageCollector.class, execData)).isEqualTo(fullyCovered);
-
-        boolean[] partiallyCovered = new boolean[PROBE_COUNT];
-        partiallyCovered[0] = true;
-        assertThat(execData.contains(vmName(JavaCodeCoverageCollectorTest.class))).isTrue();
-        assertThat(getProbes(JavaCodeCoverageCollectorTest.class, execData))
-                .isEqualTo(partiallyCovered);
     }
 
     @Test
     public void testCoverageFlush_producesMultipleMeasurements() throws Exception {
         enableJavaCoverage();
 
-        List<String> coverageFileList =
-                ImmutableList.of(
+        Map<String, ByteString> coverageData =
+                ImmutableMap.of(
                         "/data/misc/trace/com.android.test1.ec",
+                        ByteString.copyFromUtf8("com.android.test1.ec"),
                         "/data/misc/trace/com.android.test2.ec",
-                        "/data/misc/trace/com.google.test3.ec");
+                        ByteString.copyFromUtf8("com.android.test2.ec"),
+                        "/data/misc/trace/com.google.test3.ec",
+                        ByteString.copyFromUtf8("com.google.test3.ec"));
 
         mCoverageOptionsSetter.setOptionValue("coverage-flush", "true");
 
         // Setup mocks.
         mockCoverageFileOnDevice(DEVICE_PATH);
 
-        for (String additionalFile : coverageFileList) {
-            mockCoverageFileOnDevice(additionalFile);
-        }
-
-        doReturn(coverageFileList).when(mMockFlusher).forceCoverageFlush();
-        doReturn(String.join("\n", coverageFileList))
+        doReturn("").when(mMockDevice).executeShellCommand("ps -e");
+        doReturn("")
                 .when(mMockDevice)
-                .executeShellCommand("find /data/misc/trace -name '*.ec'");
+                .executeShellCommand(JavaCodeCoverageCollector.FIND_COVERAGE_FILES);
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(coverageData));
 
         mCodeCoverageCollector.setCoverageFlusher(mMockFlusher);
 
@@ -329,6 +327,11 @@ public class JavaCodeCoverageCollectorTest {
         Map<String, String> metric = new HashMap<>();
         metric.put("coverageFilePath", DEVICE_PATH);
         mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
+
+        // Verify the coverage data was logged.
+        for (ByteString contents : coverageData.values()) {
+            verify(mFakeListener).testLog(anyString(), eq(LogDataType.COVERAGE), eq(contents));
+        }
     }
 
     @Test
@@ -360,6 +363,7 @@ public class JavaCodeCoverageCollectorTest {
         doReturn(String.join("\n", coverageFileList))
                 .when(mMockDevice)
                 .executeShellCommand("find /data/misc/trace -name '*.ec'");
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
 
         // Simulate a test run.
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
@@ -376,6 +380,36 @@ public class JavaCodeCoverageCollectorTest {
     }
 
     @Test
+    public void testStreamingCoverage_logsReceived() throws Exception {
+        enableJavaCoverage();
+
+        String path1 = "path/to/coverage1.ec";
+        ByteString contents1 = ByteString.copyFromUtf8("File contents 1");
+        String path2 = "path/to/coverage2.ec";
+        ByteString contents2 = ByteString.copyFromUtf8("File contents 2");
+        File tarGz =
+                createTarGz(
+                        ImmutableMap.of(
+                                path1, contents1,
+                                path2, contents2));
+
+        // Return the tar.gz file when running the stream-compress command.
+        returnFileContentsOnShellCommand(mMockDevice, tarGz);
+
+        // Return no data for the `ps -e` command.
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, new HashMap<String, Metric>());
+
+        // Verify that the coverage data was logged.
+        verify(mFakeListener).testLog(anyString(), eq(LogDataType.COVERAGE), eq(contents1));
+        verify(mFakeListener).testLog(anyString(), eq(LogDataType.COVERAGE), eq(contents2));
+    }
+
+    @Test
     public void testInitNoResetCoverage_noop() throws Exception {
         enableJavaCoverage();
         mCoverageOptionsSetter.setOptionValue("reset-coverage-before-test", "false");
@@ -385,6 +419,92 @@ public class JavaCodeCoverageCollectorTest {
 
         // Verify that nothing was run on the device.
         verifyNoMoreInteractions(mMockDevice);
+    }
+
+    @Test
+    public void testMergeSingleMeasurement_logReceived() throws Exception {
+        enableJavaCoverage();
+        mCoverageOptionsSetter.setOptionValue("merge-coverage", "true");
+
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+
+        ByteString measurement = measurement(firstHalfCovered(JavaCodeCoverageCollector.class));
+        File tarGz = createTarGz(ImmutableMap.of("path/to/coverage.ec", measurement));
+        returnFileContentsOnShellCommand(mMockDevice, tarGz);
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, new HashMap<String, Metric>());
+
+        // Validate the logged coverage data.
+        ArgumentCaptor<ByteString> stream = ArgumentCaptor.forClass(ByteString.class);
+        verify(mFakeListener).testLog(anyString(), eq(LogDataType.COVERAGE), stream.capture());
+
+        ExecFileLoader execFileLoader = new ExecFileLoader();
+        execFileLoader.load(stream.getValue().newInput());
+
+        ExecutionDataStore execData = execFileLoader.getExecutionDataStore();
+        boolean[] firstHalf = new boolean[PROBE_COUNT];
+        for (int i = 0; i < PROBE_COUNT / 2; i++) {
+            firstHalf[i] = true;
+        }
+
+        assertThat(execData.contains(vmName(JavaCodeCoverageCollector.class))).isTrue();
+        assertThat(getProbes(JavaCodeCoverageCollector.class, execData)).isEqualTo(firstHalf);
+    }
+
+    @Test
+    public void testMergeMultipleMeasurements_logContainsAllData() throws Exception {
+        enableJavaCoverage();
+        mCoverageOptionsSetter.setOptionValue("merge-coverage", "true");
+
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+
+        ByteString firstHalfCollector =
+                measurement(firstHalfCovered(JavaCodeCoverageCollector.class));
+        ByteString secondHalfCollector =
+                measurement(secondHalfCovered(JavaCodeCoverageCollector.class));
+        ByteString partialCollectorTest =
+                measurement(partiallyCovered(JavaCodeCoverageCollectorTest.class));
+        File tarGz =
+                createTarGz(
+                        ImmutableMap.of(
+                                "JavaCodeCoverageColletor1.ec", firstHalfCollector,
+                                "JavaCodeCoverageCollector2.ec", secondHalfCollector,
+                                "JavaCodeCoverageCollectorTest.ec", partialCollectorTest));
+        returnFileContentsOnShellCommand(mMockDevice, tarGz);
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, new HashMap<String, Metric>());
+
+        // Validate the logged coverage data.
+        ArgumentCaptor<ByteString> stream = ArgumentCaptor.forClass(ByteString.class);
+        verify(mFakeListener).testLog(anyString(), eq(LogDataType.COVERAGE), stream.capture());
+
+        ExecFileLoader execFileLoader = new ExecFileLoader();
+        execFileLoader.load(stream.getValue().newInput());
+
+        ExecutionDataStore execData = execFileLoader.getExecutionDataStore();
+
+        // Check coverage data for JavaCodeCoverageCollector. All probes should be true if the data
+        // merged successfully.
+        boolean[] fullyCovered = new boolean[PROBE_COUNT];
+        Arrays.fill(fullyCovered, Boolean.TRUE);
+
+        assertThat(execData.contains(vmName(JavaCodeCoverageCollector.class))).isTrue();
+        assertThat(getProbes(JavaCodeCoverageCollector.class, execData)).isEqualTo(fullyCovered);
+
+        // Check coverage data for JavaCodeCoverageCollectorTest. Only the first probe should be
+        // true.
+        boolean[] partiallyCovered = new boolean[PROBE_COUNT];
+        partiallyCovered[0] = true;
+
+        assertThat(execData.contains(vmName(JavaCodeCoverageCollectorTest.class))).isTrue();
+        assertThat(getProbes(JavaCodeCoverageCollectorTest.class, execData))
+                .isEqualTo(partiallyCovered);
     }
 
     private void mockCoverageFileOnDevice(String devicePath)
@@ -414,6 +534,22 @@ public class JavaCodeCoverageCollectorTest {
         return new ExecutionData(classId(clazz), vmName(clazz), probes);
     }
 
+    private static <T> ExecutionData firstHalfCovered(Class<T> clazz) throws IOException {
+        boolean[] probes = new boolean[PROBE_COUNT];
+        for (int i = 0; i < PROBE_COUNT / 2; i++) {
+            probes[i] = true;
+        }
+        return new ExecutionData(classId(clazz), vmName(clazz), probes);
+    }
+
+    private static <T> ExecutionData secondHalfCovered(Class<T> clazz) throws IOException {
+        boolean[] probes = new boolean[PROBE_COUNT];
+        for (int i = PROBE_COUNT / 2; i < PROBE_COUNT; i++) {
+            probes[i] = true;
+        }
+        return new ExecutionData(classId(clazz), vmName(clazz), probes);
+    }
+
     private static <T> long classId(Class<T> clazz) throws IOException {
         return Long.valueOf(CRC64.classId(classBytes(clazz).toByteArray()));
     }
@@ -440,6 +576,46 @@ public class JavaCodeCoverageCollectorTest {
 
     private static HashMap<String, Metric> createMetricsWithCoverageMeasurement(String devicePath) {
         return TfMetricProtoUtil.upgradeConvert(ImmutableMap.of("coverageFilePath", devicePath));
+    }
+
+    private static void returnFileContentsOnShellCommand(ITestDevice device, File file)
+            throws DeviceNotAvailableException, IOException {
+        doAnswer(
+                        invocation -> {
+                            OutputStream out = (OutputStream) invocation.getArgument(2);
+                            try (InputStream in = new FileInputStream(file)) {
+                                in.transferTo(out);
+                            }
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        })
+                .when(device)
+                .executeShellV2Command(
+                        eq(JavaCodeCoverageCollector.COMPRESS_COVERAGE_FILES),
+                        any(),
+                        any(OutputStream.class),
+                        anyLong(),
+                        any(TimeUnit.class),
+                        anyInt());
+    }
+
+    private File createTarGz(Map<String, ByteString> fileContents) throws IOException {
+        File tarFile = folder.newFile();
+        try (TarArchiveOutputStream out =
+                new TarArchiveOutputStream(new FileOutputStream(tarFile))) {
+            for (Map.Entry<String, ByteString> file : fileContents.entrySet()) {
+                TarArchiveEntry entry = new TarArchiveEntry(file.getKey());
+                entry.setSize(file.getValue().size());
+
+                out.putArchiveEntry(entry);
+                file.getValue().writeTo(out);
+                out.closeArchiveEntry();
+            }
+            File tarGz = TarUtil.gzip(tarFile);
+            mFilesToClean.add(tarGz);
+            return tarGz;
+        } finally {
+            tarFile.delete();
+        }
     }
 
     private void enableJavaCoverage() throws ConfigurationException {

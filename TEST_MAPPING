@@ -17,7 +17,7 @@
       "host": true
     },
     {
-      // Instrumentation Test with FilePusher/ApkInstaller/RumCommandTargetPreparer.
+      // Instrumentation Test with FilePusher/ApkInstaller/RunCommandTargetPreparer.
       "name": "CtsApacheHttpLegacy27ApiSignatureTestCases"
     },
     {
@@ -25,28 +25,8 @@
       "name": "ziparchive-tests"
     },
     {
-      // Instrumentation Test with Class Filter/ApkInstaller.
-      "name": "CtsDpiTestCases",
-      "options": [
-        {
-          "include-filter": "android.dpi.cts.ConfigurationScreenLayoutTest"
-        }
-      ]
-    },
-    {
       // Jar Host with ApkInstaller.
       "name": "CtsSampleHostTestCases"
-    }
-  ],
-  // TODO(b/144852628): Remove after actual platinum tests are added to TEST_MAPPING files.
-  "staged-platinum-postsubmit": [
-    {
-      "name": "HelloWorldTests"
-    }
-  ],
-  "platinum-postsubmit": [
-    {
-      "name": "HelloWorldTests"
     }
   ]
 }
