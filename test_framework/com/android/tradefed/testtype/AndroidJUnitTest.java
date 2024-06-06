@@ -498,6 +498,15 @@ public class AndroidJUnitTest extends InstrumentationTest
                 notPackageArg.add(test);
             }
         }
+        if (!regexArg.isEmpty()
+                && (!classArg.isEmpty()
+                        || !notClassArg.isEmpty()
+                        || !packageArg.isEmpty()
+                        || !notPackageArg.isEmpty())) {
+            throw new IllegalArgumentException(
+                    "Mixed filter types found. AndroidJUnitTest does not support mixing both regex"
+                            + " and class/method/package filters.");
+        }
         if (!classArg.isEmpty()) {
             runner.addInstrumentationArg(INCLUDE_CLASS_INST_ARGS_KEY,
                     ArrayUtil.join(",", classArg));

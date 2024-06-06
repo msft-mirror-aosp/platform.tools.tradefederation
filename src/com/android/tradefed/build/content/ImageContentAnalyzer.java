@@ -162,9 +162,9 @@ public class ImageContentAnalyzer {
                 boolean removed = false;
                 // b/335722003
                 boolean ota4k =
-                        diffs.removeIf(d -> d.path.equals("SYSTEM/boot_otas/boot_ota_4k.zip"));
+                        diffs.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_4k.zip"));
                 boolean ota16k =
-                        diffs.removeIf(d -> d.path.equals("SYSTEM/boot_otas/boot_ota_16k.zip"));
+                        diffs.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_16k.zip"));
                 if (ota4k || ota16k) {
                     removed = true;
                 }
