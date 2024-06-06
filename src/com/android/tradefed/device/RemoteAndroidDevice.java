@@ -18,6 +18,8 @@ package com.android.tradefed.device;
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.connection.DefaultConnection;
+
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -109,5 +111,15 @@ public class RemoteAndroidDevice extends TestDevice {
             }
         }
         return descriptor;
+    }
+
+    @Override
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
+            throws DeviceNotAvailableException {
+        // turn on cmd wifi logic for virtual devices.
+        if (getOptions().isCmdWifiVirtual()) {
+            getOptions().setUseCmdWifi(true);
+        }
+        return super.connectToWifiNetwork(wifiSsidToPsk, scanSsid);
     }
 }
