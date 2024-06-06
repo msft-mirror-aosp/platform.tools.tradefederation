@@ -60,6 +60,9 @@ public class ModuleOemTargetPreparer extends InstallApexModuleTargetPreparer {
             description = "If reload apex modules by factory reset.")
     private boolean mReloadByFactoryReset = false;
 
+    @Option(name = "disable-package-cache", description = "Disable the cache of package manager")
+    private boolean mDisablePackageCache = false;
+
     @Option(
             name = "recover-module-folder",
             description =
@@ -172,7 +175,7 @@ public class ModuleOemTargetPreparer extends InstallApexModuleTargetPreparer {
             DeviceDescriptor deviceDescriptor)
             throws TargetSetupError {
         try {
-            pusher.installModules(moduleFiles, mReloadByFactoryReset);
+            pusher.installModules(moduleFiles, mReloadByFactoryReset, mDisablePackageCache);
         } catch (HarnessException e) {
             throw new TargetSetupError("Failed to recover modules", e, deviceDescriptor);
         }
@@ -191,12 +194,12 @@ public class ModuleOemTargetPreparer extends InstallApexModuleTargetPreparer {
                 // The base file is the first element
                 toPush = getSplitsForApks(testInfo, moduleFile).toArray(new File[0]);
             }
-            String packageName = parsePackageName(toPush[0], deviceDescriptor);
+            String packageName = parsePackageName(toPush[0]);
             builder.putAll(packageName, toPush);
         }
 
         try {
-            pusher.installModules(builder.build(), mReloadByFactoryReset);
+            pusher.installModules(builder.build(), mReloadByFactoryReset, mDisablePackageCache);
         } catch (HarnessException e) {
             throw new TargetSetupError("Failed to install modules", e, deviceDescriptor);
         }

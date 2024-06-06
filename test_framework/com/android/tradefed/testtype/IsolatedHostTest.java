@@ -17,6 +17,8 @@ package com.android.tradefed.testtype;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
@@ -24,6 +26,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.isolation.FilterSpec;
 import com.android.tradefed.isolation.JUnitEvent;
 import com.android.tradefed.isolation.RunnerMessage;
@@ -35,6 +38,7 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -58,6 +62,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -81,6 +86,7 @@ public class IsolatedHostTest
                 IBuildReceiver,
                 ITestAnnotationFilterReceiver,
                 ITestFilterReceiver,
+                IConfigurationReceiver,
                 ITestCollector {
     @Option(
             name = "class",
@@ -137,6 +143,13 @@ public class IsolatedHostTest
             new HashSet<>(Arrays.asList("org/junit", "com/google/common/collect/testing/google"));
 
     @Option(
+            name = "exclude-robolectric-packages",
+            description =
+                    "Indicates whether to exclude 'org/robolectric' when robolectric resources."
+                            + " Defaults to be true.")
+    private boolean mExcludeRobolectricPackages = true;
+
+    @Option(
             name = "java-folder",
             description = "The JDK to be used. If unset, the JDK on $PATH will be used.")
     private File mJdkFolder = null;
@@ -160,6 +173,13 @@ public class IsolatedHostTest
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
 
+    @Option(
+            name = "use-ravenwood-resources",
+            description =
+                    "Option to put the Ravenwood specific resources directory option on "
+                            + "the Java command line.")
+    private boolean mRavenwoodResources = false;
+
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
     private IBuildInfo mBuildInfo;
     private Set<String> mIncludeFilters = new HashSet<>();
@@ -174,17 +194,32 @@ public class IsolatedHostTest
 
     private File mIsolationJar;
 
+    private boolean debug = false;
+
+    private IConfiguration mConfig = null;
+
+    private File mCoverageExecFile;
+
+    public void setDebug(boolean debug) {
+        this.debug = debug;
+    }
+
     /** {@inheritDoc} */
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         mReportedFailure = false;
+        Process isolationRunner = null;
+        File artifactsDir = null;
+
         try {
             mServer = new ServerSocket(0);
-            mServer.setSoTimeout(mSocketTimeout);
-
+            if (!this.debug) {
+                mServer.setSoTimeout(mSocketTimeout);
+            }
+            artifactsDir = FileUtil.createTempDir("robolectric-screenshot-artifacts");
             String classpath = this.compileClassPath();
-            List<String> cmdArgs = this.compileCommandArgs(classpath);
+            List<String> cmdArgs = this.compileCommandArgs(classpath, artifactsDir);
             CLog.v(String.join(" ", cmdArgs));
             RunUtil runner = new RunUtil();
 
@@ -204,12 +239,19 @@ public class IsolatedHostTest
             mSubprocessLog = FileUtil.createTempFile("subprocess-logs", "");
             runner.setRedirectStderrToStdout(true);
 
-            Process isolationRunner =
-                    runner.runCmdInBackground(Redirect.to(mSubprocessLog), cmdArgs);
+            isolationRunner = runner.runCmdInBackground(Redirect.to(mSubprocessLog), cmdArgs);
             CLog.v("Started subprocess.");
 
+            if (this.debug) {
+                CLog.v(
+                        "JVM subprocess is waiting for a debugger to connect, will now wait"
+                                + " indefinitely for connection.");
+            }
+
             Socket socket = mServer.accept();
-            socket.setSoTimeout(mSocketTimeout);
+            if (!this.debug) {
+                socket.setSoTimeout(mSocketTimeout);
+            }
             CLog.v("Connected to subprocess.");
 
             List<String> testJarAbsPaths = getJarPaths(mJars);
@@ -238,9 +280,7 @@ public class IsolatedHostTest
                     .setCommand(RunnerOp.RUNNER_OP_STOP)
                     .build()
                     .writeDelimitedTo(socket.getOutputStream());
-            // Ensure the subprocess finishes
-            isolationRunner.waitFor(1, TimeUnit.MINUTES);
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             if (!mReportedFailure) {
                 // Avoid overriding the failure
                 FailureDescription failure =
@@ -250,12 +290,50 @@ public class IsolatedHostTest
                 listener.testRunEnded(0L, new HashMap<String, Metric>());
             }
         } finally {
+            try {
+                // Ensure the subprocess finishes
+                if (isolationRunner != null) {
+                    if (isolationRunner.isAlive()) {
+                        CLog.v(
+                                "Subprocess is still alive after test phase - waiting for it to"
+                                        + " terminate.");
+                        isolationRunner.waitFor(10, TimeUnit.SECONDS);
+                        if (isolationRunner.isAlive()) {
+                            CLog.v(
+                                    "Subprocess is still alive after test phase - requesting"
+                                            + " termination.");
+                            // Isolation runner still alive for some reason, try to kill it
+                            isolationRunner.destroy();
+                            isolationRunner.waitFor(10, TimeUnit.SECONDS);
+
+                            // If the process is still alive after trying to kill it nicely
+                            // then end it forcibly.
+                            if (isolationRunner.isAlive()) {
+                                CLog.v(
+                                        "Subprocess is still alive after test phase - forcibly"
+                                                + " terminating it.");
+                                isolationRunner.destroyForcibly();
+                            }
+                        }
+                    }
+                }
+            } catch (InterruptedException e) {
+                throw new HarnessRuntimeException(
+                        "Interrupted while stopping subprocess",
+                        e,
+                        InfraErrorIdentifier.INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN);
+            }
+
+            if (isCoverageEnabled()) {
+                logCoverageExecFile(listener);
+            }
             FileUtil.deleteFile(mIsolationJar);
+            uploadTestArtifacts(artifactsDir, listener);
         }
     }
 
     /** Assembles the command arguments to execute the subprocess runner. */
-    public List<String> compileCommandArgs(String classpath) {
+    public List<String> compileCommandArgs(String classpath, File artifactsDir) {
         List<String> cmdArgs = new ArrayList<>();
 
         if (mJdkFolder == null) {
@@ -273,13 +351,47 @@ public class IsolatedHostTest
             cmdArgs.add(javaPath);
             CLog.v("Using java executable at %s", javaPath);
         }
+        if (isCoverageEnabled()) {
+            if (mConfig.getCoverageOptions().getJaCoCoAgentPath() != null) {
+                try {
+                    mCoverageExecFile = FileUtil.createTempFile("coverage", ".exec");
+                    String javaAgent =
+                            String.format(
+                                    "-javaagent:%s=destfile=%s,"
+                                            + "inclnolocationclasses=true,"
+                                            + "exclclassloader="
+                                            + "jdk.internal.reflect.DelegatingClassLoader",
+                                    mConfig.getCoverageOptions().getJaCoCoAgentPath(),
+                                    mCoverageExecFile.getAbsolutePath());
+                    cmdArgs.add(javaAgent);
+                } catch (IOException e) {
+                    CLog.e(e);
+                }
+            } else {
+                CLog.e("jacocoagent path is not set.");
+            }
+        }
+
         cmdArgs.add("-cp");
         cmdArgs.add(classpath);
 
         cmdArgs.addAll(mJavaFlags);
 
         if (mRobolectricResources) {
-            cmdArgs.addAll(compileRobolectricOptions());
+            cmdArgs.addAll(compileRobolectricOptions(artifactsDir));
+            // Prevent tradefed from eagerly loading classes, which may not load without shadows
+            // applied.
+            if (mExcludeRobolectricPackages) {
+                mExcludePaths.add("org/robolectric");
+            }
+        }
+        if (mRavenwoodResources) {
+            // For the moment, swap in the default JUnit upstream runner
+            cmdArgs.add("-Dandroid.junit.runner=org.junit.runners.JUnit4");
+        }
+
+        if (this.debug) {
+            cmdArgs.add("-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=8656");
         }
 
         cmdArgs.addAll(
@@ -329,13 +441,54 @@ public class IsolatedHostTest
         throw new IllegalArgumentException("Test directory not found, cannot proceed");
     }
 
+    public void uploadTestArtifacts(File logDir, ITestInvocationListener listener) {
+        try {
+            for (File subFile : logDir.listFiles()) {
+                if (subFile.isDirectory()) {
+                    uploadTestArtifacts(subFile, listener);
+                } else {
+                    if (!subFile.exists()) {
+                        continue;
+                    }
+                    try (InputStreamSource dataStream = new FileInputStreamSource(subFile, true)) {
+                        String cleanName = subFile.getName().replace(",", "_");
+                        LogDataType type = LogDataType.TEXT;
+                        if (cleanName.endsWith(".png")) {
+                            type = LogDataType.PNG;
+                        } else if (cleanName.endsWith(".jpg") || cleanName.endsWith(".jpeg")) {
+                            type = LogDataType.JPEG;
+                        } else if (cleanName.endsWith(".pb")) {
+                            type = LogDataType.PB;
+                        }
+                        listener.testLog(cleanName, type, dataStream);
+                    }
+                }
+            }
+        } finally {
+            FileUtil.recursiveDelete(logDir);
+        }
+    }
+
+    private File getRavenwoodRuntimeDir(File testDir) {
+        File ravenwoodRuntime = FileUtil.findFile(testDir, "ravenwood-runtime");
+        if (ravenwoodRuntime == null || !ravenwoodRuntime.isDirectory()) {
+            throw new HarnessRuntimeException(
+                    "Could not find Ravenwood runtime needed for execution. " + testDir,
+                    InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
+        }
+        return ravenwoodRuntime;
+    }
+
     /**
      * Creates a classpath for the subprocess that includes the needed jars to run the tests
      *
      * @return a string specifying the colon separated classpath.
      */
-    private String compileClassPath() {
-        List<String> paths = new ArrayList<>();
+    public String compileClassPath() {
+        // Use LinkedHashSet because we don't want duplicates, but we still
+        // want to preserve the insertion order. e.g. mIsolationJar should always be the
+        // first one.
+        Set<String> paths = new LinkedHashSet<>();
         File testDir = findTestDirectory();
 
         try {
@@ -357,16 +510,15 @@ public class IsolatedHostTest
                             InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
                 }
                 paths.add(androidAllJar.getAbsolutePath());
+            } else if (mRavenwoodResources) {
+                addAllFilesUnder(paths, getRavenwoodRuntimeDir(testDir));
             }
 
             for (String jar : mJars) {
                 File f = FileUtil.findFile(testDir, jar);
                 if (f != null && f.exists()) {
                     paths.add(f.getAbsolutePath());
-                    String parentPath = f.getParentFile().getAbsolutePath() + "/*";
-                    if (!paths.contains(parentPath)) {
-                        paths.add(parentPath);
-                    }
+                    addAllFilesUnder(paths, f.getParentFile());
                 }
             }
         }
@@ -374,6 +526,16 @@ public class IsolatedHostTest
         String jarClasspath = String.join(java.io.File.pathSeparator, paths);
 
         return jarClasspath;
+    }
+
+    /** Add all files under {@code File} sorted by filename to {@code paths}. */
+    private static void addAllFilesUnder(Set<String> paths, File parentDirectory) {
+        var files = parentDirectory.listFiles((f) -> f.isFile());
+        Arrays.sort(files, Comparator.comparing(File::getName));
+
+        for (File file : files) {
+            paths.add(file.getAbsolutePath());
+        }
     }
 
     @VisibleForTesting
@@ -386,64 +548,105 @@ public class IsolatedHostTest
      *
      * @return a string specifying the colon separated library path.
      */
+    private String compileLdLibraryPath() {
+        return compileLdLibraryPathInner(getEnvironment("ANDROID_HOST_OUT"));
+    }
+
+    /**
+     * We call this version from the unit test, and directly pass ANDROID_HOST_OUT. We need it
+     * because Java has no API to set environmental variables.
+     */
     @VisibleForTesting
-    protected String compileLdLibraryPath() {
+    protected String compileLdLibraryPathInner(String androidHostOut) {
         if (mClasspathOverride != null) {
             return null;
         }
-        File testDir = findTestDirectory();
-        List<String> paths = new ArrayList<>();
+        // TODO(b/324134773) Unify with TestRunnerUtil.getLdLibraryPath().
 
+        File testDir = findTestDirectory();
+        // Collect all the directories that may contain `lib` or `lib64` for the test.
+        Set<String> dirs = new LinkedHashSet<>();
+
+        // Search the directories containing the test jars.
         for (String jar : mJars) {
             File f = FileUtil.findFile(testDir, jar);
             if (f == null || !f.exists()) {
                 continue;
             }
-            String libs[] = {"lib", "lib64"};
-            for (String lib : libs) {
-                File libFile = new File(f.getParentFile().getAbsolutePath(), lib);
-                // If the test module has no lib directory packaged, we assume the test does not
-                // require any external native library.
-                if (!libFile.exists()) {
-                    continue;
-                }
-                paths.add(libFile.getAbsolutePath());
-                // Include `testcases` directory for running tests based on test zip.
-                libFile = new File(f.getParentFile().getParentFile().getAbsolutePath(), lib);
-                if (libFile.exists()) {
-                    paths.add(libFile.getAbsolutePath());
-                }
-                // Include ANDROID_HOST_OUT/lib to support local case.
-                if (getEnvironment("ANDROID_HOST_OUT") != null) {
-                    libFile = new File(getEnvironment("ANDROID_HOST_OUT"), lib);
-                    if (libFile.exists()) {
-                        paths.add(libFile.getAbsolutePath());
-                    }
+            // Include the directory containing the test jar.
+            File parent = f.getParentFile();
+            if (parent != null) {
+                dirs.add(parent.getAbsolutePath());
+
+                // Also include the parent directory -- which is typically (?) "testcases" --
+                // for running tests based on test zip.
+                File grandParent = parent.getParentFile();
+                if (grandParent != null) {
+                    dirs.add(grandParent.getAbsolutePath());
                 }
             }
         }
-        if (paths.isEmpty()) {
+        // Optionally search the ravenwood runtime dir.
+        if (mRavenwoodResources) {
+            dirs.add(getRavenwoodRuntimeDir(testDir).getAbsolutePath());
+        }
+        // Search ANDROID_HOST_OUT.
+        if (androidHostOut != null) {
+            dirs.add(androidHostOut);
+        }
+
+        // Look into all the above directories, and if there are any 'lib' or 'lib64', then
+        // add it to LD_LIBRARY_PATH.
+        String libs[] = {"lib", "lib64"};
+
+        Set<String> result = new LinkedHashSet<>();
+
+        for (String dir : dirs) {
+            File path = new File(dir);
+            if (!path.isDirectory()) {
+                continue;
+            }
+
+            for (String lib : libs) {
+                File libFile = new File(path, lib);
+
+                if (libFile.isDirectory()) {
+                    result.add(libFile.getAbsolutePath());
+                }
+            }
+        }
+        if (result.isEmpty()) {
             return null;
         }
-        return String.join(java.io.File.pathSeparator, paths);
+        return String.join(java.io.File.pathSeparator, result);
     }
 
-    private List<String> compileRobolectricOptions() {
+    private List<String> compileRobolectricOptions(File artifactsDir) {
         List<String> options = new ArrayList<>();
         File testDir = findTestDirectory();
+        File androidAllDir = FileUtil.findFile(testDir, "android-all");
+        if (androidAllDir == null) {
+            throw new IllegalArgumentException("android-all directory not found, cannot proceed");
+        }
         String dependencyDir =
-                "-Drobolectric.dependency.dir=" + testDir.getAbsolutePath() + "/android-all/";
-
+                "-Drobolectric.dependency.dir=" + androidAllDir.getAbsolutePath() + "/";
         options.add(dependencyDir);
+        if (artifactsDir != null) {
+            String artifactsDirFull =
+                    "-Drobolectric.artifacts.dir=" + artifactsDir.getAbsolutePath() + "/";
+            options.add(artifactsDirFull);
+        }
         options.add("-Drobolectric.offline=true");
         options.add("-Drobolectric.logging=stdout");
         options.add("-Drobolectric.resourcesMode=binary");
+        options.add("-Drobolectric.usePreinstrumentedJars=false");
+        // TODO(rexhoffman) figure out how to get the local conscrypt working - shared objects and
+        // such.
+        options.add("-Drobolectric.conscryptMode=OFF");
 
-        // TODO(murj) hide these options behind a debug option
-        // options.add("-Drobolectric.logging.enabled=true");
-        // options.add("-Xdebug");
-        // options.add("-Xrunjdwp:transport=dt_socket,address=8600,server=y,suspend=y");
-
+        if (this.debug) {
+            options.add("-Drobolectric.logging.enabled=true");
+        }
         return options;
     }
 
@@ -468,7 +671,8 @@ public class IsolatedHostTest
 
         TestDescription currentTest = null;
         Instant start = Instant.now();
-
+        CloseableTraceScope methodScope = null;
+        CloseableTraceScope runScope = null;
         boolean runStarted = false;
         try {
             mainLoop:
@@ -557,6 +761,7 @@ public class IsolatedHostTest
                                                         event.getMethodName());
                                         listener.testStarted(desc, event.getStartTime());
                                         currentTest = desc;
+                                        methodScope = new CloseableTraceScope(desc.toString());
                                         break;
                                     case TOPIC_FINISHED:
                                         desc =
@@ -568,23 +773,39 @@ public class IsolatedHostTest
                                                 event.getEndTime(),
                                                 new HashMap<String, Metric>());
                                         currentTest = null;
+                                        if (methodScope != null) {
+                                            methodScope.close();
+                                            methodScope = null;
+                                        }
                                         break;
                                     case TOPIC_IGNORED:
                                         desc =
                                                 new TestDescription(
                                                         event.getClassName(),
                                                         event.getMethodName());
+                                        // Use endTime for both events since
+                                        // ignored test do not really run.
+                                        listener.testStarted(desc, event.getEndTime());
                                         listener.testIgnored(desc);
+                                        listener.testEnded(
+                                                desc,
+                                                event.getEndTime(),
+                                                new HashMap<String, Metric>());
                                         break;
                                     case TOPIC_RUN_STARTED:
                                         runStarted = true;
                                         listener.testRunStarted(
                                                 event.getClassName(), event.getTestCount());
+                                        runScope = new CloseableTraceScope(event.getClassName());
                                         break;
                                     case TOPIC_RUN_FINISHED:
                                         listener.testRunEnded(
                                                 event.getElapsedTime(),
                                                 new HashMap<String, Metric>());
+                                        if (runScope != null) {
+                                            runScope.close();
+                                            runScope = null;
+                                        }
                                         break;
                                     default:
                                 }
@@ -670,6 +891,24 @@ public class IsolatedHostTest
             }
         }
         return null;
+    }
+
+    private void logCoverageExecFile(ITestInvocationListener listener) {
+        if (mCoverageExecFile == null) {
+            CLog.e("Coverage execution file is null.");
+            return;
+        }
+        if (mCoverageExecFile.length() == 0) {
+            CLog.e("Coverage execution file has 0 length.");
+            return;
+        }
+        try (FileInputStreamSource source = new FileInputStreamSource(mCoverageExecFile, true)) {
+            listener.testLog("coverage", LogDataType.COVERAGE, source);
+        }
+    }
+
+    private boolean isCoverageEnabled() {
+        return mConfig != null && mConfig.getCoverageOptions().isCoverageEnabled();
     }
 
     /** {@inheritDoc} */
@@ -780,9 +1019,26 @@ public class IsolatedHostTest
         mExcludeAnnotations.clear();
     }
 
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfig = configuration;
+    }
+
+    public File getCoverageExecFile() {
+        return mCoverageExecFile;
+    }
+
     @VisibleForTesting
     protected void setServer(ServerSocket server) {
         mServer = server;
+    }
+
+    public boolean useRobolectricResources() {
+        return mRobolectricResources;
+    }
+
+    public boolean useRavenwoodResources() {
+        return mRavenwoodResources;
     }
 
     private ITestInvocationListener wrapListener(ITestInvocationListener listener) {
@@ -806,5 +1062,11 @@ public class IsolatedHostTest
             throw new RuntimeException("/tradefed-isolation.jar not found.");
         }
         return isolationJar;
+    }
+
+    public void deleteTempFiles() {
+        if (mIsolationJar != null) {
+            FileUtil.deleteFile(mIsolationJar);
+        }
     }
 }

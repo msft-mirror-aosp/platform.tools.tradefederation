@@ -23,6 +23,7 @@ import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.UniqueMultiMap;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -98,6 +99,12 @@ public class CommandOptions implements ICommandOptions {
             + "instead of bugreport during the test invocation final bugreport.")
     private boolean mTakeBugreportzOnInvocationEnded = false;
 
+    @Option(
+            name = "disable-conditional-bugreport",
+            description =
+                    "Disable the optimization to capture ANR instead of bugreport if no failure.")
+    private boolean mDisableConditionalBugreport = false;
+
     @Option(name = "invocation-timeout", description =
             "the maximum time to wait for an invocation to terminate before attempting to force"
             + "stop it.", isTimeVal = true)
@@ -132,6 +139,20 @@ public class CommandOptions implements ICommandOptions {
     )
     private boolean mDynamicSharding = true;
 
+    @Option(
+            name = "remote-dynamic-sharding",
+            description =
+                    "Enable use of the dynamic sharding service to load balance across multiple"
+                            + " hosts.")
+    private boolean mRemoteDynamicSharding = false;
+
+    @Option(
+            name = "use-even-module-sharding",
+            description =
+                    "Enable use of a strategy that attempts to distribute number of "
+                            + "modules evenly across shards")
+    private boolean mEvenModuleSharding = false;
+
     public static final String INVOCATION_DATA = "invocation-data";
 
     @Option(
@@ -144,6 +165,11 @@ public class CommandOptions implements ICommandOptions {
     public static final String USE_SANDBOX = "use-sandbox";
     public static final String ENABLE_SANDBOX_TEST_MODE = "sandbox-test-mode";
     public static final String USE_REMOTE_SANDBOX = "use-remote-sandbox";
+
+    @Option(
+            name = "remote-files",
+            description = "A list of files references to store in build info")
+    private Set<String> mRemoteFiles = new LinkedHashSet<>();
 
     @Option(
         name = USE_SANDBOX,
@@ -164,6 +190,11 @@ public class CommandOptions implements ICommandOptions {
     )
     private boolean mUseRemoteSandbox = false;
 
+    @Option(
+            name = "deviceless-remote-exec",
+            description = "Whether or not to trigger --null-deviec in the remote invocation.")
+    private boolean mDevicelessRemoteExecution = false;
+
     @Deprecated
     @Option(
             name = "parallel-remote-setup",
@@ -171,6 +202,16 @@ public class CommandOptions implements ICommandOptions {
                     "For remote sharded invocation, whether or not to attempt the setup in"
                             + " parallel.")
     private boolean mUseParallelRemoteSetup = false;
+
+    @Option(
+            name = "parallel-pre-invocation-setup",
+            description = "Whether to execute pre-invocation setup in parallel.")
+    private boolean mUseParallelPreInvocationSetup = false;
+
+    @Option(
+            name = "parallel-pre-invocation-setup-timeout",
+            description = "Timeout for parallel pre-invocation setup.")
+    private Duration mParallelPreInvocationSetupTimeout = Duration.ofMinutes(30L);
 
     @Option(name = "parallel-setup", description = "Whether to attempt the setup in parallel.")
     private boolean mUseParallelSetup = false;
@@ -207,6 +248,16 @@ public class CommandOptions implements ICommandOptions {
     )
     private Set<AutoLogCollector> mAutoCollectors = new LinkedHashSet<>();
 
+    @Option(
+            name = "experiment-enabled",
+            description = "A feature flag used to enable experimental flags.")
+    private boolean mExperimentEnabled = false;
+
+    @Option(
+            name = "experimental-flags",
+            description = "Map of experimental flags that can be used for feature gating projects.")
+    private Map<String, String> mExperimentalFlags = new LinkedHashMap<>();
+
     @Deprecated
     @Option(
         name = "logcat-on-failure",
@@ -233,7 +284,7 @@ public class CommandOptions implements ICommandOptions {
             name = "delegated-early-device-release",
             description =
                     "Feature flag to enable early device release when running in delegated mode.")
-    private boolean mEnableDelegatedEarlyDeviceRelease = false;
+    private boolean mEnableDelegatedEarlyDeviceRelease = true;
 
     @Option(
             name = "dynamic-download-args",
@@ -272,6 +323,23 @@ public class CommandOptions implements ICommandOptions {
             description = "The number of devices for multi-device tests. For a new feature "
                                   + "under developing, not for other uses.")
     private Integer mMultiDeviceCount;
+
+    @Option(name = "enable-tracing", description = "Enable test invocation tracing.")
+    private boolean mTracingEnabled = true;
+
+    public static final String JDK_FOLDER_OPTION_NAME = "jdk-folder-for-subprocess";
+
+    @Option(
+            name = "parallel-dynamic-download",
+            description = "Enable parallel download of dynamic files when supported.")
+    private boolean mEnableParallelDynamicDownload = false;
+
+    @Option(
+            name = JDK_FOLDER_OPTION_NAME,
+            description =
+                    "Whenever the java execution is forked to another subprocess, use this jdk"
+                            + " folder instead of current one.")
+    private File mJdkFolder;
 
     /**
      * Set the help mode for the config.
@@ -408,6 +476,12 @@ public class CommandOptions implements ICommandOptions {
         mTakeBugreportzOnInvocationEnded = takeBugreportz;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean isConditionalBugreportDisabled() {
+        return mDisableConditionalBugreport;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -508,6 +582,12 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public Set<String> getRemoteFiles() {
+        return mRemoteFiles;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean shouldUseSandboxing() {
         return mUseSandbox;
     }
@@ -538,6 +618,12 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public boolean isRemoteInvocationDeviceless() {
+        return mDevicelessRemoteExecution;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public Set<AutoLogCollector> getAutoLogCollectors() {
         return mAutoCollectors;
     }
@@ -546,6 +632,18 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setAutoLogCollectors(Set<AutoLogCollector> autoLogCollectors) {
         mAutoCollectors = autoLogCollectors;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isExperimentEnabled() {
+        return mExperimentEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Map<String, String> getExperimentalFlags() {
+        return mExperimentalFlags;
     }
 
     /** {@inheritDoc} */
@@ -571,13 +669,23 @@ public class CommandOptions implements ICommandOptions {
     public void setHostLogSuffix(String suffix) {
         mHostLogSuffix = suffix;
     }
-
     /** {@inheritDoc} */
     @Override
     public boolean shouldUseParallelRemoteSetup() {
         return mUseParallelRemoteSetup;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUseParallelPreInvocationSetup() {
+        return mUseParallelPreInvocationSetup;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public Duration getParallelPreInvocationSetupTimeout() {
+        return mParallelPreInvocationSetupTimeout;
+    }
     /** {@inheritDoc} */
     @Override
     public boolean shouldUseParallelSetup() {
@@ -680,8 +788,8 @@ public class CommandOptions implements ICommandOptions {
         List<String> tags = new ArrayList<>();
         // Convert a few of the enabled features into easily consumable tag that can be displayed
         // to see if a feature is enabled.
-        if (filterPreviousPassedTests()) {
-            tags.add("incremental_retry");
+        if (mAutoCollectors.contains(AutoLogCollector.DEVICE_TRACE)) {
+            tags.add("device_tracing_enable");
         }
         return tags;
     }
@@ -696,5 +804,47 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public Integer getMultiDeviceCount() {
         return mMultiDeviceCount;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setMultiDeviceCount(int count) {
+        mMultiDeviceCount = count;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isTracingEnabled() {
+        return mTracingEnabled;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public File getJdkFolderForSubprocess() {
+        return mJdkFolder;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldRemoteDynamicShard() {
+        return mRemoteDynamicSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setShouldRemoteDynamicShard(boolean shouldRemoteDynamicShard) {
+        mRemoteDynamicSharding = shouldRemoteDynamicShard;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUseEvenModuleSharding() {
+        return mEvenModuleSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding) {
+        mEvenModuleSharding = useEvenModuleSharding;
     }
 }

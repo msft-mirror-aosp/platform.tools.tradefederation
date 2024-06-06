@@ -17,10 +17,13 @@
 package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.KeyguardControllerState;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -469,6 +472,41 @@ public interface ITestDevice extends INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Connects to a wifi network.
+     *
+     * <p>Turns on wifi and blocks until a successful connection is made with one of the wifi
+     * networks given in the wifiSsidToPsk map. Once a connection is made, the instance will try to
+     * restore the connection after every reboot until {@link ITestDevice#disconnectFromWifi()} or
+     * {@link ITestDevice#clearLastConnectedWifiNetwork()} is called.
+     *
+     * @param wifiSsidToPsk A map of wifi SSIDs to passwords.
+     * @return <code>true</code> if connected to wifi network successfully. <code>false</code>
+     *     otherwise
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Connects to a wifi network.
+     *
+     * <p>Turns on wifi and blocks until a successful connection is made with one of the wifi
+     * networks given in the wifiSsidToPsk map. Once a connection is made, the instance will try to
+     * restore the connection after every reboot until {@link ITestDevice#disconnectFromWifi()} or
+     * {@link ITestDevice#clearLastConnectedWifiNetwork()} is called.
+     *
+     * @param wifiSsidToPsk A map of wifi SSIDs to passwords.
+     * @param scanSsid whether to scan for hidden SSIDs for this network.
+     * @return <code>true</code> if connected to wifi network successfully. <code>false</code>
+     *     otherwise
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean connectToWifiNetwork(Map<String, String> wifiSsidToPsk, boolean scanSsid)
+            throws DeviceNotAvailableException;
+
+    /**
      * A variant of {@link #connectToWifiNetwork(String, String)} that only connects if device
      * currently does not have network connectivity.
      *
@@ -664,6 +702,18 @@ public interface ITestDevice extends INativeDevice {
      */
     public boolean isMultiUserSupported() throws DeviceNotAvailableException;
 
+    /** Returns whether the device uses headless system user mode. */
+    public boolean isHeadlessSystemUserMode() throws DeviceNotAvailableException;
+
+    /** Returns whether it's allowed to switch to the headless SYSTEM user. */
+    public boolean canSwitchToHeadlessSystemUser() throws DeviceNotAvailableException;
+
+    /**
+     * Returns whether the main user is a permanent admin and can't be deleted or downgraded to
+     * non-admin status.
+     */
+    public boolean isMainUserPermanentAdmin() throws DeviceNotAvailableException;
+
     /**
      * Create a user with a given name and default flags 0.
      *
@@ -683,6 +733,19 @@ public interface ITestDevice extends INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public int createUser(String name, boolean guest, boolean ephemeral)
+            throws DeviceNotAvailableException, IllegalStateException;
+
+    /**
+     * Create a user with a given name and the provided flags
+     *
+     * @param name of the user to create on the device
+     * @param guest enable the user flag --guest during creation
+     * @param ephemeral enable the user flag --ephemeral during creation
+     * @param forTesting enable the test flag --for-testing during creation
+     * @return id of the created user
+     * @throws DeviceNotAvailableException
+     */
+    public int createUser(String name, boolean guest, boolean ephemeral, boolean forTesting)
             throws DeviceNotAvailableException, IllegalStateException;
 
     /**
@@ -761,6 +824,21 @@ public interface ITestDevice extends INativeDevice {
     public boolean startUser(int userId, boolean waitFlag) throws DeviceNotAvailableException;
 
     /**
+     * Starts a given user in the background, visible in the given display (i.e., allowing the user
+     * to launch activities in that display).
+     *
+     * <p><b>NOTE: </b>this command doesn't check if the user exists, display is available, {@link
+     * #isVisibleBackgroundUsersSupported() device supports such feature}, etc.
+     *
+     * @param userId of the user to start in the background
+     * @param displayId display to start user visible on
+     * @param waitFlag will make the command wait until user is started and unlocked.
+     * @return {@code true} if the user was successfully started visible in the background.
+     */
+    public boolean startVisibleBackgroundUser(int userId, int displayId, boolean waitFlag)
+            throws DeviceNotAvailableException;
+
+    /**
      * Stops a given user. If the user is already stopped, this method is a NOOP.
      * Cannot stop current and system user.
      *
@@ -784,6 +862,25 @@ public interface ITestDevice extends INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Returns whether the device allow users to be started visible in the background.
+     *
+     * <p>If it does, you could call {@link #startVisibleBackgroundUser(int, int, boolean)}, passing
+     * a display returned by {@link #listDisplayIdsForStartingVisibleBackgroundUsers()}.
+     */
+    public boolean isVisibleBackgroundUsersSupported() throws DeviceNotAvailableException;
+
+    /**
+     * Returns whether the device allow users to be started visible in the background in the {@link
+     * java.android.view.Display#DEFAULT_DISPLAY}.
+     *
+     * <p>If it does, you could call {@link #startVisibleBackgroundUser(int, int, boolean)}, passing
+     * a display returned by {@link #listDisplayIdsForStartingVisibleBackgroundUsers()} (which
+     * should include {@link java.android.view.Display#DEFAULT_DISPLAY}).
+     */
+    public boolean isVisibleBackgroundUsersOnDefaultDisplaySupported()
+            throws DeviceNotAvailableException;
+
+    /**
      * Returns the primary user id.
      *
      * @return the userId of the primary user if there is one, and null if there is no primary user.
@@ -793,11 +890,37 @@ public interface ITestDevice extends INativeDevice {
     public Integer getPrimaryUserId() throws DeviceNotAvailableException;
 
     /**
+     * Returns the main user id.
+     *
+     * @return the userId of the main user if there is one, and null if there is no main user.
+     * @throws DeviceNotAvailableException
+     * @throws DeviceRuntimeException if the output from the device is not as expected.
+     */
+    public Integer getMainUserId() throws DeviceNotAvailableException;
+
+    /**
      * Return the id of the current running user. In case of error, return -10000.
      *
      * @throws DeviceNotAvailableException
      */
     public int getCurrentUser() throws DeviceNotAvailableException;
+
+    /**
+     * Checks if the given user is visible.
+     *
+     * <p>A "visible" user is a user that is interacting with the "human" user and hence is able to
+     * launch launch activities (typically in the default display).
+     */
+    public boolean isUserVisible(int userId) throws DeviceNotAvailableException;
+
+    /**
+     * Checks if the given user is visible in the given display.
+     *
+     * <p>A "visible" user is a user that is interacting with the "human" user and hence is able to
+     * launch launch activities in that display.
+     */
+    public boolean isUserVisibleOnDisplay(int userId, int displayId)
+            throws DeviceNotAvailableException;
 
     /**
      * Find and return the flags of a given user.
@@ -979,8 +1102,15 @@ public interface ITestDevice extends INativeDevice {
     public Set<Long> listDisplayIds() throws DeviceNotAvailableException;
 
     /**
-     * Returns the list of foldable states on the device. Can be obtained with
-     * "cmd device_state print-states".
+     * Gets the list of displays that can be used to {@link #startVisibleBackgroundUser(int, int,
+     * boolean) start a user visible in the background}.
+     */
+    public Set<Integer> listDisplayIdsForStartingVisibleBackgroundUsers()
+            throws DeviceNotAvailableException;
+
+    /**
+     * Returns the list of foldable states on the device. Can be obtained with "cmd device_state
+     * print-states".
      *
      * @throws DeviceNotAvailableException
      */
@@ -1004,4 +1134,70 @@ public interface ITestDevice extends INativeDevice {
      */
     public boolean doesFileExist(String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
+
+    /**
+     * Registers a {@link IDeviceActionReceiver} for this device.
+     *
+     * <p>All registered {@link IDeviceActionReceiver}s will be notified before a device action
+     * starts and after the device action ends.
+     *
+     * @param deviceActionReceiver A {@link IDeviceActionReceiver} which will be registered.
+     */
+    public void registerDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver);
+
+    /**
+     * Removes the registered {@link IDeviceActionReceiver}.
+     *
+     * @param deviceActionReceiver A {@link IDeviceActionReceiver} which will be removed.
+     */
+    public void deregisterDeviceActionReceiver(IDeviceActionReceiver deviceActionReceiver);
+
+    /**
+     * Retrieves a bugreport from the device.
+     *
+     * <p>The implementation of this is guaranteed to continue to work on a device without an sdcard
+     * (or where the sdcard is not yet mounted).
+     *
+     * @return An {@link InputStreamSource} which will produce the bugreport contents on demand. In
+     *     case of failure, the {@code InputStreamSource} will produce an empty {@link InputStream}.
+     */
+    public InputStreamSource getBugreport();
+
+    /**
+     * Retrieves a bugreportz from the device. Zip format bugreport contains the main bugreport and
+     * other log files that are useful for debugging.
+     *
+     * <p>Only supported for 'adb version' > 1.0.36
+     *
+     * @return a {@link InputStreamSource} of the zip file containing the bugreportz, return null in
+     *     case of failure.
+     */
+    public InputStreamSource getBugreportz();
+
+    /**
+     * Helper method to take a bugreport and log it to the reporters.
+     *
+     * @param dataName name under which the bugreport will be reported.
+     * @param listener an {@link ITestLogger} to log the bugreport.
+     * @return True if the logging was successful, false otherwise.
+     */
+    public boolean logBugreport(String dataName, ITestLogger listener);
+
+    /**
+     * Take a bugreport and returns it inside a {@link Bugreport} object to handle it. Return null
+     * in case of issue. File referenced in the Bugreport object need to be cleaned via {@link
+     * Bugreport#close()}.
+     */
+    public Bugreport takeBugreport();
+
+    /** Notify the device to wait for snapuserd completion. */
+    public default void notifySnapuserd(SnapuserdWaitPhase waitPhase) {
+        // Empty on purpose
+    }
+
+    /** If expected, wait for snapuserd to complete. */
+    public default void waitForSnapuserd(SnapuserdWaitPhase currentPhase)
+            throws DeviceNotAvailableException {
+        // Empty on purpose
+    }
 }

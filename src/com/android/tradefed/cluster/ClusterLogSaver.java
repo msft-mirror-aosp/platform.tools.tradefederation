@@ -115,6 +115,13 @@ public class ClusterLogSaver implements ILogSaver {
                             + " command line in a retry invocation.")
     private String mRetryCommandLine = null;
 
+    @Option(
+            name = "output-file-format-pattern",
+            description =
+                    "Format the uploading path by removing each substring of output files "
+                            + "that matches this pattern.")
+    private String mOutputFileFormatPattern = "^android-[^/]+/(results|logs)/[^/]+/?";
+
     private File mLogDir;
     private LogFileSaver mLogFileSaver = null;
     private IClusterClient mClusterClient = null;
@@ -338,7 +345,14 @@ public class ClusterLogSaver implements ILogSaver {
                             .map((s) -> "(" + s + ")")
                             .collect(Collectors.joining("|"));
             CLog.i("Collecting output files matching regex: " + regex);
-            findFilesRecursively(mRootDir, regex).forEach(file -> outputFiles.put(file, null));
+            findFilesRecursively(mRootDir, regex)
+                    .forEach(
+                            file ->
+                                    outputFiles.put(
+                                            file,
+                                            getRelativePath(Path.of(file.getPath()).getParent())
+                                                    .toString()
+                                                    .replaceAll(mOutputFileFormatPattern, "")));
         }
 
         // Collect a context file if exists.
@@ -397,13 +411,6 @@ public class ClusterLogSaver implements ILogSaver {
     public LogFile saveLogData(String dataName, LogDataType dataType, InputStream dataStream)
             throws IOException {
         File log = mLogFileSaver.saveLogData(dataName, dataType, dataStream);
-        return new LogFile(log.getAbsolutePath(), null, dataType);
-    }
-
-    @Override
-    public LogFile saveLogDataRaw(String dataName, LogDataType dataType, InputStream dataStream)
-            throws IOException {
-        File log = mLogFileSaver.saveLogDataRaw(dataName, dataType.getFileExt(), dataStream);
         return new LogFile(log.getAbsolutePath(), null, dataType);
     }
 

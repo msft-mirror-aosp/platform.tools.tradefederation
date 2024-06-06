@@ -16,56 +16,21 @@
 
 package com.android.tradefed.testtype.suite.params.multiuser;
 
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IDeviceConfiguration;
-import com.android.tradefed.targetprep.ITargetPreparer;
-import com.android.tradefed.targetprep.RunOnSystemUserTargetPreparer;
 import com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer;
-import com.android.tradefed.testtype.IRemoteTest;
-import com.android.tradefed.testtype.ITestAnnotationFilterReceiver;
 import com.android.tradefed.testtype.suite.params.IModuleParameterHandler;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-public class RunOnWorkProfileParameterHandler implements IModuleParameterHandler {
+public class RunOnWorkProfileParameterHandler extends ProfileParameterHandler
+        implements IModuleParameterHandler {
 
     private static final String REQUIRE_RUN_ON_WORK_PROFILE_NAME =
             "com.android.bedstead.harrier.annotations.RequireRunOnWorkProfile";
 
+    public RunOnWorkProfileParameterHandler() {
+        super(REQUIRE_RUN_ON_WORK_PROFILE_NAME, new RunOnWorkProfileTargetPreparer());
+    }
+
     @Override
     public String getParameterIdentifier() {
         return "run-on-work-profile";
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public void addParameterSpecificConfig(IConfiguration moduleConfiguration) {
-        for (IDeviceConfiguration deviceConfig : moduleConfiguration.getDeviceConfig()) {
-            List<ITargetPreparer> preparers = deviceConfig.getTargetPreparers();
-            // The first thing the module will do is run on a work profile
-            preparers.add(0, new RunOnWorkProfileTargetPreparer());
-
-            // Remove the target preparer which forces onto system user
-            preparers.removeIf(preparer -> preparer instanceof RunOnSystemUserTargetPreparer);
-        }
-    }
-
-    @Override
-    public void applySetup(IConfiguration moduleConfiguration) {
-        // Add filter to include @RequireRunOnWorkProfile
-        for (IRemoteTest test : moduleConfiguration.getTests()) {
-            if (test instanceof ITestAnnotationFilterReceiver) {
-                ITestAnnotationFilterReceiver filterTest = (ITestAnnotationFilterReceiver) test;
-                filterTest.clearIncludeAnnotations();
-                filterTest.addIncludeAnnotation(REQUIRE_RUN_ON_WORK_PROFILE_NAME);
-
-                Set<String> excludeAnnotations = new HashSet<>(filterTest.getExcludeAnnotations());
-                excludeAnnotations.remove(REQUIRE_RUN_ON_WORK_PROFILE_NAME);
-                filterTest.clearExcludeAnnotations();
-                filterTest.addAllExcludeAnnotation(excludeAnnotations);
-            }
-        }
     }
 }

@@ -44,9 +44,9 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
 
     private static final String NAME_FORMAT = "%s-%s-logcat-on-failure";
 
-    private static final String LOGCAT_COLLECT_CMD = "logcat -T 150";
+    private static final String LOGCAT_COLLECT_CMD = "logcat -b all -T 150";
     // -t implies -d (dump) so it's a one time collection
-    private static final String LOGCAT_COLLECT_CMD_LEGACY = "logcat -t 5000";
+    private static final String LOGCAT_COLLECT_CMD_LEGACY = "logcat -b all -t 5000";
     private static final int API_LIMIT = 20;
 
     private static final int THROTTLE_LIMIT_PER_RUN = 10;
@@ -83,7 +83,8 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
     }
 
     @Override
-    public void onTestFail(DeviceMetricData testData, TestDescription test) {
+    public void onTestFail(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException {
         if (mCurrentCount > THROTTLE_LIMIT_PER_RUN) {
             if (mFirstThrottle) {
                 CLog.w("Throttle capture of logcat-on-failure due to too many failures.");
@@ -93,16 +94,17 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
         }
         // Delay slightly for the error to get in the logcat
         getRunUtil().sleep(100);
-        collectAndLog(test.toString());
+        collectAndLog(test.toString(), MAX_LOGAT_SIZE_BYTES);
         mCurrentCount++;
     }
 
     @Override
-    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure) {
+    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure)
+            throws DeviceNotAvailableException {
         // Delay slightly for the error to get in the logcat
         getRunUtil().sleep(100);
         // TODO: Improve the name
-        collectAndLog("run-failure");
+        collectAndLog("run-failure", MAX_LOGAT_SIZE_BYTES);
     }
 
     @Override
@@ -118,11 +120,16 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
     }
 
     @VisibleForTesting
+    CollectingByteOutputReceiver createLegacyCollectingReceiver() {
+        return new CollectingByteOutputReceiver();
+    }
+
+    @VisibleForTesting
     IRunUtil getRunUtil() {
         return RunUtil.getDefault();
     }
 
-    private void collectAndLog(String testName) {
+    protected void collectAndLog(String testName, int size) throws DeviceNotAvailableException {
         for (ITestDevice device : getRealDevices()) {
             boolean isDeviceOnline = isDeviceOnline(device);
             ILogcatReceiver receiver = mLogcatReceivers.get(device);
@@ -138,7 +145,7 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
             // If supported get the logcat buffer, even if device is offline to get the buffer
             saveLogcatSource(
                     testName,
-                    receiver.getLogcatData(MAX_LOGAT_SIZE_BYTES, mOffset.get(device)),
+                    receiver.getLogcatData(size, mOffset.get(device)),
                     device.getSerialNumber());
         }
     }
@@ -168,21 +175,30 @@ public class LogcatOnFailureCollector extends BaseDeviceMetricCollector {
         }
     }
 
-    private void legacyCollection(ITestDevice device, String testName) {
-        CollectingByteOutputReceiver outputReceiver = new CollectingByteOutputReceiver();
-        try {
-            device.executeShellCommand(LOGCAT_COLLECT_CMD_LEGACY, outputReceiver);
-            saveLogcatSource(
-                    testName,
-                    new ByteArrayInputStreamSource(outputReceiver.getOutput()),
-                    device.getSerialNumber());
-        } catch (DeviceNotAvailableException e) {
-            CLog.e(e);
-        }
+    private void legacyCollection(ITestDevice device, String testName)
+            throws DeviceNotAvailableException {
+        CollectingByteOutputReceiver outputReceiver = createLegacyCollectingReceiver();
+        device.executeShellCommand(LOGCAT_COLLECT_CMD_LEGACY, outputReceiver);
+        saveLogcatSource(
+                testName,
+                new ByteArrayInputStreamSource(outputReceiver.getOutput()),
+                device.getSerialNumber());
+        outputReceiver.cancel();
     }
 
     private void saveLogcatSource(String testName, InputStreamSource source, String serial) {
+        if (source == null) {
+            return;
+        }
         try (InputStreamSource logcatSource = source) {
+            // If the resulting logcat looks wrong or empty, discard it
+            if (logcatSource.size() < 75L) {
+                CLog.e(
+                        "Discarding logcat on failure (size=%s): it failed to collect something"
+                                + " relevant likely due to timings.",
+                        logcatSource.size());
+                return;
+            }
             String name = String.format(NAME_FORMAT, testName, serial);
             super.testLog(name, LogDataType.LOGCAT, logcatSource);
         }

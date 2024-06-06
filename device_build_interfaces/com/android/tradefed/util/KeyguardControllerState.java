@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.util;
 
-import com.android.tradefed.log.LogUtil.CLog;
-
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,9 +24,11 @@ public class KeyguardControllerState {
     private static final Pattern NAME_PATTERN = Pattern.compile(".*KeyguardController:");
     private static final Pattern SHOWING_PATTERN = Pattern.compile("mKeyguardShowing=(\\S+)");
     private static final Pattern OCCLUDED_PATTERN = Pattern.compile("mOccluded=(\\S+)");
+    private static final Pattern GOING_AWAY_PATTERN = Pattern.compile("mKeyguardGoingAway=(\\S+)");
 
     private boolean mKeyguardShowing;
     private boolean mKeyguardOccluded;
+    private boolean mKeyguardGoingAway;
 
     private KeyguardControllerState() {}
 
@@ -59,19 +59,22 @@ public class KeyguardControllerState {
             String line = log.trim();
             Matcher matcher = SHOWING_PATTERN.matcher(line);
             if (matcher.matches()) {
-                CLog.v(line);
                 final String showingString = matcher.group(1);
                 mKeyguardShowing = Boolean.valueOf(showingString);
-                CLog.v(showingString);
                 continue;
             }
 
             matcher = OCCLUDED_PATTERN.matcher(line);
             if (matcher.matches()) {
-                CLog.v(line);
                 final String occludedString = matcher.group(1);
                 mKeyguardOccluded = Boolean.valueOf(occludedString);
-                CLog.v(occludedString);
+                continue;
+            }
+
+            matcher = GOING_AWAY_PATTERN.matcher(line);
+            if (matcher.matches()) {
+                final String goingAwayString = matcher.group(1);
+                mKeyguardGoingAway = Boolean.valueOf(goingAwayString);
                 continue;
             }
         }
@@ -85,5 +88,10 @@ public class KeyguardControllerState {
     /** Returns True if the keyguard is occluded, false otherwise. */
     public boolean isKeyguardOccluded() {
         return mKeyguardOccluded;
+    }
+
+    /** Returns True if the keyguard is going away, false otherwise. */
+    public boolean isKeyguardGoingAway() {
+        return mKeyguardGoingAway;
     }
 }

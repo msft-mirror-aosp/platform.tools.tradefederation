@@ -41,7 +41,6 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-
 /** Static util functions for TF Cluster to get global config instances, host information, etc. */
 public class ClusterHostUtil {
 
@@ -55,6 +54,7 @@ public class ClusterHostUtil {
     static final String UNKNOWN = "UNKNOWN";
     static final String TRADEFED = "TRADEFED";
     static final String LOCALHOST_IP = "127.0.0.1";
+    static final String LOCALHOST_NAME = "localhost";
 
     private static long sTfStartTime = getCurrentTimeMillis();
 
@@ -276,7 +276,8 @@ public class ClusterHostUtil {
     public static boolean isLocalhostIpPort(String input) {
         try {
             HostAndPort hostAndPort = HostAndPort.fromString(input);
-            return LOCALHOST_IP.equals(hostAndPort.getHost());
+            return (LOCALHOST_IP.equals(hostAndPort.getHost())
+                    || LOCALHOST_NAME.equals(hostAndPort.getHost()));
         } catch (IllegalArgumentException e) {
             return false;
         }

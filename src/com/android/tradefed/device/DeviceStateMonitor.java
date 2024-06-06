@@ -56,14 +56,11 @@ public class DeviceStateMonitor extends NativeDeviceStateMonitor {
                 if (output.contains("package:")) {
                     return true;
                 }
-            } catch (IOException e) {
-                CLog.i("%s on device %s failed: %s", cmd, getSerialNumber(), e.getMessage());
             } catch (TimeoutException e) {
                 CLog.i("%s on device %s failed: timeout", cmd, getSerialNumber());
-            } catch (AdbCommandRejectedException e) {
-                CLog.i("%s on device %s failed: %s", cmd, getSerialNumber(), e.getMessage());
-            } catch (ShellCommandUnresponsiveException e) {
-                CLog.i("%s on device %s failed: %s", cmd, getSerialNumber(), e.getMessage());
+            } catch (IOException|AdbCommandRejectedException|ShellCommandUnresponsiveException e) {
+                CLog.i("%s on device %s failed: %s(message: %s)", cmd, getSerialNumber(),
+                       e.getClass().getSimpleName(), e.getMessage());
             }
             getRunUtil().sleep(Math.min(getCheckPollTime() * counter, MAX_CHECK_POLL_TIME));
             counter++;
@@ -72,16 +69,17 @@ public class DeviceStateMonitor extends NativeDeviceStateMonitor {
         return false;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    protected boolean postOnlineCheck(final long waitTime) {
+    protected boolean postOnlineCheck(final long waitTime) throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         if (!waitForPmResponsive(waitTime)) {
             return false;
         }
         long elapsedTime = System.currentTimeMillis() - startTime;
+        if (!waitForStoreMount(waitTime - elapsedTime)) {
+            return false;
+        }
         return super.postOnlineCheck(waitTime - elapsedTime);
     }
 }

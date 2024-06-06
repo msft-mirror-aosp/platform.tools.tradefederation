@@ -220,6 +220,7 @@ public class TestFilterHelper {
     public boolean shouldRun(String packageName, Class<?> classObj, Method method) {
         String className = classObj.getName();
         String methodName = String.format("%s#%s", className, method.getName());
+
         if (!shouldRunFilter(packageName, className, methodName)) {
             return false;
         }
@@ -243,7 +244,23 @@ public class TestFilterHelper {
         return mIncludeFilters.isEmpty()
                 || mIncludeFilters.contains(methodName)
                 || mIncludeFilters.contains(className)
-                || mIncludeFilters.contains(packageName);
+                || mIncludeFilters.contains(packageName)
+                || includeFilterMatches(methodName);
+    }
+
+    private boolean includeFilterMatches(String methodName) {
+        for (var filter : mIncludeFilters) {
+            // if (methodName.contains(filter)) {
+            // The Whole method name must match so user must pass .* on ends.
+            // This is good so we don't accidentally two method when user
+            // passes 'testFoo':
+            //   #testFoo
+            //   #testFooAndBar
+            if (methodName.matches(filter)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -291,7 +308,8 @@ public class TestFilterHelper {
             return mIncludeFilters.isEmpty()
                     || mIncludeFilters.contains(methodName)
                     || mIncludeFilters.contains(className)
-                    || mIncludeFilters.contains(packageName);
+                    || mIncludeFilters.contains(packageName)
+                    || includeFilterMatches(methodName);
         } finally {
             StreamUtil.close(cl);
         }
@@ -314,6 +332,13 @@ public class TestFilterHelper {
             // Skip method because it was excluded
             return false;
         }
+        for (String filter : mExcludeFilters) {
+            // The whole method name must match so user must pass .* on ends.
+            if (methodName.matches(filter)) {
+                return false;
+            }
+        }
+
         return true;
     }
 }

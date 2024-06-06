@@ -19,11 +19,14 @@ import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IDeviceActionReceiver;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -35,6 +38,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 
@@ -53,7 +57,7 @@ import java.util.stream.Collectors;
  * Base implementation of {@link IMetricCollector} that allows to start and stop collection on
  * {@link #onTestRunStart(DeviceMetricData)} and {@link #onTestRunEnd(DeviceMetricData, Map)}.
  */
-public class BaseDeviceMetricCollector implements IMetricCollector {
+public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActionReceiver {
 
     public static final String TEST_CASE_INCLUDE_GROUP_OPTION = "test-case-include-group";
     public static final String TEST_CASE_EXCLUDE_GROUP_OPTION = "test-case-exclude-group";
@@ -93,10 +97,15 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     private boolean mSkipTestCase = false;
     /** Whether or not the collector was initialized already or not. */
     private boolean mWasInitDone = false;
+    /** Whether or not a DNAE occurred and we should stop collection. */
+    private boolean mDeviceNoAvailable = false;
+    /** Whether the {@link IDeviceActionReceiver} should be disabled or not. */
+    private boolean mDisableReceiver = true;
 
     @Override
-    public ITestInvocationListener init(
-            IInvocationContext context, ITestInvocationListener listener) {
+    public final ITestInvocationListener init(
+            IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
         mContext = context;
         mForwarder = listener;
         if (mWasInitDone) {
@@ -104,7 +113,31 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
                     String.format("init was called a second time on %s", this));
         }
         mWasInitDone = true;
+        mDeviceNoAvailable = false;
+        // Register this collector for device action events.
+        if (!isDisabledReceiver()) {
+            for (ITestDevice device : getRealDevices()) {
+                device.registerDeviceActionReceiver(this);
+            }
+        }
+        long start = System.currentTimeMillis();
+        try {
+            extraInit(context, listener);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        }
         return this;
+    }
+
+    /**
+     * @param context
+     * @param listener
+     * @throws DeviceNotAvailableException
+     */
+    public void extraInit(IInvocationContext context, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+        // Empty by default
     }
 
     @Override
@@ -156,38 +189,59 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     }
 
     @Override
-    public void onTestRunStart(DeviceMetricData runData) {
-        // Does nothing
-    }
-
-    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure) {
+    public void onTestModuleStarted() throws DeviceNotAvailableException {
         // Does nothing
     }
 
     @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
+    public void onTestModuleEnded() throws DeviceNotAvailableException {
         // Does nothing
     }
 
     @Override
-    public void onTestStart(DeviceMetricData testData) {
+    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    /**
+     * Callback for testRunFailed events
+     *
+     * @param testData
+     * @param failure
+     * @throws DeviceNotAvailableException
+     */
+    public void onTestRunFailed(DeviceMetricData testData, FailureDescription failure)
+            throws DeviceNotAvailableException {
         // Does nothing
     }
 
     @Override
-    public void onTestFail(DeviceMetricData testData, TestDescription test) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
         // Does nothing
     }
 
     @Override
-    public void onTestAssumptionFailure(DeviceMetricData testData, TestDescription test) {
+    public void onTestStart(DeviceMetricData testData) throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void onTestFail(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void onTestAssumptionFailure(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException {
         // Does nothing
     }
 
     @Override
     public void onTestEnd(
-            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics) {
+            DeviceMetricData testData, final Map<String, Metric> currentTestCaseMetrics)
+            throws DeviceNotAvailableException {
         // Does nothing
     }
 
@@ -195,7 +249,8 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     public void onTestEnd(
             DeviceMetricData testData,
             final Map<String, Metric> currentTestCaseMetrics,
-            TestDescription test) {
+            TestDescription test)
+            throws DeviceNotAvailableException {
         // Call the default implementation of onTestEnd if not overridden
         onTestEnd(testData, currentTestCaseMetrics);
     }
@@ -218,6 +273,11 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     }
 
     @Override
+    public void invocationSkipped(SkipReason reason) {
+        mForwarder.invocationSkipped(reason);
+    }
+
+    @Override
     public final void invocationEnded(long elapsedTime) {
         mForwarder.invocationEnded(elapsedTime);
     }
@@ -229,12 +289,43 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testModuleStarted(IInvocationContext moduleContext) {
-        mForwarder.testModuleStarted(moduleContext);
+        long start = System.currentTimeMillis();
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("module_start_" + this.getClass().getSimpleName())) {
+            onTestModuleStarted();
+        } catch (DeviceNotAvailableException dnae) {
+            mDeviceNoAvailable = true;
+            CLog.e(dnae);
+        } catch (Throwable t) {
+            CLog.e(t);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+            mForwarder.testModuleStarted(moduleContext);
+        }
     }
 
     @Override
     public final void testModuleEnded() {
-        mForwarder.testModuleEnded();
+        long start = System.currentTimeMillis();
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("module_end_" + this.getClass().getSimpleName())) {
+            onTestModuleEnded();
+        } catch (DeviceNotAvailableException dnae) {
+            CLog.e(dnae);
+        } catch (Throwable t) {
+            CLog.e(t);
+        } finally {
+            // De-register this collector from device action events
+            if (!isDisabledReceiver()) {
+                for (ITestDevice device : getRealDevices()) {
+                    device.deregisterDeviceActionReceiver(this);
+                }
+            }
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+            mForwarder.testModuleEnded();
+        }
     }
 
     /** Test run callbacks */
@@ -253,9 +344,14 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
             String runName, int testCount, int attemptNumber, long startTime) {
         mRunData = new DeviceMetricData(mContext);
         mRunName = runName;
+        mDeviceNoAvailable = false;
         long start = System.currentTimeMillis();
-        try {
-            onTestRunStart(mRunData);
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("run_start_" + this.getClass().getSimpleName())) {
+            onTestRunStart(mRunData, testCount);
+        } catch (DeviceNotAvailableException e) {
+            mDeviceNoAvailable = true;
+            CLog.e(e);
         } catch (Throwable t) {
             // Prevent exception from messing up the status reporting.
             CLog.e(t);
@@ -268,30 +364,40 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testRunFailed(String errorMessage) {
-        long start = System.currentTimeMillis();
-        try {
-            onTestRunFailed(mRunData, FailureDescription.create(errorMessage));
-        } catch (Throwable t) {
-            // Prevent exception from messing up the status reporting.
-            CLog.e(t);
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        if (!mDeviceNoAvailable) {
+            long start = System.currentTimeMillis();
+            try {
+                onTestRunFailed(mRunData, FailureDescription.create(errorMessage));
+            } catch (DeviceNotAvailableException e) {
+                mDeviceNoAvailable = true;
+                CLog.e(e);
+            } catch (Throwable t) {
+                // Prevent exception from messing up the status reporting.
+                CLog.e(t);
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+            }
         }
         mForwarder.testRunFailed(errorMessage);
     }
 
     @Override
     public final void testRunFailed(FailureDescription failure) {
-        long start = System.currentTimeMillis();
-        try {
-            onTestRunFailed(mRunData, failure);
-        } catch (Throwable t) {
-            // Prevent exception from messing up the status reporting.
-            CLog.e(t);
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        if (!mDeviceNoAvailable) {
+            long start = System.currentTimeMillis();
+            try {
+                onTestRunFailed(mRunData, failure);
+            } catch (DeviceNotAvailableException e) {
+                mDeviceNoAvailable = true;
+                CLog.e(e);
+            } catch (Throwable t) {
+                // Prevent exception from messing up the status reporting.
+                CLog.e(t);
+            } finally {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+            }
         }
         mForwarder.testRunFailed(failure);
     }
@@ -303,16 +409,28 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
-        long start = System.currentTimeMillis();
-        try {
-            onTestRunEnd(mRunData, runMetrics);
-            mRunData.addToMetrics(runMetrics);
-        } catch (Throwable t) {
-            // Prevent exception from messing up the status reporting.
-            CLog.e(t);
-        } finally {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        if (!mDeviceNoAvailable) {
+            long start = System.currentTimeMillis();
+            try (CloseableTraceScope ignored =
+                    new CloseableTraceScope("run_end_" + this.getClass().getSimpleName())) {
+                onTestRunEnd(mRunData, runMetrics);
+                mRunData.addToMetrics(runMetrics);
+            } catch (DeviceNotAvailableException e) {
+                mDeviceNoAvailable = true;
+                CLog.e(e);
+            } catch (Throwable t) {
+                // Prevent exception from messing up the status reporting.
+                CLog.e(t);
+            } finally {
+                // De-register this collector from device action events
+                if (!isDisabledReceiver()) {
+                    for (ITestDevice device : getRealDevices()) {
+                        device.deregisterDeviceActionReceiver(this);
+                    }
+                }
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+            }
         }
         mForwarder.testRunEnded(elapsedTime, runMetrics);
     }
@@ -325,18 +443,23 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testStarted(TestDescription test, long startTime) {
-        mTestData = new DeviceMetricData(mContext);
-        mSkipTestCase = shouldSkip(test);
-        if (!mSkipTestCase) {
-            long start = System.currentTimeMillis();
-            try {
-                onTestStart(mTestData);
-            } catch (Throwable t) {
-                // Prevent exception from messing up the status reporting.
-                CLog.e(t);
-            } finally {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+        if (!mDeviceNoAvailable) {
+            mTestData = new DeviceMetricData(mContext);
+            mSkipTestCase = shouldSkip(test);
+            if (!mSkipTestCase) {
+                long start = System.currentTimeMillis();
+                try {
+                    onTestStart(mTestData);
+                } catch (DeviceNotAvailableException e) {
+                    mDeviceNoAvailable = true;
+                    CLog.e(e);
+                } catch (Throwable t) {
+                    // Prevent exception from messing up the status reporting.
+                    CLog.e(t);
+                } finally {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
+                }
             }
         }
         mForwarder.testStarted(test, startTime);
@@ -344,10 +467,13 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testFailed(TestDescription test, String trace) {
-        if (!mSkipTestCase) {
+        if (!mSkipTestCase && !mDeviceNoAvailable) {
             long start = System.currentTimeMillis();
             try {
                 onTestFail(mTestData, test);
+            } catch (DeviceNotAvailableException e) {
+                mDeviceNoAvailable = true;
+                CLog.e(e);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
@@ -361,13 +487,16 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testFailed(TestDescription test, FailureDescription failure) {
-        if (!mSkipTestCase) {
+        if (!mSkipTestCase && !mDeviceNoAvailable) {
             // Don't collect on not_executed test case
             if (failure.getFailureStatus() == null
                     || !FailureStatus.NOT_EXECUTED.equals(failure.getFailureStatus())) {
                 long start = System.currentTimeMillis();
                 try {
                     onTestFail(mTestData, test);
+                } catch (DeviceNotAvailableException e) {
+                    mDeviceNoAvailable = true;
+                    CLog.e(e);
                 } catch (Throwable t) {
                     // Prevent exception from messing up the status reporting.
                     CLog.e(t);
@@ -388,11 +517,14 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     @Override
     public final void testEnded(
             TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
-        if (!mSkipTestCase) {
+        if (!mSkipTestCase && !mDeviceNoAvailable) {
             long start = System.currentTimeMillis();
             try {
                 onTestEnd(mTestData, testMetrics, test);
                 mTestData.addToMetrics(testMetrics);
+            } catch (DeviceNotAvailableException e) {
+                mDeviceNoAvailable = true;
+                CLog.e(e);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
@@ -407,11 +539,19 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
     }
 
     @Override
+    public final void testSkipped(TestDescription test, SkipReason reason) {
+        mForwarder.testSkipped(test, reason);
+    }
+
+    @Override
     public final void testAssumptionFailure(TestDescription test, String trace) {
-        if (!mSkipTestCase) {
+        if (!mSkipTestCase && !mDeviceNoAvailable) {
             long start = System.currentTimeMillis();
             try {
                 onTestAssumptionFailure(mTestData, test);
+            } catch (DeviceNotAvailableException e) {
+                mDeviceNoAvailable = true;
+                CLog.e(e);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
@@ -425,10 +565,13 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
 
     @Override
     public final void testAssumptionFailure(TestDescription test, FailureDescription failure) {
-        if (!mSkipTestCase) {
+        if (!mSkipTestCase && !mDeviceNoAvailable) {
             long start = System.currentTimeMillis();
             try {
                 onTestAssumptionFailure(mTestData, test);
+            } catch (DeviceNotAvailableException e) {
+                mDeviceNoAvailable = true;
+                CLog.e(e);
             } catch (Throwable t) {
                 // Prevent exception from messing up the status reporting.
                 CLog.e(t);
@@ -495,6 +638,12 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
      */
     public String getRunName() {
         return mRunName;
+    }
+
+    public String getModuleName() {
+        return mContext.getAttributes().get(ModuleDefinition.MODULE_NAME) != null
+                ? mContext.getAttributes().get(ModuleDefinition.MODULE_NAME).get(0)
+                : null;
     }
 
     /**
@@ -626,4 +775,23 @@ public class BaseDeviceMetricCollector implements IMetricCollector {
         return src;
     }
 
+    @Override
+    public void rebootStarted(ITestDevice device) throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        // Does nothing
+    }
+
+    @Override
+    public void setDisableReceiver(boolean isDisabled) {
+        mDisableReceiver = isDisabled;
+    }
+
+    @Override
+    public boolean isDisabledReceiver() {
+        return mDisableReceiver;
+    }
 }

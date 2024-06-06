@@ -106,12 +106,25 @@ public interface ICommandScheduler {
      *
      * @param listener the {@link ICommandScheduler.IScheduledInvocationListener} to be informed
      * @param args the command arguments
-     *
+     * @return The invocation id of the scheduled command.
      * @throws ConfigurationException if command was invalid
      * @throws NoDeviceException if there is no device to use
      */
-    public void execCommand(IScheduledInvocationListener listener, String[] args)
+    public long execCommand(IScheduledInvocationListener listener, String[] args)
             throws ConfigurationException, NoDeviceException;
+
+    /**
+     * Directly execute command on already allocated devices.
+     *
+     * @param listener the {@link ICommandScheduler.IScheduledInvocationListener} to be informed
+     * @param devices the {@link List<ITestDevice>} to use
+     * @param args the command arguments
+     * @return The invocation id of the scheduled command.
+     * @throws ConfigurationException if command was invalid
+     */
+    public long execCommand(
+            IScheduledInvocationListener listener, List<ITestDevice> devices, String[] args)
+            throws ConfigurationException;
 
     /**
      * Directly execute command on already allocated device.
@@ -119,11 +132,12 @@ public interface ICommandScheduler {
      * @param listener the {@link ICommandScheduler.IScheduledInvocationListener} to be informed
      * @param device the {@link ITestDevice} to use
      * @param args the command arguments
-     *
+     * @return The invocation id of the scheduled command.
      * @throws ConfigurationException if command was invalid
      */
-    public void execCommand(IScheduledInvocationListener listener, ITestDevice device,
-            String[] args) throws ConfigurationException;
+    public long execCommand(
+            IScheduledInvocationListener listener, ITestDevice device, String[] args)
+            throws ConfigurationException;
 
     /**
      * Directly allocates a device and executes a command without adding it to the command queue
@@ -135,7 +149,7 @@ public interface ICommandScheduler {
      * @throws ConfigurationException if command was invalid
      * @throws NoDeviceException if there is no device to use
      */
-    public void execCommand(
+    public long execCommand(
             IInvocationContext context, IScheduledInvocationListener listener, String[] args)
             throws ConfigurationException, NoDeviceException;
 
@@ -146,14 +160,32 @@ public interface ICommandScheduler {
 
     /**
      * Attempt to gracefully shutdown the command scheduler.
-     * <p/>
-     * Clears commands waiting to be tested, and requests that all invocations in progress
-     * shut down gracefully.
-     * <p/>
-     * After shutdown is called, the scheduler main loop will wait for all invocations in progress
-     * to complete before exiting completely.
+     *
+     * <p>Clears commands waiting to be tested, and requests that all invocations in progress shut
+     * down gracefully.
+     *
+     * <p>After shutdown is called, the scheduler main loop will wait for all invocations in
+     * progress to complete before exiting completely.
      */
-    public void shutdown();
+    default void shutdown() {
+        shutdown(false);
+    }
+
+    /**
+     * Stops scheduling and accepting new tests but does not stop Tradefed. This is meant to enable
+     * a two steps shutdown where first we drain all the running tests, then terminate Tradefed
+     * process.
+     */
+    default void stopScheduling() {
+        // Empty
+    }
+
+    /**
+     * Attempt to gracefully shutdown the command scheduler.
+     *
+     * @param notifyStop if true, notifies invocations of TF shutdown.
+     */
+    public void shutdown(boolean notifyStop);
 
     /**
      * Similar to {@link #shutdown()}, but will instead wait for all commands to be executed
@@ -305,4 +337,7 @@ public interface ICommandScheduler {
 
     /** Set the client to report harness data */
     public void setClearcutClient(ClearcutClient client);
+
+    /** Returns true if the device is used by an active invocation thread. */
+    public boolean isDeviceInInvocationThread(ITestDevice device);
 }

@@ -21,12 +21,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <uses-sdk android:minSdkVersion="3"
-              android:targetSdkVersion="7" />
+    <uses-sdk android:minSdkVersion="19"
+              android:targetSdkVersion="31" />
 
-    <application>
+    <application android:usesCleartextTraffic="true">
         <uses-library android:name="android.test.runner" />
-        <service android:name=".WifiMonitorService">
+        <service android:name=".WifiMonitorService"
+                 android:exported="false">
             <intent-filter>
                 <action android:name="com.android.tradefed.utils.wifi.RECONNECT" />
             </intent-filter>

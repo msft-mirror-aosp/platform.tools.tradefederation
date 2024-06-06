@@ -30,10 +30,11 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.util.Sl4aBluetoothUtil;
-import com.android.tradefed.util.Sl4aBluetoothUtil.BluetoothProfile;
 import com.android.tradefed.util.Sl4aBluetoothUtil.BluetoothAccessLevel;
 import com.android.tradefed.util.Sl4aBluetoothUtil.BluetoothPriorityLevel;
+import com.android.tradefed.util.Sl4aBluetoothUtil.BluetoothProfile;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -60,6 +61,7 @@ public class PairingMultiTargetPreparerTest {
     @Mock private IBuildInfo mSecondaryBuild;
     @Mock private Sl4aBluetoothUtil mUtil;
     private PairingMultiTargetPreparer mPreparer;
+    private TestInformation mTestInfo;
 
     @Before
     public void setUp() throws Exception {
@@ -70,6 +72,7 @@ public class PairingMultiTargetPreparerTest {
         deviceBuildMap.put(mPrimary, mPrimaryBuild);
         deviceBuildMap.put(mSecondary, mSecondaryBuild);
         when(mContext.getDeviceBuildMap()).thenReturn(deviceBuildMap);
+        mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
 
         when(mUtil.enable(any(ITestDevice.class))).thenReturn(true);
         when(mUtil.pair(any(ITestDevice.class), any(ITestDevice.class))).thenReturn(true);
@@ -100,7 +103,7 @@ public class PairingMultiTargetPreparerTest {
         setBluetoothProfiles();
         when(mUtil.connect(any(ITestDevice.class), any(ITestDevice.class), anySet()))
                 .thenReturn(true);
-        mPreparer.setUp(mContext);
+        mPreparer.setUp(mTestInfo);
         verify(mUtil).enable(mPrimary);
         verify(mUtil).enable(mSecondary);
         verify(mUtil).setBtPairTimeout(Duration.ofMinutes(2).plusSeconds(30));
@@ -118,7 +121,7 @@ public class PairingMultiTargetPreparerTest {
         OptionSetter setter = new OptionSetter(mPreparer);
         setter.setOptionValue("with-connection", "false");
         setBluetoothProfiles();
-        mPreparer.setUp(mContext);
+        mPreparer.setUp(mTestInfo);
         verify(mUtil).enable(mPrimary);
         verify(mUtil).enable(mSecondary);
         verify(mUtil).pair(mPrimary, mSecondary);
@@ -128,7 +131,7 @@ public class PairingMultiTargetPreparerTest {
 
     @Test
     public void testPairWithEmptyProfiles() throws Exception {
-        mPreparer.setUp(mContext);
+        mPreparer.setUp(mTestInfo);
         verify(mUtil).enable(mPrimary);
         verify(mUtil).enable(mSecondary);
         verify(mUtil).pair(mPrimary, mSecondary);

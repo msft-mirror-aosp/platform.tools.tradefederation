@@ -31,9 +31,13 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.CollectingOutputReceiver;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IDevice.DeviceState;
+import com.android.ddmlib.IShellOutputReceiver;
+import com.android.ddmlib.ShellCommandUnresponsiveException;
+import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -46,6 +50,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
@@ -192,7 +197,7 @@ public class DeviceStateMonitorTest {
                         return new CollectingOutputReceiver() {
                             @Override
                             public String getOutput() {
-                                return "/system/bin/adb";
+                                return "uid=0(root)";
                             }
                         };
                     }
@@ -226,7 +231,7 @@ public class DeviceStateMonitorTest {
                             @Override
                             public String getOutput() {
                                 if (mAtomicBoolean.get()) {
-                                  return "/system/bin/adb";
+                                    return "uid=0(root)";
                                 }
                                 return "not found";
                             }
@@ -293,10 +298,44 @@ public class DeviceStateMonitorTest {
         IDevice mFakeDevice =
                 new StubDevice("serial") {
                     @Override
-                    public ListenableFuture<String> getSystemProperty(String name) {
-                        SettableFuture<String> f = SettableFuture.create();
-                        f.set("1");
-                        return f;
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputResponse,
+                            TimeUnit maxTimeUnits)
+                            throws TimeoutException, AdbCommandRejectedException,
+                                    ShellCommandUnresponsiveException, IOException {
+                        String res = "1\n";
+                        receiver.addOutput(res.getBytes(), 0, res.length());
+                    }
+                };
+        mMonitor = new DeviceStateMonitor(mMockMgr, mFakeDevice, true);
+        boolean res = mMonitor.waitForBootComplete(WAIT_TIMEOUT_NOT_REACHED_MS);
+        assertTrue(res);
+    }
+
+    /**
+     * Test {@link DeviceStateMonitor#waitForBootComplete(long)} when the shell command returns
+     * warnings. This happens on some specialized devices such as Microdroid.
+     */
+    @Test
+    public void testWaitForBootComplete_warnings() throws Exception {
+        IDevice mFakeDevice =
+                new StubDevice("serial") {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputResponse,
+                            TimeUnit maxTimeUnits)
+                            throws TimeoutException, AdbCommandRejectedException,
+                                    ShellCommandUnresponsiveException, IOException {
+                        String res =
+                                "warning: Not a fatal error #1\n"
+                                        + "warning: Not a fatal error #2\n"
+                                        + "warning: Not a fatal error #3\n"
+                                        + "1\n";
+                        receiver.addOutput(res.getBytes(), 0, res.length());
                     }
                 };
         mMonitor = new DeviceStateMonitor(mMockMgr, mFakeDevice, true);
@@ -311,15 +350,22 @@ public class DeviceStateMonitorTest {
     public void testWaitForBoot_becomeComplete() throws Exception {
         IDevice mFakeDevice =
                 new StubDevice("serial") {
+
                     @Override
-                    public ListenableFuture<String> getSystemProperty(String name) {
-                        SettableFuture<String> f = SettableFuture.create();
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputResponse,
+                            TimeUnit maxTimeUnits)
+                            throws TimeoutException, AdbCommandRejectedException,
+                                    ShellCommandUnresponsiveException, IOException {
+                        String res = "";
                         if (mAtomicBoolean.get()) {
-                            f.set("1");
+                            res = "1\n";
                         } else {
-                            f.set("0");
+                            res = "0\n";
                         }
-                        return f;
+                        receiver.addOutput(res.getBytes(), 0, res.length());
                     }
                 };
         mMonitor =
