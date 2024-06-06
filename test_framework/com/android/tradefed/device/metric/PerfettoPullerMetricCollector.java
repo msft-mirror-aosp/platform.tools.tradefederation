@@ -354,7 +354,7 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
 
         // Use absolute path to the trace file if it is available otherwise
         // resolve the trace processor name from the test or module artifacts.
-        if (mTraceProcessorBinary == null) {
+        if (mTraceProcessorBinary == null || !mTraceProcessorBinary.exists()) {
             mTraceProcessorBinary = getFileFromTestArtifacts(mTraceProcessorName);
         }
 
@@ -445,49 +445,44 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
             return super.retrieveFile(device, remoteFilePath, userId);
         }
         File perfettoCompressedFile = null;
-        try {
-            String filePathInDevice = remoteFilePath;
-            CLog.i("Retrieving the compressed perfetto trace content from device.");
-            LargeOutputReceiver compressedOutputReceiver = new LargeOutputReceiver(
-                    "perfetto_compressed_temp",
-                    device.getSerialNumber(), mMaxCompressedFileSize);
-            device.executeShellCommand(
-                    String.format("gzip -c %s", filePathInDevice),
-                    compressedOutputReceiver,
-                    mCompressedTimeoutMs, mCompressResponseTimeoutMs, TimeUnit.MILLISECONDS, 1);
-            compressedOutputReceiver.flush();
-            compressedOutputReceiver.cancel();
+        String filePathInDevice = remoteFilePath;
+        CLog.i("Retrieving the compressed perfetto trace content from device.");
+        LargeOutputReceiver compressedOutputReceiver =
+                new LargeOutputReceiver(
+                        "perfetto_compressed_temp",
+                        device.getSerialNumber(),
+                        mMaxCompressedFileSize);
+        device.executeShellCommand(
+                String.format("gzip -c %s", filePathInDevice),
+                compressedOutputReceiver,
+                mCompressedTimeoutMs,
+                mCompressResponseTimeoutMs,
+                TimeUnit.MILLISECONDS,
+                1);
+        compressedOutputReceiver.flush();
+        compressedOutputReceiver.cancel();
 
-            // Copy to temp file which will be used for decompression, perfetto
-            // metrics extraction and uploading the file later.
-            try (InputStreamSource largeStreamSrc = compressedOutputReceiver.getData();
-                    InputStream inputStream = largeStreamSrc.createInputStream()) {
-                perfettoCompressedFile = FileUtil.createTempFile(
-                        "perfetto_compressed", ".gz");
-                FileOutputStream outStream = new FileOutputStream(
-                        perfettoCompressedFile);
-                byte[] buffer = new byte[4096];
-                int bytesRead = -1;
-                while ((bytesRead = inputStream.read(buffer)) > -1) {
-                    outStream.write(buffer, 0, bytesRead);
-                }
-                StreamUtil.close(outStream);
-                CLog.i("Successfully copied the compressed content from device to"
-                        + " host.");
-            } catch (IOException e) {
-                if (perfettoCompressedFile != null) {
-                    perfettoCompressedFile.delete();
-                }
-                CLog.e("Failed to copy compressed perfetto to temporary file.");
-                CLog.e(e);
-            } finally {
-                compressedOutputReceiver.delete();
+        // Copy to temp file which will be used for decompression, perfetto
+        // metrics extraction and uploading the file later.
+        try (InputStreamSource largeStreamSrc = compressedOutputReceiver.getData();
+                InputStream inputStream = largeStreamSrc.createInputStream()) {
+            perfettoCompressedFile = FileUtil.createTempFile("perfetto_compressed", ".gz");
+            FileOutputStream outStream = new FileOutputStream(perfettoCompressedFile);
+            byte[] buffer = new byte[4096];
+            int bytesRead = -1;
+            while ((bytesRead = inputStream.read(buffer)) > -1) {
+                outStream.write(buffer, 0, bytesRead);
             }
-        } catch (DeviceNotAvailableException e) {
-            CLog.e(
-                    "Exception when retrieveing compressed perfetto trace file '%s' "
-                            + "from %s", remoteFilePath, device.getSerialNumber());
+            StreamUtil.close(outStream);
+            CLog.i("Successfully copied the compressed content from device to" + " host.");
+        } catch (IOException e) {
+            if (perfettoCompressedFile != null) {
+                perfettoCompressedFile.delete();
+            }
+            CLog.e("Failed to copy compressed perfetto to temporary file.");
             CLog.e(e);
+        } finally {
+            compressedOutputReceiver.delete();
         }
         return perfettoCompressedFile;
     }

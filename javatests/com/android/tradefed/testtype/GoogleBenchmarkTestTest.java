@@ -19,14 +19,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
-import com.android.tradefed.device.CollectingOutputReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.MockitoFileUtil;
@@ -34,6 +35,8 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.StringEscapeUtils;
 
 import org.junit.Before;
@@ -41,14 +44,17 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.AdditionalMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -58,7 +64,6 @@ import java.util.concurrent.TimeUnit;
 public class GoogleBenchmarkTestTest {
 
     @Mock ITestInvocationListener mMockInvocationListener;
-    private CollectingOutputReceiver mMockReceiver = null;
     @Mock ITestDevice mMockITestDevice;
     private GoogleBenchmarkTest mGoogleBenchmarkTest;
     private TestInformation mTestInfo;
@@ -70,23 +75,17 @@ public class GoogleBenchmarkTestTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
 
-        mMockReceiver = new CollectingOutputReceiver();
-
         mDummyTest = new TestDescription("Class", "method");
         when(mMockITestDevice.getSerialNumber()).thenReturn("serial");
         mGoogleBenchmarkTest =
                 new GoogleBenchmarkTest() {
-                    @Override
-                    CollectingOutputReceiver createOutputCollector() {
-                        return mMockReceiver;
-                    }
 
                     @Override
                     GoogleBenchmarkResultParser createResultParser(
                             String runName, ITestInvocationListener listener) {
                         return new GoogleBenchmarkResultParser(runName, listener) {
                             @Override
-                            public Map<String, String> parse(CollectingOutputReceiver output) {
+                            public Map<String, String> parse(CommandResult cmd_result) {
                                 listener.testStarted(mDummyTest);
                                 listener.testEnded(mDummyTest, Collections.emptyMap());
                                 return Collections.emptyMap();
@@ -113,34 +112,38 @@ public class GoogleBenchmarkTestTest {
         when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
         when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
 
-        when(mMockITestDevice.executeShellCommand(
-                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .thenReturn("method1\nmethod2\nmethod3");
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("method1\nmethod2\nmethod3"));
 
-        when(mMockITestDevice.executeShellCommand(
-                        String.format("%s/test2 --benchmark_list_tests=true", nativeTestPath)))
-                .thenReturn("method1\nmethod2\n");
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(String.format("%s/test2 --benchmark_list_tests=true", nativeTestPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("method1\nmethod2\n"));
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
 
-        verify(mMockITestDevice)
-                .executeShellCommand(
+        verify(mMockITestDevice, times(2))
+                .executeShellV2Command(
                         Mockito.contains(test1),
-                        Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
-        verify(mMockITestDevice)
-                .executeShellCommand(
+        verify(mMockITestDevice, times(2))
+                .executeShellV2Command(
                         Mockito.contains(test2),
-                        Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
         verify(mMockInvocationListener).testRunStarted(test1, 3);
         verify(mMockInvocationListener, times(2)).testStarted(mDummyTest);
         verify(mMockInvocationListener, times(2))
-                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+                .testEnded(eq(mDummyTest), Mockito.<HashMap<String, String>>any());
         verify(mMockInvocationListener).testRunStarted(test2, 2);
         verify(mMockITestDevice, times(2)).executeShellCommand(Mockito.contains("chmod"));
         verify(mMockInvocationListener, times(2))
@@ -176,11 +179,11 @@ public class GoogleBenchmarkTestTest {
 
     /** Test the run method for a couple tests with a module name */
     @Test
-    public void testRun_withModuleName() throws DeviceNotAvailableException {
+    public void testRun_withSingleModuleName() throws DeviceNotAvailableException {
         final String moduleName = "module";
         final String nativeTestPath =
                 String.format("%s/%s", GoogleBenchmarkTest.DEFAULT_TEST_PATH, moduleName);
-        mGoogleBenchmarkTest.setModuleName(moduleName);
+        mGoogleBenchmarkTest.addModuleName(moduleName);
         final String test1 = "test1";
         final String test2 = "test2";
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
@@ -191,37 +194,101 @@ public class GoogleBenchmarkTestTest {
         String[] files = new String[] {"test1", "test2"};
         when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
         when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
-        when(mMockITestDevice.executeShellCommand(
-                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .thenReturn("\nmethod1\nmethod2\nmethod3\n\n");
-        when(mMockITestDevice.executeShellCommand(
-                        String.format("%s/test2 --benchmark_list_tests=true", nativeTestPath)))
-                .thenReturn("method1\nmethod2\n");
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("\nmethod1\nmethod2\nmethod3\n\n"));
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(String.format("%s/test2 --benchmark_list_tests=true", nativeTestPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("method1\nmethod2\n"));
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
 
         verify(mMockInvocationListener).testRunStarted(test1, 3);
         verify(mMockInvocationListener, times(2)).testStarted(mDummyTest);
         verify(mMockInvocationListener, times(2))
-                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+                .testEnded(eq(mDummyTest), Mockito.<HashMap<String, String>>any());
         verify(mMockInvocationListener).testRunStarted(test2, 2);
-        verify(mMockITestDevice)
-                .executeShellCommand(
+        verify(mMockITestDevice, times(2))
+                .executeShellV2Command(
                         Mockito.contains(test1),
-                        Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
-        verify(mMockITestDevice)
-                .executeShellCommand(
+        verify(mMockITestDevice, times(2))
+                .executeShellV2Command(
                         Mockito.contains(test2),
-                        Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
         verify(mMockITestDevice, times(2)).executeShellCommand(Mockito.contains("chmod"));
         verify(mMockInvocationListener, times(2))
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
+    /** Test the run method for a couple tests with multiple module names */
+    @Test
+    public void testRun_withMultipleModuleNames() throws DeviceNotAvailableException {
+        final List<String> moduleNames =
+                new ArrayList<>(Arrays.asList("module1", "module2", "module3"));
+        List<String> nativeTestPaths = new ArrayList<>();
+        for (String moduleName : moduleNames) {
+            nativeTestPaths.add(
+                    String.format("%s/%s", GoogleBenchmarkTest.DEFAULT_TEST_PATH, moduleName));
+            mGoogleBenchmarkTest.addModuleName(moduleName);
+        }
+        final String test1 = "test1";
+        final String test2 = "test2";
+
+        for (String nativeTestPath : nativeTestPaths) {
+            MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);
+            when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+            when(mMockITestDevice.isDirectory(nativeTestPath)).thenReturn(true);
+            when(mMockITestDevice.isDirectory(nativeTestPath + "/test1")).thenReturn(false);
+            when(mMockITestDevice.isDirectory(nativeTestPath + "/test2")).thenReturn(false);
+            String[] files = new String[] {"test1", "test2"};
+            when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
+            when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
+            when(mMockITestDevice.executeShellV2Command(
+                            eq(
+                                    String.format(
+                                            "%s/test1 --benchmark_list_tests=true",
+                                            nativeTestPath)),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt()))
+                    .thenReturn(getCommandResult("\nmethod1\nmethod2\nmethod3\n\n"));
+            when(mMockITestDevice.executeShellV2Command(
+                            eq(
+                                    String.format(
+                                            "%s/test2 --benchmark_list_tests=true",
+                                            nativeTestPath)),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt()))
+                    .thenReturn(getCommandResult("method1\nmethod2\n"));
+        }
+
+        mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
+
+        InOrder inOrderVerifier = inOrder(mMockITestDevice);
+
+        for (String moduleName : moduleNames) {
+            String patten =
+                    ".*" + moduleName + ".*" + mGoogleBenchmarkTest.GBENCHMARK_JSON_OUTPUT_FORMAT;
+            inOrderVerifier
+                    .verify(mMockITestDevice)
+                    .executeShellV2Command(
+                            Mockito.matches(patten),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt());
+        }
     }
 
     /** Test the run method for a couple tests with a module name */
@@ -238,16 +305,18 @@ public class GoogleBenchmarkTestTest {
         String[] files = new String[] {"test1"};
         when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
         when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
-        when(mMockITestDevice.executeShellCommand(
-                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .thenReturn("method1\nmethod2\nmethod3");
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("method1\nmethod2\nmethod3"));
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
 
-        verify(mMockITestDevice)
-                .executeShellCommand(
+        verify(mMockITestDevice, times(2))
+                .executeShellV2Command(
                         Mockito.contains(test1),
-                        Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
@@ -256,7 +325,7 @@ public class GoogleBenchmarkTestTest {
         verify(mMockInvocationListener).testRunStarted(reportName, 3);
         verify(mMockInvocationListener).testStarted(mDummyTest);
         verify(mMockInvocationListener)
-                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+                .testEnded(eq(mDummyTest), Mockito.<HashMap<String, String>>any());
         verify(mMockInvocationListener, times(1))
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
@@ -275,15 +344,17 @@ public class GoogleBenchmarkTestTest {
         when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
         doThrow(new DeviceNotAvailableException("dnae", "serial"))
                 .when(mMockITestDevice)
-                .executeShellCommand(
+                .executeShellV2Command(
                         Mockito.contains(test1),
-                        Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
-        when(mMockITestDevice.executeShellCommand(
-                        String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)))
-                .thenReturn("method1\nmethod2\nmethod3");
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(String.format("%s/test1 --benchmark_list_tests=true", nativeTestPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("method1\nmethod2\nmethod3"));
 
         try {
             mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
@@ -400,24 +471,32 @@ public class GoogleBenchmarkTestTest {
             String incFilterFlag =
                     mGoogleBenchmarkTest.getFilterFlagForFilters(
                             mGoogleBenchmarkTest.getIncludeFilters());
-            when(mMockITestDevice.executeShellCommand(
-                            Mockito.contains(StringEscapeUtils.escapeShell(incFilterFlag))))
-                    .thenReturn(incTests);
+            when(mMockITestDevice.executeShellV2Command(
+                            Mockito.contains(StringEscapeUtils.escapeShell(incFilterFlag)),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt()))
+                    .thenReturn(getCommandResult(incTests));
         } else {
-            when(mMockITestDevice.executeShellCommand(
+            when(mMockITestDevice.executeShellV2Command(
                             AdditionalMatchers.not(
-                                    Mockito.contains(
-                                            GoogleBenchmarkTest.GBENCHMARK_FILTER_OPTION))))
-                    .thenReturn(incTests);
+                                    Mockito.contains(GoogleBenchmarkTest.GBENCHMARK_FILTER_OPTION)),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt()))
+                    .thenReturn(getCommandResult(incTests));
         }
         if (mGoogleBenchmarkTest.getExcludeFilters().size() > 0) {
             // List tests to exclude
             String excFilterFlag =
                     mGoogleBenchmarkTest.getFilterFlagForFilters(
                             mGoogleBenchmarkTest.getExcludeFilters());
-            when(mMockITestDevice.executeShellCommand(
-                            Mockito.contains(StringEscapeUtils.escapeShell(excFilterFlag))))
-                    .thenReturn(excTests);
+            when(mMockITestDevice.executeShellV2Command(
+                            Mockito.contains(StringEscapeUtils.escapeShell(excFilterFlag)),
+                            Mockito.anyLong(),
+                            (TimeUnit) Mockito.any(),
+                            Mockito.anyInt()))
+                    .thenReturn(getCommandResult(excTests));
         }
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
@@ -425,16 +504,15 @@ public class GoogleBenchmarkTestTest {
             // Running filtered tests
             String testFilterFlag = mGoogleBenchmarkTest.getFilterFlagForTests(filteredTests);
             verify(mMockITestDevice)
-                    .executeShellCommand(
+                    .executeShellV2Command(
                             Mockito.contains(StringEscapeUtils.escapeShell(testFilterFlag)),
-                            Mockito.same(mMockReceiver),
                             Mockito.anyLong(),
                             (TimeUnit) Mockito.any(),
                             Mockito.anyInt());
             verify(mMockInvocationListener).testRunStarted("test1", filteredTests.size());
             verify(mMockInvocationListener).testStarted(mDummyTest);
             verify(mMockInvocationListener)
-                    .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+                    .testEnded(eq(mDummyTest), Mockito.<HashMap<String, String>>any());
             // Running filtered tests
             verify(mMockInvocationListener, times(1))
                     .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
@@ -519,21 +597,23 @@ public class GoogleBenchmarkTestTest {
         String[] files = new String[] {testName};
         when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
         // List tests
-        when(mMockITestDevice.pushString(Mockito.<String>any(), Mockito.eq(deviceScriptPath)))
+        when(mMockITestDevice.pushString(Mockito.<String>any(), eq(deviceScriptPath)))
                 .thenReturn(Boolean.TRUE);
-        when(mMockITestDevice.executeShellCommand(
-                        Mockito.eq(String.format("sh %s", deviceScriptPath))))
-                .thenReturn("test");
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(String.format("sh %s", deviceScriptPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("test"));
         // Run tests
-        when(mMockITestDevice.pushString(Mockito.<String>any(), Mockito.eq(deviceScriptPath)))
+        when(mMockITestDevice.pushString(Mockito.<String>any(), eq(deviceScriptPath)))
                 .thenReturn(Boolean.TRUE);
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
 
-        verify(mMockITestDevice)
-                .executeShellCommand(
-                        Mockito.eq(String.format("sh %s", deviceScriptPath)),
-                        Mockito.same(mMockReceiver),
+        verify(mMockITestDevice, times(2))
+                .executeShellV2Command(
+                        eq(String.format("sh %s", deviceScriptPath)),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
@@ -541,7 +621,7 @@ public class GoogleBenchmarkTestTest {
         verify(mMockInvocationListener).testRunStarted(testName, 1);
         verify(mMockInvocationListener).testStarted(mDummyTest);
         verify(mMockInvocationListener)
-                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+                .testEnded(eq(mDummyTest), Mockito.<HashMap<String, String>>any());
         verify(mMockInvocationListener, times(1))
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
@@ -560,29 +640,40 @@ public class GoogleBenchmarkTestTest {
         String[] files = new String[] {"test1"};
         when(mMockITestDevice.getChildren(nativeTestPath)).thenReturn(files);
         when(mMockITestDevice.executeShellCommand(Mockito.contains("chmod"))).thenReturn("");
-        when(mMockITestDevice.executeShellCommand(
-                        String.format(
-                                "LD_LIBRARY_PATH=my/ld/path %s/test1"
-                                        + " --benchmark_list_tests=true",
-                                nativeTestPath)))
-                .thenReturn("method1\nmethod2\nmethod3");
+        when(mMockITestDevice.executeShellV2Command(
+                        eq(
+                                String.format(
+                                        "LD_LIBRARY_PATH=my/ld/path %s/test1"
+                                                + " --benchmark_list_tests=true",
+                                        nativeTestPath)),
+                        Mockito.anyLong(),
+                        (TimeUnit) Mockito.any(),
+                        Mockito.anyInt()))
+                .thenReturn(getCommandResult("method1\nmethod2\nmethod3"));
 
         mGoogleBenchmarkTest.run(mTestInfo, mMockInvocationListener);
 
-        verify(mMockITestDevice)
-                .executeShellCommand(
+        verify(mMockITestDevice, times(2))
+                .executeShellV2Command(
                         Mockito.contains(test1),
-                        Mockito.same(mMockReceiver),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any(),
                         Mockito.anyInt());
         verify(mMockInvocationListener).testRunStarted(test1, 3);
         verify(mMockInvocationListener).testStarted(mDummyTest);
         verify(mMockInvocationListener)
-                .testEnded(Mockito.eq(mDummyTest), Mockito.<HashMap<String, String>>any());
+                .testEnded(eq(mDummyTest), Mockito.<HashMap<String, String>>any());
 
         verify(mMockITestDevice, times(1)).executeShellCommand(Mockito.contains("chmod"));
         verify(mMockInvocationListener, times(1))
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
+    private static CommandResult getCommandResult(String output) {
+        CommandResult result = new CommandResult();
+        result.setStatus(CommandStatus.SUCCESS);
+        result.setStdout(output);
+        result.setExitCode(0);
+        return result;
     }
 }

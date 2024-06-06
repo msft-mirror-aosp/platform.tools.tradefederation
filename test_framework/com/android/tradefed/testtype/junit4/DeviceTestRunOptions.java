@@ -35,7 +35,8 @@ public class DeviceTestRunOptions {
     private String[] mInstallArgs; // optional
     private Integer mUserId; // optional
     private Long mTestTimeoutMs = BaseHostJUnit4Test.DEFAULT_TEST_TIMEOUT_MS; // optional
-    private Long mMaxTimeToOutputMs; // optional
+    private Long mMaxTimeToOutputMs =
+            BaseHostJUnit4Test.DEFAULT_MAX_TIMEOUT_TO_OUTPUT_MS; // optional
     private Long mMaxInstrumentationTimeoutMs; // optional
     private boolean mCheckResults = true; // optional
     private boolean mDisableHiddenApiCheck = false; // optional

@@ -18,6 +18,7 @@ package com.android.tradefed.testtype.binary;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -36,6 +37,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
@@ -102,15 +104,16 @@ public class ExecutableHostTestTest {
         mTestInfo.getContext().addDeviceBuildInfo("device", new BuildInfo());
         mExecutableTest.run(mTestInfo, mMockListener);
 
-        verify(mMockListener, Mockito.times(1)).testRunStarted(eq("test"), eq(0));
+        verify(mMockListener, Mockito.times(1)).testRunStarted(eq("test"), eq(1));
         FailureDescription failure =
                 FailureDescription.create(
                                 String.format(ExecutableBaseTest.NO_BINARY_ERROR, path),
                                 FailureStatus.TEST_FAILURE)
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-        verify(mMockListener, Mockito.times(1)).testRunFailed(failure);
         verify(mMockListener, Mockito.times(1))
-                .testRunEnded(eq(0L), Mockito.<HashMap<String, Metric>>any());
+                .testFailed(eq(new TestDescription("test", "test")), eq(failure));
+        verify(mMockListener, Mockito.times(1))
+                .testRunEnded(anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -273,7 +276,7 @@ public class ExecutableHostTestTest {
 
             mExecutableTest.run(mTestInfo, mMockListener);
 
-            verify(mMockListener, Mockito.times(1)).testRunStarted(eq(tmpBinary.getName()), eq(0));
+            verify(mMockListener, Mockito.times(1)).testRunStarted(eq(tmpBinary.getName()), eq(1));
             FailureDescription failure =
                     FailureDescription.create(
                                     String.format(
@@ -281,7 +284,7 @@ public class ExecutableHostTestTest {
                                             tmpBinary.getName()),
                                     FailureStatus.TEST_FAILURE)
                             .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-            verify(mMockListener, Mockito.times(1)).testRunFailed(eq(failure));
+            verify(mMockListener, Mockito.times(1)).testFailed(any(), eq(failure));
             verify(mMockListener, Mockito.times(1))
                     .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         } finally {

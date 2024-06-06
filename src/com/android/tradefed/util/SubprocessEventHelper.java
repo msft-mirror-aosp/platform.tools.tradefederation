@@ -23,6 +23,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 
 import com.google.common.base.Strings;
@@ -65,6 +66,10 @@ public class SubprocessEventHelper {
 
     private static final String MODULE_CONTEXT_KEY = "moduleContextFileName";
     private static final String MODULE_NAME = "moduleName";
+
+    // Keys for skip reason
+    private static final String SKIP_REASON_MESSAGE = "skipMessage";
+    private static final String SKIP_REASON_TRIGGER = "trigger";
 
     // keys for Error Classification
     private static final String FAILURE_STATUS_KEY = "failure_status";
@@ -387,6 +392,36 @@ public class SubprocessEventHelper {
                 CLog.e(e);
             }
             return json;
+        }
+    }
+
+    public static class SkippedTestEventInfo extends BaseTestEventInfo {
+        public SkipReason skipReason = null;
+
+        public SkippedTestEventInfo(String className, String testName, SkipReason reason) {
+            super(className, testName);
+            skipReason = reason;
+        }
+
+        public SkippedTestEventInfo(JSONObject jsonObject) throws JSONException {
+            super(jsonObject);
+            skipReason =
+                    new SkipReason(
+                            jsonObject.getString(SKIP_REASON_MESSAGE),
+                            jsonObject.getString(SKIP_REASON_TRIGGER));
+        }
+
+        @Override
+        public String toString() {
+            JSONObject tags = null;
+            try {
+                tags = new JSONObject(super.toString());
+                tags.put(SKIP_REASON_MESSAGE, skipReason.getReason());
+                tags.put(SKIP_REASON_TRIGGER, skipReason.getTrigger());
+            } catch (JSONException e) {
+                CLog.e(e);
+            }
+            return tags.toString();
         }
     }
 

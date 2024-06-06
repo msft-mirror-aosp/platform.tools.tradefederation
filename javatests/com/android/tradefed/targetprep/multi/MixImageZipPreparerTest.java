@@ -99,19 +99,41 @@ public class MixImageZipPreparerTest {
     // The object under test.
     private MixImageZipPreparer mPreparer;
 
+    // FIXME: Use Mockito.spy on ByteArrayInputStream when it works with JDK 17.
+    private class InputStreamForTesting extends ByteArrayInputStream {
+        private boolean mClosed = false;
+
+        private InputStreamForTesting(byte[] data) {
+            super(data);
+        }
+
+        @Override
+        public void close() throws IOException {
+            Assert.assertFalse(mClosed);
+            super.close();
+            mClosed = true;
+        }
+    }
+
     private class ByteArrayInputStreamFactory implements MixImageZipPreparer.InputStreamFactory {
         private final byte[] mData;
-        private List<InputStream> createdInputStreams;
+        private List<InputStreamForTesting> mCreatedInputStreams;
 
         private ByteArrayInputStreamFactory(String data) {
             mData = data.getBytes();
-            createdInputStreams = new ArrayList<InputStream>();
+            mCreatedInputStreams = new ArrayList<InputStreamForTesting>();
+        }
+
+        private void verifyClosedStreams() {
+            for (InputStreamForTesting stream : mCreatedInputStreams) {
+                Assert.assertTrue(stream.mClosed);
+            }
         }
 
         @Override
         public InputStream createInputStream() throws IOException {
-            InputStream stream = Mockito.spy(new ByteArrayInputStream(mData));
-            createdInputStreams.add(stream);
+            InputStreamForTesting stream = new InputStreamForTesting(mData);
+            mCreatedInputStreams.add(stream);
             return stream;
         }
 
@@ -510,10 +532,7 @@ public class MixImageZipPreparerTest {
                 } else {
                     Assert.assertTrue(expected.getSize() > actual.getCompressedSize());
                 }
-
-                for (InputStream stream : expected.createdInputStreams) {
-                    Mockito.verify(stream).close();
-                }
+                expected.verifyClosedStreams();
             }
         } finally {
             ZipUtil.closeZip(zipFile);

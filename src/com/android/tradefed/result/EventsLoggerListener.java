@@ -15,10 +15,10 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 
@@ -56,6 +56,11 @@ public class EventsLoggerListener implements ILogSaverListener {
                 String.format(
                         "[invocation failed: %s|%s|%s]\n",
                         failure.getFailureStatus(), failure.getErrorIdentifier(), failure));
+    }
+
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        writeToFile(String.format("[invocation skipped: %s]\n", reason));
     }
 
     @Override
@@ -145,6 +150,11 @@ public class EventsLoggerListener implements ILogSaverListener {
     @Override
     public void testAssumptionFailure(TestDescription test, String trace) {
         mTestCaseStatus = TestStatus.ASSUMPTION_FAILURE;
+    }
+
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        mTestCaseStatus = TestStatus.SKIPPED;
     }
 
     @Override

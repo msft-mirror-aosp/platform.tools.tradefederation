@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
-
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,7 +27,7 @@ public class CountingTestResultListener extends TestResultListener {
 
     @Override
     public void testResult(TestDescription test, TestResult result) {
-        mResults.put(test, result.getStatus());
+        mResults.put(test, result.getResultStatus());
     }
 
     /**
@@ -61,6 +59,7 @@ public class CountingTestResultListener extends TestResultListener {
         int[] results = getResultCounts();
         return results[TestStatus.INCOMPLETE.ordinal()] > 0
                 || results[TestStatus.ASSUMPTION_FAILURE.ordinal()] > 0
-                || results[TestStatus.FAILURE.ordinal()] > 0;
+                || results[TestStatus.FAILURE.ordinal()] > 0
+                || results[TestStatus.SKIPPED.ordinal()] > 0;
     }
 }

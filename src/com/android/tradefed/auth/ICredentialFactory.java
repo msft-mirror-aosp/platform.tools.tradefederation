@@ -21,6 +21,7 @@ import java.util.Collection;
 import java.util.Map;
 
 import com.google.api.client.auth.oauth2.Credential;
+import com.google.auth.Credentials;
 
 /**
  * An interface for credential factory to create oauth2 {@link Credential}. Also provide information
@@ -35,7 +36,7 @@ public interface ICredentialFactory {
      * @return an oauth2 {@link Credential}
      * @throws IOException
      */
-    public Credential createCredential(Collection<String> scopes) throws IOException;
+    public Credentials createCredential(Collection<String> scopes) throws IOException;
 
     /**
      * Get information about the credential factory's meta data, e.g. key file path, email, etc.

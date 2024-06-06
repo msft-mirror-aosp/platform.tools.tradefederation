@@ -20,27 +20,23 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDevice;
-import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 
-import java.util.ArrayList;
-import java.util.Map;
 
 /** Target preparer for creating user and cleaning it up at the end. */
 @OptionClass(alias = "create-user-preparer")
 public class CreateUserPreparer extends BaseTargetPreparer {
-    private static final String TF_CREATED_USER = "tf_created_user";
 
     @Option(
             name = "reuse-test-user",
             description =
                     "Whether or not to reuse already created tradefed test user, or remove them "
                             + " and re-create them between module runs.")
-    private boolean mReuseTestUser = false;
+    private boolean mReuseTestUser;
 
-    private Integer mOriginalUser = null;
-    private Integer mCreatedUserId = null;
+    private Integer mOriginalUser;
+    private Integer mCreatedUserId;
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -52,9 +48,18 @@ public class CreateUserPreparer extends BaseTargetPreparer {
             throw new TargetSetupError(
                     "Failed to get the current user.", device.getDeviceDescriptor());
         }
+        CLog.i("setUp(): mOriginalUser=%d, mReuseTestUser=%b", mOriginalUser, mReuseTestUser);
 
-        mCreatedUserId = createUser(device);
+        mCreatedUserId = UserHelper.createUser(device, mReuseTestUser);
 
+        switchCurrentUser(device, mCreatedUserId);
+
+        device.waitForDeviceAvailable();
+        device.postBootSetup();
+    }
+
+    private void switchCurrentUser(ITestDevice device, int userId)
+            throws TargetSetupError, DeviceNotAvailableException {
         if (!device.startUser(mCreatedUserId, true)) {
             throw new TargetSetupError(
                     String.format("Failed to start to user '%s'", mCreatedUserId),
@@ -65,16 +70,12 @@ public class CreateUserPreparer extends BaseTargetPreparer {
                     String.format("Failed to switch to user '%s'", mCreatedUserId),
                     device.getDeviceDescriptor());
         }
-        device.waitForDeviceAvailable();
-        device.postBootSetup();
     }
 
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
         if (mCreatedUserId == null) {
-            return;
-        }
-        if (mOriginalUser == null) {
+            CLog.d("Skipping teardown because no user was created");
             return;
         }
         if (e instanceof DeviceNotAvailableException) {
@@ -82,66 +83,24 @@ public class CreateUserPreparer extends BaseTargetPreparer {
             return;
         }
         ITestDevice device = testInfo.getDevice();
-        if (!device.switchUser(mOriginalUser)) {
-            CLog.e("Failed to switch back to original user '%s'", mOriginalUser);
+
+        if (mOriginalUser == null) {
+            CLog.d("Skipping teardown because original user is null");
+            return;
         }
+        switchBackToOriginalUser(device);
+
         if (!mReuseTestUser) {
             device.removeUser(mCreatedUserId);
         }
     }
 
-    private int createUser(ITestDevice device)
-            throws DeviceNotAvailableException, TargetSetupError {
-        if (mReuseTestUser) {
-            Integer existingTFUser = findExistingTradefedUser(device);
-            if (existingTFUser != null) {
-                return existingTFUser;
-            }
+    private void switchBackToOriginalUser(ITestDevice device) throws DeviceNotAvailableException {
+        CLog.d(
+                "switchBackToOriginalUser(): switching current user from %d to user %d ",
+                mCreatedUserId, mOriginalUser);
+        if (!device.switchUser(mOriginalUser)) {
+            CLog.e("Failed to switch back to original user '%s'", mOriginalUser);
         }
-
-        cleanupOldUsersIfLimitReached(device);
-
-        try {
-            return device.createUser(TF_CREATED_USER);
-        } catch (IllegalStateException e) {
-            throw new TargetSetupError("Failed to create user.", e, device.getDeviceDescriptor());
-        }
-    }
-
-    private void cleanupOldUsersIfLimitReached(ITestDevice device)
-            throws DeviceNotAvailableException {
-        ArrayList<Integer> tfCreatedUsers = new ArrayList<>();
-        int existingUsersCount = 0;
-        for (Map.Entry<Integer, UserInfo> entry : device.getUserInfos().entrySet()) {
-            UserInfo userInfo = entry.getValue();
-            String userName = userInfo.userName();
-
-            if (!userInfo.isGuest()) {
-                // Guest users don't fall under the quota.
-                existingUsersCount++;
-            }
-            if (userName != null && userName.equals(TF_CREATED_USER)) {
-                tfCreatedUsers.add(entry.getKey());
-            }
-        }
-
-        if (existingUsersCount >= device.getMaxNumberOfUsersSupported()) {
-            // Reached the maximum number of users allowed. Remove stale users to free up space.
-            for (int userId : tfCreatedUsers) {
-                device.removeUser(userId);
-            }
-        }
-    }
-
-    private Integer findExistingTradefedUser(ITestDevice device)
-            throws DeviceNotAvailableException {
-        for (Map.Entry<Integer, UserInfo> entry : device.getUserInfos().entrySet()) {
-            String userName = entry.getValue().userName();
-
-            if (userName != null && userName.equals(TF_CREATED_USER)) {
-                return entry.getKey();
-            }
-        }
-        return null;
     }
 }

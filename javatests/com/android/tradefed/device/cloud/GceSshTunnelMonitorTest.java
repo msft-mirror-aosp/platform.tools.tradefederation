@@ -150,7 +150,6 @@ public class GceSshTunnelMonitorTest {
         IManagedTestDevice mockDevice = Mockito.mock(IManagedTestDevice.class);
         when(mockDevice.getSerialNumber()).thenReturn("INIT_SERIAL");
         mockDevice.setIDevice((RemoteAvdIDevice) Mockito.any());
-        mockDevice.setFastbootEnabled(false);
         doReturn(null).when(mMockRunUtil).runCmdInBackground(Mockito.anyList());
 
         mMonitor.createSshTunnel(mockDevice, mHost.getHost(), mHost.getPortOrDefault(5555));

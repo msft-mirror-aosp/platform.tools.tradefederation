@@ -98,7 +98,7 @@ public class SystemUpdaterDeviceFlasher implements IDeviceFlasher {
             throw new TargetSetupError("No OTA package file present for build "
                     + deviceBuild.getDeviceBuildId(), device.getDeviceDescriptor());
         }
-        if (!device.pushFile(otaPackageFile, "/cache/update.zip")) {
+        if (!device.pushFile(otaPackageFile, "/cache/update.zip", true)) {
             throw new TargetSetupError("Could not push OTA file to the target.",
                     device.getDeviceDescriptor());
         }
