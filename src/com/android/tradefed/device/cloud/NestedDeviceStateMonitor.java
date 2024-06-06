@@ -41,7 +41,7 @@ public class NestedDeviceStateMonitor extends DeviceStateMonitor {
 
     /** {@inheritDoc} */
     @Override
-    protected boolean postOnlineCheck(final long waitTime) {
+    protected boolean postOnlineCheck(final long waitTime) throws DeviceNotAvailableException {
         long startTime = System.currentTimeMillis();
         if (!super.postOnlineCheck(waitTime)) {
             return false;

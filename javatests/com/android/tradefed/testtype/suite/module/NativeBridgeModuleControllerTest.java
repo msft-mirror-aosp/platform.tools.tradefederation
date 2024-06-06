@@ -56,7 +56,7 @@ public class NativeBridgeModuleControllerTest {
 
     /** Test that a StubDevice is ignored by the check. */
     @Test
-    public void testStubDevice() {
+    public void testStubDevice() throws Exception {
         when(mMockDevice.getIDevice()).thenReturn(new StubDevice("serial"));
 
         assertEquals(RunStrategy.RUN, mController.shouldRunModule(mContext));

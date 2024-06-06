@@ -33,13 +33,9 @@ import com.android.tradefed.device.metric.IMetricCollectorReceiver;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
-import com.android.tradefed.invoker.shard.token.ITokenProvider;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
-import com.android.tradefed.invoker.shard.token.TokenProperty;
-import com.android.tradefed.invoker.shard.token.TokenProviderHelper;
 import com.android.tradefed.log.ILogRegistry;
 import com.android.tradefed.log.ILogRegistry.EventType;
-import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -52,18 +48,13 @@ import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IReportNotExecuted;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
-import com.google.common.collect.Sets;
-
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -80,10 +71,8 @@ public final class TestsPoolPoller
 
     private static final long WAIT_RECOVERY_TIME = 15 * 60 * 1000;
 
-    private Collection<IRemoteTest> mGenericPool;
-    private Collection<ITokenRequest> mTokenPool;
+    private ITestsPool mTestsPool;
     private CountDownLatch mTracker;
-    private Set<ITokenRequest> mRejectedToken;
 
     private TestInformation mTestInfo;
     private IConfiguration mConfig;
@@ -95,21 +84,12 @@ public final class TestsPoolPoller
     /**
      * Ctor where the pool of {@link IRemoteTest} is provided.
      *
-     * @param tests {@link IRemoteTest}s pool of all tests.
+     * @param testsPool {@link ITestsPool}s pool of all tests.
      * @param tracker a {@link CountDownLatch} shared to get the number of running poller.
      */
-    public TestsPoolPoller(Collection<IRemoteTest> tests, CountDownLatch tracker) {
-        mGenericPool = tests;
+    public TestsPoolPoller(ITestsPool testsPool, CountDownLatch tracker) {
         mTracker = tracker;
-    }
-
-    public TestsPoolPoller(
-            Collection<IRemoteTest> tests,
-            Collection<ITokenRequest> tokenTests,
-            CountDownLatch tracker) {
-        this(tests, tracker);
-        mTokenPool = tokenTests;
-        mRejectedToken = Sets.newConcurrentHashSet();
+        mTestsPool = testsPool;
     }
 
     /** Returns the first {@link IRemoteTest} from the pool or null if none remaining. */
@@ -119,60 +99,7 @@ public final class TestsPoolPoller
 
     /** Returns the first {@link IRemoteTest} from the pool or null if none remaining. */
     private IRemoteTest poll(boolean reportNotExecuted) {
-        if (mTokenPool != null) {
-            synchronized (mTokenPool) {
-                if (!mTokenPool.isEmpty()) {
-                    Iterator<ITokenRequest> itr = mTokenPool.iterator();
-                    while (itr.hasNext()) {
-                        ITokenRequest test = itr.next();
-                        if (reportNotExecuted) {
-                            // Return to report not executed tests, regardless of if they can
-                            // actually execute or not.
-                            mRejectedToken.remove(test);
-                            mTokenPool.remove(test);
-                            return test;
-                        }
-                        if (mRejectedToken.contains(test)) {
-                            // If the poller already rejected the tests once, do not re-evaluate.
-                            continue;
-                        }
-                        Set<TokenProperty> tokens = test.getRequiredTokens(mTestInfo);
-                        if (tokens == null || tokens.isEmpty() || isSupported(tokens)) {
-                            // No Token can run anywhere, or supported can run
-                            mTokenPool.remove(test);
-                            mRejectedToken.remove(test);
-                            return test;
-                        }
-
-                        // Track as rejected
-                        mRejectedToken.add(test);
-                    }
-                }
-            }
-        }
-        synchronized (mGenericPool) {
-            if (mGenericPool.isEmpty()) {
-                return null;
-            }
-            IRemoteTest test = mGenericPool.iterator().next();
-            mGenericPool.remove(test);
-            return test;
-        }
-    }
-
-    private ITokenRequest pollRejectedTokenModule() {
-        if (mTokenPool == null) {
-            return null;
-        }
-        synchronized (mTokenPool) {
-            if (mRejectedToken.isEmpty()) {
-                return null;
-            }
-            ITokenRequest test = mRejectedToken.iterator().next();
-            mRejectedToken.remove(test);
-            mTokenPool.remove(test);
-            return test;
-        }
+        return mTestsPool.poll(mTestInfo, reportNotExecuted);
     }
 
     /** {@inheritDoc} */
@@ -255,7 +182,7 @@ public final class TestsPoolPoller
                     CLog.w(due);
                     CLog.w("Proceeding to the next test.");
                 } catch (DeviceNotAvailableException dnae) {
-                    HandleDeviceNotAvailable(listener, dnae, test);
+                    handleDeviceNotAvailable(dnae, test);
                 } catch (ConfigurationException | BuildRetrievalError e) {
                     CLog.w(
                             "Failed to validate the @options of test: %s. Proceeding to next test.",
@@ -265,6 +192,10 @@ public final class TestsPoolPoller
                     validationConfig.cleanConfigurationData();
                     CurrentInvocation.setRunIsolation(IsolationGrade.NOT_ISOLATED);
                     CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                    // Clean the suite internals once done
+                    if (test instanceof BaseTestSuite) {
+                        ((BaseTestSuite) test).cleanUpSuiteSetup();
+                    }
                 }
             }
         } finally {
@@ -281,44 +212,80 @@ public final class TestsPoolPoller
      * Helper to wait for the device to maybe come back online, in that case we reboot it to refresh
      * the state and proceed with execution.
      */
-    void HandleDeviceNotAvailable(
-            ITestLogger logger, DeviceNotAvailableException originalException, IRemoteTest test)
+    void handleDeviceNotAvailable(DeviceNotAvailableException originalException, IRemoteTest test)
             throws DeviceNotAvailableException {
-        ITestDevice device = mTestInfo.getDevice();
-        try {
-            if (device instanceof NestedRemoteDevice) {
-                // If it's not the last device, reset it.
-                // TODO: Attempt reset when fixed
-            } else if (mTracker.getCount() > 1) {
-                CLog.d(
-                        "Wait %s for device to maybe come back online.",
-                        TimeUtil.formatElapsedTime(WAIT_RECOVERY_TIME));
-                device.waitForDeviceAvailable(WAIT_RECOVERY_TIME);
-                device.reboot();
-                CLog.d("TestPoller was recovered after %s went offline", device.getSerialNumber());
-                return;
+        // If `mTestsPool` is a RemoteDynamicPool, then `test` should always be
+        // an instance of ITestSuite, but just checking here in case.
+        if (mTestsPool instanceof RemoteDynamicPool && test instanceof ITestSuite) {
+            ITestDevice device = mTestInfo.getDevice();
+            RemoteDynamicPool remotePool = (RemoteDynamicPool) mTestsPool;
+            ITestSuite testModule = (ITestSuite) test;
+            int attemptNumber = remotePool.getAttemptNumber(testModule);
+            if (attemptNumber + 1 <= mConfig.getRetryDecision().getMaxRetryCount()) {
+                // requeue the module for execution
+                remotePool.returnToRemotePool(testModule, attemptNumber + 1);
+            } else {
+                // module has run out of retries
             }
-        } catch (DeviceNotAvailableException e) {
-            // ignore this exception
+
+            // We catch and rethrow in order to log that the poller associated with the device
+            // that went offline is terminating.
+            CLog.e(
+                    "Test %s threw DeviceNotAvailableException. Test poller associated with "
+                            + "device %s is terminating.",
+                    test.getClass(), device.getSerialNumber());
+            // Log an event to track more easily the failure
+            logDeviceEvent(
+                    EventType.SHARD_POLLER_EARLY_TERMINATION,
+                    device.getSerialNumber(),
+                    originalException);
+
+            // re-throw error
+            throw originalException;
+        } else if (mTestsPool instanceof RemoteDynamicPool) {
+            CLog.w("RemoteDynamicPool should only use ITestSuite, but found IRemoteTest.");
+            throw originalException;
+        } else {
+            ITestDevice device = mTestInfo.getDevice();
+            try {
+                if (device instanceof NestedRemoteDevice) {
+                    // If it's not the last device, reset it.
+                    // TODO: Attempt reset when fixed
+                } else if (mTracker.getCount() > 1) {
+                    CLog.d(
+                            "Wait %s for device to maybe come back online.",
+                            TimeUtil.formatElapsedTime(WAIT_RECOVERY_TIME));
+                    device.waitForDeviceAvailable(WAIT_RECOVERY_TIME);
+                    device.reboot();
+                    CLog.d(
+                            "TestPoller was recovered after %s went offline",
+                            device.getSerialNumber());
+                    return;
+                }
+            } catch (DeviceNotAvailableException e) {
+                // ignore this exception
+            }
+
+            // We catch and rethrow in order to log that the poller associated with the device
+            // that went offline is terminating.
+            CLog.e(
+                    "Test %s threw DeviceNotAvailableException. Test poller associated with "
+                            + "device %s is terminating.",
+                    test.getClass(), device.getSerialNumber());
+            // Log an event to track more easily the failure
+            logDeviceEvent(
+                    EventType.SHARD_POLLER_EARLY_TERMINATION,
+                    device.getSerialNumber(),
+                    originalException);
+
+            throw originalException;
         }
-        // We catch and rethrow in order to log that the poller associated with the device
-        // that went offline is terminating.
-        CLog.e(
-                "Test %s threw DeviceNotAvailableException. Test poller associated with "
-                        + "device %s is terminating.",
-                test.getClass(), device.getSerialNumber());
-        // Log an event to track more easily the failure
-        logDeviceEvent(
-                EventType.SHARD_POLLER_EARLY_TERMINATION,
-                device.getSerialNumber(),
-                originalException);
-        throw originalException;
     }
 
     /** Go through the remaining IRemoteTest and report them as not executed. */
     private void reportNotExecuted(ITestInvocationListener listener) {
         // Report non-executed token test first
-        ITokenRequest tokenTest = pollRejectedTokenModule();
+        ITokenRequest tokenTest = mTestsPool.pollRejectedTokenModule();
         while (tokenTest != null) {
             if (tokenTest instanceof IReportNotExecuted) {
                 String message =
@@ -331,7 +298,7 @@ public final class TestsPoolPoller
                         "Could not report not executed tests from %s.",
                         tokenTest.getClass().getCanonicalName());
             }
-            tokenTest = pollRejectedTokenModule();
+            tokenTest = mTestsPool.pollRejectedTokenModule();
         }
         // Report all remaining test
         IRemoteTest test = poll(true);
@@ -362,20 +329,6 @@ public final class TestsPoolPoller
         return LogRegistry.getLogRegistry();
     }
 
-    private boolean isSupported(Set<TokenProperty> requiredTokens) {
-        for (TokenProperty prop : requiredTokens) {
-            ITokenProvider provider = TokenProviderHelper.getTokenProvider(prop);
-            if (provider == null) {
-                CLog.e("No provider for token %s", prop);
-                return false;
-            }
-            if (!provider.hasToken(mTestInfo.getDevice(), prop)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     @VisibleForTesting
     public void setLogRegistry(ILogRegistry registry) {
         mRegistry = registry;
@@ -396,14 +349,9 @@ public final class TestsPoolPoller
         mCollectors = collectors;
     }
 
-    /** Get a copy of the pool of token tests. For testing only. */
+    /** Get a peek of token tests. For testing only. */
     @VisibleForTesting
-    List<ITokenRequest> getTokenPool() {
-        if (mTokenPool == null) {
-            return null;
-        }
-        synchronized (mTokenPool) {
-            return new ArrayList<>(mTokenPool);
-        }
+    int peekTokenPoolSize() {
+        return ((LocalPool) mTestsPool).peekTokenSize();
     }
 }

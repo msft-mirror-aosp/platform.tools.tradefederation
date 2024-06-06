@@ -23,7 +23,6 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.EventsLoggerListener;
 import com.android.tradefed.result.FailureDescription;
-import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -36,6 +35,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.retry.ISupportGranularResults;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -151,6 +151,12 @@ public class ResultAggregator extends CollectingTestListener {
     public void invocationFailed(FailureDescription failure) {
         super.invocationFailed(failure);
         mAllForwarder.invocationFailed(failure);
+    }
+
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        super.invocationSkipped(reason);
+        mAllForwarder.invocationSkipped(reason);
     }
 
     /** {@inheritDoc} */
@@ -308,6 +314,12 @@ public class ResultAggregator extends CollectingTestListener {
     }
 
     @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        super.testSkipped(test, reason);
+        mDetailedForwarder.testSkipped(test, reason);
+    }
+
+    @Override
     public void testAssumptionFailure(TestDescription test, String trace) {
         super.testAssumptionFailure(test, trace);
         mDetailedForwarder.testAssumptionFailure(test, trace);
@@ -460,7 +472,7 @@ public class ResultAggregator extends CollectingTestListener {
             Map<TestDescription, TestResult> testResults, ITestInvocationListener listener) {
         for (Map.Entry<TestDescription, TestResult> testEntry : testResults.entrySet()) {
             listener.testStarted(testEntry.getKey(), testEntry.getValue().getStartTime());
-            switch (testEntry.getValue().getStatus()) {
+            switch (testEntry.getValue().getResultStatus()) {
                 case FAILURE:
                     listener.testFailed(testEntry.getKey(), testEntry.getValue().getFailure());
                     break;
@@ -475,6 +487,9 @@ public class ResultAggregator extends CollectingTestListener {
                     listener.testFailed(
                             testEntry.getKey(),
                             FailureDescription.create("Test did not complete due to exception."));
+                    break;
+                case SKIPPED:
+                    listener.testSkipped(testEntry.getKey(), testEntry.getValue().getSkipReason());
                     break;
                 default:
                     break;
@@ -550,12 +565,10 @@ public class ResultAggregator extends CollectingTestListener {
 
     private void saveEventsLog(File eventsLog, String key) {
         if (eventsLog != null && eventsLog.length() > 0 && mLogSaver != null) {
-            try (FileInputStreamSource source = new FileInputStreamSource(eventsLog, true)) {
+            try {
                 LogFile logged =
-                        mLogSaver.saveLogData(
-                                eventsLog.getName(),
-                                LogDataType.TF_EVENTS,
-                                source.createInputStream());
+                        mLogSaver.saveLogFile(
+                                eventsLog.getName(), LogDataType.TF_EVENTS, eventsLog);
                 if (logged != null) {
                     mAggregatedForwarder.logAssociation(key, logged);
                     mDetailedForwarder.logAssociation(key, logged);

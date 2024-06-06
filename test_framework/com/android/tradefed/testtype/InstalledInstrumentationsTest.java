@@ -27,22 +27,34 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;
 import com.android.tradefed.util.AbiFormatter;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
 import com.android.tradefed.util.ListInstrumentationParser.InstrumentationTarget;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Runs all instrumentation found on current device. */
 @OptionClass(alias = "installed-instrumentation")
@@ -69,7 +81,7 @@ public class InstalledInstrumentationsTest
             description="Sets timeout (in milliseconds) that will be applied to each test. In the "
                     + "event of a test timeout it will log the results and proceed with executing "
                     + "the next test. For no timeout, set to 0.")
-    private int mTestTimeout = 5 * 60 * 1000;  // default to 5 minutes
+    private long mTestTimeout = 5 * 60 * 1000;  // default to 5 minutes
 
     @Option(name = "size",
             description = "Restrict tests to a specific test size. " +
@@ -186,13 +198,24 @@ public class InstalledInstrumentationsTest
                     "Create InstrumentationTest type rather than more recent AndroidJUnitTest.")
     private boolean mDowngradeInstrumentation = false;
 
+    @Option(
+            name = "test-storage-dir",
+            description = "The device directory path where test storage read files.")
+    private String mTestStorageInternalDir = "/sdcard/googletest/test_runfiles";
+
+    @Option(
+            name = "use-test-storage",
+            description =
+                    "If set to true, we will push filters to the test storage instead of disk.")
+    private boolean mUseTestStorage = true;
+
     private int mTotalShards = 0;
     private int mShardIndex = 0;
     private List<IMetricCollector> mMetricCollectorList = new ArrayList<>();
     private IConfiguration mConfiguration;
 
     private List<InstrumentationTest> mTests = null;
-    private Map<String, List<TestDescription>> mRunTestsFailureMap = null;
+    private Map<String, Set<TestDescription>> mRunTestsFailureMap = null;
 
     @Option(name = AbiFormatter.FORCE_ABI_STRING,
             description = AbiFormatter.FORCE_ABI_DESCRIPTION,
@@ -200,22 +223,34 @@ public class InstalledInstrumentationsTest
     private String mForceAbi = null;
 
     @Override
-    public boolean shouldRetry(int attemptJustExecuted, List<TestRunResult> previousResults)
+    public boolean shouldRetry(
+            int attemptJustExecuted, List<TestRunResult> previousResults, Set<String> skipList)
             throws DeviceNotAvailableException {
         boolean retry = false;
-        mRunTestsFailureMap = new HashMap<>();
+        if (mRunTestsFailureMap == null) {
+            mRunTestsFailureMap = new HashMap<>();
+        }
         for (TestRunResult run : previousResults) {
             if (run == null) {
                 continue;
             }
-            if (run.isRunFailure()) {
-                retry = true;
-                // Retry the full run in case of run failure
-                mRunTestsFailureMap.put(run.getName(), new ArrayList<TestDescription>());
-            } else if (run.hasFailedTests()) {
-                retry = true;
-                mRunTestsFailureMap.put(
-                        run.getName(), new ArrayList<TestDescription>(run.getFailedTests()));
+            if (run.isRunFailure() || run.hasFailedTests()) {
+                Set<TestDescription> excludes =
+                        new LinkedHashSet<>(
+                                run.getTestsInState(
+                                        Arrays.asList(
+                                                TestStatus.PASSED,
+                                                TestStatus.ASSUMPTION_FAILURE,
+                                                TestStatus.IGNORED)));
+                if (mRunTestsFailureMap.get(run.getName()) != null) {
+                    excludes.addAll(mRunTestsFailureMap.get(run.getName()));
+                }
+                Set<TestDescription> skipListDescriptor = convertStringToDescription(skipList);
+                // Complete the excludes with skip list
+                excludes.addAll(skipListDescriptor);
+                // Exclude passed tests from rerunning
+                retry = shouldRetry(run, skipListDescriptor);
+                mRunTestsFailureMap.put(run.getName(), excludes);
             } else {
                 // Set null if we should not rerun it
                 mRunTestsFailureMap.put(run.getName(), null);
@@ -227,6 +262,27 @@ public class InstalledInstrumentationsTest
             mRunTestsFailureMap = null;
         }
         return retry;
+    }
+
+    private Set<TestDescription> convertStringToDescription(Set<String> skipList) {
+        Set<TestDescription> descriptions = new LinkedHashSet<TestDescription>();
+        for (String s : skipList) {
+            String[] classMethod = s.split("#", 2);
+            descriptions.add(new TestDescription(classMethod[0], classMethod[1]));
+        }
+        return descriptions;
+    }
+
+    private boolean shouldRetry(TestRunResult run, Set<TestDescription> skipList) {
+        if (run.isRunFailure()) {
+            return true;
+        }
+        Set<TestDescription> failedTests = run.getFailedTests();
+        failedTests.removeAll(skipList);
+        if (failedTests.isEmpty()) {
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -301,14 +357,24 @@ public class InstalledInstrumentationsTest
         if (mTests == null) {
 
             ListInstrumentationParser parser = new ListInstrumentationParser();
-            String pmListOutput = getDevice().executeShellCommand(PM_LIST_CMD);
+            CommandResult pmListResult = getDevice().executeShellV2Command(PM_LIST_CMD);
+            if (!CommandStatus.SUCCESS.equals(pmListResult.getStatus())) {
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "Failed to execute '%s'." + "stdout: %s\nstderr: %s",
+                                PM_LIST_CMD, pmListResult.getStdout(), pmListResult.getStderr()),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+            String pmListOutput = pmListResult.getStdout();
             String pmListLines[] = pmListOutput.split(LINE_SEPARATOR);
             parser.processNewLines(pmListLines);
 
             if (parser.getInstrumentationTargets().isEmpty()) {
-                throw new IllegalArgumentException(String.format(
-                        "No instrumentations were found on device %s - <%s>", getDevice()
-                                .getSerialNumber(), pmListOutput));
+                throw new HarnessRuntimeException(
+                        String.format(
+                                "No instrumentations were found on device %s - <%s>",
+                                getDevice().getSerialNumber(), pmListOutput),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
 
             int numUnshardedTests = 0;
@@ -340,24 +406,16 @@ public class InstalledInstrumentationsTest
                     t.setPackageName(targetPackageName);
                     if (mRunTestsFailureMap != null) {
                         // Don't retry if there was no failure in a particular instrumentation.
-                        if (mRunTestsFailureMap.containsKey(targetPackageName)
-                                && mRunTestsFailureMap.get(targetPackageName) == null) {
-                            CLog.d("Skipping %s at retry, nothing to do.", targetPackageName);
-                            continue;
-                        }
-                        // if possible reduce the scope of the retry to be more efficient.
-                        if (t instanceof AndroidJUnitTest) {
-                            AndroidJUnitTest filterable = (AndroidJUnitTest) t;
-                            if (mRunTestsFailureMap.containsKey(targetPackageName)) {
-                                List<TestDescription> tests =
-                                        mRunTestsFailureMap.get(targetPackageName);
-                                for (TestDescription test : tests) {
-                                    filterable.addIncludeFilter(
-                                            String.format(
-                                                    "%s#%s",
-                                                    test.getClassName(),
-                                                    test.getTestNameWithoutParams()));
-                                }
+                        if (mRunTestsFailureMap.containsKey(targetPackageName)) {
+                            if (mRunTestsFailureMap.get(targetPackageName) == null) {
+                                CLog.d("Skipping %s at retry, nothing to do.", targetPackageName);
+                                continue;
+                            }
+                            // if possible reduce the scope of the retry to be more efficient.
+                            if (t instanceof AndroidJUnitTest) {
+                                AndroidJUnitTest filterable = (AndroidJUnitTest) t;
+                                excludePassedTests(
+                                        filterable, mRunTestsFailureMap.get(targetPackageName));
                             }
                         }
                     }
@@ -369,6 +427,34 @@ public class InstalledInstrumentationsTest
                     }
                     mTests.add(t);
                 }
+            }
+        }
+    }
+
+    private void excludePassedTests(ITestFilterReceiver test, Set<TestDescription> passedTests) {
+        // Exclude all passed tests for the retry.
+        for (TestDescription testCase : passedTests) {
+            String filter = String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
+            if (!(test instanceof ITestFileFilterReceiver)) {
+                test.addExcludeFilter(filter);
+                continue;
+            }
+
+            File excludeFilterFile = ((ITestFileFilterReceiver) test).getExcludeTestFile();
+            if (excludeFilterFile == null) {
+                try {
+                    excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
+                } catch (IOException e) {
+                    throw new HarnessRuntimeException(
+                            e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+                }
+                ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
+            }
+            try {
+                FileUtil.writeToFile(filter + "\n", excludeFilterFile, true);
+            } catch (IOException e) {
+                CLog.e(e);
+                continue;
             }
         }
     }
@@ -414,7 +500,7 @@ public class InstalledInstrumentationsTest
         return mShellTimeout;
     }
 
-    int getTestTimeout() {
+    long getTestTimeout() {
         return mTestTimeout;
     }
 

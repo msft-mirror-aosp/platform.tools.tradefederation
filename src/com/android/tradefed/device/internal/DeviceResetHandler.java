@@ -25,6 +25,8 @@ import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -35,6 +37,8 @@ import com.proto.tradefed.feature.FeatureResponse;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Utility handling generically device resetting. This is meant to only be used internally to the
@@ -44,7 +48,11 @@ public class DeviceResetHandler {
 
     private final TradefedFeatureClient mClient;
     private final IInvocationContext mContext;
-    
+
+    public DeviceResetHandler() {
+        this(new TradefedFeatureClient(), CurrentInvocation.getInvocationContext());
+    }
+
     public DeviceResetHandler(IInvocationContext context) {
         this(new TradefedFeatureClient(), context);
     }
@@ -72,6 +80,7 @@ public class DeviceResetHandler {
             Map<String, String> args = new HashMap<>();
             args.put(DeviceResetFeature.DEVICE_NAME, mContext.getDeviceName(device));
             response = mClient.triggerFeature(DeviceResetFeature.DEVICE_RESET_FEATURE_NAME, args);
+            CLog.d("Response from reset request: %s", response.getResponse());
         } finally {
             mClient.close();
         }
@@ -81,6 +90,7 @@ public class DeviceResetHandler {
             Object o = null;
             try {
                 o = SerializationUtil.deserialize(trace);
+                CLog.e("Reset failed: %s", o);
             } catch (IOException | RuntimeException e) {
                 CLog.e(e);
             }
@@ -88,14 +98,13 @@ public class DeviceResetHandler {
                 throw (DeviceNotAvailableException) o;
             } else if (o instanceof IHarnessException) {
                 IHarnessException exception = (IHarnessException) o;
-                throw new HarnessRuntimeException("Exception while resetting the device.", exception);
+                throw new HarnessRuntimeException(
+                        "Exception while resetting the device.", exception);
             } else if (o instanceof Exception) {
                 throw new HarnessRuntimeException(
                         "Exception while resetting the device.",
                         (Exception) o, InfraErrorIdentifier.UNDETERMINED);
             }
-
-            CLog.e("Reset failed: %s", response.getErrorInfo().getErrorTrace());
             return false;
         }
         if (device instanceof NativeDevice) {
@@ -103,6 +112,16 @@ public class DeviceResetHandler {
         }
         CurrentInvocation.setModuleIsolation(IsolationGrade.FULLY_ISOLATED);
         CurrentInvocation.setRunIsolation(IsolationGrade.FULLY_ISOLATED);
+
+        // Save powerwash performance data
+        Pattern durationPattern = Pattern.compile("Powerwash\\sfinished\\sin (\\d+)\\sms");
+        Matcher matcher;
+        matcher = durationPattern.matcher(response.getResponse());
+        if (matcher.find()) {
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.DEVICE_RESET_COUNT, 1);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_POWERWASH_DURATIONS, matcher.group(1));
+        }
         return true;
     }
 }

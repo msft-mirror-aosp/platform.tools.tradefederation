@@ -15,11 +15,13 @@
  */
 package com.android.tradefed.testtype.rust;
 
+import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.InvocationContext;
@@ -29,10 +31,14 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.testtype.Abi;
+import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+
+import com.google.common.truth.Truth;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -44,6 +50,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.List;
 
 /** Unit tests for {@link RustBinaryHostTest}. */
 @RunWith(JUnit4.class)
@@ -136,12 +143,9 @@ public class RustBinaryHostTestTest {
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
-                        Mockito.eq("-Zunstable-options"),
-                        Mockito.eq("--report-time"),
                         Mockito.eq("--bench"),
                         Mockito.eq("--color"),
                         Mockito.eq("never"),
-                        Mockito.eq("--exact"),
                         Mockito.eq("--list")))
                 .thenReturn(successResult("", runListBenchmarksOutput(numOfTest)));
     }
@@ -185,12 +189,9 @@ public class RustBinaryHostTestTest {
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
                         Mockito.eq(binary.getAbsolutePath()),
-                        Mockito.eq("-Zunstable-options"),
-                        Mockito.eq("--report-time"),
                         Mockito.eq("--bench"),
                         Mockito.eq("--color"),
-                        Mockito.eq("never"),
-                        Mockito.eq("--exact")))
+                        Mockito.eq("never")))
                 .thenReturn(successResult("", output));
     }
 
@@ -657,6 +658,33 @@ public class RustBinaryHostTestTest {
                     .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         } finally {
             FileUtil.deleteFile(binary);
+        }
+    }
+
+    @Test
+    public void testFindBinaryWithBitness() throws Exception {
+        String moduleName = "testModuleName";
+        File testsDir = FileUtil.createTempDir("rust-test");
+        try {
+            File moduleDir = new File(testsDir, moduleName);
+            moduleDir.mkdirs();
+            File subDir = new File(moduleDir, "x86_64");
+            subDir.mkdirs();
+            File testModuleBinary64 = new File(subDir, moduleName + "64");
+            testModuleBinary64.createNewFile();
+            when(mMockBuildInfo.getFile(BuildInfoFileKey.HOST_LINKED_DIR)).thenReturn(testsDir);
+            OptionSetter setter = new OptionSetter(mTest);
+            setter.setOptionValue("test-file", moduleName);
+            IAbi abi = new Abi("arm64-v8a", "64");
+            mTest.setAbi(abi);
+
+            List<File> files = mTest.findFiles();
+            Truth.assertThat(files.size()).isEqualTo(1);
+            for (File f : files) {
+                assertFalse(f.isDirectory());
+            }
+        } finally {
+            FileUtil.recursiveDelete(testsDir);
         }
     }
 }

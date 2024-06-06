@@ -24,8 +24,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.testtype.coverage.CoverageOptions;
 
 import com.google.common.collect.ImmutableList;
 
@@ -49,6 +51,9 @@ public final class NativeCodeCoverageFlusherTest {
     @Mock ITestDevice mMockDevice;
     @Mock IRunUtil mMockRunUtil;
 
+    CoverageOptions mCoverageOptions;
+    OptionSetter mCoverageOptionsSetter;
+
     // Object under test
     NativeCodeCoverageFlusher mFlusher;
 
@@ -56,6 +61,9 @@ public final class NativeCodeCoverageFlusherTest {
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
+
+        mCoverageOptions = new CoverageOptions();
+        mCoverageOptionsSetter = new OptionSetter(mCoverageOptions);
     }
 
     @Test
@@ -68,13 +76,15 @@ public final class NativeCodeCoverageFlusherTest {
 
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
-        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
         mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.resetCoverage();
 
         // Verify that the coverage clear commands were executed.
         verify(mMockDevice).executeShellCommand("find /data/misc/trace -name '*.profraw' -delete");
+        verify(mMockDevice).executeShellCommand("find /data/local/tmp -name '*.profraw' -delete");
         verify(mMockDevice).executeShellCommand("find /data/misc/trace -name '*.gcda' -delete");
+        verify(mMockDevice).executeShellCommand("find /data/local/tmp -name '*.gcda' -delete");
     }
 
     @Test
@@ -82,7 +92,7 @@ public final class NativeCodeCoverageFlusherTest {
         doReturn(false).when(mMockDevice).isAdbRoot();
 
         try {
-            mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+            mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
             mFlusher.setRunUtil(mMockRunUtil);
             mFlusher.resetCoverage();
             fail("Should have thrown an exception");
@@ -105,7 +115,7 @@ public final class NativeCodeCoverageFlusherTest {
 
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
-        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
         mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
@@ -114,9 +124,11 @@ public final class NativeCodeCoverageFlusherTest {
     }
 
     @Test
-    public void testFlushCoverageSpecificProcesses_flushSpecificCommandCalled()
-            throws DeviceNotAvailableException {
+    public void testFlushCoverageSpecificProcesses_flushSpecificCommandCalled() throws Exception {
         List<String> processes = ImmutableList.of("adbd", "logcat");
+        for (String process : processes) {
+            mCoverageOptionsSetter.setOptionValue("coverage-processes", process);
+        }
 
         doReturn(true).when(mMockDevice).isAdbRoot();
 
@@ -126,7 +138,7 @@ public final class NativeCodeCoverageFlusherTest {
 
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
-        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
         mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
@@ -135,8 +147,8 @@ public final class NativeCodeCoverageFlusherTest {
     }
 
     @Test
-    public void testFlushNotHandled_flushNotCalled() throws DeviceNotAvailableException {
-        List<String> processes = ImmutableList.of("adbd");
+    public void testFlushNotHandled_flushNotCalled() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage-processes", "adbd");
 
         doReturn(true).when(mMockDevice).isAdbRoot();
 
@@ -146,7 +158,7 @@ public final class NativeCodeCoverageFlusherTest {
 
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
-        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
         mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
@@ -155,8 +167,8 @@ public final class NativeCodeCoverageFlusherTest {
     }
 
     @Test
-    public void testFlushStatusReadFailed_flushNotCalled() throws DeviceNotAvailableException {
-        List<String> processes = ImmutableList.of("adbd");
+    public void testFlushStatusReadFailed_flushNotCalled() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage-processes", "adbd");
 
         doReturn(true).when(mMockDevice).isAdbRoot();
 
@@ -165,7 +177,7 @@ public final class NativeCodeCoverageFlusherTest {
 
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
-        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
         mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
@@ -174,8 +186,8 @@ public final class NativeCodeCoverageFlusherTest {
     }
 
     @Test
-    public void testFlushStatusReadEmpty_flushNotCalled() throws DeviceNotAvailableException {
-        List<String> processes = ImmutableList.of("adbd");
+    public void testFlushStatusReadEmpty_flushNotCalled() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage-processes", "adbd");
 
         doReturn(true).when(mMockDevice).isAdbRoot();
 
@@ -185,7 +197,7 @@ public final class NativeCodeCoverageFlusherTest {
 
         when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
 
-        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, processes);
+        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
         mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
@@ -213,7 +225,7 @@ public final class NativeCodeCoverageFlusherTest {
         when(mMockDevice.executeShellV2Command(contains("234"))).thenReturn(resultHandled);
         when(mMockDevice.executeShellV2Command(contains("456"))).thenReturn(resultEmpty);
 
-        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of());
+        mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
         mFlusher.setRunUtil(mMockRunUtil);
         mFlusher.forceCoverageFlush();
 
@@ -222,11 +234,12 @@ public final class NativeCodeCoverageFlusherTest {
     }
 
     @Test
-    public void testNoAdbRootFlush_noOp() throws DeviceNotAvailableException {
+    public void testNoAdbRootFlush_noOp() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage-processes", "mediaserver");
         doReturn(false).when(mMockDevice).isAdbRoot();
 
         try {
-            mFlusher = new NativeCodeCoverageFlusher(mMockDevice, ImmutableList.of("mediaserver"));
+            mFlusher = new NativeCodeCoverageFlusher(mMockDevice, mCoverageOptions);
             mFlusher.setRunUtil(mMockRunUtil);
             mFlusher.forceCoverageFlush();
             fail("Should have thrown an exception");

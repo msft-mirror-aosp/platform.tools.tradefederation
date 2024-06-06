@@ -16,6 +16,7 @@
 package com.android.tradefed.result;
 
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import java.util.HashMap;
@@ -190,6 +191,15 @@ public interface ITestLifeCycleReceiver {
      * @param test identifies the test
      */
     public default void testIgnored(TestDescription test) {}
+
+    /**
+     * Called when a test is skipped and did not execute for a reason that is not usually expected.
+     * These tests will be attempted to be retried to attempt to get a proper execution.
+     *
+     * @param test identifies the test
+     * @param reason {@link SkipReason}
+     */
+    public default void testSkipped(TestDescription test, SkipReason reason) {}
 
     /**
      * Reports the execution end of an individual test case.

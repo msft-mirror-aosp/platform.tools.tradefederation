@@ -93,8 +93,7 @@ public class CecControllerTokenProviderTest {
                         + "waiting for input\n"
                         + "4089747576\n"
                         + "40:89:74:65:73:74";
-        try {
-            BufferedReader br = new BufferedReader(new StringReader(consoleOutput));
+        try (BufferedReader br = new BufferedReader(new StringReader(consoleOutput))) {
             assertTrue(provider.checkConsoleOutput("waiting for input", 250, br));
             assertTrue(
                     provider.checkConsoleOutput(

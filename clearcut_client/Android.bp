@@ -27,11 +27,13 @@ java_library_host {
         "com/**/*.java",
     ],
     static_libs: [
-        "protobuf-java-util-prebuilt-jar",
         "asuite_proto_java",
+        "libprotobuf-java-util-full",
     ],
     libs: [
         "tradefed-common-util",
         "devtools-annotations-prebuilt",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
