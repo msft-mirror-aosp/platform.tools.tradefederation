@@ -22,6 +22,8 @@ import com.android.tradefed.build.LocalFolderBuildProvider;
 import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.ConfigurationDescriptor;
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DeviceConfigurationHolder;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
@@ -34,11 +36,14 @@ import com.android.tradefed.result.TextResultReporter;
 import com.android.tradefed.targetprep.StubTargetPreparer;
 import com.android.tradefed.targetprep.multi.StubMultiTargetPreparer;
 import com.android.tradefed.testtype.suite.module.TestFailureModuleController;
+import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ModuleTestTypeUtil;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -164,6 +169,22 @@ public class ValidateSuiteConfigHelperTest {
         }
     }
 
+    /** Test that metric collectors can be specified inside a performance module for a suite. */
+    @Test
+    public void testMetricCollectorsForPerformanceModule()
+            throws ConfigurationException, RuntimeException {
+        IConfiguration config = new Configuration("test", "test description");
+        List<IMetricCollector> collectors = new ArrayList<>();
+        collectors.add(new BaseDeviceMetricCollector());
+        config.setDeviceMetricCollectors(collectors);
+        ConfigurationDescriptor configDesc = new ConfigurationDescriptor();
+        configDesc.addMetadata(
+                ModuleTestTypeUtil.TEST_TYPE_KEY, ModuleTestTypeUtil.TEST_TYPE_VALUE_PERFORMANCE);
+        config.setConfigurationObject(
+                Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME, configDesc);
+        ValidateSuiteConfigHelper.validateConfig(config);
+    }
+
     /** Test that metric collectors exempted can run in the module */
     @Test
     public void testMetricCollectors_exempted() {
@@ -195,6 +216,82 @@ public class ValidateSuiteConfigHelperTest {
             fail("Should have thrown an exception.");
         } catch (RuntimeException expected) {
             assertTrue(expected.getMessage().contains(ModuleDefinition.MODULE_CONTROLLER));
+        }
+    }
+
+    /** Test that a config file containing include tag fails validation. */
+    @Test
+    public void testValidateConfigFileWithIncludeTag_fail() throws Exception {
+        String configWithIncludeTag =
+                "<configuration description=\"Config with include tag\">\n"
+                        + "    <include name=\"empty\" />\n"
+                        + "</configuration>";
+        File configFile = FileUtil.createTempFile("config", ".xml");
+        FileUtil.writeToFile(configWithIncludeTag, configFile);
+
+        try {
+            ValidateSuiteConfigHelper.validateConfigFile(configFile);
+            fail("Should have thrown an exception.");
+        } catch (RuntimeException expected) {
+            assertTrue(
+                    expected.getMessage()
+                            .contains("Found template-include or include tag in config file"));
+        } finally {
+            configFile.delete();
+        }
+    }
+
+    /** Test that a config file containing include tag in comments passes validation. */
+    @Test
+    public void testValidateConfigFileWithIncludeTagInComment_pass() throws Exception {
+        String configWithIncludeTag =
+                "<configuration description=\"Config with include tag\">\n"
+                        + "    <!--<include name=\"empty\" />-->\n"
+                        + "</configuration>";
+        File configFile = FileUtil.createTempFile("config", ".xml");
+        FileUtil.writeToFile(configWithIncludeTag, configFile);
+
+        try {
+            ValidateSuiteConfigHelper.validateConfigFile(configFile);
+        } finally {
+            configFile.delete();
+        }
+    }
+
+    /** Test that a config file containing template-include tag fails validation. */
+    @Test
+    public void testValidateConfigFileWithTemplateIncludeTag_fail() throws Exception {
+        String configWithIncludeTag =
+                "<configuration description=\"Config with template-include tag\">\n"
+                        + "    <template-include name=\"config\" default=\"empty\" />\n"
+                        + "</configuration>";
+        File configFile = FileUtil.createTempFile("config", ".xml");
+        FileUtil.writeToFile(configWithIncludeTag, configFile);
+
+        try {
+            ValidateSuiteConfigHelper.validateConfigFile(configFile);
+            fail("Should have thrown an exception.");
+        } catch (RuntimeException expected) {
+            assertTrue(
+                    expected.getMessage()
+                            .contains("Found template-include or include tag in config file"));
+        } finally {
+            configFile.delete();
+        }
+    }
+
+    /** Test that a config file containing no include tags passes validation. */
+    @Test
+    public void testValidateConfigFile_pass() throws Exception {
+        String configWithIncludeTag =
+                "<configuration description=\"Config\">\n" + "</configuration>";
+        File configFile = FileUtil.createTempFile("config", ".xml");
+        FileUtil.writeToFile(configWithIncludeTag, configFile);
+
+        try {
+            ValidateSuiteConfigHelper.validateConfigFile(configFile);
+        } finally {
+            configFile.delete();
         }
     }
 }

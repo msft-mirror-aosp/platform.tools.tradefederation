@@ -21,6 +21,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TimeUtil;
@@ -62,9 +63,10 @@ public class WaitForDeviceDatetimePreparer extends BaseTargetPreparer {
             if (mForceSetupError) {
                 throw new TargetSetupError(
                         String.format(
-                                "datetime on device is incorrect after " + "wait timeout of '%s'",
+                                "datetime on device is incorrect after wait timeout of '%s'",
                                 TimeUtil.formatElapsedTime(mDatetimeWaitTimeout)),
-                        device.getDeviceDescriptor());
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             } else {
                 CLog.w("datetime on device is incorrect after wait timeout.");
             }

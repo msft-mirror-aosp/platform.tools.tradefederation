@@ -21,7 +21,10 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.Sl4aBluetoothUtil;
@@ -83,34 +86,47 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
     private Sl4aBluetoothUtil mUtil = new Sl4aBluetoothUtil();
 
     @Override
-    public void setUp(IInvocationContext context)
+    public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
-        setDeviceInfos(context.getDeviceBuildMap());
+        setDeviceInfos(testInformation.getContext().getDeviceBuildMap());
         try {
+            CLog.d("Enabling bluetooth on %s", mPrimaryDevice.getDeviceDescriptor());
             if (!mUtil.enable(mPrimaryDevice)) {
                 throw new TargetSetupError(
-                        "Failed to enable Bluetooth", mPrimaryDevice.getDeviceDescriptor());
+                        "Failed to enable Bluetooth",
+                        mPrimaryDevice.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
+            CLog.d("Enabling bluetooth on %s", mCompanionDevice.getDeviceDescriptor());
             if (!mUtil.enable(mCompanionDevice)) {
                 throw new TargetSetupError(
-                        "Failed to enable Bluetooth", mCompanionDevice.getDeviceDescriptor());
+                        "Failed to enable Bluetooth",
+                        mCompanionDevice.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
             mUtil.setBtPairTimeout(mPairingTimeout);
+            CLog.d("Starting pairing bluetooth on %s", mPrimaryDevice.getDeviceDescriptor());
             if (!mUtil.pair(mPrimaryDevice, mCompanionDevice)) {
                 throw new TargetSetupError(
-                        "Bluetooth pairing failed.", mPrimaryDevice.getDeviceDescriptor());
+                        "Bluetooth pairing failed.",
+                        mPrimaryDevice.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_BLUETOOTH_PAIRING);
             }
             // Always enable PBAP between primary and companion devices in case it's not enabled
             // For now, assume PBAP client profile is always on primary device, and enable PBAP on
             // companion device.
+            CLog.d("Enabling PBAP on %s", mCompanionDevice.getDeviceDescriptor());
             if (!mUtil.changeProfileAccessPermission(
                     mCompanionDevice,
                     mPrimaryDevice,
                     BluetoothProfile.PBAP,
                     BluetoothAccessLevel.ACCESS_ALLOWED)) {
                 throw new TargetSetupError(
-                        "Failed to allow PBAP access", mCompanionDevice.getDeviceDescriptor());
+                        "Failed to allow PBAP access",
+                        mCompanionDevice.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
+            CLog.d("Enabling PBAP_CLIENT on %s", mPrimaryDevice.getDeviceDescriptor());
             if (!mUtil.setProfilePriority(
                     mPrimaryDevice,
                     mCompanionDevice,
@@ -118,13 +134,16 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
                     BluetoothPriorityLevel.PRIORITY_ON)) {
                 throw new TargetSetupError(
                         "Failed to turn on PBAP client priority",
-                        mPrimaryDevice.getDeviceDescriptor());
+                        mPrimaryDevice.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             }
+            CLog.d("Connecting to profiles");
             if (mConnectDevices && mProfiles.size() > 0) {
                 if (!mUtil.connect(mPrimaryDevice, mCompanionDevice, mProfiles)) {
                     throw new TargetSetupError(
                             "Failed to connect bluetooth profiles",
-                            mPrimaryDevice.getDeviceDescriptor());
+                            mPrimaryDevice.getDeviceDescriptor(),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
                 }
             }
         } finally {
@@ -132,19 +151,17 @@ public class PairingMultiTargetPreparer extends BaseMultiTargetPreparer {
         }
     }
 
-    private void setDeviceInfos(Map<ITestDevice, IBuildInfo> deviceInfos) throws TargetSetupError {
+    private void setDeviceInfos(Map<ITestDevice, IBuildInfo> deviceInfos)
+            throws TargetSetupError, DeviceNotAvailableException {
         List<ITestDevice> devices = new ArrayList<>(deviceInfos.keySet());
         if (devices.size() != 2) {
             throw new TargetSetupError(
-                    "The preparer assumes 2 devices only", devices.get(0).getDeviceDescriptor());
+                    "The preparer assumes 2 devices only",
+                    devices.get(0).getDeviceDescriptor(),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
-        try {
-            int primaryIdx = mPrimaryDeviceName.equals(devices.get(0).getProductType()) ? 0 : 1;
-            mPrimaryDevice = devices.get(primaryIdx);
-            mCompanionDevice = devices.get(1 - primaryIdx);
-        } catch (DeviceNotAvailableException e) {
-            throw new TargetSetupError(
-                    "Device is not available", e, devices.get(0).getDeviceDescriptor());
-        }
+        int primaryIdx = mPrimaryDeviceName.equals(devices.get(0).getProductType()) ? 0 : 1;
+        mPrimaryDevice = devices.get(primaryIdx);
+        mCompanionDevice = devices.get(1 - primaryIdx);
     }
 }

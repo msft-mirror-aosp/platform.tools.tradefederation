@@ -304,7 +304,7 @@ public class GcovCodeCoverageCollectorTest {
         inOrder.verify(mMockDevice).isAdbRoot();
         inOrder.verify(mMockDevice).enableAdbRoot();
         inOrder.verify(mMockDevice).executeShellCommand("kill -37 123");
-        inOrder.verify(mMockDevice, times(2)).executeShellCommand(anyString());
+        inOrder.verify(mMockDevice, times(4)).executeShellCommand(anyString());
         inOrder.verify(mMockDevice).disableAdbRoot();
     }
 

@@ -184,8 +184,9 @@ public class ShardMainResultForwarderTest {
         Mockito.verify(mMockLogListener, times(1))
                 .testLog(Mockito.any(), Mockito.any(), Mockito.any());
         // The callback was received all the way to the last reporter.
-        Mockito.verify(mMockLogListener, times(1))
+        Mockito.verify(mMockLogListener, times(2))
                 .testLogSaved(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.verify(mMockLogListener, times(1)).logAssociation(Mockito.any(), Mockito.any());
         Mockito.verify(mMockLogListener, times(1)).invocationEnded(500L);
     }
 

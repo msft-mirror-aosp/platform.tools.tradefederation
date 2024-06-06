@@ -16,12 +16,9 @@
 
 package com.android.tradefed.targetprep;
 
-import static com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparer.RUN_TESTS_AS_USER_KEY;
-import static com.android.tradefed.targetprep.RunOnSystemUserTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY;
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -52,10 +49,7 @@ public class RunOnSystemUserTargetPreparerTest {
     @Before
     public void setUp() throws Exception {
         mPreparer = new RunOnSystemUserTargetPreparer();
-        when(mTestInfo
-                        .getDevice()
-                        .getBooleanProperty(eq(HEADLESS_SYSTEM_USER_PROPERTY), anyBoolean()))
-                .thenReturn(false);
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(false);
         when(mTestInfo.getDevice().switchUser(anyInt())).thenReturn(true);
     }
 
@@ -98,10 +92,7 @@ public class RunOnSystemUserTargetPreparerTest {
     @Test
     public void setup_headlessSystemUser_doesNotSwitchUser() throws Exception {
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(10);
-        when(mTestInfo
-                        .getDevice()
-                        .getBooleanProperty(eq(HEADLESS_SYSTEM_USER_PROPERTY), anyBoolean()))
-                .thenReturn(true);
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
 
         mPreparer.setUp(mTestInfo);
 
@@ -111,10 +102,7 @@ public class RunOnSystemUserTargetPreparerTest {
     @Test
     public void setup_headlessSystemUser_runsOnSystemUser() throws Exception {
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(10);
-        when(mTestInfo
-                        .getDevice()
-                        .getBooleanProperty(eq(HEADLESS_SYSTEM_USER_PROPERTY), anyBoolean()))
-                .thenReturn(true);
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
 
         mPreparer.setUp(mTestInfo);
 

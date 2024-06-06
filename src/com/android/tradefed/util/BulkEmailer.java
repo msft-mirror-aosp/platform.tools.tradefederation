@@ -98,9 +98,11 @@ public class BulkEmailer {
     }
 
     /**
-     * Helper method to load BulkMailer from config.
-     * The config must include the following tag
-     * <object type="emailer" class="com.android.tradefed.util.BulkEmailer">
+     * Helper method to load BulkMailer from config. The config must include the following tag
+     *
+     * <pre>
+     * <code>&lt;object type="emailer" class="com.android.tradefed.util.BulkEmailer"/&gt;</code>
+     * </pre>
      *
      * @param config the config
      * @return an instance of BulkEmailer

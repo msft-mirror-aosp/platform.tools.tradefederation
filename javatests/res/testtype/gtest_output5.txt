@@ -32,7 +32,7 @@ The default value 30 is used.
 [  FAILED  ] MyParamSequence/MyParamTest.ShouldPass/3 (0 ms)
 [ RUN      ] MyParamSequence/MyParamTest.ShouldPass/4
 This is some random text that should get captured by the parser.
-[  FAILED  ] MyParamSequence/MyParamTest.ShouldPass/4 (0 ms)
+[  FAILED  ] MyParamSequence/MyParamTest.ShouldPass/4, where GetParam() = "4" (0 ms)
 [ RUN      ] MyParamSequence/MyParamTest.ShouldPass/5
 [       OK ] MyParamSequence/MyParamTest.ShouldPass/5 (0 ms)
 [ RUN      ] MyParamSequence/MyParamTest.ShouldPass/6

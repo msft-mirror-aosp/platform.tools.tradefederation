@@ -16,6 +16,7 @@
 
 package com.android.tradefed.invoker;
 
+import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -47,12 +48,25 @@ public interface ITestInvocation {
      * Notify the {@link TestInvocation} that TradeFed has been requested to stop.
      *
      * @param message The message associated with stopping the invocation
+     * @param errorId Identifier associated with the forced stop
      */
-    public default void notifyInvocationStopped(String message, ErrorIdentifier errorId) {}
+    public default void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {}
+
+    /**
+     * Notify the {@link TestInvocation} that TradeFed will eventually shutdown.
+     *
+     * @param message The message associated with stopping the invocation
+     */
+    public default void notifyInvocationStopped(String message) {}
 
     /** The exit information of the given invocation. */
     public default ExitInformation getExitInfo() {
         return new ExitInformation();
+    }
+
+    /** Forward the clearcut client to report metrics. */
+    public default void setClearcutClient(ClearcutClient client) {
+        // Do nothing by default
     }
 
     /** Represents some exit information for an invocation. */

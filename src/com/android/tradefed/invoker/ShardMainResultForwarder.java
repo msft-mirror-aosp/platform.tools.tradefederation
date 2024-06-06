@@ -19,6 +19,7 @@ import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.VersionedFile;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaverListener;
@@ -28,14 +29,18 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ResultForwarder;
+import com.android.tradefed.result.skipped.SkipReason;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.TimeUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * A {@link ResultForwarder} that combines the results of a sharded test invocations. It only
@@ -70,6 +75,11 @@ public class ShardMainResultForwarder extends ResultForwarder implements ILogSav
         mShardsRemaining = expectedShards;
         mInitCount = expectedShards;
         mShardContextList = new ArrayList<>();
+    }
+
+    @Override
+    public List<ITestInvocationListener> getListeners() {
+        return super.getListeners();
     }
 
     /**
@@ -112,6 +122,13 @@ public class ShardMainResultForwarder extends ResultForwarder implements ILogSav
     public void invocationFailed(FailureDescription failure) {
         // one of the shards failed. Fail the whole invocation
         super.invocationFailed(failure);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        // Shouldn't really happen, but if one shard is skipped, report skip.
+        super.invocationSkipped(reason);
     }
 
     /**
@@ -236,24 +253,58 @@ public class ShardMainResultForwarder extends ResultForwarder implements ILogSav
                 }
             }
             // Copy invocation metrics to main
+            MultiMap<String, String> attributes = shard.getAttributes();
             for (InvocationGroupMetricKey key : InvocationGroupMetricKey.values()) {
-                Map<String, String> attributes = shard.getAttributes().getUniqueMap();
-                for (String attKey : attributes.keySet()) {
-                    if (attKey.startsWith(key.toString())) {
-                        if (key.shouldAdd()) {
-                            long baseValue = 0L;
-                            if (mInvocationMetrics.get(attKey) != null) {
-                                baseValue = mInvocationMetrics.get(attKey);
-                            }
-                            try {
-                                long newVal = baseValue + Long.parseLong(attributes.get(attKey));
-                                mInvocationMetrics.put(attKey, newVal);
-                            } catch (NumberFormatException e) {
-                                CLog.e(e);
-                            }
-                        } else {
-                            main.addInvocationAttribute(attKey, attributes.get(attKey));
+                Set<String> attKeys = new HashSet<>(attributes.keySet());
+                for (String attKey : attKeys) {
+                    if (attKey.startsWith(key.toString() + ":")) {
+                        List<String> values = attributes.get(attKey);
+                        if (values == null) {
+                            continue;
                         }
+                        attributes.remove(attKey);
+                        for (String val : values) {
+                            if (key.shouldAdd()) {
+                                long baseValue = 0L;
+                                if (mInvocationMetrics.get(attKey) != null) {
+                                    baseValue = mInvocationMetrics.get(attKey);
+                                }
+                                try {
+                                    long newVal = baseValue + Long.parseLong(val);
+                                    mInvocationMetrics.put(attKey, newVal);
+                                } catch (NumberFormatException e) {
+                                    CLog.e(e);
+                                }
+                            } else {
+                                main.addInvocationAttribute(attKey, val);
+                            }
+                        }
+                    }
+                }
+            }
+            for (InvocationMetricKey key : InvocationMetricKey.values()) {
+                if (!attributes.containsKey(key.toString())) {
+                    continue;
+                }
+                List<String> values = attributes.get(key.toString());
+                if (values == null) {
+                    continue;
+                }
+                attributes.remove(key.toString());
+                for (String val : values) {
+                    if (key.shouldAdd()) {
+                        long baseValue = 0L;
+                        if (mInvocationMetrics.get(key.toString()) != null) {
+                            baseValue = mInvocationMetrics.get(key.toString());
+                        }
+                        try {
+                            long newVal = baseValue + Long.parseLong(val);
+                            mInvocationMetrics.put(key.toString(), newVal);
+                        } catch (NumberFormatException e) {
+                            // Ignored, it's just not a number
+                        }
+                    } else {
+                        main.addInvocationAttribute(key.toString(), val);
                     }
                 }
             }
