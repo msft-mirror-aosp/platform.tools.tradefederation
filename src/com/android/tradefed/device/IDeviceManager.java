@@ -220,6 +220,14 @@ public interface IDeviceManager {
     public List<DeviceDescriptor> listAllDevices();
 
     /**
+     * Returns a list of DeviceDescriptors for all known devices
+     *
+     * @param shortDescriptor whether to limit descriptors to minimum info
+     * @return a list of {@link DeviceDescriptor} for all known devices
+     */
+    public List<DeviceDescriptor> listAllDevices(boolean shortDescriptor);
+
+    /**
      * Returns the DeviceDescriptor with the given serial.
      *
      * @param serial serial number for the device to get

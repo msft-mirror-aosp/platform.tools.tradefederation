@@ -21,6 +21,7 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.targetprep.DeviceFlashPreparer;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +37,8 @@ public interface IHostOptions {
      */
     public enum PermitLimitType {
         CONCURRENT_FLASHER,
-        CONCURRENT_DOWNLOAD;
+        CONCURRENT_DOWNLOAD,
+        CONCURRENT_VIRTUAL_DEVICE_STARTUP;
     }
 
     /**
@@ -51,6 +53,12 @@ public interface IHostOptions {
      * downloads remote builds.
      */
     Integer getConcurrentDownloadLimit();
+
+    /**
+     * Returns the max number of concurrent virtual device startup allowed. Used by {@link
+     * com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice} that startup virtual device.
+     */
+    Integer getConcurrentVirtualDeviceStartupLimit();
 
     /** Returns the path that fastboot should use as temporary folder. */
     File getFastbootTmpDir();
@@ -74,7 +82,10 @@ public interface IHostOptions {
     public List<String> getLabels();
 
     /** Known tcp-device associated with a specific IP. */
-    Set<String> getKnownTcpDeviceIpPool();
+    @Deprecated
+    default Set<String> getKnownTcpDeviceIpPool() {
+      return new HashSet<>();
+    }
 
     /** Known gce-device associated with a specific IP. */
     Set<String> getKnownGceDeviceIpPool();
@@ -83,13 +94,16 @@ public interface IHostOptions {
     Set<String> getKnownRemoteDeviceIpPool();
 
     /** Known preconfigured virtual device pool. */
-    Set<String> getKnownPreconfigureVirtualDevicePool();
+    List<String> getKnownPreconfigureVirtualDevicePool();
 
     /** Check if it should use the zip64 format in partial download or not. */
     boolean getUseZip64InPartialDownload();
 
     /** Returns the network interface used to connect to remote test devices. */
     String getNetworkInterface();
+
+    /** Returns the Test Phase level timeout specified. Default will be 0 for no timeouts. */
+    long getTestPhaseTimeout();
 
     /** Initializes the concurrent locks */
     public void initConcurrentLocks();
@@ -102,4 +116,22 @@ public interface IHostOptions {
 
     /** Returns the number of available permit of a given type */
     public Integer getAvailablePermits(PermitLimitType type);
+
+    /** Returns the number of permits in use for a given type */
+    public int getInUsePermits(PermitLimitType type);
+
+    /** Returns whether or not flashing should be done with fuse mounted device image zip file. */
+    public boolean shouldFlashWithFuseZip();
+
+    /** Return maximum allowed size(bytes) of the local file cache. */
+    public Long getCacheSizeLimit();
+
+    /** Returns whether or not incremental flashing is enabled. */
+    public boolean isIncrementalFlashingEnabled();
+
+    /** Returns whether the host is opt-out of incremental flashing. */
+    public boolean isOptOutOfIncrementalFlashing();
+
+    /** Returns whether host metric reporting should be disabled. */
+    public boolean isHostMetricReportingDisabled();
 }

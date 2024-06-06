@@ -17,11 +17,13 @@ package com.android.tradefed.invoker.shard;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestLoggerReceiver;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
@@ -50,6 +52,14 @@ public class StrictShardHelper extends ShardHelper {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
+        // need to look up attempt id somewhere and make sure we only attempt this on attempt 0
+        if (config.getCommandOptions().shouldRemoteDynamicShard()) {
+            // We are using dynamic sharding
+            DynamicShardHelper helper = new DynamicShardHelper();
+            // TODO(murj) handle the case where dynamic sharding fails
+            return helper.shardConfig(config, testInfo, rescheduler, logger);
+        }
+
         Integer shardCount = config.getCommandOptions().getShardCount();
         Integer shardIndex = config.getCommandOptions().getShardIndex();
         boolean optimizeMainline = config.getCommandOptions().getOptimizeMainlineTest();
@@ -74,7 +84,12 @@ public class StrictShardHelper extends ShardHelper {
             // not sharded
             splitList = listAllTests;
         } else {
-            splitList = splitTests(listAllTests, shardCount).get(shardIndex);
+            splitList =
+                    splitTests(
+                                    listAllTests,
+                                    shardCount,
+                                    config.getCommandOptions().shouldUseEvenModuleSharding())
+                            .get(shardIndex);
         }
         aggregateSuiteModules(splitList);
         if (optimizeMainline) {
@@ -115,9 +130,12 @@ public class StrictShardHelper extends ShardHelper {
         if (m.find()) {
             return m.group(1);
         }
-        throw new RuntimeException(
-                String.format("Module: %s doesn't match the pattern for mainline modules. The " +
-                        "pattern should end with apk/apex/apks.", id));
+        throw new HarnessRuntimeException(
+                String.format(
+                        "Module: %s doesn't match the pattern for mainline modules. The "
+                                + "pattern should end with apk/apex/apks.",
+                        id),
+                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
     }
 
     /**
@@ -183,27 +201,37 @@ public class StrictShardHelper extends ShardHelper {
      * @param fullList the initial full list of {@link IRemoteTest} containing all the tests that
      *     need to run.
      * @param shardCount the total number of shard that need to run.
+     * @param useEvenModuleSharding whether to use a strategy that evenly distributes number of
+     *     modules across shards
      * @return a list of list {@link IRemoteTest}s that have been assigned to each shard. The list
      *     size will be the shardCount.
      */
     @VisibleForTesting
-    protected List<List<IRemoteTest>> splitTests(List<IRemoteTest> fullList, int shardCount) {
-        List<List<IRemoteTest>> shards = new ArrayList<>();
-        // We are using Match.ceil to avoid the last shard having too much extra.
-        int numPerShard = (int) Math.ceil(fullList.size() / (float) shardCount);
+    protected List<List<IRemoteTest>> splitTests(
+            List<IRemoteTest> fullList, int shardCount, boolean useEvenModuleSharding) {
+        List<List<IRemoteTest>> shards;
+        if (useEvenModuleSharding) {
+            CLog.d("Using the sharding strategy to distribute number of modules more evenly.");
+            shards = shardList(fullList, shardCount);
+        } else {
+            shards = new ArrayList<>();
+            // We are using Match.ceil to avoid the last shard having too much extra.
+            int numPerShard = (int) Math.ceil(fullList.size() / (float) shardCount);
 
-        boolean needsCorrection = false;
-        float correctionRatio = 0f;
-        if (fullList.size() > shardCount) {
-            // In some cases because of the Math.ceil, some combination might run out of tests
-            // before the last shard, in that case we populate a correction to rebalance the tests.
-            needsCorrection = (numPerShard * (shardCount - 1)) > fullList.size();
-            correctionRatio = numPerShard - (fullList.size() / (float) shardCount);
+            boolean needsCorrection = false;
+            float correctionRatio = 0f;
+            if (fullList.size() > shardCount) {
+                // In some cases because of the Math.ceil, some combination might run out of tests
+                // before the last shard, in that case we populate a correction to rebalance the
+                // tests.
+                needsCorrection = (numPerShard * (shardCount - 1)) > fullList.size();
+                correctionRatio = numPerShard - (fullList.size() / (float) shardCount);
+            }
+            // Recalculate the number of tests per shard with the correction taken into account.
+            numPerShard = (int) Math.floor(numPerShard - correctionRatio);
+            // Based of the parameters, distribute the tests across shards.
+            shards = balancedDistrib(fullList, shardCount, numPerShard, needsCorrection);
         }
-        // Recalculate the number of tests per shard with the correction taken into account.
-        numPerShard = (int) Math.floor(numPerShard - correctionRatio);
-        // Based of the parameters, distribute the tests accross shards.
-        shards = balancedDistrib(fullList, shardCount, numPerShard, needsCorrection);
         // Do last minute rebalancing
         topBottom(shards, shardCount);
         return shards;
@@ -249,6 +277,37 @@ public class StrictShardHelper extends ShardHelper {
             } else {
                 break;
             }
+        }
+        return shards;
+    }
+
+    @VisibleForTesting
+    static <T> List<List<T>> shardList(List<T> fullList, int shardCount) {
+        int totalSize = fullList.size();
+        int smallShardSize = totalSize / shardCount;
+        int bigShardSize = smallShardSize + 1;
+        int bigShardCount = totalSize % shardCount;
+
+        // Correctness:
+        // sum(shard sizes)
+        // == smallShardSize * smallShardCount + bigShardSize * bigShardCount
+        // == smallShardSize * (shardCount - bigShardCount) + bigShardSize * bigShardCount
+        // == smallShardSize * (shardCount - bigShardCount) + (smallShardSize + 1) * bigShardCount
+        // == smallShardSize * (shardCount - bigShardCount + bigShardCount) + bigShardCount
+        // == smallShardSize * shardCount + bigShardCount
+        // == floor(totalSize / shardCount) * shardCount + remainder(totalSize / shardCount)
+        // == totalSize
+
+        List<List<T>> shards = new ArrayList<>();
+        int i = 0;
+        for (; i < bigShardCount * bigShardSize; i += bigShardSize) {
+            shards.add(fullList.subList(i, i + bigShardSize));
+        }
+        for (; i < totalSize; i += smallShardSize) {
+            shards.add(fullList.subList(i, i + smallShardSize));
+        }
+        while (shards.size() < shardCount) {
+            shards.add(new ArrayList<>());
         }
         return shards;
     }

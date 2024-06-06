@@ -24,8 +24,10 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Replicate a setup for one device to all other devices that will be part of sharding. */
 public class ParentShardReplicate {
@@ -58,9 +60,12 @@ public class ParentShardReplicate {
         CLog.logAndDisplay(LogLevel.DEBUG, "Using replicated setup.");
         try {
             List<IDeviceConfiguration> currentConfigs = config.getDeviceConfig();
+            Set<String> objectToReplicate =
+                    new HashSet<>(Configuration.getMultiDeviceSupportedTag());
+            objectToReplicate.remove(Configuration.BUILD_PROVIDER_TYPE_NAME);
             for (int i = 0; i < deviceCount - 1; i++) {
                 IConfiguration deepCopy =
-                        config.partialDeepClone(Arrays.asList(Configuration.DEVICE_NAME), client);
+                        config.partialDeepClone(new ArrayList<>(objectToReplicate), client);
                 String newName = String.format("expanded-%s", i);
                 IDeviceConfiguration newDeviceConfig =
                         deepCopy.getDeviceConfig().get(0).clone(newName);

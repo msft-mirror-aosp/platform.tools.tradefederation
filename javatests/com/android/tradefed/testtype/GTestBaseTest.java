@@ -78,6 +78,7 @@ public class GTestBaseTest {
         assertEquals("--gtest_filter=filter1", filters);
     }
 
+
     /** Test get postive gtest filters. */
     @Test
     public void testGTestFilters_positive()
@@ -197,5 +198,18 @@ public class GTestBaseTest {
         List<IRemoteTest> tests = new ArrayList<>(gTestBase.split(5));
         assertNotNull(tests);
         assertNotNull(((GTestBase) tests.get(0)).getAbi());
+    }
+
+    /**
+     * Test that we change to the test's working directory before execution when the option is set.
+     */
+    @Test
+    public void test_getGTestCmdLineWrapper_changeWorkingDirectory()
+            throws ConfigurationException, DeviceNotAvailableException {
+        GTestBase gTestBase = new GTestBaseImpl();
+        mSetter = new OptionSetter(gTestBase);
+        mSetter.setOptionValue("change-to-working-directory", "true");
+        String cmd_line = gTestBase.getGTestCmdLine("/data/local/tmp/test1", "flags");
+        assertEquals("cd /data/local/tmp; ./test1 flags", cmd_line);
     }
 }

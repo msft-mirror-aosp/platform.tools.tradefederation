@@ -25,6 +25,8 @@ import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogFile;
@@ -36,13 +38,18 @@ import com.android.tradefed.util.TimeUtil;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /** Special runner that replays the results given to it. */
 public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver {
+
+    public static final String REPLAY_DONE = "REPLAY_DONE";
 
     private class ReplayModuleHolder {
         public IInvocationContext mModuleContext;
@@ -75,6 +82,7 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
             }
             device.waitForDeviceAvailable();
         }
+        testInfo.getContext().getBuildInfos().get(0).addBuildAttribute(REPLAY_DONE, "false");
 
         long startReplay = System.currentTimeMillis();
         CLog.logAndDisplay(
@@ -84,8 +92,12 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
         LogLevel originalLevel = mConfiguration.getLogOutput().getLogLevel();
         mConfiguration.getLogOutput().setLogLevel(LogLevel.WARN);
 
-        for (TestRunResult module : mModuleResult.keySet()) {
-            ReplayModuleHolder holder = mModuleResult.get(module);
+        Set<Entry<TestRunResult, ReplayModuleHolder>> entries = mModuleResult.entrySet();
+        for (Entry<TestRunResult, ReplayModuleHolder> e : new LinkedHashSet<>(entries)) {
+            TestRunResult module = e.getKey();
+            ReplayModuleHolder holder = e.getValue();
+            // Remove tracking to free memory
+            mModuleResult.remove(module);
 
             IInvocationContext moduleContext = holder.mModuleContext;
             if (moduleContext != null) {
@@ -114,6 +126,7 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
             // So we need to clean up the entries when we are done with them to free up the
             // memory early
             holder.mResults.clear();
+            module.getTestResults().clear();
         }
         // Restore the original log level to continue execution with the requested log level.
         mConfiguration.getLogOutput().setLogLevel(originalLevel);
@@ -123,6 +136,9 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
                 TimeUtil.formatElapsedTime(System.currentTimeMillis() - startReplay));
         mModuleResult.clear();
         mCompleted = true;
+
+        testInfo.getContext().getBuildInfos().get(0).removeBuildAttribute(REPLAY_DONE);
+        testInfo.getContext().getBuildInfos().get(0).addBuildAttribute(REPLAY_DONE, "true");
     }
 
     /**
@@ -166,7 +182,7 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
         listener.testRunStarted(module.getName(), testSet.size());
         for (Map.Entry<TestDescription, TestResult> testEntry : testSet) {
             listener.testStarted(testEntry.getKey(), testEntry.getValue().getStartTime());
-            switch (testEntry.getValue().getStatus()) {
+            switch (testEntry.getValue().getResultStatus()) {
                 case FAILURE:
                     listener.testFailed(testEntry.getKey(), testEntry.getValue().getStackTrace());
                     break;
@@ -176,6 +192,9 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
                     break;
                 case IGNORED:
                     listener.testIgnored(testEntry.getKey());
+                    break;
+                case SKIPPED:
+                    listener.testSkipped(testEntry.getKey(), testEntry.getValue().getSkipReason());
                     break;
                 case INCOMPLETE:
                     listener.testFailed(
@@ -192,10 +211,14 @@ public final class ResultsPlayer implements IRemoteTest, IConfigurationReceiver 
                             .logAssociation(logFile.getKey(), logFile.getValue());
                 }
             }
-            listener.testEnded(
-                    testEntry.getKey(),
-                    testEntry.getValue().getEndTime(),
-                    testEntry.getValue().getProtoMetrics());
+            HashMap<String, Metric> metrics = testEntry.getValue().getProtoMetrics();
+            // Mark result as cached
+            metrics.put(
+                    "cached",
+                    Metric.newBuilder()
+                            .setMeasurements(Measurements.newBuilder().setSingleString("true"))
+                            .build());
+            listener.testEnded(testEntry.getKey(), testEntry.getValue().getEndTime(), metrics);
         }
         if (module.isRunFailure()) {
             listener.testRunFailed(module.getRunFailureMessage());

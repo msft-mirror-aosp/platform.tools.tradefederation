@@ -28,38 +28,73 @@ import com.android.tradefed.util.CommandStatus;
 /** A {@link ITargetPreparer} that wipes userdata */
 @OptionClass(alias = "device-wiper")
 public class DeviceWiper extends BaseTargetPreparer {
-
-    @Option(name = "use-erase", description =
-            "instruct wiper to use fastboot erase instead of format")
+    @Deprecated
+    @Option(name = "use-erase",
+            description =
+                    "Deprecated. Please use mode instead. Instruct wiper to use fastboot erase "
+                    + "instead of format.")
     protected boolean mUseErase = false;
+
+    private enum Mode {
+        /** Use fastboot format. */
+        FORMAT,
+        /** Use fastboot erase. */
+        ERASE,
+        /**
+         * Use factory reset. Recommended when the test needs to support Cuttlefish, where fastboot
+         * is not fully supported.
+         */
+        FACTORY_RESET,
+    }
+
+    @Option(name = "mode", description = "Determines how to wipes userdata. Default: FORMAT")
+    private Mode mMode = Mode.FORMAT;
 
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInfo.getDevice();
         CLog.i("Wiping device");
-        device.rebootIntoBootloader();
-        if (mUseErase) {
-            doErase(device);
-        } else {
-            doFormat(device);
+        if (mMode.equals(Mode.FORMAT) && mUseErase) {
+            mMode = Mode.ERASE;
         }
-        device.executeFastbootCommand("reboot");
+        switch (mMode) {
+            case FORMAT:
+                doFormat(device);
+                break;
+            case ERASE:
+                doErase(device);
+                break;
+            case FACTORY_RESET:
+                doFactoryReset(device);
+                break;
+        }
         device.waitForDeviceAvailable();
     }
 
     private void doFormat(ITestDevice device) throws DeviceNotAvailableException, TargetSetupError {
-        CLog.d("Attempting fastboot wiping");
-        CommandResult r = device.executeLongFastbootCommand("-w");
-        if (r.getStatus() != CommandStatus.SUCCESS) {
-            throw new TargetSetupError(String.format("fastboot wiping failed: %s", r.getStderr()),
-                    device.getDeviceDescriptor());
+        try {
+            device.rebootIntoBootloader();
+            CLog.d("Attempting fastboot wiping");
+            CommandResult r = device.executeLongFastbootCommand("-w");
+            if (r.getStatus() != CommandStatus.SUCCESS) {
+                throw new TargetSetupError(
+                        String.format("fastboot wiping failed: %s", r.getStderr()),
+                        device.getDeviceDescriptor());
+            }
+        } finally {
+            device.executeFastbootCommand("reboot");
         }
     }
 
     private void doErase(ITestDevice device) throws DeviceNotAvailableException, TargetSetupError {
-        performFastbootOp(device, "erase", "cache");
-        performFastbootOp(device, "erase", "userdata");
+        try {
+            device.rebootIntoBootloader();
+            performFastbootOp(device, "erase", "cache");
+            performFastbootOp(device, "erase", "userdata");
+        } finally {
+            device.executeFastbootCommand("reboot");
+        }
     }
 
     private void performFastbootOp(ITestDevice device, String op, String partition)
@@ -70,5 +105,21 @@ public class DeviceWiper extends BaseTargetPreparer {
             throw new TargetSetupError(String.format("%s %s failed: %s", op, partition,
                     r.getStderr()), device.getDeviceDescriptor());
         }
+    }
+
+    private void doFactoryReset(ITestDevice device)
+            throws DeviceNotAvailableException, TargetSetupError {
+        if (!device.enableAdbRoot()) {
+            throw new TargetSetupError("Unable to do factory reset because adb root failed",
+                    device.getDeviceDescriptor());
+        }
+        CommandResult r =
+                device.executeShellV2Command("am broadcast -p android --receiver-foreground "
+                        + "-a android.intent.action.FACTORY_RESET");
+        if (r.getStatus() != CommandStatus.SUCCESS) {
+            throw new TargetSetupError(String.format("factory reset failed: %s", r.getStderr()),
+                    device.getDeviceDescriptor());
+        }
+        device.waitForDeviceNotAvailable(30_000);
     }
 }

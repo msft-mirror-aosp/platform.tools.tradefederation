@@ -60,7 +60,7 @@ class YamlTestDependencies {
             }
             if (!DEPENDENCY_KEYS.containsAll(dependencyEntry.keySet())) {
                 Set<String> unexpectedKeys = new HashSet<>(dependencyEntry.keySet());
-                unexpectedKeys.removeAll(unexpectedKeys);
+                unexpectedKeys.removeAll(DEPENDENCY_KEYS);
                 throw new ConfigurationException(
                         String.format(
                                 "keys '%s' in '%s' are unexpected",

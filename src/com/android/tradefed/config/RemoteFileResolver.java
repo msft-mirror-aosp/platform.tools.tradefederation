@@ -16,8 +16,10 @@
 package com.android.tradefed.config;
 
 import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.config.DynamicRemoteFileResolver.ServiceFileResolverLoader;
 import com.android.tradefed.config.remote.IRemoteFileResolver;
 import com.android.tradefed.config.remote.IRemoteFileResolver.RemoteFileResolverArgs;
+import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
 import com.android.tradefed.invoker.logger.InvocationLocal;
 
 import java.io.File;
@@ -52,15 +54,7 @@ public class RemoteFileResolver {
                 }
             };
 
-    private final IFileResolverLoader mFileResolverLoader;
-
-    public RemoteFileResolver() {
-        this(DEFAULT_FILE_RESOLVER_LOADER);
-    }
-
-    public RemoteFileResolver(IFileResolverLoader loader) {
-        this.mFileResolverLoader = loader;
-    }
+    public RemoteFileResolver() {}
 
     /**
      * Load a file specified by a URI and place it in the destination directory
@@ -70,7 +64,8 @@ public class RemoteFileResolver {
      * @return a {@link File} object representing the loaded file
      * @throws BuildRetrievalError when the requested resource cannot be located
      */
-    public static File resolveRemoteFile(URI fileURI, URI destDir) throws BuildRetrievalError {
+    public static ResolvedFile resolveRemoteFile(URI fileURI, URI destDir)
+            throws BuildRetrievalError {
         return resolveRemoteFile(fileURI, destDir, getDefaultResolver(fileURI, new HashMap<>()));
     }
 
@@ -83,8 +78,8 @@ public class RemoteFileResolver {
      * @return a {@link File} object representing the loaded file
      * @throws BuildRetrievalError when the requested resource cannot be located
      */
-    public static File resolveRemoteFile(URI fileURI, URI destDir, IRemoteFileResolver resolver)
-            throws BuildRetrievalError {
+    public static ResolvedFile resolveRemoteFile(
+            URI fileURI, URI destDir, IRemoteFileResolver resolver) throws BuildRetrievalError {
         RemoteFileResolverArgs args = new RemoteFileResolverArgs();
         args.setConsideredFile(new File(fileURI.toString()));
         args.setDestinationDir(new File(destDir));
@@ -99,7 +94,7 @@ public class RemoteFileResolver {
                             });
         }
         args.addQueryArgs(queryArgs);
-        return resolver.resolveRemoteFile(args).getResolvedFile();
+        return resolver.resolveRemoteFile(args);
     }
 
     /**

@@ -23,6 +23,7 @@ import com.android.os.StatsLog.StatsdStatsReport;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.util.statsd.ConfigUtil;
@@ -93,7 +94,7 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
      * a running log of them, and push the config to collect app crashes.
      */
     @Override
-    public void onTestRunStart(DeviceMetricData runData) {
+    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
         mTestDevices = getDevices();
         mIncludeDeviceSerial = (mTestDevices.size() > 1);
         for (ITestDevice device : mTestDevices) {
@@ -103,11 +104,12 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
                 List<Integer> existingTimestamps =
                         getStatsdMetadata(device).getSystemRestartSecList();
                 mExistingTimestamps.put(device.getSerialNumber(), existingTimestamps);
-            } catch (DeviceNotAvailableException | InvalidProtocolBufferException e) {
+            } catch (InvalidProtocolBufferException e) {
                 // Error is not thrown as we still want to process the other devices.
                 CLog.e(
                         "Failed to get statsd metadata from device %s. Exception: %s.",
                         device.getSerialNumber(), e);
+                continue;
             }
 
             // Register statsd config to collect app crashes.
@@ -116,11 +118,12 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
                         device.getSerialNumber(),
                         pushStatsConfig(
                                 device, Arrays.asList(Atom.APP_CRASH_OCCURRED_FIELD_NUMBER)));
-            } catch (DeviceNotAvailableException | IOException e) {
+            } catch (IOException e) {
                 // Error is not thrown as we still want to push the config to other devices.
                 CLog.e(
                         "Failed to push statsd config to device %s. Exception: %s.",
                         device.getSerialNumber(), e);
+                continue;
             }
         }
     }
@@ -130,16 +133,22 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
      * if any.
      */
     @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
         for (ITestDevice device : mTestDevices) {
+            if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                CLog.d(
+                        "Device '%s' is in state '%s' skipping RuntimeRestartCollector",
+                        device.getSerialNumber(), device.getDeviceState());
+                continue;
+            }
             // Pull statsd metadata again to look at the changes of system server crash timestamps
             // during the test run, and report them.
             // A copy of the list is created as the list returned by the proto is not modifiable.
             List<Integer> updatedTimestamps = new ArrayList<>();
             try {
                 updatedTimestamps.addAll(getStatsdMetadata(device).getSystemRestartSecList());
-            } catch (DeviceNotAvailableException | InvalidProtocolBufferException e) {
+            } catch (InvalidProtocolBufferException e) {
                 // Error is not thrown as we still want to process the other devices.
                 CLog.e(
                         "Failed to get statsd metadata from device %s. Exception: %s.",
@@ -178,38 +187,23 @@ public class RuntimeRestartCollector extends BaseDeviceMetricCollector {
             }
             long configId = mDeviceConfigIds.get(device.getSerialNumber());
             List<Long> uptimeListNanos = new ArrayList<>();
-            try {
-                List<EventMetricData> metricData = getEventMetricData(device, configId);
-                uptimeListNanos.addAll(
-                        metricData
-                                .stream()
-                                .filter(d -> d.hasElapsedTimestampNanos())
-                                .filter(d -> d.hasAtom())
-                                .filter(d -> d.getAtom().hasAppCrashOccurred())
-                                .filter(d -> d.getAtom().getAppCrashOccurred().hasProcessName())
-                                .filter(
-                                        d ->
-                                                SYSTEM_SERVER_KEYWORD.equals(
-                                                        d.getAtom()
-                                                                .getAppCrashOccurred()
-                                                                .getProcessName()))
-                                .map(d -> d.getElapsedTimestampNanos())
-                                .collect(Collectors.toList()));
-            } catch (DeviceNotAvailableException e) {
-                // Error is not thrown as we still want to process other devices.
-                CLog.e(
-                        "Failed to retrieve event metric data from device %s. Exception: %s.",
-                        device.getSerialNumber(), e);
-            }
+            List<EventMetricData> metricData = getEventMetricData(device, configId);
+            uptimeListNanos.addAll(
+                    metricData.stream()
+                            .filter(d -> d.hasElapsedTimestampNanos())
+                            .filter(d -> d.hasAtom())
+                            .filter(d -> d.getAtom().hasAppCrashOccurred())
+                            .filter(d -> d.getAtom().getAppCrashOccurred().hasProcessName())
+                            .filter(
+                                    d ->
+                                            SYSTEM_SERVER_KEYWORD.equals(
+                                                    d.getAtom()
+                                                            .getAppCrashOccurred()
+                                                            .getProcessName()))
+                            .map(d -> d.getElapsedTimestampNanos())
+                            .collect(Collectors.toList()));
             addAtomBasedMetrics(currentRunMetrics, uptimeListNanos, device.getSerialNumber());
-            try {
-                removeConfig(device, configId);
-            } catch (DeviceNotAvailableException e) {
-                // Error is not thrown as we still want to remove the config from other devices.
-                CLog.e(
-                        "Failed to remove statsd config from device %s. Exception: %s.",
-                        device.getSerialNumber(), e);
-            }
+            removeConfig(device, configId);
         }
     }
 
