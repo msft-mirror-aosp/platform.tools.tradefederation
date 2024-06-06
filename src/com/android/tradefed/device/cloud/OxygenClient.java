@@ -33,6 +33,8 @@ import com.android.tradefed.util.RunUtil;
 import com.google.common.collect.Lists;
 
 import java.io.File;
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,7 +53,8 @@ public class OxygenClient {
 
     public enum LHPTunnelMode {
         SSH,
-        ADB;
+        ADB,
+        CURL;
     }
 
     private final File mClientBinary;
@@ -197,7 +200,7 @@ public class OxygenClient {
     public CommandResult leaseDevice(
             IBuildInfo b, TestDeviceOptions deviceOptions, MultiMap<String, String> attributes) {
         if (deviceOptions.useOxygenationDevice()) {
-            // TODO(easoncylee/haoch): Flesh out this section when the oxygen client is supported.
+            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
             // Lease an oxygenation device with additional options passed in when
             // use-oxygenation-device is set.
             // For now, return failure with exceptions first.
@@ -366,7 +369,7 @@ public class OxygenClient {
             return true;
         }
         if (deviceOptions.useOxygenationDevice()) {
-            // TODO(easoncylee/haoch): Flesh out this section when the oxygen client is supported.
+            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
             // Release an oxygenation device with additional options passed in when
             // use-oxygenation-device is set.
             // For now, return false first.
@@ -416,7 +419,8 @@ public class OxygenClient {
      *
      * @return {@link Process} of the adb over LHP tunnel.
      */
-    public Process createTunnelViaLHP(LHPTunnelMode mode) {
+    public Process createTunnelViaLHP(
+            LHPTunnelMode mode, String portNumber, String instanceName, String deviceId) {
         // TODO(easoncylee): Flesh out this section once the oxygen client is ready.
         // At high level, the logic would look like as following steps:
         // Step1: Create an unused ServerSocket port for establishing the adb tunnel.
@@ -424,9 +428,26 @@ public class OxygenClient {
         // Step3: return the process of the connection, or null if the tunnel can't be established.
         if (LHPTunnelMode.ADB.equals(mode)) {
             return null;
+        } else if (LHPTunnelMode.CURL.equals(mode)) {
+            return null;
         } else {
             return null;
         }
+    }
+
+    /** Helper to create an unused server socket. */
+    public Integer createServerSocket() {
+        ServerSocket s = null;
+        try {
+            s = new ServerSocket(0);
+            // even after being closed, socket may remain in TIME_WAIT state
+            // reuse address allows to connect to it even in this state.
+            s.setReuseAddress(true);
+            s.close();
+        } catch (IOException e) {
+            CLog.d("Failed to connect to remote GCE using adb tunnel %s", e.getMessage());
+        }
+        return s.getLocalPort();
     }
 
     /** Close the connection to the remote oxygenation device with a given {@link Process}. */
