@@ -540,7 +540,7 @@ public class AndroidJUnitTestTest {
      * not for <package>.
      */
     @Test
-    public void c() throws Exception {
+    public void testIsClassOrMethod() throws Exception {
         assertFalse("String was just package", mAndroidJUnitTest.isClassOrMethod("android.test"));
         assertTrue("String was class", mAndroidJUnitTest.isClassOrMethod("android.test.Foo"));
         assertTrue("String was method", mAndroidJUnitTest.isClassOrMethod("android.test.Foo#bar"));
