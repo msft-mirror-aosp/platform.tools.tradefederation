@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import static org.junit.Assert.*;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -44,12 +43,13 @@ import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Unit tests for {@link FileSystemLogSaver}.
@@ -173,8 +173,7 @@ public class FileSystemLogSaverTest {
     @Test
     public void testSaveLogData_uncompressed() throws IOException {
         LogFile logFile = null;
-        ZipFile zipFile = null;
-        BufferedReader logFileReader = null;
+        GZIPInputStream gis = null;
         try {
             // TODO: would be nice to create a mock file output to make this test not use disk I/O
             FileSystemLogSaver saver = new FileSystemLogSaver();
@@ -185,25 +184,19 @@ public class FileSystemLogSaverTest {
             ByteArrayInputStream mockInput = new ByteArrayInputStream(testData.getBytes());
             logFile = saver.saveLogData("testSaveLogData", LogDataType.TEXT, mockInput);
 
-            assertTrue(logFile.getPath().endsWith(LogDataType.ZIP.getFileExt()));
+            assertTrue(logFile.getPath().endsWith(LogDataType.GZIP.getFileExt()));
             // Verify test data was written to file
-            zipFile = new ZipFile(new File(logFile.getPath()));
-
-            String actualLogString =
-                    StreamUtil.getStringFromStream(
-                            zipFile.getInputStream(new ZipEntry("testSaveLogData.txt")));
+            gis = new GZIPInputStream(Files.newInputStream(Path.of(logFile.getPath())));
+            String actualLogString = StreamUtil.getStringFromStream(gis);
             assertTrue(actualLogString.equals(testData));
         } finally {
-            StreamUtil.close(logFileReader);
-            if (zipFile != null) {
-                zipFile.close();
-            }
+            StreamUtil.close(gis);
             FileUtil.deleteFile(new File(logFile.getPath()));
         }
     }
 
     /**
-     * Test saving compressed data for {@link FileSystemLogSaver#saveLogDataRaw(String, LogDataType,
+     * Test saving compressed data for {@link FileSystemLogSaver#saveLogData(String, LogDataType,
      * InputStream)}.
      */
     @Test
@@ -246,7 +239,7 @@ public class FileSystemLogSaverTest {
 
             final String testData = "Here's some test data, blah";
             ByteArrayInputStream mockInput = new ByteArrayInputStream(testData.getBytes());
-            logFile = saver.saveLogDataRaw("testSaveLogData", LogDataType.TEXT, mockInput);
+            logFile = saver.saveLogDataRaw("testSaveLogData", LogDataType.HOST_LOG, mockInput);
 
             // Verify test data was written to file
             logFileReader = new BufferedReader(new FileReader(new File(logFile.getPath())));

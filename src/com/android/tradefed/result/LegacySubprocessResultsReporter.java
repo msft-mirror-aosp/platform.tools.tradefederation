@@ -25,13 +25,13 @@ import com.android.tradefed.util.SubprocessEventHelper.BaseTestEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.FailedTestEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationFailedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationStartedEventInfo;
+import com.android.tradefed.util.SubprocessEventHelper.LogAssociationEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestEndedEventInfo;
+import com.android.tradefed.util.SubprocessEventHelper.TestModuleStartedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestRunEndedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestRunFailedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestRunStartedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestStartedEventInfo;
-import com.android.tradefed.util.SubprocessEventHelper.TestModuleStartedEventInfo;
-import com.android.tradefed.util.SubprocessEventHelper.LogAssociationEventInfo;
 import com.android.tradefed.util.SubprocessTestResultsParser;
 
 import org.json.JSONObject;
@@ -62,10 +62,17 @@ public final class LegacySubprocessResultsReporter extends SubprocessResultsRepo
             };
 
     public LegacySubprocessResultsReporter() {
-        // Install a signal handler to properly stop running invocations. This allows old TF-based
-        // test suites to generate test result files when interrupted.
-        // FIXME: Don't install a new handler if CommandRunner already installed one.
-        Signal.handle(new Signal("TERM"), handler);
+        this(true);
+    }
+
+    protected LegacySubprocessResultsReporter(boolean installHandler) {
+        if (installHandler) {
+            // Install a signal handler to properly stop running invocations. This allows old
+            // TF-based
+            // test suites to generate test result files when interrupted.
+            // FIXME: Don't install a new handler if CommandRunner already installed one.
+            Signal.handle(new Signal("TERM"), handler);
+        }
     }
 
     /* Legacy method compatible with TF/CTS 8+. */

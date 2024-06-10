@@ -24,6 +24,8 @@ import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.retry.ResultsPlayer;
 
+import com.google.common.base.Strings;
+
 /** Reporter that allows to generate reports in a particular format. TODO: fix logged file */
 public abstract class FormattedGeneratorReporter extends SuiteResultReporter
         implements IConfigurationReceiver {
@@ -54,6 +56,21 @@ public abstract class FormattedGeneratorReporter extends SuiteResultReporter
                     replaySuccess = ((ResultsPlayer) test).completed();
                 }
             }
+
+            String replay =
+                    getInvocationContext()
+                            .getBuildInfos()
+                            .get(0)
+                            .getBuildAttributes()
+                            .get(ResultsPlayer.REPLAY_DONE);
+            if (!Strings.isNullOrEmpty(replay) && "false".equals(replay)) {
+                CLog.e(
+                        "Invocation failed and previous session results couldn't be copied, skip "
+                                + "generating the formatted report due to:");
+                CLog.e(mTestHarnessError);
+                return;
+            }
+
             if (replaySuccess != null && !replaySuccess) {
                 CLog.e(
                         "Invocation failed and previous session results couldn't be copied, skip "

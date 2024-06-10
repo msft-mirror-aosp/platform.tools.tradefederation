@@ -19,7 +19,10 @@ package com.android.tradefed.config;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.proxy.TradefedDelegator;
+import com.android.tradefed.config.remote.ExtendedFile;
+import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
 import com.android.tradefed.config.yaml.ConfigurationYamlParser;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.ClassPathScanner;
@@ -506,7 +509,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
     protected ConfigurationDef getConfigurationDef(
             String name, boolean isGlobal, Map<String, String> templateMap)
             throws ConfigurationException {
-        return new ConfigLoader(isGlobal).getConfigurationDef(name, templateMap);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("getConfigurationDef")) {
+            return new ConfigLoader(isGlobal).getConfigurationDef(name, templateMap);
+        }
     }
 
     /**
@@ -551,8 +556,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
             CLog.w("dry-run detected, we are using a dryrun keystore");
             keyStoreClient = new DryRunKeyStore();
         }
-        final List<String> tmpUnconsumedArgs = config.setOptionsFromCommandLineArgs(
-                listArgs, keyStoreClient);
+        final List<String> tmpUnconsumedArgs =
+                config.setOptionsFromCommandLineArgs(listArgs, keyStoreClient);
 
         if (unconsumedArgs == null && tmpUnconsumedArgs.size() > 0) {
             // (unconsumedArgs == null) is taken as a signal that the caller
@@ -672,37 +677,40 @@ public class ConfigurationFactory implements IConfigurationFactory {
             List<String> optionArgsRef,
             IKeyStoreClient keyStoreClient)
             throws ConfigurationException {
-        final String extension = FileUtil.getExtension(configName);
-        switch (extension) {
-            case ".xml":
-            case ".config":
-            case "":
-                final ConfigurationXmlParserSettings parserSettings =
-                        new ConfigurationXmlParserSettings();
-                final ArgsOptionParser templateArgParser = new ArgsOptionParser(parserSettings);
-                if (keyStoreClient != null) {
-                    templateArgParser.setKeyStore(keyStoreClient);
-                }
-                optionArgsRef.addAll(templateArgParser.parseBestEffort(listArgs));
-                // Check that the same template is not attempted to be loaded twice.
-                for (String key : parserSettings.templateMap.keySet()) {
-                    if (parserSettings.templateMap.get(key).size() > 1) {
-                        throw new ConfigurationException(
-                                String.format("More than one template specified for key '%s'", key),
-                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("extractTemplates")) {
+            final String extension = FileUtil.getExtension(configName);
+            switch (extension) {
+                case ".xml":
+                case ".config":
+                case "":
+                    final ConfigurationXmlParserSettings parserSettings =
+                            new ConfigurationXmlParserSettings();
+                    final ArgsOptionParser templateArgParser = new ArgsOptionParser(parserSettings);
+                    if (keyStoreClient != null) {
+                        templateArgParser.setKeyStore(keyStoreClient);
                     }
-                }
-                return parserSettings.templateMap.getUniqueMap();
-            case ".tf_yaml":
-                // We parse the arguments but don't support template for YAML
-                final ArgsOptionParser allArgsParser = new ArgsOptionParser();
-                if (keyStoreClient != null) {
-                    allArgsParser.setKeyStore(keyStoreClient);
-                }
-                optionArgsRef.addAll(allArgsParser.parseBestEffort(listArgs));
-                return new HashMap<>();
-            default:
-                return new HashMap<>();
+                    optionArgsRef.addAll(templateArgParser.parseBestEffort(listArgs));
+                    // Check that the same template is not attempted to be loaded twice.
+                    for (String key : parserSettings.templateMap.keySet()) {
+                        if (parserSettings.templateMap.get(key).size() > 1) {
+                            throw new ConfigurationException(
+                                    String.format(
+                                            "More than one template specified for key '%s'", key),
+                                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                        }
+                    }
+                    return parserSettings.templateMap.getUniqueMap();
+                case ".tf_yaml":
+                    // We parse the arguments but don't support template for YAML
+                    final ArgsOptionParser allArgsParser = new ArgsOptionParser();
+                    if (keyStoreClient != null) {
+                        allArgsParser.setKeyStore(keyStoreClient);
+                    }
+                    optionArgsRef.addAll(allArgsParser.parseBestEffort(listArgs));
+                    return new HashMap<>();
+                default:
+                    return new HashMap<>();
+            }
         }
     }
 
@@ -742,7 +750,11 @@ public class ConfigurationFactory implements IConfigurationFactory {
             // we'd prefer them here.
             File destDir = FileUtil.createTempDir("tf-configs");
 
-            File configFile = resolveRemoteFile(configURI, destDir.toURI());
+            ResolvedFile resolvedConfigFile = resolveRemoteFile(configURI, destDir.toURI());
+            File configFile = resolvedConfigFile.getResolvedFile();
+            if (configFile instanceof ExtendedFile) {
+                ((ExtendedFile) configFile).waitForDownload();
+            }
 
             CLog.i("Attempting to read from file: %s", configFile.getPath());
             try (BufferedInputStream configInputStream =
@@ -778,7 +790,9 @@ public class ConfigurationFactory implements IConfigurationFactory {
                                 InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 }
 
-                FileUtil.deleteFile(configFile);
+                if (resolvedConfigFile.shouldCleanUp()) {
+                    FileUtil.deleteFile(configFile);
+                }
                 FileUtil.recursiveDelete(destDir);
 
                 final ConfigurationXmlParserSettings parserSettings =
@@ -804,7 +818,8 @@ public class ConfigurationFactory implements IConfigurationFactory {
     }
 
     @VisibleForTesting
-    protected File resolveRemoteFile(URI configURI, URI destDir) throws BuildRetrievalError {
+    protected ResolvedFile resolveRemoteFile(URI configURI, URI destDir)
+            throws BuildRetrievalError {
         return RemoteFileResolver.resolveRemoteFile(configURI, destDir);
     }
 

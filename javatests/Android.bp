@@ -20,13 +20,15 @@ java_library_host {
     name: "tradefed-test-protos",
     visibility: ["//visibility:private"],
     srcs: ["res/**/*.proto"],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
     libs: [
         "libprotobuf-java-full",
     ],
     proto: {
         include_dirs: ["external/protobuf/src"],
         type: "full",
-    }
+    },
 }
 
 tradefed_java_library_host {
@@ -36,13 +38,18 @@ tradefed_java_library_host {
     // Only compile source java files in this lib.
     srcs: ["com/**/*.java"],
 
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+
     java_resource_dirs: ["res"],
     java_resources: [
         ":SimpleFailingTest",
         ":OnePassOneFailParamTest",
         ":OnePassingOneFailingTest",
         ":SimplePassingTest",
+        ":PassIgnoreAssumeTest",
         ":MultipleClassesTest",
+        ":IncludeFilterTest",
     ],
 
     javacflags: [
@@ -58,8 +65,9 @@ tradefed_java_library_host {
     libs: [
         "tradefed",
         "libprotobuf-java-full",
-        "truth-prebuilt",
+        "truth",
         "loganalysis",
+        "perfetto_trace-full",
     ],
 
     manifest: "MANIFEST.mf",

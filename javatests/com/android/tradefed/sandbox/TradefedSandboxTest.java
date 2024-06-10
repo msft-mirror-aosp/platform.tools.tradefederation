@@ -78,6 +78,11 @@ public class TradefedSandboxTest {
                     IRunUtil createRunUtil() {
                         return mMockRunUtil;
                     }
+
+                    @Override
+                    protected String getJava() {
+                        return "jdk/java";
+                    }
                 };
 
         doReturn(new SandboxOptions())
@@ -145,7 +150,7 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil)
                 .setEnvVariable(
                         Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
-        verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
+        verify(mMockRunUtil, times(2)).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
@@ -192,7 +197,7 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil)
                 .setEnvVariable(
                         Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
-        verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
+        verify(mMockRunUtil, times(2)).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
@@ -236,7 +241,7 @@ public class TradefedSandboxTest {
         verify(mMockRunUtil)
                 .setEnvVariable(
                         Mockito.eq(GlobalConfiguration.GLOBAL_CONFIG_VARIABLE), Mockito.any());
-        verify(mMockRunUtil).setEnvVariablePriority(EnvPriority.SET);
+        verify(mMockRunUtil, times(2)).setEnvVariablePriority(EnvPriority.SET);
         verify(mMockListener)
                 .testLog(
                         Mockito.eq("sandbox-global-config"),
@@ -302,7 +307,10 @@ public class TradefedSandboxTest {
 
             File res =
                     mSandbox.getTradefedSandboxEnvironment(
-                            mMockContext, mMockConfig, new String[] {"empty", "--arg", "1"});
+                            mMockContext,
+                            mMockConfig,
+                            mMockListener,
+                            new String[] {"empty", "--arg", "1"});
             assertEquals(tmpDir, res);
         } finally {
             FileUtil.recursiveDelete(tmpDir);
@@ -327,7 +335,10 @@ public class TradefedSandboxTest {
 
             try {
                 mSandbox.getTradefedSandboxEnvironment(
-                        mMockContext, mMockConfig, new String[] {"empty", "--arg", "1"});
+                        mMockContext,
+                        mMockConfig,
+                        mMockListener,
+                        new String[] {"empty", "--arg", "1"});
                 fail("Should have thrown an exception.");
             } catch (ConfigurationException expected) {
                 assertEquals(

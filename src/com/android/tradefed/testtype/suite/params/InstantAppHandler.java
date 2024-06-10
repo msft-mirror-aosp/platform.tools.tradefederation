@@ -28,10 +28,12 @@ import java.util.Set;
 /** Handler for {@link ModuleParameters#INSTANT_APP}. */
 public class InstantAppHandler implements IModuleParameterHandler {
 
+    public static final String INSTANT_APP_ID = "instant";
+
     /** {@inheritDoc} */
     @Override
     public String getParameterIdentifier() {
-        return "instant";
+        return INSTANT_APP_ID;
     }
 
     /** {@inheritDoc} */

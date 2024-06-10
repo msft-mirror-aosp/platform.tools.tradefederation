@@ -17,10 +17,15 @@ package com.android.tradefed.postprocessor;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -28,16 +33,22 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.skipped.SkipReason;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * The base {@link IPostProcessor} that every implementation should extend. Ensure that the post
@@ -52,6 +63,9 @@ public abstract class BasePostProcessor implements IPostProcessor {
     private ArrayListMultimap<String, Metric> storedTestMetrics = ArrayListMultimap.create();
     private Map<TestDescription, Map<String, LogFile>> mTestLogs = new LinkedHashMap<>();
     private Map<String, LogFile> mRunLogs = new HashMap<>();
+
+    private Map<String, LogFile> mCopiedLogs = new HashMap<>();
+    private Set<LogFile> mToDelete = new HashSet<>();
 
     // Keeps track of the current test; takes null value when the post processor is not in the scope
     // of any test (i.e. before the first test, in-between tests and after the last test).
@@ -91,7 +105,10 @@ public abstract class BasePostProcessor implements IPostProcessor {
     /** {@inheritDoc} */
     @Override
     public final ITestInvocationListener init(ITestInvocationListener listener) {
+        long start = System.currentTimeMillis();
         setUp();
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         mForwarder = listener;
         return this;
     }
@@ -121,6 +138,11 @@ public abstract class BasePostProcessor implements IPostProcessor {
     }
 
     @Override
+    public void invocationSkipped(SkipReason reason) {
+        mForwarder.invocationSkipped(reason);
+    }
+
+    @Override
     public final void invocationEnded(long elapsedTime) {
         mForwarder.invocationEnded(elapsedTime);
     }
@@ -134,9 +156,18 @@ public abstract class BasePostProcessor implements IPostProcessor {
             CLog.i("Saving file with data name %s in post processor.", dataName);
             if (mLogSaver != null) {
                 try {
-                    LogFile log =
-                            mLogSaver.saveLogData(
-                                    dataName, dataType, dataStream.createInputStream());
+                    LogFile log = null;
+                    if (dataStream instanceof FileInputStreamSource) {
+                        log =
+                                mLogSaver.saveLogFile(
+                                        dataName,
+                                        dataType,
+                                        ((FileInputStreamSource) dataStream).getFile());
+                    } else {
+                        log =
+                                mLogSaver.saveLogData(
+                                        dataName, dataType, dataStream.createInputStream());
+                    }
                     testLogSaved(dataName, dataType, dataStream, log);
                     logAssociation(dataName, log);
                 } catch (IOException e) {
@@ -200,8 +231,10 @@ public abstract class BasePostProcessor implements IPostProcessor {
 
     @Override
     public final void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
+        long start = System.currentTimeMillis();
         mIsPostProcessing = true;
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("run_processor_" + this.getClass().getSimpleName())) {
             HashMap<String, Metric> rawValues = getRawMetricsOnly(runMetrics);
             // Add post-processed run metrics.
             Map<String, Metric.Builder> postprocessedResults =
@@ -220,6 +253,10 @@ public abstract class BasePostProcessor implements IPostProcessor {
             // Clear out the stored test and run logs.
             mTestLogs.clear();
             mRunLogs.clear();
+            // Delete all the copies
+            cleanUp();
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         }
         mIsPostProcessing = false;
         mForwarder.testRunEnded(elapsedTime, runMetrics);
@@ -272,6 +309,7 @@ public abstract class BasePostProcessor implements IPostProcessor {
     public final void testEnded(
             TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         mIsPostProcessing = true;
+        long start = System.currentTimeMillis();
         try {
             HashMap<String, Metric> rawValues = getRawMetricsOnly(testMetrics);
             // Store the raw metrics from the test in storedTestMetrics for potential aggregation.
@@ -304,6 +342,9 @@ public abstract class BasePostProcessor implements IPostProcessor {
         } catch (RuntimeException e) {
             // Prevent exception from messing up the status reporting.
             CLog.e(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.COLLECTOR_TIME, System.currentTimeMillis() - start);
         }
         mIsPostProcessing = false;
         mCurrentTest = null;
@@ -325,6 +366,11 @@ public abstract class BasePostProcessor implements IPostProcessor {
         mForwarder.testIgnored(test);
     }
 
+    @Override
+    public final void testSkipped(TestDescription test, SkipReason reason) {
+        mForwarder.testSkipped(test, reason);
+    }
+
     /**
      * Override this method in the child post processors to initialize before the test runs.
      */
@@ -343,6 +389,9 @@ public abstract class BasePostProcessor implements IPostProcessor {
     @Override
     public final void testLogSaved(
             String dataName, LogDataType dataType, InputStreamSource dataStream, LogFile logFile) {
+        if (!mIsPostProcessing) {
+            mCopiedLogs.put(dataName, copyLogFile(logFile));
+        }
         if (mForwarder instanceof ILogSaverListener) {
             ((ILogSaverListener) mForwarder).testLogSaved(dataName, dataType, dataStream, logFile);
         }
@@ -358,11 +407,15 @@ public abstract class BasePostProcessor implements IPostProcessor {
     public final void logAssociation(String dataName, LogFile logFile) {
         // Only associate files created outside of the current post processor.
         if (!mIsPostProcessing) {
-            // mCurrentTest is null only outside the scope of a test.
-            if (mCurrentTest != null) {
-                mTestLogs.get(mCurrentTest).put(dataName, logFile);
-            } else {
-                mRunLogs.put(dataName, logFile);
+            LogFile copyFile = mCopiedLogs.remove(dataName);
+            if (copyFile != null) {
+                mToDelete.add(copyFile);
+                // mCurrentTest is null only outside the scope of a test.
+                if (mCurrentTest != null) {
+                    mTestLogs.get(mCurrentTest).put(dataName, copyFile);
+                } else {
+                    mRunLogs.put(dataName, copyFile);
+                }
             }
         }
 
@@ -423,5 +476,39 @@ public abstract class BasePostProcessor implements IPostProcessor {
         return mRunName;
     }
 
+    protected void cleanUp() {
+        // Delete all the copies
+        for (LogFile f : mToDelete) {
+            FileUtil.deleteFile(new File(f.getPath()));
+        }
+        mToDelete.clear();
+    }
 
+    private LogFile copyLogFile(LogFile original) {
+        if (Strings.isNullOrEmpty(original.getPath())) {
+            CLog.d("%s doesn't exist and can't be copied for post processor.", original);
+            return null;
+        }
+        File originalFile = new File(original.getPath());
+        if (!originalFile.exists()) {
+            CLog.d("%s doesn't exist and can't be copied for post processor.", original.getPath());
+            return null;
+        }
+        try {
+            File copy =
+                    FileUtil.createTempFile(
+                            originalFile.getName(), "", CurrentInvocation.getWorkFolder());
+            copy.delete();
+            FileUtil.hardlinkFile(originalFile, copy);
+            return new LogFile(
+                    copy.getAbsolutePath(),
+                    original.getUrl(),
+                    original.isCompressed(),
+                    original.getType(),
+                    original.getSize());
+        } catch (IOException e) {
+            CLog.e(e);
+        }
+        return null;
+    }
 }

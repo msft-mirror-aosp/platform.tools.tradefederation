@@ -100,6 +100,54 @@ public class SwitchUserTargetPreparerTest {
     }
 
     @Test
+    public void testSetUpRunAsSystem_ifSystemSwitchIsNotAllowed_switchToMain() throws Exception {
+        mOptionSetter.setOptionValue("user-type", "system");
+
+        // setup
+        when(mMockDevice.getCurrentUser()).thenReturn(11);
+        mockListUsersInfo(
+                mMockDevice,
+                /* userIds= */ new Integer[] {0, 10, 11},
+                /* flags= */ new Integer[] {
+                    UserInfo.FLAG_PRIMARY, UserInfo.FLAG_MAIN, UserInfo.FLAG_GUEST
+                });
+
+        when(mMockDevice.isHeadlessSystemUserMode()).thenReturn(true);
+        when(mMockDevice.canSwitchToHeadlessSystemUser()).thenReturn(false);
+        when(mMockDevice.switchUser(10)).thenReturn(true);
+
+        // act
+        mSwitchUserTargetPreparer.setUp(mTestInformation);
+
+        // assert
+        verify(mMockDevice, times(1)).switchUser(10);
+    }
+
+    @Test
+    public void testSetUpRunAsSystem_ifSystemSwitchIsNotAllowed_noSwitchIfAlreadyOnMainUser()
+            throws Exception {
+        mOptionSetter.setOptionValue("user-type", "system");
+
+        // setup
+        when(mMockDevice.getCurrentUser()).thenReturn(10);
+        mockListUsersInfo(
+                mMockDevice,
+                /* userIds= */ new Integer[] {0, 10, 11},
+                /* flags= */ new Integer[] {
+                    UserInfo.FLAG_PRIMARY, UserInfo.FLAG_MAIN, UserInfo.FLAG_GUEST
+                });
+
+        when(mMockDevice.isHeadlessSystemUserMode()).thenReturn(true);
+        when(mMockDevice.canSwitchToHeadlessSystemUser()).thenReturn(false);
+
+        // act
+        mSwitchUserTargetPreparer.setUp(mTestInformation);
+
+        // assert
+        verify(mMockDevice, never()).switchUser(10);
+    }
+
+    @Test
     public void testSetUpRunAsPrimary_ifNotInPrimary_switchToPrimary() throws Exception {
         mOptionSetter.setOptionValue("user-type", "primary");
 

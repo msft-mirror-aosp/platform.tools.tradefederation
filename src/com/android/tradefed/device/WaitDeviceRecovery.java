@@ -19,6 +19,7 @@ import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.TimeoutException;
 import com.android.helper.aoa.UsbDevice;
+import com.android.helper.aoa.UsbException;
 import com.android.helper.aoa.UsbHelper;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -163,7 +164,7 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
         }
 
         if (!recoverUntilOnline) {
-            if (monitor.waitForDeviceAvailable(mWaitTime) == null) {
+            if (monitor.waitForDeviceAvailableInRecoverPath(mWaitTime) == null) {
                 // device is online but not responsive
                 handleDeviceUnresponsive(device, monitor);
             }
@@ -444,15 +445,27 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
      * @param device the {@link IDevice} to reboot.
      * @param mode The mode into which to reboot the device. null being regular reboot.
      */
-    private void rebootDevice(IDevice device, String mode) {
+    private void rebootDevice(IDevice device, String mode) throws DeviceNotAvailableException {
         try {
             device.reboot(mode);
         } catch (IOException e) {
-            CLog.w("failed to reboot %s: %s", device.getSerialNumber(), e.getMessage());
+            CLog.w(
+                    "%s: failed to reboot %s: %s",
+                    e.getClass().getSimpleName(), device.getSerialNumber(), e.getMessage());
         } catch (TimeoutException e) {
             CLog.w("failed to reboot %s: timeout", device.getSerialNumber());
         } catch (AdbCommandRejectedException e) {
-            CLog.w("failed to reboot %s: %s", device.getSerialNumber(), e.getMessage());
+            CLog.w(
+                    "%s: failed to reboot %s: %s",
+                    e.getClass().getSimpleName(), device.getSerialNumber(), e.getMessage());
+            if (e.isDeviceOffline() || e.wasErrorDuringDeviceSelection()) {
+                // If reboot is not attempted, then fail right away
+                throw new DeviceNotAvailableException(
+                        e.getMessage(),
+                        e,
+                        device.getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+            }
         }
     }
 
@@ -476,25 +489,36 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
     @Override
     public void recoverDeviceRecovery(IDeviceStateMonitor monitor)
             throws DeviceNotAvailableException {
-        throw new DeviceNotAvailableException("device recovery not implemented",
-                monitor.getSerialNumber());
+        // TODO(b/305735893): Root and capture logs
+        throw new DeviceNotAvailableException(
+                "device unexpectedly went into recovery mode.",
+                monitor.getSerialNumber(),
+                DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
     }
 
     /** Recovery routine for device unavailable errors. */
     private boolean attemptDeviceUnavailableRecovery(
-            IDeviceStateMonitor monitor, boolean recoverTillOnline) {
+            IDeviceStateMonitor monitor, boolean recoverTillOnline)
+            throws DeviceNotAvailableException {
         TestDeviceState state = monitor.getDeviceState();
-        if (TestDeviceState.FASTBOOT.equals(state)
-                || TestDeviceState.FASTBOOTD.equals(state)
-                || TestDeviceState.RECOVERY.equals(state)) {
+        if (TestDeviceState.RECOVERY.equals(state)) {
+            CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
+            recoverDeviceRecovery(monitor);
+            return false;
+        }
+        if (TestDeviceState.FASTBOOT.equals(state) || TestDeviceState.FASTBOOTD.equals(state)) {
             CLog.d("Device is in '%s' state skipping USB reset attempt.", state);
             return false;
         }
-        String serial = monitor.getSerialNumber();
+        if (monitor.isAdbTcp()) {
+            CLog.d("Device is connected via TCP, skipping USB reset attempt.");
+            return false;
+        }
         boolean recoveryAttempted = false;
         if (!mDisableUsbReset) {
             // First try to do a USB reset to get the device back
             try (UsbHelper usb = getUsbHelper()) {
+                String serial = monitor.getSerialNumber();
                 try (UsbDevice usbDevice = usb.getDevice(serial)) {
                     if (usbDevice != null) {
                         CLog.d("Resetting USB port for device '%s'", serial);
@@ -513,6 +537,9 @@ public class WaitDeviceRecovery implements IDeviceRecovery {
                 CLog.w("Problem initializing USB helper, skipping USB reset and disabling it.");
                 CLog.w(e);
                 mDisableUsbReset = true;
+            } catch (UsbException e) {
+                CLog.w("Problem initializing USB helper, skipping USB reset.");
+                CLog.w(e);
             }
         }
         if (recoveryAttempted) {
