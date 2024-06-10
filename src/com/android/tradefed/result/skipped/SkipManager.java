@@ -70,7 +70,7 @@ public class SkipManager implements IDisableable {
     @Option(
             name = "skip-on-no-change-presubmit-only",
             description = "Allow enabling the skip logic only in presubmit.")
-    private boolean mSkipOnNoChangePresubmitOnly = false;
+    private boolean mSkipOnNoChangePresubmitOnly = true;
 
     @Option(
             name = "considered-for-content-analysis",
