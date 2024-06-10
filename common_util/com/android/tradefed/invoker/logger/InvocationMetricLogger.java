@@ -268,6 +268,13 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
         CAS_DOWNLOAD_HOT_FILES_COUNT("cas_download_hot_files_count", true),
         CAS_DOWNLOAD_COLD_FILES_COUNT("cas_download_cold_files_count", true),
+        // Records local cache metrics
+        // CAS downloader local cache type. Can be either NFS or local disk.
+        CAS_DOWNLOAD_LOCAL_CACHE_TYPE("cas_download_local_cache_type", false),
+        // Number of ATE instances that sharing a same NFS backed local cache
+        CAS_DOWNLOAD_NFS_LOCAL_CACHE_CONCURRENCY("cas_download_nfs_local_cache_concurrency", false),
+        CAS_DOWNLOAD_ACQUIRE_LOCAL_CACHE_LOCK_TIME(
+                "cas_download_acquire_local_cache_lock_time_ms", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
