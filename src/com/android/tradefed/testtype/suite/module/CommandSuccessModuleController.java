@@ -24,24 +24,40 @@ import com.android.tradefed.testtype.suite.module.IModuleController.RunStrategy;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** Base class for a module controller to skip test module based on shell command failure. */
 public class CommandSuccessModuleController extends BaseModuleController {
     @Option(name = "run-command", description = "adb shell command to run")
     private List<String> mCommands = new ArrayList<>();
 
+    @Option(
+            name = "command-timeout",
+            description =
+                    "timeout to fail the check if command is hanging. "
+                            + "Default unit is millis but '12s34ms' format is accepted.")
+    private Duration mTimeout = Duration.ZERO;
+
     @Override
     public RunStrategy shouldRun(IInvocationContext context) throws DeviceNotAvailableException {
         for (ITestDevice device : context.getDevices()) {
+
             for (String cmd : mCommands) {
-                CommandResult result = device.executeShellV2Command(cmd);
+                CommandResult result =
+                        device.executeShellV2Command(
+                                cmd, mTimeout.toMillis(), TimeUnit.MILLISECONDS);
                 if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                     LogUtil.CLog.d(
                             "Skipping module %s because shell command '%s' failed with exit code"
-                                    + " %d, stderr '%s'",
-                            getModuleName(), cmd, result.getExitCode(), result.getStderr());
+                                    + " %d, stderr '%s', status '%s'",
+                            getModuleName(),
+                            cmd,
+                            result.getExitCode(),
+                            result.getStderr(),
+                            result.getStatus());
                     return RunStrategy.FULL_MODULE_BYPASS;
                 }
             }
