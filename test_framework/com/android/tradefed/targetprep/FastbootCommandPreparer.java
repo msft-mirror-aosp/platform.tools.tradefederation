@@ -20,6 +20,8 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.util.CommandResult;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,7 +69,20 @@ public final class FastbootCommandPreparer extends BaseTargetPreparer {
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         if (!mFastbootCommands.isEmpty()) {
-            executeFastbootCommands(mFastbootCommands, testInformation.getDevice());
+            final ITestDevice device = testInformation.getDevice();
+            enterFastboot(device);
+            for (String cmd : mFastbootCommands) {
+                final CommandResult result = device.executeFastbootCommand(cmd.split("\\s+"));
+                if (result.getExitCode() != 0) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Command %s failed, stdout = [%s], stderr = [%s].",
+                                    cmd, result.getStdout(), result.getStderr()),
+                            device.getDeviceDescriptor(),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+            }
+            exitFastboot(device);
         }
     }
 
@@ -76,22 +91,24 @@ public final class FastbootCommandPreparer extends BaseTargetPreparer {
     public void tearDown(TestInformation testInformation, Throwable e)
             throws DeviceNotAvailableException {
         if (!mFastbootTearDownCommands.isEmpty()) {
-            executeFastbootCommands(mFastbootTearDownCommands, testInformation.getDevice());
+            final ITestDevice device = testInformation.getDevice();
+            enterFastboot(device);
+            for (String cmd : mFastbootTearDownCommands) {
+                device.executeFastbootCommand(cmd.split("\\s+"));
+            }
+            exitFastboot(device);
         }
     }
 
-    private void executeFastbootCommands(List<String> commands, ITestDevice device)
-            throws DeviceNotAvailableException {
+    private void enterFastboot(ITestDevice device) throws DeviceNotAvailableException {
         if (mFastbootMode == FastbootMode.BOOTLOADER) {
             device.rebootIntoBootloader();
         } else {
             device.rebootIntoFastbootd();
         }
+    }
 
-        for (String cmd : commands) {
-            device.executeFastbootCommand(cmd.split("\\s+"));
-        }
-
+    private void exitFastboot(ITestDevice device) throws DeviceNotAvailableException {
         if (!mStayFastboot) {
             device.reboot();
         }

@@ -49,10 +49,25 @@ import javax.annotation.Nullable;
 @OptionClass(alias = "run-host-script")
 public class RunHostScriptTargetPreparer extends BaseTargetPreparer {
 
-    @Option(name = "script-file", description = "Path to the script to execute.")
+    /** Placeholder to be replaced with real device serial number in commands */
+    private static final String DEVICE_SERIAL_PLACEHOLDER = "$SERIAL";
+
+    @Option(
+            name = "script-file",
+            description =
+                    "Path to the script to execute. "
+                            + DEVICE_SERIAL_PLACEHOLDER
+                            + " can be used as placeholder to be replaced "
+                            + "with real device serial number at runtime.")
     private String mScriptPath = null;
 
-    @Option(name = "work-dir", description = "Working directory to use when executing script.")
+    @Option(
+            name = "work-dir",
+            description =
+                    "Working directory to use when executing script. "
+                            + DEVICE_SERIAL_PLACEHOLDER
+                            + " can be used as placeholder to be replaced "
+                            + "with real device serial number at runtime.")
     private File mWorkDir = null;
 
     @Option(name = "script-timeout", description = "Script execution timeout.")
@@ -73,6 +88,15 @@ public class RunHostScriptTargetPreparer extends BaseTargetPreparer {
             return;
         }
         ITestDevice device = testInfo.getDevice();
+
+        // Replace placeholder (if any) in paths with real device serial number.
+        mScriptPath = mScriptPath.replace(DEVICE_SERIAL_PLACEHOLDER, device.getSerialNumber());
+        if (mWorkDir != null) {
+            mWorkDir =
+                    new File(
+                            mWorkDir.toString()
+                                    .replace(DEVICE_SERIAL_PLACEHOLDER, device.getSerialNumber()));
+        }
 
         // Find script and verify it exists and is executable
         File scriptFile = findScriptFile(testInfo);

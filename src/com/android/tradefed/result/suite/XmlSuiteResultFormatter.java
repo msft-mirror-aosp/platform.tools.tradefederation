@@ -16,7 +16,7 @@
 package com.android.tradefed.result.suite;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -27,10 +27,10 @@ import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
-import com.android.tradefed.testtype.suite.TestFailureListener;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -60,15 +60,20 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * Utility class to save a suite run as an XML. TODO: Remove all the special Compatibility Test
  * format work around to get the same format.
  */
 public class XmlSuiteResultFormatter implements IFormatterGenerator {
+
+    // The maximum size of a stack trace saved in the report.
+    private static final int STACK_TRACE_MAX_SIZE = 1024 * 1024;
 
     private static final String ENCODING = "UTF-8";
     private static final String TYPE = "org.kxml2.io.KXmlParser,org.kxml2.io.KXmlSerializer";
@@ -83,6 +88,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String CASE_TAG = "TestCase";
     private static final String COMMAND_LINE_ARGS = "command_line_args";
     private static final String DEVICES_ATTR = "devices";
+    private static final String DEVICE_KERNEL_INFO_ATTR = "device_kernel_info";
     private static final String DONE_ATTR = "done";
     private static final String END_DISPLAY_TIME_ATTR = "end_display";
     private static final String END_TIME_ATTR = "end";
@@ -122,8 +128,10 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static final String START_TIME_ATTR = "start";
 
     private static final String SUMMARY_TAG = "Summary";
+    private static final String SYSTEM_IMG_INFO_ATTR = "system_img_info";
     private static final String TEST_TAG = "Test";
     private static final String TOTAL_TESTS_ATTR = "total_tests";
+    private static final String VENDOR_IMG_INFO_ATTR = "vendor_img_info";
 
     private static final String LOG_FILE_NAME_ATTR = "file_name";
 
@@ -224,11 +232,11 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         if (serialsShards.isEmpty()) {
             deviceList = String.join(",", holder.context.getSerials());
         } else {
-            List<String> subList = new ArrayList<>();
+            Set<String> subSet = new LinkedHashSet<>();
             for (List<String> list : serialsShards.values()) {
-                subList.add(String.join(",", list));
+                subSet.addAll(list);
             }
-            deviceList = String.join(",", subList);
+            deviceList = String.join(",", subSet);
         }
         serializer.attribute(NS, DEVICES_ATTR, deviceList);
 
@@ -252,6 +260,12 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                     NS,
                     sanitizeAttributesKey(key),
                     String.join(",", holder.context.getAttributes().get(key)));
+        }
+        if (!holder.context.getBuildInfos().isEmpty()) {
+            IBuildInfo buildInfo = holder.context.getBuildInfos().get(0);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, DEVICE_KERNEL_INFO_ATTR);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, SYSTEM_IMG_INFO_ATTR);
+            addBuildInfoAttributesIfNotNull(serializer, buildInfo, VENDOR_IMG_INFO_ATTR);
         }
         addBuildInfoAttributes(serializer, holder);
         serializer.endTag(NS, BUILD_TAG);
@@ -346,12 +360,17 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             serializer.startTag(NS, CASE_TAG);
             serializer.attribute(NS, NAME_ATTR, className);
             for (Entry<String, TestResult> individualResult : format.get(className).entrySet()) {
-                TestStatus status = individualResult.getValue().getStatus();
+                TestStatus status = individualResult.getValue().getResultStatus();
+                // TODO(b/322204420): Report skipped to XML and support parsing it
+                if (TestStatus.SKIPPED.equals(status)) {
+                    continue;
+                }
                 if (status == null) {
                     continue; // test was not executed, don't report
                 }
                 serializer.startTag(NS, TEST_TAG);
-                serializer.attribute(NS, RESULT_ATTR, getTestStatusCompatibilityString(status));
+                serializer.attribute(
+                        NS, RESULT_ATTR, TestStatus.convertToCompatibilityString(status));
                 serializer.attribute(NS, NAME_ATTR, individualResult.getKey());
                 if (TestStatus.IGNORED.equals(status)) {
                     serializer.attribute(NS, SKIPPED_ATTR, Boolean.toString(true));
@@ -362,7 +381,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                 HandleLoggedFiles(serializer, individualResult);
 
                 for (Entry<String, String> metric :
-                        individualResult.getValue().getMetrics().entrySet()) {
+                        TfMetricProtoUtil.compatibleConvert(
+                                        individualResult.getValue().getProtoMetrics())
+                                .entrySet()) {
                     serializer.startTag(NS, METRIC_TAG);
                     serializer.attribute(NS, METRIC_KEY, metric.getKey());
                     serializer.text(sanitizeXmlContent(metric.getValue()));
@@ -388,6 +409,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             }
             ErrorIdentifier errorIdentifier =
                     testResult.getValue().getFailure().getErrorIdentifier();
+            String truncatedStackTrace = getTruncatedStackTrace(fullStack, testResult.getKey());
             serializer.startTag(NS, FAILURE_TAG);
 
             serializer.attribute(NS, MESSAGE_ATTR, sanitizeXmlContent(message));
@@ -396,14 +418,32 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
                 serializer.attribute(NS, ERROR_CODE_ATTR, Long.toString(errorIdentifier.code()));
             }
             serializer.startTag(NS, STACK_TAG);
-            serializer.text(sanitizeXmlContent(fullStack));
+            serializer.text(sanitizeXmlContent(truncatedStackTrace));
             serializer.endTag(NS, STACK_TAG);
 
             serializer.endTag(NS, FAILURE_TAG);
         }
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Truncates the full stack trace with maximum {@link STACK_TRACE_MAX_SIZE} characters. */
+    private static String getTruncatedStackTrace(String fullStackTrace, String testCaseName) {
+        if (fullStackTrace == null) {
+            return null;
+        }
+        if (fullStackTrace.length() > STACK_TRACE_MAX_SIZE) {
+            CLog.i(
+                    "The stack trace for test case %s contains %d characters, and has been"
+                            + " truncated to %d characters in %s.",
+                    testCaseName,
+                    fullStackTrace.length(),
+                    STACK_TRACE_MAX_SIZE,
+                    TEST_RESULT_FILE_NAME);
+            return fullStackTrace.substring(0, STACK_TRACE_MAX_SIZE);
+        }
+        return fullStackTrace;
+    }
+
+    /** Add files captured on test failures. */
     private static void HandleLoggedFiles(
             XmlSerializer serializer, Entry<String, TestResult> testResult)
             throws IllegalArgumentException, IllegalStateException, IOException {
@@ -452,29 +492,6 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
     private static String toReadableDateString(long time) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
         return dateFormat.format(new Date(time));
-    }
-
-    /** Convert our test status to a format compatible with CTS backend. */
-    private static String getTestStatusCompatibilityString(TestStatus status) {
-        switch (status) {
-            case PASSED:
-                return "pass";
-            case FAILURE:
-                return "fail";
-            default:
-                return status.toString();
-        }
-    }
-
-    private static TestStatus getStatusFromString(String status) {
-        switch (status) {
-            case "pass":
-                return TestStatus.PASSED;
-            case "fail":
-                return TestStatus.FAILURE;
-            default:
-                return TestStatus.valueOf(status);
-        }
     }
 
     /** {@inheritDoc} */
@@ -660,7 +677,9 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         while (parser.nextTag() == XmlPullParser.START_TAG) {
             parser.require(XmlPullParser.START_TAG, NS, TEST_TAG);
             String methodName = parser.getAttributeValue(NS, NAME_ATTR);
-            TestStatus status = getStatusFromString(parser.getAttributeValue(NS, RESULT_ATTR));
+            TestStatus status =
+                    TestStatus.convertFromCompatibilityString(
+                            parser.getAttributeValue(NS, RESULT_ATTR));
             TestDescription description = new TestDescription(className, methodName);
             currentModule.testStarted(description);
             if (TestStatus.IGNORED.equals(status)) {
@@ -691,7 +710,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         }
     }
 
-    /** Add files captured by {@link TestFailureListener} on test failures. */
+    /** Add files captured on test failures. */
     private static void parseLoggedFiles(XmlPullParser parser, TestRunResult currentModule)
             throws XmlPullParserException, IOException {
         if (parser.getName().equals(BUGREPORT_TAG)) {
@@ -734,5 +753,14 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
 
     private static String sanitizeAttributesKey(String attribute) {
         return attribute.replace(":", "_");
+    }
+
+    private static void addBuildInfoAttributesIfNotNull(
+            XmlSerializer serializer, IBuildInfo buildInfo, String attributeName)
+            throws IOException {
+        String attributeValue = buildInfo.getBuildAttributes().get(attributeName);
+        if (attributeValue != null) {
+            serializer.attribute(NS, attributeName, attributeValue);
+        }
     }
 }

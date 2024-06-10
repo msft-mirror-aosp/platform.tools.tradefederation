@@ -15,24 +15,27 @@
  */
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+
 import com.android.annotations.VisibleForTesting;
-import com.android.incfs.install.adb.ddmlib.DeviceConnection;
-import com.android.incfs.install.adb.ddmlib.DeviceLogger;
 import com.android.incfs.install.IncrementalInstallSession;
 import com.android.incfs.install.IncrementalInstallSession.Builder;
 import com.android.incfs.install.PendingBlock;
+import com.android.incfs.install.adb.ddmlib.DeviceConnection;
+import com.android.incfs.install.adb.ddmlib.DeviceLogger;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
@@ -63,10 +66,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A {@link ITargetPreparer} that installs one or more apps from a {@link
@@ -77,15 +80,14 @@ import java.util.concurrent.TimeUnit;
  * the first.
  */
 @OptionClass(alias = "tests-zip-app")
-public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiReceiver {
+public class TestAppInstallSetup extends BaseTargetPreparer
+        implements IAbiReceiver, IDiscoverDependencies {
 
     /** The mode the apk should be install in. */
     private enum InstallMode {
         FULL,
         INSTANT,
     }
-
-    public static final String RUN_TESTS_AS_USER_KEY = "RUN_TESTS_AS_USER";
 
     // An error message that occurs when a test APK is already present on the DUT,
     // but cannot be updated. When this occurs, the package is removed from the
@@ -111,7 +113,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
             name = "split-apk-file-names",
             description =
                     "the split apk file names separted by comma that will be installed on device."
-                        + " Can be repeated for multiple split apk sets.See"
+                        + " Can be repeated for multiple split apk sets. See"
                         + " https://developer.android.com/studio/build/configure-apk-splits on how"
                         + " to split apk to several files")
     private List<String> mSplitApkFileNames = new ArrayList<>();
@@ -133,9 +135,10 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
                     + "including leading dash, e.g. \"-d\"")
     private Collection<String> mInstallArgs = new ArrayList<>();
 
-    @Option(name = "force-queryable",
+    @Option(
+            name = "force-queryable",
             description = "Whether apks should be installed as force queryable.")
-    private boolean mForceQueryable = true;
+    private Boolean mForceQueryable = null;
 
     @Option(
             name = "cleanup-apks",
@@ -176,7 +179,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
     private boolean mInstantMode = false;
 
     @Option(name = "aapt-version", description = "The version of AAPT for APK parsing.")
-    private AaptVersion mAaptVersion = AaptVersion.AAPT;
+    private AaptVersion mAaptVersion = AaptVersion.AAPT2;
 
     @Option(
             name = "force-install-mode",
@@ -351,6 +354,11 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
         if (mAbi != null && mForceAbi != null) {
             throw new IllegalStateException("cannot specify both abi flags: --abi and --force-abi");
         }
+
+        // We are going to need several "ro.build" props, save some time (0.4 sec) by prefetching
+        if (getDevice() instanceof NativeDevice) {
+            ((NativeDevice) getDevice()).batchPrefetchStartupBuildProps();
+        }
         String abiName = null;
         if (mAbi != null) {
             abiName = mAbi.getName();
@@ -379,18 +387,32 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
             if (!testInfo.getDevice().getUserInfos().containsKey(mUserId)) {
                 CLog.w("User requested: %s doesn't exist on device. Ignoring it.", mUserId);
                 mUserId = null;
+            } else {
+                CLog.d("Using user %s from testInfo properties.", mUserId);
             }
         }
 
+        if (mForceQueryable == null) {
+            // Do not add --force-queryable if the device api level >= 34. Ideally,
+            // checkApiLevelAgainstNextRelease(34) should only return true for api 34 devices. But,
+            // it also returns true for branches like the tm-xx-plus-aosp. Adding another condition
+            // ro.build.id==TM to handle this special case.
+            mForceQueryable =
+                    !getDevice().checkApiLevelAgainstNextRelease(34)
+                            || "TM".equals(getDevice().getBuildAlias());
+        }
         if (mForceQueryable && getDevice().isAppEnumerationSupported()) {
             mInstallArgs.add("--force-queryable");
         }
 
+        // Add bypass flag for low target sdk apps when installing on U+ devices
+        if (getDevice().isBypassLowTargetSdkBlockSupported()) {
+            mInstallArgs.add("--bypass-low-target-sdk-block");
+        }
+
         for (File testAppName : mTestFiles) {
             Map<File, String> appFilesAndPackages =
-                    resolveApkFiles(
-                            testInfo,
-                            findApkFiles(testAppName, testInfo.getDevice().getDeviceDescriptor()));
+                    resolveApkFiles(testInfo, findApkFiles(testAppName));
             installer(testInfo, appFilesAndPackages);
         }
 
@@ -599,13 +621,10 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
                             aaptParser.getSdkVersion(),
                             device.getApiLevel());
                 } else {
-                    appFiles.put(
-                            testAppFile,
-                            parsePackageName(testAppFile, device.getDeviceDescriptor()));
+                    appFiles.put(testAppFile, parsePackageName(testAppFile));
                 }
             } else {
-                appFiles.put(
-                        testAppFile, parsePackageName(testAppFile, device.getDeviceDescriptor()));
+                appFiles.put(testAppFile, parsePackageName(testAppFile));
             }
         }
         return appFiles;
@@ -615,8 +634,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
      * Returns the provided file if not a directory or all APK files contained in the directory tree
      * rooted at the provided path otherwise.
      */
-    private List<File> findApkFiles(File fileOrDirectory, DeviceDescriptor deviceDescriptor)
-            throws TargetSetupError {
+    private List<File> findApkFiles(File fileOrDirectory) throws TargetSetupError {
 
         if (!fileOrDirectory.isDirectory()) {
             return ImmutableList.of(fileOrDirectory);
@@ -635,7 +653,8 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
                     String.format(
                             "Could not list files of specified directory: %s", fileOrDirectory),
                     e,
-                    deviceDescriptor,
+                    null,
+                    false,
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
 
@@ -643,7 +662,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
             throw new TargetSetupError(
                     String.format(
                             "Could not find any files in specified directory: %s", fileOrDirectory),
-                    deviceDescriptor,
+                    null,
+                    null,
+                    false,
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
         }
 
@@ -714,13 +735,16 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
     }
 
     /** Get the package name from the test app. */
-    protected String parsePackageName(File testAppFile, DeviceDescriptor deviceDescriptor)
-            throws TargetSetupError {
+    protected String parsePackageName(File testAppFile) throws TargetSetupError {
         AaptParser parser = AaptParser.parse(testAppFile, mAaptVersion);
         if (parser == null) {
             throw new TargetSetupError(
-                    "apk installed but AaptParser failed",
-                    deviceDescriptor,
+                    String.format(
+                            "AaptParser failed for file %s. The APK won't be installed",
+                            testAppFile.getName()),
+                    null,
+                    null,
+                    false, // Not device side error, doesn't need descriptor
                     DeviceErrorIdentifier.AAPT_PARSER_FAILED);
         }
         return parser.getPackageName();
@@ -823,5 +847,18 @@ public class TestAppInstallSetup extends BaseTargetPreparer implements IAbiRecei
         }
 
         return incrementalInstallSessionBuilder;
+    }
+
+    @Override
+    public Set<String> reportDependencies() {
+        Set<String> deps = new HashSet<String>();
+        for (File f : getTestsFileName()) {
+            if (!f.exists()) deps.add(f.getName());
+        }
+        for (String testAppNames : mSplitApkFileNames) {
+            List<String> apkNames = Arrays.asList(testAppNames.split(","));
+            deps.addAll(apkNames);
+        }
+        return deps;
     }
 }

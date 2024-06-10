@@ -16,7 +16,7 @@
 package com.android.tradefed.testtype.suite;
 
 import com.android.ddmlib.Log.LogLevel;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -29,10 +29,16 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.TestStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.annotations.VisibleForTesting;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 /**
  * Listener attached to each {@link IRemoteTest} of each module in order to collect the list of
@@ -44,7 +50,8 @@ public class ModuleListener extends CollectingTestListener {
     private TestStatus mTestStatus;
     private String mTrace;
     private int mTestsRan = 1;
-    private ITestInvocationListener mMainListener;
+    private final ITestInvocationListener mMainListener;
+    private final IInvocationContext mModuleContext;
 
     private boolean mCollectTestsOnly = false;
     /** Track runs in progress for logging purpose */
@@ -52,9 +59,13 @@ public class ModuleListener extends CollectingTestListener {
     /** Track if we are within an isolated run or not */
     private IsolationGrade mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
 
+    private List<String> mTestMappingSources = new ArrayList<String>();
+    private static final String TEST_MAPPING_SOURCE = "test_mapping_source";
+
     /** Constructor. */
-    public ModuleListener(ITestInvocationListener listener) {
+    public ModuleListener(ITestInvocationListener listener, IInvocationContext moduleContext) {
         mMainListener = listener;
+        mModuleContext = moduleContext;
         mRunInProgress = false;
         setIsAggregrateMetrics(true);
     }
@@ -67,6 +78,16 @@ public class ModuleListener extends CollectingTestListener {
     /** Sets whether or not we are only collecting the tests. */
     public void setCollectTestsOnly(boolean collectTestsOnly) {
         mCollectTestsOnly = collectTestsOnly;
+    }
+
+    /** Sets test-mapping sources that will be inserted into metrics. */
+    public void setTestMappingSources(List<String> testMappingSources) {
+        mTestMappingSources = testMappingSources;
+    }
+
+    @VisibleForTesting
+    List<String> getTestMappingSources() {
+        return mTestMappingSources;
     }
 
     @Override
@@ -87,13 +108,15 @@ public class ModuleListener extends CollectingTestListener {
         if (attemptNumber != 0) {
             mTestsRan = 1;
         }
-        CLog.d("ModuleListener.testRunStarted(%s, %s, %s)", name, numTests, attemptNumber);
+        CLog.d(
+                "ModuleListener.testRunStarted(%s, %s, %s) on %s",
+                name, numTests, attemptNumber, getSerial());
     }
 
     /** {@inheritDoc} */
     @Override
     public void testRunFailed(String errorMessage) {
-        CLog.d("ModuleListener.testRunFailed(%s)", errorMessage);
+        CLog.d("ModuleListener.testRunFailed(%s) on %s", errorMessage, getSerial());
         super.testRunFailed(errorMessage);
     }
 
@@ -101,17 +124,18 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testRunFailed(FailureDescription failure) {
         CLog.d(
-                "ModuleListener.testRunFailed(%s|%s|%s)",
+                "ModuleListener.testRunFailed(%s|%s|%s) on %s",
                 failure.getFailureStatus(),
                 failure.getErrorIdentifier(),
-                failure.getErrorMessage());
+                failure.getErrorMessage(),
+                getSerial());
         super.testRunFailed(failure);
     }
 
     /** {@inheritDoc} */
     @Override
     public void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
-        CLog.d("ModuleListener.testRunEnded(%s)", elapsedTime);
+        CLog.d("ModuleListener.testRunEnded(%s) on %s", elapsedTime, getSerial());
 
         if (!IsolationGrade.NOT_ISOLATED.equals(mAttemptIsolation)) {
             runMetrics.put(
@@ -133,7 +157,7 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testStarted(TestDescription test, long startTime) {
         if (!mCollectTestsOnly) {
-            CLog.d("ModuleListener.testStarted(%s)", test.toString());
+            CLog.d("ModuleListener.testStarted(%s) on %s", test.toString(), getSerial());
         }
         mTestStatus = TestStatus.PASSED;
         mTrace = null;
@@ -155,11 +179,17 @@ public class ModuleListener extends CollectingTestListener {
             String runAndTestCase = String.format("%s%s", runName, testName.toString());
             String message =
                     String.format(
-                            "[%d/%d] %s %s", mTestsRan, getExpectedTests(), runAndTestCase, status);
+                            "[%d/%d] %s %s %s",
+                            mTestsRan, getExpectedTests(), getSerial(), runAndTestCase, status);
             if (mTrace != null) {
                 message += ": " + mTrace;
             }
-            CLog.logAndDisplay(LogLevel.INFO, message);
+            // Respect log level for passed status, force log for non-passed
+            if (TestStatus.PASSED.equals(status)) {
+                CLog.i(message);
+            } else {
+                CLog.logAndDisplay(LogLevel.INFO, message);
+            }
         }
         mTestsRan++;
     }
@@ -174,6 +204,11 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         logTestStatus(test, mTestStatus);
+        if (!mTestMappingSources.isEmpty()) {
+            testMetrics.put(
+                    TEST_MAPPING_SOURCE,
+                    TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
+        }
         super.testEnded(test, endTime, testMetrics);
     }
 
@@ -195,6 +230,13 @@ public class ModuleListener extends CollectingTestListener {
         super.testAssumptionFailure(test, failure);
         mTestStatus = TestStatus.ASSUMPTION_FAILURE;
         mTrace = failure.toString();
+    }
+
+    @Override
+    public void testSkipped(TestDescription test, SkipReason reason) {
+        mTestStatus = TestStatus.SKIPPED;
+        mTrace = reason.toString();
+        super.testSkipped(test, reason);
     }
 
     /** {@inheritDoc} */
@@ -260,5 +302,12 @@ public class ModuleListener extends CollectingTestListener {
                 ((ILogSaverListener) mMainListener).logAssociation(dataName, logFile);
             }
         }
+    }
+
+    private String getSerial() {
+        if (mModuleContext == null || mModuleContext.getDevices().isEmpty()) {
+            return "";
+        }
+        return mModuleContext.getDevices().get(0).getSerialNumber();
     }
 }

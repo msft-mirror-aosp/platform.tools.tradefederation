@@ -17,14 +17,17 @@ package com.android.tradefed.presubmit;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.testtype.suite.ValidateSuiteConfigHelper;
 
 import com.google.common.base.Joiner;
@@ -51,6 +54,11 @@ public class DeviceTestsConfigValidation implements IBuildReceiver {
             name = "config-extension",
             description = "The expected extension from configuration to check.")
     private String mConfigExtension = "config";
+
+    @Option(
+            name = "disallowed-test-type",
+            description = "The disallowed test type for configs in device-tests.zip")
+    private List<String> mDisallowedTestTypes = new ArrayList<>();
 
     private IBuildInfo mBuild;
 
@@ -82,8 +90,21 @@ public class DeviceTestsConfigValidation implements IBuildReceiver {
                 // All configurations in device-tests.zip should be module since they are generated
                 // from AndroidTest.xml
                 ValidateSuiteConfigHelper.validateConfig(c);
+
+                for (IDeviceConfiguration dConfig : c.getDeviceConfig()) {
+                    GeneralTestsConfigValidation.validatePreparers(
+                            c, config, dConfig.getTargetPreparers());
+                }
                 // Check that all the tests runners are well supported.
                 GeneralTestsConfigValidation.checkRunners(c.getTests(), "device-tests");
+
+                ConfigurationDescriptor cd = c.getConfigurationDescription();
+                GeneralTestsConfigValidation.checkModuleParameters(
+                        c.getName(), cd.getMetaData(ITestSuite.PARAMETER_KEY));
+
+                // Check for disallowed test types
+                GeneralTestsConfigValidation.checkDisallowedTestType(c, mDisallowedTestTypes);
+
                 // Add more checks if necessary
             } catch (ConfigurationException e) {
                 errors.add(String.format("\t%s: %s", config.getName(), e.getMessage()));

@@ -24,7 +24,6 @@ import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
@@ -91,12 +90,13 @@ public class LocalAndroidVirtualDeviceTest {
         }
 
         @Override
-        public void waitForDeviceAvailable() {
+        public boolean waitForDeviceAvailable() {
             Assert.assertTrue("Unexpected method call to waitForDeviceAvailable.", expectToConnect);
+            return true;
         }
 
         @Override
-        IRunUtil createRunUtil() {
+        protected IRunUtil createRunUtil() {
             Assert.assertNotNull("Unexpected method call to createRunUtil.", currentRunUtil);
             IRunUtil returnValue = currentRunUtil;
             currentRunUtil = null;
@@ -105,6 +105,7 @@ public class LocalAndroidVirtualDeviceTest {
     }
 
     private static final String STUB_SERIAL_NUMBER = "local-virtual-device-0";
+    private static final Integer DEVICE_NUM_OFFSET = 5;
     private static final String IP_ADDRESS = "127.0.0.1";
     private static final String PORT = "6520";
     private static final String ONLINE_SERIAL_NUMBER = IP_ADDRESS + ":" + PORT;
@@ -121,7 +122,8 @@ public class LocalAndroidVirtualDeviceTest {
                     + "    \"logs\": ["
                     + "     {"
                     + "      \"path\": \"%s\","
-                    + "      \"type\": \"KERNEL_LOG\""
+                    + "      \"type\": \"KERNEL_LOG\","
+                    + "      \"name\": \"kernel.1.log\""
                     + "     }"
                     + "    ]"
                     + "   }"
@@ -141,7 +143,8 @@ public class LocalAndroidVirtualDeviceTest {
                     + "    \"logs\": ["
                     + "     {"
                     + "      \"path\": \"%s\","
-                    + "      \"type\": \"KERNEL_LOG\""
+                    + "      \"type\": \"KERNEL_LOG\","
+                    + "      \"name\": \"kernel.1.log\""
                     + "     }"
                     + "    ]"
                     + "   }"
@@ -177,11 +180,12 @@ public class LocalAndroidVirtualDeviceTest {
         mSystemImageZip = null;
         mOtaToolsZip = null;
 
-        when(mMockBuildInfo.getFile(eq(BuildInfoFileKey.DEVICE_IMAGE))).thenReturn(mImageZip);
         when(mMockBuildInfo.getFile((String) any()))
                 .thenAnswer(
                         invocation -> {
                             switch ((String) invocation.getArguments()[0]) {
+                                case "device":
+                                    return mImageZip;
                                 case "cvd-host_package.tar.gz":
                                     return mHostPackageTarGzip;
                                 case "boot-img.zip":
@@ -201,7 +205,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         mLocalAvd =
                 new TestableLocalAndroidVirtualDevice(
-                        new StubLocalAndroidVirtualDevice(STUB_SERIAL_NUMBER),
+                        new StubLocalAndroidVirtualDevice(STUB_SERIAL_NUMBER, DEVICE_NUM_OFFSET),
                         mockDeviceStateMonitor,
                         mockDeviceMonitor);
         TestDeviceOptions options = mLocalAvd.getOptions();
@@ -303,18 +307,19 @@ public class LocalAndroidVirtualDeviceTest {
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
-                        eq("--local-image"),
-                        imageDir.capture(),
+                        eq(Integer.toString(DEVICE_NUM_OFFSET + 1)),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
-                        eq("--local-tool"),
-                        hostPackageDir.capture(),
                         eq("--report_file"),
                         reportFile.capture(),
                         eq("--no-autoconnect"),
                         eq("--yes"),
                         eq("--skip-pre-run-check"),
                         eq("-vv"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
                         eq("-test")))
                 .thenAnswer(answer);
 
@@ -330,30 +335,34 @@ public class LocalAndroidVirtualDeviceTest {
             ArgumentCaptor<String> bootImageDir,
             ArgumentCaptor<String> systemImageDir,
             ArgumentCaptor<String> otaToolsDir) {
+        mLocalAvd.getOptions().getGceDriverFileParams().put("test-file", new File("/test/file"));
         IRunUtil runUtil = mock(IRunUtil.class);
         when(runUtil.runTimedCmd(
                         eq(ACLOUD_TIMEOUT),
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
-                        eq("--local-image"),
-                        imageDir.capture(),
+                        eq(Integer.toString(DEVICE_NUM_OFFSET + 1)),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
-                        eq("--local-tool"),
-                        hostPackageDir.capture(),
                         eq("--report_file"),
                         reportFile.capture(),
                         eq("--no-autoconnect"),
                         eq("--yes"),
                         eq("--skip-pre-run-check"),
+                        eq("-vv"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
                         eq("--local-boot-image"),
                         bootImageDir.capture(),
                         eq("--local-system-image"),
                         systemImageDir.capture(),
                         eq("--local-tool"),
                         otaToolsDir.capture(),
-                        eq("-vv"),
+                        eq("--test-file"),
+                        eq("/test/file"),
                         eq("-test")))
                 .thenAnswer(answer);
 
@@ -382,6 +391,7 @@ public class LocalAndroidVirtualDeviceTest {
         Assert.assertTrue(StubLocalAndroidVirtualDevice.class.equals(device.getClass()));
         StubLocalAndroidVirtualDevice stubDevice = (StubLocalAndroidVirtualDevice) device;
         Assert.assertEquals(STUB_SERIAL_NUMBER, stubDevice.getSerialNumber());
+        Assert.assertEquals(DEVICE_NUM_OFFSET, stubDevice.getDeviceNumOffset());
     }
 
     /**
@@ -445,7 +455,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
         verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
-        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         for (Map.Entry<String, ArgumentCaptor<String>> entry : captureDirs.entrySet()) {
@@ -501,7 +511,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
         verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
-        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());
@@ -553,7 +563,7 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.postInvocationTearDown(expectedException);
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
-        verify(testLogger).testLog(any(), eq(LogDataType.KERNEL_LOG), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());

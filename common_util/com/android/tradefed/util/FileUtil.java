@@ -17,12 +17,15 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.config.Option;
-import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.error.HarnessIOException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.LogDataType;
-import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
+
+import com.google.common.collect.ImmutableSet;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -59,6 +62,9 @@ import java.util.zip.ZipFile;
  * A helper class for file related operations
  */
 public class FileUtil {
+
+    private static final ImmutableSet<String> DISK_SPACE_ERRORS =
+            ImmutableSet.of("No space left on device");
 
     /**
      * The minimum allowed disk space in megabytes. File creation methods will throw
@@ -114,32 +120,6 @@ public class FileUtil {
             super(msg, InfraErrorIdentifier.LAB_HOST_FILESYSTEM_FULL);
         }
 
-    }
-
-    /** Harness exception that helps carrying file issues. */
-    public static class HarnessIOException extends IOException implements IHarnessException {
-
-        private ErrorIdentifier mErrorId;
-        private String mOrigin;
-
-        HarnessIOException(Throwable cause, ErrorIdentifier errorId) {
-            super(cause);
-            mErrorId = errorId;
-            mOrigin =
-                    StackWalker.getInstance(java.lang.StackWalker.Option.RETAIN_CLASS_REFERENCE)
-                            .getCallerClass()
-                            .getCanonicalName();
-        }
-
-        @Override
-        public ErrorIdentifier getErrorId() {
-            return mErrorId;
-        }
-
-        @Override
-        public String getOrigin() {
-            return mOrigin;
-        }
     }
 
     /**
@@ -235,6 +215,24 @@ public class FileUtil {
             return file.setWritable(true, false /* false == writable for all */) &&
                     file.setReadable(true, false /* false == readable for all */);
         }
+    }
+
+    /**
+     * Performs a best effort attempt to ensure given file group executable, readable, and writable.
+     *
+     * <p>If 'chmod' system command is not supported by underlying OS, will attempt to set
+     * permissions for all users. The operation is synchronized to prevent race condition introduced
+     * by accessing files from a cache, e.g., GCSFileDownloader.
+     *
+     * @param file the {@link File} to make owner and group writable
+     * @return <code>true</code> if permissions were set successfully, <code>false</code> otherwise
+     */
+    public static synchronized boolean ensureGroupRWX(File file) {
+        if (!file.canExecute()) {
+            // Set the executable bit if needed
+            return chmodGroupRWX(file);
+        }
+        return true;
     }
 
     /**
@@ -1198,10 +1196,17 @@ public class FileUtil {
      * @return md5 of the file
      */
     public static String calculateMd5(File file) {
+        long startTime = System.currentTimeMillis();
         try (FileInputStream inputSource = new FileInputStream(file)) {
             return StreamUtil.calculateMd5(inputSource);
         } catch (IOException e) {
             CLog.e(e);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MD5_CALCULATION_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MD5_CALCULATION_COUNT, 1);
         }
         return "-1";
     }
@@ -1253,6 +1258,51 @@ public class FileUtil {
     }
 
     /**
+     * Get all files in the given directory with name matching the given filter and also filter the
+     * found files by abi arch if abi is not null.
+     *
+     * @param fileName {@link String} of the regex to match file path
+     * @param abi {@link IAbi} object of the abi to match the target
+     * @param includeDirectory whether to include directories in the search result
+     * @param dirs an array of {@link File} object of the directories to search for files
+     * @return a set of {@link File}s or empty if it could not be found
+     */
+    public static Set<File> findFiles(
+            String fileName, IAbi abi, boolean includeDirectory, File... dirs) throws IOException {
+        // files that will be returned at the end
+        Set<File> abiSpecificFiles = new LinkedHashSet<>();
+        // files that were found before abi check
+        Set<File> allFiles = new LinkedHashSet<>();
+        for (File dir : dirs) {
+            Set<File> testSrcs = findFilesObject(dir, fileName, includeDirectory);
+            allFiles.addAll(testSrcs);
+            if (testSrcs.isEmpty()) {
+                continue;
+            }
+            Iterator<File> itr = testSrcs.iterator();
+            if (abi != null) {
+                while (itr.hasNext()) {
+                    File matchFile = itr.next();
+                    if (matchFile
+                            .getParentFile()
+                            .getName()
+                            .equals(AbiUtils.getArchForAbi(abi.getName()))) {
+                        abiSpecificFiles.add(matchFile);
+                    }
+                }
+            }
+        }
+        // if arch specific directory structure exists, return files only from the arch specific
+        // directories
+        if (!abiSpecificFiles.isEmpty()) {
+            return abiSpecificFiles;
+        } else {
+            // Otherwise, return all files that matched the filename
+            return allFiles;
+        }
+    }
+
+    /**
      * Search and return the first directory {@link File} among other directories.
      *
      * @param dirName The directory name we are looking for.
@@ -1285,11 +1335,32 @@ public class FileUtil {
      * @return a set of {@link File} of the file objects. @See {@link #findFiles(File, String)}
      */
     public static Set<File> findFilesObject(File dir, String filter) throws IOException {
+        return findFilesObject(dir, filter, true);
+    }
+
+    /**
+     * Get all file paths of files in the given directory with name matching the given filter
+     *
+     * @param dir {@link File} object of the directory to search for files recursively
+     * @param filter {@link String} of the regex to match file names
+     * @param includeDirectory whether to include directories in the search result
+     * @return a set of {@link File} of the file objects. @See {@link #findFiles(File, String)}
+     */
+    public static Set<File> findFilesObject(File dir, String filter, boolean includeDirectory)
+            throws IOException {
         Set<File> files = new LinkedHashSet<>();
         try (Stream<Path> stream =
                 Files.walk(Paths.get(dir.getAbsolutePath()), FileVisitOption.FOLLOW_LINKS)) {
-            stream.filter(path -> path.getFileName().toString().matches(filter))
-                    .forEach(path -> files.add(path.toFile()));
+            if (includeDirectory) {
+                stream.filter(path -> path.getFileName().toString().matches(filter))
+                        .forEach(path -> files.add(path.toFile()));
+            } else {
+                stream.filter(
+                                path ->
+                                        path.getFileName().toString().matches(filter)
+                                                && path.toFile().isFile())
+                        .forEach(path -> files.add(path.toFile()));
+            }
         }
         return files;
     }
@@ -1367,5 +1438,18 @@ public class FileUtil {
             CLog.e(e);
         }
         return null;
+    }
+
+    /** Returns true if the message is an disk space error. */
+    public static boolean isDiskSpaceError(String message) {
+        return DISK_SPACE_ERRORS.contains(message);
+    }
+
+    /** Wraps error into a disk space error if needed. */
+    public static IOException convertToDiskSpaceIfNeeded(IOException e) {
+        if (isDiskSpaceError(e.getMessage())) {
+            return new HarnessIOException(e, InfraErrorIdentifier.NO_DISK_SPACE);
+        }
+        return e;
     }
 }
