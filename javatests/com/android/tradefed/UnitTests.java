@@ -31,6 +31,7 @@ import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
+import com.android.tradefed.cache.remote.RemoteCacheClientTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
 import com.android.tradefed.cluster.ClusterCommandConfigBuilderTest;
@@ -98,6 +99,7 @@ import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
 import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
+import com.android.tradefed.device.cloud.HostOrchestratorUtilTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.OxygenClientTest;
@@ -527,6 +529,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // cache
     MerkleTreeTest.class,
+    RemoteCacheClientTest.class,
 
     // clearcut
     ClearcutClientTest.class,
@@ -620,6 +623,7 @@ import org.junit.runners.Suite.SuiteClasses;
     GceManagerTest.class,
     GceRemoteCmdFormatterTest.class,
     GceSshTunnelMonitorTest.class,
+    HostOrchestratorUtilTest.class,
     ManagedRemoteDeviceTest.class,
     NestedRemoteDeviceTest.class,
     OxygenClientTest.class,

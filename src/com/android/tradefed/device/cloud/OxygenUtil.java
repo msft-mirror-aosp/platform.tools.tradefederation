@@ -103,6 +103,11 @@ public class OxygenUtil {
                                                     "failed to initialize fetch system images",
                                                     "fetch_cvd_failure")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "failed to initialize fetch system images",
+                                                    "fetch_cvd_failure")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to read from socket, retry",
