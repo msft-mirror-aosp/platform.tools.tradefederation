@@ -21,8 +21,10 @@ import static com.google.common.base.Preconditions.checkState;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.testtype.coverage.CoverageOptions;
 
 import com.google.common.collect.ImmutableList;
+
 import java.util.List;
 import java.util.StringJoiner;
 
@@ -36,19 +38,18 @@ public final class NativeCodeCoverageFlusher {
             "cat /proc/%d/status | grep SigCgt | awk '{ print $2 }'";
     private static final long SIGNAL_37_BIT = 1L << (37 - 1);
     private static final String COVERAGE_FLUSH_COMMAND_FORMAT = "kill -37 %s";
-    private static final String CLEAR_CLANG_COVERAGE_FILES =
-            "find /data/misc/trace -name '*.profraw' -delete";
-    private static final String CLEAR_GCOV_COVERAGE_FILES =
-            "find /data/misc/trace -name '*.gcda' -delete";
+    private static final String CLEAR_CLANG_COVERAGE_FILES_FORMAT =
+            "find %s -name '*.profraw' -delete";
+    private static final String CLEAR_GCOV_COVERAGE_FILES_FORMAT = "find %s -name '*.gcda' -delete";
     private static final long FLUSH_DELAY_MS = 2 * 60 * 1000; // 2 minutes
 
     private final ITestDevice mDevice;
-    private final List<String> mProcessNames;
+    private final CoverageOptions mCoverageOptions;
     private IRunUtil mRunUtil = RunUtil.getDefault();
 
-    public NativeCodeCoverageFlusher(ITestDevice device, List<String> processNames) {
+    public NativeCodeCoverageFlusher(ITestDevice device, CoverageOptions coverageOptions) {
         mDevice = device;
-        mProcessNames = processNames;
+        mCoverageOptions = coverageOptions;
     }
 
     public void setRunUtil(IRunUtil runUtil) {
@@ -63,8 +64,21 @@ public final class NativeCodeCoverageFlusher {
      */
     public void resetCoverage() throws DeviceNotAvailableException {
         forceCoverageFlush();
-        mDevice.executeShellCommand(CLEAR_CLANG_COVERAGE_FILES);
-        mDevice.executeShellCommand(CLEAR_GCOV_COVERAGE_FILES);
+        deleteCoverageMeasurements();
+    }
+
+    /**
+     * Deletes coverage measurements from the device. Device must be in adb root.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void deleteCoverageMeasurements() throws DeviceNotAvailableException {
+        for (String devicePath : mCoverageOptions.getDeviceCoveragePaths()) {
+            mDevice.executeShellCommand(
+                    String.format(CLEAR_CLANG_COVERAGE_FILES_FORMAT, devicePath));
+            mDevice.executeShellCommand(
+                    String.format(CLEAR_GCOV_COVERAGE_FILES_FORMAT, devicePath));
+        }
     }
 
     /**
@@ -76,7 +90,8 @@ public final class NativeCodeCoverageFlusher {
     public void forceCoverageFlush() throws DeviceNotAvailableException {
         checkState(mDevice.isAdbRoot(), "adb root is required to flush native coverage data.");
 
-        List<Integer> signalHandlingPids = findSignalHandlingPids(mProcessNames);
+        List<Integer> signalHandlingPids =
+                findSignalHandlingPids(mCoverageOptions.getCoverageProcesses());
         StringJoiner pidString = new StringJoiner(" ");
 
         CLog.d("Signal handling pids: %s", signalHandlingPids.toString());

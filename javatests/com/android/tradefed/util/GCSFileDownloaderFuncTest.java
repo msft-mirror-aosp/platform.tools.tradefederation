@@ -413,6 +413,7 @@ public class GCSFileDownloaderFuncTest {
     public void testCheckFreshness_notFresh() throws Exception {
         String remotePath = String.format("gs://%s/%s/%s", BUCKET_NAME, mRemoteRoot, FILE_NAME1);
         File localFile = mDownloader.downloadFile(remotePath);
+        mDownloader.clearCache();
         // Change the remote file.
         createFile(mStorage, "New content.", BUCKET_NAME, mRemoteRoot, FILE_NAME1);
         Assert.assertFalse(mDownloader.isFresh(localFile, remotePath));
@@ -429,6 +430,7 @@ public class GCSFileDownloaderFuncTest {
     public void testCheckFreshness_folder_addFile() throws Exception {
         String remotePath = String.format("gs://%s/%s/%s", BUCKET_NAME, mRemoteRoot, FOLDER_NAME1);
         File localFolder = mDownloader.downloadFile(remotePath);
+        mDownloader.clearCache();
         createFile(
                 mStorage,
                 "A new file",
@@ -444,6 +446,7 @@ public class GCSFileDownloaderFuncTest {
     public void testCheckFreshness_folder_removeFile() throws Exception {
         String remotePath = String.format("gs://%s/%s/%s", BUCKET_NAME, mRemoteRoot, FOLDER_NAME1);
         File localFolder = mDownloader.downloadFile(remotePath);
+        mDownloader.clearCache();
         mStorage.objects()
                 .delete(BUCKET_NAME, Paths.get(mRemoteRoot, FOLDER_NAME1, FILE_NAME3).toString())
                 .execute();
@@ -454,6 +457,7 @@ public class GCSFileDownloaderFuncTest {
     public void testCheckFreshness_folder_changeFile() throws Exception {
         String remotePath = String.format("gs://%s/%s/%s", BUCKET_NAME, mRemoteRoot, FOLDER_NAME1);
         File localFolder = mDownloader.downloadFile(remotePath);
+        mDownloader.clearCache();
         createFile(mStorage, "New content", BUCKET_NAME, mRemoteRoot, FOLDER_NAME1, FILE_NAME3);
         Assert.assertFalse(mDownloader.isFresh(localFolder, remotePath));
     }

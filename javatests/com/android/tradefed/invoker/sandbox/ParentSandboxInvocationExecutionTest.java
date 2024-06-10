@@ -18,8 +18,10 @@ package com.android.tradefed.invoker.sandbox;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
@@ -31,11 +33,13 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.util.IRunUtil;
 
@@ -60,7 +64,7 @@ public class ParentSandboxInvocationExecutionTest {
     private IRunUtil mMockRunUtil;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         mMockFactory = Mockito.mock(IConfigurationFactory.class);
         mMockDevice = Mockito.mock(ITestDevice.class);
         mMockLogger = Mockito.mock(ITestLogger.class);
@@ -101,8 +105,13 @@ public class ParentSandboxInvocationExecutionTest {
         mContext = new InvocationContext();
         mContext.addAllocatedDevice(ConfigurationDef.DEFAULT_DEVICE_NAME, mMockDevice);
         mContext.addDeviceBuildInfo(ConfigurationDef.DEFAULT_DEVICE_NAME, new BuildInfo());
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(mMockDevice.getOptions()).thenReturn(options);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(mContext).build();
         mConfig = new Configuration("test", "test");
+        mConfig.setCommandLine(new String[] {"empty"});
+        mConfig.setConfigurationObject(Configuration.SANDBOX_TYPE_NAME, new TradefedSandbox());
     }
 
     @Test
@@ -112,7 +121,7 @@ public class ParentSandboxInvocationExecutionTest {
         mParentSandbox.doCleanUp(mContext, mConfig, null);
 
         verify(mMockFactory, times(0)).createConfigurationFromArgs(Mockito.any());
-        verify(mMockDevice, times(1)).getIDevice();
+        verify(mMockDevice, times(2)).getIDevice();
     }
 
     /**
@@ -163,6 +172,6 @@ public class ParentSandboxInvocationExecutionTest {
 
         verify(mMockLabPreparer, times(1)).setUp(Mockito.any());
         verify(mMockLabPreparer, times(1)).tearDown(Mockito.any(), Mockito.any());
-        verify(mMockDevice, times(1)).getIDevice();
+        verify(mMockDevice, times(2)).getIDevice();
     }
 }

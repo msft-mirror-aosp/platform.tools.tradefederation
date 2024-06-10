@@ -29,6 +29,7 @@ import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.SubprocessTestResultsParser;
 
@@ -303,6 +304,23 @@ public class SubprocessResultsReporterTest {
             String content = FileUtil.readStringFromFile(tmpReportFile);
             assertTrue(content.contains("\"trace\":\"assumption failure\""));
             assertTrue(content.contains("\"failure_status\":\"TEST_FAILURE\""));
+        } finally {
+            FileUtil.deleteFile(tmpReportFile);
+        }
+    }
+
+    @Test
+    public void testSkippedStatus() throws Exception {
+        OptionSetter setter = new OptionSetter(mReporter);
+        File tmpReportFile = FileUtil.createTempFile("subprocess-reporter", "unittest");
+        try {
+            setter.setOptionValue("subprocess-report-file", tmpReportFile.getAbsolutePath());
+            TestDescription testId = new TestDescription("com.fakeclass", "faketest");
+            SkipReason reason = new SkipReason("reason", "demotion");
+            mReporter.testSkipped(testId, reason);
+            String content = FileUtil.readStringFromFile(tmpReportFile);
+            assertTrue(content.contains("\"skipMessage\":\"reason\""));
+            assertTrue(content.contains("\"trigger\":\"demotion\""));
         } finally {
             FileUtil.deleteFile(tmpReportFile);
         }

@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.result.proto;
 
+import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.error.HarnessException;
@@ -33,6 +34,7 @@ import com.android.tradefed.result.proto.TestRecordProto.DebugInfoContext;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.result.proto.TestRecordProto.TestStatus;
 import com.android.tradefed.result.retry.ISupportGranularResults;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.SerializationUtil;
 import com.android.tradefed.util.StreamUtil;
@@ -68,8 +70,15 @@ public abstract class ProtoResultReporter
     private IInvocationContext mContext;
 
     private FailureDescription mInvocationFailureDescription = null;
+    private SkipReason mInvocationSkipReason = null;
     /** Whether or not a testModuleStart had currently been called. */
     private boolean mModuleInProgress = false;
+
+    private IInvocationContext mModuleContext;
+    /** Track whether or not invocation ended has been reported. */
+    private boolean mInvocationEnded = false;
+    /** Whether or not to inline test record of child events */
+    private boolean mInlineRecordOfChildren = true;
 
     @Override
     public boolean supportGranularResults() {
@@ -78,6 +87,10 @@ public abstract class ProtoResultReporter
 
     public void setGranularResults(boolean granularResults) {
         mReportGranularResults = granularResults;
+    }
+
+    public void setInlineRecordOfChildren(boolean inline) {
+        mInlineRecordOfChildren = inline;
     }
 
     /**
@@ -145,6 +158,13 @@ public abstract class ProtoResultReporter
      */
     public void processTestCaseEnded(TestRecord testCaseRecord) {}
 
+    /**
+     * Use the invocation record to send one by one all the final logs of the invocation.
+     *
+     * @param invocationLogs The finalized proto representing the invocation.
+     */
+    public void processFinalInvocationLogs(TestRecord invocationLogs) {}
+
     // Invocation events
 
     @Override
@@ -194,6 +214,11 @@ public abstract class ProtoResultReporter
     }
 
     @Override
+    public void invocationSkipped(SkipReason reason) {
+        mInvocationSkipReason = reason;
+    }
+
+    @Override
     public final void invocationEnded(long elapsedTime) {
         if (mModuleInProgress) {
             // If we had a module in progress, and a new module start occurs, complete the call
@@ -212,6 +237,9 @@ public abstract class ProtoResultReporter
         } else {
             mInvocationRecordBuilder.setStatus(TestStatus.PASS);
         }
+        if (mInvocationSkipReason != null) {
+            mInvocationRecordBuilder.setSkipReason(convertSkipReason(mInvocationSkipReason));
+        }
 
         // Finalize the protobuf handling: where to put the results.
         TestRecord record = mInvocationRecordBuilder.build();
@@ -221,6 +249,7 @@ public abstract class ProtoResultReporter
             CLog.e("Failed to process invocation ended:");
             CLog.e(e);
         }
+        mInvocationEnded = true;
     }
 
     // Module events (optional when there is no suite)
@@ -239,6 +268,7 @@ public abstract class ProtoResultReporter
         moduleBuilder.setDescription(Any.pack(moduleContext.toProto()));
         mLatestChild.add(moduleBuilder);
         mModuleInProgress = true;
+        mModuleContext = moduleContext;
         try {
             processTestModuleStarted(moduleBuilder.build());
         } catch (RuntimeException e) {
@@ -251,9 +281,14 @@ public abstract class ProtoResultReporter
     public final void testModuleEnded() {
         TestRecord.Builder moduleBuilder = mLatestChild.pop();
         mModuleInProgress = false;
-        moduleBuilder.setEndTime(createTimeStamp(System.currentTimeMillis()));
-        TestRecord.Builder parentBuilder = mLatestChild.peek();
 
+        moduleBuilder.setEndTime(createTimeStamp(System.currentTimeMillis()));
+        // Module do not have a fail status
+        moduleBuilder.setStatus(TestStatus.PASS);
+        // Repack module for updated properties
+        moduleBuilder.setDescription(Any.pack(mModuleContext.toProto()));
+        TestRecord.Builder parentBuilder = mLatestChild.peek();
+        mModuleContext = null;
         // Finalize the module and track it in the child
         TestRecord moduleRecord = moduleBuilder.build();
         ChildReference moduleReference = createModuleChildReference(moduleRecord);
@@ -431,6 +466,13 @@ public abstract class ProtoResultReporter
     }
 
     @Override
+    public final void testSkipped(TestDescription test, SkipReason reason) {
+        TestRecord.Builder testBuilder = mLatestChild.peek();
+
+        testBuilder.setSkipReason(convertSkipReason(reason));
+    }
+
+    @Override
     public final void testFailed(TestDescription test, String trace) {
         TestRecord.Builder testBuilder = mLatestChild.peek();
 
@@ -508,6 +550,11 @@ public abstract class ProtoResultReporter
             return;
         }
         TestRecord.Builder current = mLatestChild.peek();
+        if (mInvocationEnded) {
+            // For after invocation ended events, report artifacts one by one.
+            current.clearArtifacts();
+            current.clearChildren();
+        }
         Map<String, Any> fullmap = new HashMap<>();
         fullmap.putAll(current.getArtifactsMap());
         Any any = Any.pack(createFileProto(logFile));
@@ -520,6 +567,10 @@ public abstract class ProtoResultReporter
         } while (fullmap.containsKey(key));
         fullmap.put(key, any);
         current.putAllArtifacts(fullmap);
+        if (mInvocationEnded) {
+            CLog.logAndDisplay(LogLevel.DEBUG, "process final logs: %s", logFile.getPath());
+            processFinalInvocationLogs(current.build());
+        }
     }
 
     /**
@@ -532,7 +583,9 @@ public abstract class ProtoResultReporter
     private ChildReference createChildReference(TestRecord record) {
         ChildReference.Builder child = ChildReference.newBuilder();
         child.setTestRecordId(record.getTestRecordId());
-        child.setInlineTestRecord(record);
+        if (mInlineRecordOfChildren) {
+            child.setInlineTestRecord(record);
+        }
         return child.build();
     }
 
@@ -607,5 +660,13 @@ public abstract class ProtoResultReporter
         debugBuilder.setDebugInfoContext(debugContext);
 
         return debugBuilder.build();
+    }
+
+    private com.android.tradefed.result.proto.TestRecordProto.SkipReason convertSkipReason(
+            SkipReason skip) {
+        com.android.tradefed.result.proto.TestRecordProto.SkipReason.Builder reason =
+                com.android.tradefed.result.proto.TestRecordProto.SkipReason.newBuilder();
+        reason.setReason(skip.getReason()).setTrigger(skip.getTrigger());
+        return reason.build();
     }
 }

@@ -18,6 +18,7 @@ package com.android.tradefed.result;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.FatalHostError;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 
@@ -32,8 +33,6 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
 
 /**
@@ -94,7 +93,10 @@ public class LogFileSaver {
             return FileUtil.createTempDir("inv_");
         } catch (IOException e) {
             // uh oh, this can't be good, abort tradefed
-            throw new FatalHostError("Cannot create tmp directory.", e);
+            throw new FatalHostError(
+                    "Cannot create tmp directory.",
+                    e,
+                    InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
         }
     }
 
@@ -191,7 +193,7 @@ public class LogFileSaver {
     /**
      * Save the log data to a file
      *
-     * @param dataName a {@link String} descriptive name of the data. e.g. "dev
+     * @param dataName a {@link String} descriptive name of the data.
      * @param dataType the {@link LogDataType} of the file.
      * @param dataStream the {@link InputStream} of the data.
      * @return the file of the generated data
@@ -203,8 +205,40 @@ public class LogFileSaver {
     }
 
     /**
+     * Save a given log file
+     *
+     * @param dataName a {@link String} descriptive name of the data.
+     * @param dataType the {@link LogDataType} of the file.
+     * @param fileToLog the {@link File} to be logged
+     * @return the file of the generated data
+     * @throws IOException if log file could not be generated
+     */
+    public File saveLogFile(String dataName, LogDataType dataType, File fileToLog)
+            throws IOException {
+        long startTime = System.currentTimeMillis();
+        final String saneDataName = sanitizeFilename(dataName);
+        if (mInvLogDir != null && !mInvLogDir.exists()) {
+            mInvLogDir.mkdirs();
+        }
+        // add underscore to end of data name to make generated name more readable
+        File logFile =
+                FileUtil.createTempFile(
+                        saneDataName + "_", "." + dataType.getFileExt(), mInvLogDir);
+        // Delete to avoid hardlink collision
+        logFile.delete();
+        // Hardlink fallback to copy if needed
+        FileUtil.hardlinkFile(fileToLog, logFile);
+        CLog.i(
+                "Saved log file %s. [size=%s, elapsed=%sms]",
+                logFile.getAbsolutePath(),
+                logFile.length(),
+                System.currentTimeMillis() - startTime);
+        return logFile;
+    }
+
+    /**
      * Save raw data to a file
-     * @param dataName a {@link String} descriptive name of the data. e.g. "dev
+     * @param dataName a {@link String} descriptive name of the data.
      * @param ext the extension of the date
      * @param dataStream the {@link InputStream} of the data.
      * @return the file of the generated data
@@ -212,6 +246,7 @@ public class LogFileSaver {
      */
     public File saveLogDataRaw(String dataName, String ext, InputStream dataStream)
             throws IOException {
+        long startTime = System.currentTimeMillis();
         final String saneDataName = sanitizeFilename(dataName);
         if (mInvLogDir != null && !mInvLogDir.exists()) {
             mInvLogDir.mkdirs();
@@ -219,14 +254,18 @@ public class LogFileSaver {
         // add underscore to end of data name to make generated name more readable
         File logFile = FileUtil.createTempFile(saneDataName + "_", "." + ext, mInvLogDir);
         FileUtil.writeToFile(dataStream, logFile);
-        CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
+        CLog.i(
+                "Saved log file %s. [size=%s, elapsed=%sms]",
+                logFile.getAbsolutePath(),
+                logFile.length(),
+                System.currentTimeMillis() - startTime);
         return logFile;
     }
 
     /**
      * Save and compress, if necessary, the log data to a gzip file
      *
-     * @param dataName a {@link String} descriptive name of the data. e.g. "dev
+     * @param dataName a {@link String} descriptive name of the data.
      * @param dataType the {@link LogDataType} of the file. Log data which is a (ie
      *            {@link LogDataType#isCompressed()} is <code>true</code>)
      * @param dataStream the {@link InputStream} of the data.
@@ -239,6 +278,7 @@ public class LogFileSaver {
             CLog.d("Log data for %s is already compressed, skipping compression", dataName);
             return saveLogData(dataName, dataType, dataStream);
         }
+        long startTime = System.currentTimeMillis();
         BufferedInputStream bufInput = null;
         OutputStream outStream = null;
         try {
@@ -247,7 +287,11 @@ public class LogFileSaver {
             bufInput = new BufferedInputStream(dataStream);
             outStream = createGZipLogStream(logFile);
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
+            CLog.i(
+                    "Saved gzip log file %s. [size=%s, elapsed=%sms]",
+                    logFile.getAbsolutePath(),
+                    logFile.length(),
+                    System.currentTimeMillis() - startTime);
             return logFile;
         } finally {
             StreamUtil.close(bufInput);
@@ -256,52 +300,56 @@ public class LogFileSaver {
     }
 
     /**
-     * Save and compress, if necessary, the log data to a zip file
+     * Save and compress, if necessary, the log data to a gzip file
      *
-     * @param dataName a {@link String} descriptive name of the data. e.g. "dev
-     * @param dataType the {@link LogDataType} of the file. Log data which is a (ie
-     *            {@link LogDataType#isCompressed()} is <code>true</code>)
-     * @param dataStream the {@link InputStream} of the data.
+     * @param dataName a {@link String} descriptive name of the data.
+     * @param dataType the {@link LogDataType} of the file. Log data which is a (ie {@link
+     *     LogDataType#isCompressed()} is <code>true</code>)
+     * @param fileToLog the {@link File} to save
      * @return the file of the generated data
      * @throws IOException if log file could not be generated
      */
-    public File saveAndZipLogData(String dataName, LogDataType dataType, InputStream dataStream)
+    public File saveAndGZipLogFile(String dataName, LogDataType dataType, File fileToLog)
             throws IOException {
-        if (dataType.isCompressed()) {
+        if (dataType.isCompressed() || fileToLog.getName().endsWith(".gz")) {
             CLog.d("Log data for %s is already compressed, skipping compression", dataName);
-            return saveLogData(dataName, dataType, dataStream);
+            return saveLogFile(dataName, dataType, fileToLog);
         }
+        long startTime = System.currentTimeMillis();
         BufferedInputStream bufInput = null;
-        ZipOutputStream outStream = null;
+        OutputStream outStream = null;
         try {
             final String saneDataName = sanitizeFilename(dataName);
-            // add underscore to end of data name to make generated name more readable
-            File logFile = FileUtil.createTempFile(saneDataName + "_", "."
-                    + LogDataType.ZIP.getFileExt(), mInvLogDir);
-            bufInput = new BufferedInputStream(dataStream);
-            outStream = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(
-                    logFile), BUFFER_SIZE));
-            outStream.putNextEntry(new ZipEntry(saneDataName + "." + dataType.getFileExt()));
+            File logFile = createCompressedLogFile(saneDataName, dataType);
+            // TODO: Optimize gzip of existing log file
+            bufInput = new BufferedInputStream(new FileInputStream(fileToLog));
+            outStream = createGZipLogStream(logFile);
             StreamUtil.copyStreams(bufInput, outStream);
-            CLog.i("Saved log file %s. size=%s", logFile.getAbsolutePath(), logFile.length());
+            CLog.i(
+                    "Saved gzip log file %s. [size=%s, elapsed=%sms]",
+                    logFile.getAbsolutePath(),
+                    logFile.length(),
+                    System.currentTimeMillis() - startTime);
             return logFile;
         } finally {
             StreamUtil.close(bufInput);
-            StreamUtil.closeZipStream(outStream);
+            StreamUtil.close(outStream);
         }
     }
 
     /**
      * Creates an empty file for storing compressed log data.
      *
-     * @param dataName a {@link String} descriptive name of the data to be stor
-     *            "device_logcat"
+     * @param dataName a {@link String} descriptive name of the data to be stored.
      * @param origDataType the type of {@link LogDataType} to be stored
      * @return a {@link File}
      * @throws IOException if log file could not be created
      */
     public File createCompressedLogFile(String dataName, LogDataType origDataType)
             throws IOException {
+        if (mInvLogDir != null && !mInvLogDir.exists()) {
+            mInvLogDir.mkdirs();
+        }
         // add underscore to end of data name to make generated name more readable
         return FileUtil.createTempFile(dataName + "_",
                 String.format(".%s.%s", origDataType.getFileExt(), LogDataType.GZIP.getFileExt()),
@@ -328,7 +376,7 @@ public class LogFileSaver {
      * users of this class to mock.
      *
      * @param logFile the {@link File} to read from
-     * @return a buffered {@link InputStream} to read file data. Callers must c
+     * @return a buffered {@link InputStream} to read file data. Callers must call
      *         this stream when complete
      * @throws IOException if stream could not be generated
      */

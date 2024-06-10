@@ -31,6 +31,15 @@ import java.util.Properties;
 /** Utility for reading configuration resources. */
 public class ResourceUtil {
 
+    /** Extracts a given resource to an output file. */
+    public static void extractResourceToFile(String resource, File output) throws IOException {
+        try (InputStream resStream = ResourceUtil.class.getResourceAsStream(resource)) {
+            FileUtil.writeToFile(resStream, output);
+        }
+    }
+
+    /** DEPRECATED: Use extractResourceToFile Extracts a given resource to an output file. */
+    @Deprecated
     /** Extracts a given resource to an output file. Returns false if it fails. */
     public static boolean extractResourceAsFile(String resource, File output) {
         try (InputStream resStream = ResourceUtil.class.getResourceAsStream(resource)) {
