@@ -45,6 +45,8 @@ public class DeviceDescriptor implements Serializable {
     private final String mSimOperator;
     private final IDevice mIDevice;
     private final boolean mIsTemporary;
+    private final String mPreconfiguredIp;
+    private final Integer mPreconfiguredDeviceNumOffset;
 
     public DeviceDescriptor() {
         this(null, false, null, null, null, null, null, null);
@@ -79,6 +81,8 @@ public class DeviceDescriptor implements Serializable {
                 simState,
                 simOperator,
                 false,
+                null,
+                null,
                 null);
     }
 
@@ -114,6 +118,8 @@ public class DeviceDescriptor implements Serializable {
                 simState,
                 simOperator,
                 false,
+                null,
+                null,
                 idevice);
     }
 
@@ -150,6 +156,8 @@ public class DeviceDescriptor implements Serializable {
                 simState,
                 simOperator,
                 false,
+                null,
+                null,
                 idevice);
     }
 
@@ -171,6 +179,8 @@ public class DeviceDescriptor implements Serializable {
             String simState,
             String simOperator,
             boolean isTemporary,
+            String preconfiguredIp,
+            Integer preconfiguredDeviceNumOffset,
             IDevice idevice) {
         mSerial = serial;
         mDisplaySerial = displaySerial;
@@ -189,6 +199,8 @@ public class DeviceDescriptor implements Serializable {
         mSimState = simState;
         mSimOperator = simOperator;
         mIsTemporary = isTemporary;
+        mPreconfiguredIp = preconfiguredIp;
+        mPreconfiguredDeviceNumOffset = preconfiguredDeviceNumOffset;
         mIDevice = idevice;
     }
 
@@ -212,6 +224,8 @@ public class DeviceDescriptor implements Serializable {
                 d.getSimState(),
                 d.getSimOperator(),
                 d.isTemporary(),
+                d.getPreconfiguredIp(),
+                d.getPreconfiguredDeviceNumOffset(),
                 d.getIDevice());
     }
 
@@ -235,6 +249,33 @@ public class DeviceDescriptor implements Serializable {
                 d.getSimState(),
                 d.getSimOperator(),
                 d.isTemporary(),
+                d.getPreconfiguredIp(),
+                d.getPreconfiguredDeviceNumOffset(),
+                d.getIDevice());
+    }
+
+    public DeviceDescriptor(
+            DeviceDescriptor d, String preconfiguredIp, Integer preconfiguredDeviceNumOffset) {
+        this(
+                d.getSerial(),
+                d.getDisplaySerial(),
+                d.isStubDevice(),
+                d.getDeviceState(),
+                d.getState(),
+                d.getTestDeviceState(),
+                d.getProduct(),
+                d.getProductVariant(),
+                d.getSdkVersion(),
+                d.getBuildId(),
+                null,
+                d.getBatteryLevel(),
+                d.getDeviceClass(),
+                d.getMacAddress(),
+                d.getSimState(),
+                d.getSimOperator(),
+                d.isTemporary(),
+                preconfiguredIp,
+                preconfiguredDeviceNumOffset,
                 d.getIDevice());
     }
 
@@ -308,6 +349,14 @@ public class DeviceDescriptor implements Serializable {
     /** Returns whether or not the device will be deleted at the end of the invocation. */
     public boolean isTemporary() {
         return mIsTemporary;
+    }
+
+    public String getPreconfiguredIp() {
+        return mPreconfiguredIp;
+    }
+
+    public Integer getPreconfiguredDeviceNumOffset() {
+        return mPreconfiguredDeviceNumOffset;
     }
 
     private IDevice getIDevice() {

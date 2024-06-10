@@ -16,11 +16,13 @@
 package com.android.tradefed.testtype.junit4;
 
 import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.LogAnnotation;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.MetricAnnotation;
@@ -39,6 +41,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Result forwarder from JUnit4 Runner.
@@ -49,7 +52,7 @@ public class JUnit4ResultForwarder extends RunListener {
     private List<Throwable> mTestCaseFailures;
     private Description mRunDescription;
     private boolean mBeforeClass = true;
-    private boolean mTestFinished = false;
+    private CloseableTraceScope mMethodTrace = null;
 
     private LogUploaderThread mLogUploaderThread;
 
@@ -60,14 +63,20 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testFailure(Failure failure) throws Exception {
-        mTestFinished = true;
+        if (mLogUploaderThread != null) {
+            mLogUploaderThread.cancel();
+        }
 
         Description description = failure.getDescription();
         if (description.getMethodName() == null) {
             Throwable error = failure.getException();
             String message = error.getMessage();
             if (message == null) {
-                message = "Exception with no error message";
+                if (error instanceof CarryInterruptedException) {
+                    message = "Test Phase Timeout Reached.";
+                } else {
+                    message = "Exception with no error message";
+                }
             }
             FailureDescription failureDesc =
                     FailureDescription.create(message).setFailureStatus(FailureStatus.TEST_FAILURE);
@@ -82,6 +91,8 @@ public class JUnit4ResultForwarder extends RunListener {
                 }
                 failureDesc.setErrorIdentifier(((IHarnessException) error).getErrorId());
                 failureDesc.setOrigin(((IHarnessException) error).getOrigin());
+            } else if (error instanceof CarryInterruptedException) {
+                failureDesc.setErrorIdentifier(TestErrorIdentifier.TEST_PHASE_TIMED_OUT);
             }
             mListener.testRunFailed(failureDesc);
             // If the exception is ours thrown from before, rethrow it
@@ -128,8 +139,8 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testStarted(Description description) throws Exception {
+        mMethodTrace = new CloseableTraceScope(description.getMethodName());
         mBeforeClass = false;
-        mTestFinished = false;
         mTestCaseFailures.clear();
         TestDescription testid =
                 new TestDescription(
@@ -145,7 +156,7 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testFinished(Description description) throws Exception {
-        mTestFinished = true;
+        mLogUploaderThread.cancel();
 
         TestDescription testid =
                 new TestDescription(
@@ -155,9 +166,7 @@ public class JUnit4ResultForwarder extends RunListener {
         try {
             handleFailures(testid);
         } finally {
-            while (mLogUploaderThread.isAlive()) {
-                // wait for it to finish
-            }
+            mLogUploaderThread.join();
             // run last time to make sure all logs uploaded
             pollLogsAndUpload(description);
 
@@ -172,6 +181,10 @@ public class JUnit4ResultForwarder extends RunListener {
             }
             mListener.testEnded(testid, metrics);
             mTestCaseFailures.clear();
+            if (mMethodTrace != null) {
+                mMethodTrace.close();
+                mMethodTrace = null;
+            }
         }
     }
 
@@ -218,6 +231,7 @@ public class JUnit4ResultForwarder extends RunListener {
      */
     private class LogUploaderThread extends Thread {
         private Description mDescription;
+        private AtomicBoolean mIsCancelled = new AtomicBoolean(false);
 
         public LogUploaderThread(Description description) {
             mDescription = description;
@@ -225,9 +239,13 @@ public class JUnit4ResultForwarder extends RunListener {
 
         @Override
         public void run() {
-            while (!mTestFinished) {
+            while (!mIsCancelled.get()) {
                 pollLogsAndUpload(mDescription);
             }
+        }
+
+        public void cancel() {
+            mIsCancelled.set(true);
         }
     }
 

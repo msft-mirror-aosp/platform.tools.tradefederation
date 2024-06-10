@@ -88,7 +88,10 @@ public class WifiPreparer extends BaseTargetPreparer implements IExternalDepende
         }
 
         if (mWifiNetwork == null) {
-            throw new TargetSetupError("wifi-network not specified", device.getDeviceDescriptor());
+            throw new TargetSetupError(
+                    "wifi-network not specified",
+                    device.getDeviceDescriptor(),
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_AP_NAME, mWifiNetwork);
@@ -121,6 +124,10 @@ public class WifiPreparer extends BaseTargetPreparer implements IExternalDepende
         ITestDevice device = testInfo.getDevice();
         if (e instanceof DeviceFailedToBootError) {
             CLog.d("boot failure: skipping wifi teardown");
+            return;
+        }
+        if (e instanceof DeviceNotAvailableException) {
+            CLog.d("device is not available. skipping wifi teardown");
             return;
         }
 

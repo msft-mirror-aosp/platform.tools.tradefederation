@@ -39,6 +39,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.TestRunnerUtil;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -55,6 +56,7 @@ import java.util.List;
 public class ExecutableHostTest extends ExecutableBaseTest {
 
     private static final String ANDROID_SERIAL = "ANDROID_SERIAL";
+    private static final String LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
     private static final String LOG_STDOUT_TAG = "-binary-stdout-";
     private static final String LOG_STDERR_TAG = "-binary-stderr-";
 
@@ -111,6 +113,17 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         if (!(getTestInfo().getDevice().getIDevice() instanceof StubDevice)) {
             runUtil.setEnvVariable(ANDROID_SERIAL, getTestInfo().getDevice().getSerialNumber());
         }
+        String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(new File(binaryPath));
+        // Also add the directory of the binary path as the test may package library as data
+        // dependency.
+        String cwd = new File(binaryPath).getParentFile().getAbsolutePath();
+        if (ldLibraryPath != null) {
+            ldLibraryPath = String.format("%s%s%s", ldLibraryPath, java.io.File.pathSeparator, cwd);
+        } else {
+            ldLibraryPath = cwd;
+        }
+        runUtil.setEnvVariable(LD_LIBRARY_PATH, ldLibraryPath);
+
         // Set Tradefed adb on $PATH of binary
         AdbUtils.updateAdb(getTestInfo(), runUtil, getAdbPath());
         // Ensure its executable
