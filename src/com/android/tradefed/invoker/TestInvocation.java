@@ -45,9 +45,10 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.StubLocalAndroidVirtualDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
@@ -1660,7 +1661,8 @@ public class TestInvocation implements ITestInvocation {
         int countVirtualLost = 0;
         for (Entry<ITestDevice, FreeDeviceState> fds : devicesStates.entrySet()) {
             // TODO: Rely on the FailureStatus for lost devices instead
-            if ((fds.getKey().getIDevice() instanceof TcpDevice)
+            if ((fds.getKey().getIDevice() instanceof RemoteAvdIDevice
+                            || fds.getKey().getIDevice() instanceof StubLocalAndroidVirtualDevice)
                     && exception instanceof DeviceNotAvailableException) {
                 countVirtualLost++;
                 continue;
