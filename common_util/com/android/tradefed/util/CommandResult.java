@@ -25,6 +25,7 @@ public class CommandResult {
     private String mStdout = null;
     private String mStderr = null;
     private Integer mExitCode = null;
+    private boolean mCached = false;
 
     /**
      * Create a {@link CommandResult} with the default {@link CommandStatus#TIMED_OUT} status.
@@ -52,6 +53,15 @@ public class CommandResult {
 
     public void setStatus(CommandStatus status) {
         mCmdStatus = status;
+    }
+
+    /** Returns whether this result is a cached result or not. */
+    public boolean isCached() {
+        return mCached;
+    }
+
+    public void setCached(boolean cached) {
+        mCached = cached;
     }
 
     /**

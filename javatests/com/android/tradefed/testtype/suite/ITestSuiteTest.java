@@ -22,6 +22,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -32,6 +34,7 @@ import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationDef;
 import com.android.tradefed.config.ConfigurationDescriptor;
@@ -46,22 +49,24 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
-import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.error.HarnessRuntimeException;
-import com.android.tradefed.guice.InvocationScope;
-import com.android.tradefed.guice.InvocationScopeModule;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric.Builder;
+import com.android.tradefed.postprocessor.BasePostProcessor;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.MultiFailureDescription;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -69,6 +74,7 @@ import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
+import com.android.tradefed.retry.RetryPreparationDecision;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.KeyguardStatusChecker;
 import com.android.tradefed.suite.checker.StatusCheckerResult;
@@ -76,6 +82,7 @@ import com.android.tradefed.suite.checker.StatusCheckerResult.CheckStatus;
 import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.StubTargetPreparer;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.FakeTest;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -85,12 +92,10 @@ import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.MultiMap;
 
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.ArgumentCaptor;
@@ -114,6 +119,8 @@ import java.util.Set;
 @RunWith(JUnit4.class)
 public class ITestSuiteTest {
 
+    @Rule public TemporaryFolder mTempFolder = new TemporaryFolder();
+
     private static final MultiMap<String, String> METADATA_INCLUDES = new MultiMap<>();
     private static final MultiMap<String, String> METADATA_EXCLUDES = new MultiMap<>();
     private static final String EMPTY_CONFIG = "empty";
@@ -130,12 +137,8 @@ public class ITestSuiteTest {
     private List<IMetricCollector> mListCollectors;
     private IConfiguration mStubMainConfiguration;
     @Mock ILogSaver mMockLogSaver;
+    @Mock IRetryDecision mMockDecision;
     private BaseTargetPreparer mMockPreparer;
-
-    // Guice scope and objects for testing
-    private InvocationScope mScope;
-    private Injector mInjector;
-    private InvocationScopeModule mInvocationScope;
     private String mTestFailedMessage = "I failed!";
 
     /** Very basic implementation of {@link ITestSuite} to test it. */
@@ -292,15 +295,19 @@ public class ITestSuiteTest {
         }
     }
 
+    /** Implementation of {@link IRemoteTest} to simulate running 0 tests. */
+    public static class StubCollectingTestWithEmptyTestMethods extends StubCollectingTest {
+        @Override
+        public void run(TestInformation testInfo, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+            // To simulate that no tests would be run.
+            return;
+        }
+    }
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-
-        // Start with the Guice scope setup
-        mScope = new InvocationScope();
-        mScope.enter();
-        mInvocationScope = new InvocationScopeModule(mScope);
-        mInjector = Guice.createInjector(mInvocationScope);
 
         mMockPreparer = Mockito.mock(BaseTargetPreparer.class);
         mTestSuite = new TestSuiteImpl(1, mMockPreparer);
@@ -325,12 +332,6 @@ public class ITestSuiteTest {
         mListCollectors = new ArrayList<>();
         mListCollectors.add(new TestMetricCollector("metric1", "value1"));
         mListCollectors.add(new TestMetricCollector("metric2", "value2"));
-    }
-
-    @After
-    public void tearDown() {
-        // Always exit the scope at the end.
-        mScope.exit();
     }
 
     public static class TestMetricCollector extends BaseDeviceMetricCollector {
@@ -601,6 +602,79 @@ public class ITestSuiteTest {
         FailureDescription failure = capture.getValue();
         assertEquals(
                 TestErrorIdentifier.MODULE_CHANGED_SYSTEM_STATUS, failure.getErrorIdentifier());
+    }
+
+    /**
+     * Test for {@link ITestSuite#run(TestInformation, ITestInvocationListener)} when preparation
+     * pass after retrying but there are no tests run, it should reports testRunStarted,
+     * testRunFailed, and testRunEnd at 1st time. At 2nd time, it should report testRunStarted, and
+     * testRunEnd with empty test methods.
+     */
+    @Test
+    public void testRun_preparationPassAfterRetry_report2times() throws Exception {
+        List<ISystemStatusChecker> sysChecker = new ArrayList<ISystemStatusChecker>();
+        sysChecker.add(mMockSysChecker);
+        mTestSuite =
+            new TestSuiteImpl() {
+                @Override
+                public LinkedHashMap<String, IConfiguration> loadTests() {
+                    LinkedHashMap<String, IConfiguration> testConfig = new LinkedHashMap<>();
+                    try {
+                        IConfiguration config =
+                            ConfigurationFactory.getInstance()
+                                .createConfigurationFromArgs(new String[] {EMPTY_CONFIG});
+                        config.setTargetPreparer(mMockPreparer);
+                        config.setSystemStatusChecker(mMockSysChecker);
+                        config.setTest(new StubCollectingTestWithEmptyTestMethods());
+                        config.getConfigurationDescription().setModuleName(TEST_CONFIG_NAME);
+                        testConfig.put(TEST_CONFIG_NAME, config);
+                    } catch (ConfigurationException e) {
+                        CLog.e(e);
+                        throw new RuntimeException(e);
+                    }
+                    return testConfig;
+                }
+            };
+        mTestSuite.setDevice(mMockDevice);
+        mTestSuite.setBuild(mMockBuildInfo);
+        mTestSuite.setInvocationContext(mContext);
+        mTestSuite.setSystemStatusChecker(sysChecker);
+        mTestSuite.setConfiguration(mStubMainConfiguration);
+        OptionSetter setter = new OptionSetter(mTestSuite);
+        setter.setOptionValue("merge-attempts", "false");
+        final String exceptionMessage = "ouch I failed";
+        DeviceDescriptor nullDescriptor = null;
+        doThrow(new TargetSetupError(exceptionMessage, nullDescriptor))
+                .when(mMockPreparer)
+                .setUp(Mockito.any());
+        RetryPreparationDecision decision = new RetryPreparationDecision(
+                false, false);
+        doReturn(decision)
+                .when(mMockDecision)
+                .shouldRetryPreparation(Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
+        doReturn(2).when(mMockDecision).getMaxRetryCount();
+        when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+        when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+        mStubMainConfiguration.setRetryDecision(mMockDecision);
+        mTestSuite.run(mTestInfo, mMockListener);
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("test"), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
+        ArgumentCaptor<FailureDescription> captured =
+                ArgumentCaptor.forClass(FailureDescription.class);
+        verify(mMockListener).testRunFailed(captured.capture());
+        // At the second time, the device is recovered, so expect that it run test level tests.
+        verify(mMockListener)
+                .testRunStarted(
+                        Mockito.eq("test"),
+                        Mockito.eq(0),
+                        Mockito.eq(1),
+                        Mockito.anyLong());
+        verify(mMockListener, times(2))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        assertTrue(captured.getValue().getErrorMessage().contains(exceptionMessage));
     }
 
     /**
@@ -1656,7 +1730,7 @@ public class ITestSuiteTest {
     @Test
     public void testNoAbi() throws Exception {
         Mockito.reset(mMockDevice);
-        when(mMockDevice.getIDevice()).thenReturn(new TcpDevice("tcp-device-0"));
+        when(mMockDevice.getIDevice()).thenReturn(new RemoteAvdIDevice("gce-device-0"));
         when(mMockDevice.getProperty("ro.product.cpu.abilist")).thenReturn(null);
         when(mMockDevice.getProperty("ro.product.cpu.abi")).thenReturn(null);
         when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
@@ -1676,7 +1750,7 @@ public class ITestSuiteTest {
         OptionSetter setter = new OptionSetter(mTestSuite);
         setter.setOptionValue(ITestSuite.PRIMARY_ABI_RUN, "true");
         Mockito.reset(mMockDevice);
-        when(mMockDevice.getIDevice()).thenReturn(new TcpDevice("tcp-device-0"));
+        when(mMockDevice.getIDevice()).thenReturn(new RemoteAvdIDevice("gce-device-0"));
         when(mMockDevice.getProperty("ro.product.cpu.abi")).thenReturn(null);
         when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
 
@@ -1689,13 +1763,6 @@ public class ITestSuiteTest {
                     "Device 'SERIAL' was not online to query ro.product.cpu.abi",
                     expected.getMessage());
         }
-    }
-
-    /** Test that when {@link ITestSuite} is within a Guice scope it can receive the injector. */
-    @Test
-    public void testInjector_guice() throws Exception {
-        mInjector.injectMembers(mTestSuite);
-        assertNotNull(mTestSuite.getInjector());
     }
 
     /**
@@ -1758,6 +1825,7 @@ public class ITestSuiteTest {
     @Test
     public void testStageTestArtifacts() throws Exception {
         String remoteFilePath = "gs://module1/tests.zip";
+        File testsDir = mTempFolder.newFolder();
         DynamicRemoteFileResolver dynamicResolver =
                 new DynamicRemoteFileResolver() {
                     @Override
@@ -1767,17 +1835,18 @@ public class ITestSuiteTest {
                             List<String> includeFilters,
                             List<String> excludeFilters)
                             throws BuildRetrievalError {
-                        assertEquals(new File("tests_dir"), destDir);
+                        assertEquals(destDir, testsDir);
                         assertEquals(remoteFilePath, remoteFilePath);
                         assertArrayEquals(new String[] {"/test/"}, includeFilters.toArray());
-                        assertArrayEquals(new String[] {"[.]config$"}, excludeFilters.toArray());
+                        assertArrayEquals(
+                                new String[] {"[.]config$", "[.]jar$"}, excludeFilters.toArray());
                     }
                 };
         OptionSetter setter = new OptionSetter(mTestSuite);
         setter.setOptionValue("partial-download-via-feature", "false");
         mTestSuite.setDynamicResolver(dynamicResolver);
         IDeviceBuildInfo mockBuildInfo = mock(IDeviceBuildInfo.class);
-        when(mockBuildInfo.getTestsDir()).thenReturn(new File("tests_dir"));
+        when(mockBuildInfo.getTestsDir()).thenReturn(testsDir);
         when(mockBuildInfo.getRemoteFiles())
                 .thenReturn(new HashSet<File>(Arrays.asList(new File(remoteFilePath))));
         mTestSuite.setBuild(mockBuildInfo);
@@ -1787,7 +1856,7 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        verify(mockBuildInfo, times(4)).getRemoteFiles();
+        verify(mockBuildInfo, times(3)).getRemoteFiles();
     }
 
     /** Test for {@link ITestSuite#reportNotExecuted(ITestInvocationListener, String)}. */
@@ -1864,5 +1933,72 @@ public class ITestSuiteTest {
         assertEquals(FailureStatus.NOT_EXECUTED, failures.get(0).getFailureStatus());
         assertTrue(failures.get(1).getErrorMessage().equals("Injected message"));
         assertEquals(FailureStatus.NOT_EXECUTED, failures.get(1).getFailureStatus());
+    }
+
+    public static class FakePostProcessor extends BasePostProcessor {
+        public static final String FAKE_KEY = "FAKE_KEY";
+
+        @Override
+        public Map<String, Builder> processRunMetricsAndLogs(
+                HashMap<String, Metric> rawMetrics, Map<String, LogFile> runLogs) {
+            Map<String, Builder> newMetrics = new HashMap<>();
+            newMetrics.put(
+                    FAKE_KEY,
+                    Metric.newBuilder()
+                            .setType(DataType.RAW)
+                            .setMeasurements(Measurements.newBuilder().setSingleString("")));
+            return newMetrics;
+        }
+    }
+
+    /** Test for module-level post-processor for perf module. */
+    @Test
+    public void testPostProcessorAddsMetricsForPerfModule() throws Exception {
+        mTestSuite =
+                new TestSuiteImpl() {
+                    @Override
+                    public LinkedHashMap<String, IConfiguration> loadTests() {
+                        LinkedHashMap<String, IConfiguration> testConfig = new LinkedHashMap<>();
+                        try {
+                            IConfiguration config =
+                                    ConfigurationFactory.getInstance()
+                                            .createConfigurationFromArgs(
+                                                    new String[] {EMPTY_CONFIG});
+                            config.setTest(new StubCollectingTest());
+                            config.getConfigurationDescription().setModuleName(TEST_CONFIG_NAME);
+                            testConfig.put(TEST_CONFIG_NAME, config);
+
+                            // Mark module as perf module.
+                            config.getConfigurationDescription()
+                                    .addMetadata(
+                                            ITestSuite.TEST_TYPE_KEY,
+                                            ITestSuite.TEST_TYPE_VALUE_PERFORMANCE);
+                            // Add module-level post processor for perf module.
+                            config.setPostProcessors(Arrays.asList(new FakePostProcessor()));
+                        } catch (ConfigurationException e) {
+                            CLog.e(e);
+                            throw new RuntimeException(e);
+                        }
+                        return testConfig;
+                    }
+                };
+        mTestSuite.setDevice(mMockDevice);
+        mTestSuite.setBuild(mMockBuildInfo);
+        mTestSuite.setInvocationContext(mContext);
+        mTestSuite.setConfiguration(mStubMainConfiguration);
+        List<ISystemStatusChecker> sysChecker = new ArrayList<ISystemStatusChecker>();
+        sysChecker.add(mMockSysChecker);
+        mTestSuite.setSystemStatusChecker(sysChecker);
+        when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+        when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+
+        mTestSuite.run(mTestInfo, mMockListener);
+
+        // Verify the post processor has added metric.
+        ArgumentCaptor<HashMap<String, Metric>> captured = ArgumentCaptor.forClass(HashMap.class);
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), captured.capture());
+        assertNotNull(captured.getValue().get(FakePostProcessor.FAKE_KEY));
     }
 }

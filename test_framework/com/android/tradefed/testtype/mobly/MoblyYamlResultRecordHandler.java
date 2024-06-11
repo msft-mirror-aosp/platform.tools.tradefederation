@@ -16,7 +16,6 @@
 
 package com.android.tradefed.testtype.mobly;
 
-
 import java.util.Map;
 
 /** Mobly yaml result 'Record' element handler. */
@@ -59,8 +58,8 @@ public class MoblyYamlResultRecordHandler implements IMoblyYamlResultHandler {
             mTestClass = testClass;
             mTestName = testName;
             mResult = result;
-            mBeginTime = Long.parseLong(beginTime);
-            mEndTime = Long.parseLong(endTime);
+            mBeginTime = "null".equals(beginTime) ? 0 : Long.parseLong(beginTime);
+            mEndTime = "null".equals(endTime) ? 0 : Long.parseLong(endTime);
             mStacktrace = stacktrace;
         }
 

@@ -25,7 +25,4 @@
     <option name="test-arg" value="com.android.tradefed.testtype.HostTest:exclude-annotation:android.platform.test.annotations.LargeTest" />
     <option name="test-arg" value="com.android.compatibility.common.tradefed.testtype.JarHostTest:exclude-annotation:android.platform.test.annotations.LargeTest" />
     <option name="test-arg" value="com.android.tradefed.testtype.IsolatedHostTest:exclude-annotation:android.platform.test.annotations.LargeTest" />
-
-    <!-- Exclude known failures from the unit tests suite -->
-    <include name="unit-tests/unit-tests-known-failures" />
 </configuration>

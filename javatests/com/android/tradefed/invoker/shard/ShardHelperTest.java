@@ -43,6 +43,9 @@ import com.android.tradefed.testtype.HostTestTest.SuccessTestCase;
 import com.android.tradefed.testtype.HostTestTest.TestMetricTestCase;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.StubTest;
+import com.android.tradefed.testtype.suite.BaseTestSuite;
+import com.android.tradefed.testtype.suite.ITestSuite;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 import com.android.tradefed.util.keystore.KeyStoreException;
@@ -412,9 +415,73 @@ public class ShardHelperTest {
                                         assertTrue(test instanceof TestsPoolPoller);
                                         TestsPoolPoller poller = (TestsPoolPoller) test;
                                         // Token pool has the test
-                                        assertEquals(1, poller.getTokenPool().size());
+                                        assertEquals(1, poller.peekTokenPoolSize());
                                         return true;
                                     }
                                 }));
+    }
+
+    @Test
+    public void testSplitWithMultiDevices() throws Exception {
+        CommandOptions options = new CommandOptions();
+        OptionSetter setter = new OptionSetter(options);
+        setter.setOptionValue("shard-count", "3");
+        mConfig.setCommandOptions(options);
+        mConfig.setCommandLine(new String[] {"empty"});
+        StubTest test = new StubTest();
+        setter = new OptionSetter(test);
+        setter.setOptionValue("num-shards", "3");
+        List<IRemoteTest> tests = new ArrayList<>();
+        tests.add(test);
+        // Two modules need 2 devices
+        tests.add(createShardedModule(2));
+        tests.add(createShardedModule(2));
+        // One module needs 3 devices
+        tests.add(createShardedModule(3));
+        mConfig.setTests(tests);
+        assertEquals(4, mConfig.getTests().size());
+        assertTrue(mHelper.shardConfig(mConfig, mTestInfo, mRescheduler, null));
+        List<IConfiguration> capturedConfig = new ArrayList<>();
+        Mockito.verify(mRescheduler, Mockito.times(5))
+                .scheduleConfig(
+                        Mockito.argThat(
+                                new ArgumentMatcher<IConfiguration>() {
+                                    @Override
+                                    public boolean matches(IConfiguration argument) {
+                                        capturedConfig.add(argument);
+                                        return true;
+                                    }
+                                }));
+        IConfiguration neededDevice2 = capturedConfig.get(0);
+        assertEquals(2, neededDevice2.getTests().size());
+        assertTrue(neededDevice2.getTests().get(0) instanceof BaseTestSuite);
+        assertTrue(neededDevice2.getTests().get(1) instanceof BaseTestSuite);
+
+        IConfiguration neededDevice3 = capturedConfig.get(1);
+        assertEquals(1, neededDevice3.getTests().size());
+        assertTrue(neededDevice3.getTests().get(0) instanceof BaseTestSuite);
+
+        IConfiguration stub1 = capturedConfig.get(2);
+        assertEquals(1, stub1.getTests().size());
+        assertTrue(stub1.getTests().get(0) instanceof TestsPoolPoller);
+        IConfiguration stub2 = capturedConfig.get(3);
+        assertEquals(1, stub2.getTests().size());
+        assertTrue(stub2.getTests().get(0) instanceof TestsPoolPoller);
+        IConfiguration stub3 = capturedConfig.get(4);
+        assertEquals(1, stub3.getTests().size());
+        assertTrue(stub3.getTests().get(0) instanceof TestsPoolPoller);
+    }
+
+    private ITestSuite createShardedModule(int neededDevice) {
+        BaseTestSuite suite = new BaseTestSuite();
+        ModuleDefinition module =
+                new ModuleDefinition() {
+                    @Override
+                    public int neededDevices() {
+                        return neededDevice;
+                    }
+                };
+        suite.setDirectModule(module);
+        return suite;
     }
 }

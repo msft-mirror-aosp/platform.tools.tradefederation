@@ -19,6 +19,7 @@ package com.android.tradefed.command;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.util.UniqueMultiMap;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +113,9 @@ public interface ICommandOptions {
     /** Sets whether or not to capture a bugreportz at the end of the invocation. */
     public void setBugreportzOnInvocationEnded(boolean takeBugreportz);
 
+    /** Returns whether or not conditional bugreport is disabled */
+    public boolean isConditionalBugreportDisabled();
+
     /**
      * Return the invocation timeout specified. 0 if no timeout to be used.
      */
@@ -155,6 +159,9 @@ public interface ICommandOptions {
     /** Returns the data passed to the invocation to describe it */
     public UniqueMultiMap<String, String> getInvocationData();
 
+    /** Returns the list of remote files configured. */
+    public Set<String> getRemoteFiles();
+
     /** Returns true if we should use Tf containers to run the invocation */
     public boolean shouldUseSandboxing();
 
@@ -170,11 +177,20 @@ public interface ICommandOptions {
     /** Whether or not to use sandbox mode in remote invocation. */
     public boolean shouldUseRemoteSandboxMode();
 
+    /** Whether or not to trigger a deviceless remote invocation. */
+    public boolean isRemoteInvocationDeviceless();
+
     /** Returns the set of auto log collectors to be added for an invocation */
     public Set<AutoLogCollector> getAutoLogCollectors();
 
     /** Sets the set of auto log collectors that should be added to an invocation. */
     public void setAutoLogCollectors(Set<AutoLogCollector> autoLogCollectors);
+
+    /** Whether or not to enable experiments through experimental flags. */
+    public boolean isExperimentEnabled();
+
+    /** Returns the experimental flags map, that can be used to feature gate projects. */
+    public Map<String, String> getExperimentalFlags();
 
     /** Whether or not to capture a screenshot on test case failure */
     public boolean captureScreenshotOnFailure();
@@ -190,6 +206,12 @@ public interface ICommandOptions {
 
     /** Whether or not to attempt parallel setup of the remote devices. */
     public boolean shouldUseParallelRemoteSetup();
+
+    /** Return whether to execute pre-invocation setup in parallel. */
+    public boolean shouldUseParallelPreInvocationSetup();
+
+    /** Return the timeout for parallel pre-invocation setup. */
+    public Duration getParallelPreInvocationSetupTimeout();
 
     /** Whether or not to attempt parallel setup. */
     public boolean shouldUseParallelSetup();
@@ -253,4 +275,25 @@ public interface ICommandOptions {
 
     /** Return the number of devices for multi-device tests. */
     public Integer getMultiDeviceCount();
+
+    /** Sets the number of expected devices for multi-device tests. */
+    public void setMultiDeviceCount(int count);
+
+    /** Returns whether or not invocation tracing is enabled. */
+    public boolean isTracingEnabled();
+
+    /** Returns the jdk folder to use when forking execution in a subprocess. */
+    public File getJdkFolderForSubprocess();
+
+    /** Returns whether to use remote dynamic sharding server or not */
+    public boolean shouldRemoteDynamicShard();
+
+    /** Sets whether to use remote dynamic sharding server or not */
+    public void setShouldRemoteDynamicShard(boolean shouldRemoteDynamicShard);
+
+    /** Returns whether to attempt to distribute number of modules evenly across shards */
+    public boolean shouldUseEvenModuleSharding();
+
+    /** Set whether to attempt to distribute number of modules evenly across shards */
+    public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding);
 }

@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype.suite;
 
+import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.AbiUtils;
 
 import java.util.regex.Matcher;
@@ -44,7 +46,8 @@ public class SuiteTestFilter {
      */
     public static SuiteTestFilter createFrom(String filter) {
         if (filter.isEmpty()) {
-            throw new IllegalArgumentException("Filter was empty");
+            throw new HarnessRuntimeException(
+                    "Filter was empty", InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
         String[] parts = filter.split(" +");
         Integer shardIndex = null;
@@ -154,6 +157,18 @@ public class SuiteTestFilter {
     /** @return the module name of this filter, or null if not specified. */
     public String getName() {
         return mName;
+    }
+
+    public String getModuleId() {
+        StringBuilder sb = new StringBuilder();
+        if (mAbi != null) {
+            sb.append(mAbi.trim());
+            sb.append(" ");
+        }
+        if (mName != null) {
+            sb.append(mName.trim());
+        }
+        return sb.toString();
     }
 
     /**

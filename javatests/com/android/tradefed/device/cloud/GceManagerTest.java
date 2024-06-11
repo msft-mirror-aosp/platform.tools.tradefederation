@@ -69,6 +69,7 @@ public class GceManagerTest {
     private IBuildInfo mMockBuildInfo;
     @Mock IRunUtil mMockRunUtil;
     private File mAvdBinary;
+    @Mock OxygenClient mMockOxygenClient;
 
     @Before
     public void setUp() throws Exception {
@@ -435,7 +436,6 @@ public class GceManagerTest {
                             reportFile.getAbsolutePath(),
                             "--base-instance-num",
                             "3",
-                            "--launch-args=\"--base_instance_num=3\"",
                             "-v");
             assertEquals(expected, result);
         } finally {
@@ -800,10 +800,10 @@ public class GceManagerTest {
                 ArrayUtil.list(
                         mOptions.getAvdDriverBinary().getAbsolutePath(),
                         "delete",
-                        "--instance_names",
-                        "instance1",
                         "--config_file",
-                        mGceManager.getAvdConfigFile().getAbsolutePath());
+                        mGceManager.getAvdConfigFile().getAbsolutePath(),
+                        "--instance_names",
+                        "instance1");
         assertEquals(expected, result);
     }
 
@@ -824,10 +824,10 @@ public class GceManagerTest {
                         "delete",
                         "--service-account-json-private-key-path",
                         "/path/to/key.json",
-                        "--instance_names",
-                        "instance1",
                         "--config_file",
-                        mGceManager.getAvdConfigFile().getAbsolutePath());
+                        mGceManager.getAvdConfigFile().getAbsolutePath(),
+                        "--instance_names",
+                        "instance1");
         assertEquals(expected, result);
     }
 
@@ -855,7 +855,9 @@ public class GceManagerTest {
                         "--host-user",
                         "bar",
                         "--host-ssh-private-key-path",
-                        "/path/to/id_rsa");
+                        "/path/to/id_rsa",
+                        "--instance_names",
+                        "instance1");
         assertEquals(expected, result);
     }
 
@@ -911,7 +913,7 @@ public class GceManagerTest {
         mGceManager.shutdownGce();
 
         List<String> args = capture.getValue();
-        assertTrue(args.get(5).contains(mAvdBinary.getName()));
+        assertTrue(args.get(3).contains(mAvdBinary.getName()));
     }
 
     /** Test a success case for collecting the bugreport with ssh. */
@@ -1138,10 +1140,10 @@ public class GceManagerTest {
                         Mockito.anyLong(),
                         Mockito.any(),
                         Mockito.eq("delete"),
-                        Mockito.eq("--instance_names"),
-                        Mockito.eq("ins-fake-instance-linux"),
                         Mockito.eq("--config_file"),
                         Mockito.any(),
+                        Mockito.eq("--instance_names"),
+                        Mockito.eq("ins-fake-instance-linux"),
                         Mockito.eq("--report_file"),
                         Mockito.any()))
                 .thenReturn(shutdownResult);
@@ -1188,5 +1190,13 @@ public class GceManagerTest {
         assertEquals(1800000L, mOptions.getGceCmdTimeout());
         mGceManager = new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo);
         assertEquals(1800000L, mOptions.getGceCmdTimeout());
+    }
+
+    @Test(expected = TargetSetupError.class)
+    public void testStartGce_oxygenation() throws Exception {
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        mGceManager = new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo);
+        mGceManager.startGce();
     }
 }

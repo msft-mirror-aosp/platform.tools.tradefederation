@@ -18,6 +18,9 @@ package com.android.tradefed.invoker;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
@@ -44,6 +47,9 @@ public class TestInformation {
 
     private int mPrimaryDeviceIndex = 0;
 
+    // Flag to indicate if the test was informed of timeout
+    private boolean mTestTimedOut = false;
+
     private TestInformation(Builder builder) {
         mContext = builder.mContext;
         mProperties = builder.mProperties;
@@ -56,7 +62,9 @@ public class TestInformation {
             IInvocationContext moduleContext,
             boolean copyExecFile) {
         mContext = moduleContext;
-        mProperties = invocationInfo.mProperties;
+        // Copy properties so each shard has its own
+        mProperties = new ExecutionProperties();
+        mProperties.putAll(invocationInfo.mProperties.getAll());
         mDependenciesFolder = invocationInfo.mDependenciesFolder;
         if (copyExecFile) {
             mExecutionFiles = new ExecutionFiles();
@@ -132,6 +140,16 @@ public class TestInformation {
     /** Returns the folder where all the dependencies are stored for an invocation. */
     public File dependenciesFolder() {
         return mDependenciesFolder;
+    }
+
+    /** Returns whether the test was informed of timeout or not. */
+    public boolean isTestTimedOut() {
+        return mTestTimedOut;
+    }
+
+    /** Notifies that test phase timeout has been triggered for this test. */
+    public void notifyTimeout() {
+        mTestTimedOut = true;
     }
 
     /** Builder to create a {@link TestInformation} instance. */
@@ -219,6 +237,13 @@ public class TestInformation {
                 // approach to do individual download from remote artifact.
                 // Try to stage the files from remote zip files.
                 file = getBuildInfo().stageRemoteFile(fileName, testsDir);
+                if (file != null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
+                }
+            } else if (file.isDirectory()) {
+                CLog.d("Found %s as a directory, searching further.", fileName);
+                file = FileUtil.findFile(file, fileName);
             }
             return file;
         }

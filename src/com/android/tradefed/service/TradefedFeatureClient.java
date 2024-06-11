@@ -17,6 +17,7 @@ package com.android.tradefed.service;
 
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.StreamUtil;
 
@@ -35,6 +36,7 @@ import io.grpc.StatusRuntimeException;
 /** A grpc client to request feature execution from the server. */
 public class TradefedFeatureClient implements AutoCloseable {
 
+    private static final int MAX_MESSAGE_SIZE_BYTES = 33554432; // 32 MB
     private TradefedInformationBlockingStub mBlockingStub;
     private ManagedChannel mChannel;
 
@@ -42,6 +44,7 @@ public class TradefedFeatureClient implements AutoCloseable {
         mChannel =
                 ManagedChannelBuilder.forAddress("localhost", TradefedFeatureServer.getPort())
                         .usePlaintext()
+                        .maxInboundMessageSize(MAX_MESSAGE_SIZE_BYTES)
                         .build();
         mBlockingStub = TradefedInformationGrpc.newBlockingStub(mChannel);
     }
@@ -67,8 +70,13 @@ public class TradefedFeatureClient implements AutoCloseable {
      */
     private FeatureResponse triggerFeature(
             String featureName, String invocationReference, Map<String, String> args) {
+        if (mChannel == null) {
+            throw new IllegalStateException(
+                    "Tradefed feature channel is null due to being uninitialized or closed.");
+        }
         FeatureResponse response;
-        try {
+        try (CloseableTraceScope ignore =
+                new CloseableTraceScope("triggerFeature:" + featureName)) {
             CLog.d("invoking feature '%s'", featureName);
             FeatureRequest.Builder request =
                     FeatureRequest.newBuilder().setName(featureName).putAllArgs(args);
@@ -80,6 +88,7 @@ public class TradefedFeatureClient implements AutoCloseable {
             } else {
                 CLog.w("Reference id is null.");
             }
+            CLog.d("%s", request);
             response = mBlockingStub.triggerFeature(request.build());
         } catch (StatusRuntimeException e) {
             response =
@@ -90,7 +99,17 @@ public class TradefedFeatureClient implements AutoCloseable {
                                             .build())
                             .build();
         }
-        CLog.d("Feature name: %s. response: %s", featureName, response);
+        String message = String.format("Feature name: %s. response: %s", featureName, response);
+        if (response.hasErrorInfo()) {
+            StringBuilder callsite = new StringBuilder();
+            for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+                callsite.append(e.toString());
+            }
+            message += String.format(". Callsite: %s", callsite);
+            CLog.w(message);
+        } else {
+            CLog.d(message);
+        }
         return response;
     }
 

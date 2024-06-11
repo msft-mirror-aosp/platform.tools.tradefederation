@@ -119,7 +119,7 @@ public class DynamicRemoteFileResolverTest {
     public void setUp() {
         MockitoAnnotations.initMocks(this);
 
-        mResolver = new DynamicRemoteFileResolver(mResolverLoader);
+        mResolver = new DynamicRemoteFileResolver(mResolverLoader, true);
     }
 
     @Test
@@ -131,7 +131,8 @@ public class DynamicRemoteFileResolverTest {
         assertEquals("gs:/fake/path", object.remoteFile.getPath());
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
 
         Set<File> downloadedFile = setter.validateRemoteFilePath(mResolver);
@@ -158,7 +159,9 @@ public class DynamicRemoteFileResolverTest {
         Map<String, String> testMap = new HashMap<>();
         testMap.put("key", "value");
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path")).addQueryArgs(testMap);
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArgs(testMap)
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
 
         Set<File> downloadedFile = setter.validateRemoteFilePath(mResolver);
@@ -203,7 +206,8 @@ public class DynamicRemoteFileResolverTest {
         assertEquals(2, object.remoteFileList.size());
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file-list");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
 
         Set<File> downloadedFile = setter.validateRemoteFilePath(mResolver);
@@ -230,13 +234,16 @@ public class DynamicRemoteFileResolverTest {
 
         File fake = temporaryFolder.newFile();
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs://success/fake/path"));
+        args1.setConsideredFile(new File("gs://success/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file-list");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
         RemoteFileResolverArgs args2 = new RemoteFileResolverArgs();
-        args2.setConsideredFile(new File("gs://success/fake/path2"));
+        args2.setConsideredFile(new File("gs://success/fake/path2"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file-list");
         when(mMockResolver.resolveRemoteFile(args2)).thenReturn(new ResolvedFile(fake));
         RemoteFileResolverArgs args3 = new RemoteFileResolverArgs();
-        args3.setConsideredFile(new File("gs://failure/test"));
+        args3.setConsideredFile(new File("gs://failure/test"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file-list");
         when(mMockResolver.resolveRemoteFile(args3))
                 .thenThrow(
                         new BuildRetrievalError(
@@ -265,10 +272,12 @@ public class DynamicRemoteFileResolverTest {
         assertEquals(3, object.remoteMap.size());
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-map");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
         RemoteFileResolverArgs args2 = new RemoteFileResolverArgs();
-        args2.setConsideredFile(new File("gs:/fake/path2"));
+        args2.setConsideredFile(new File("gs:/fake/path2"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-map");
         when(mMockResolver.resolveRemoteFile(args2)).thenReturn(new ResolvedFile(fake2));
 
         Set<File> downloadedFile = setter.validateRemoteFilePath(mResolver);
@@ -296,13 +305,16 @@ public class DynamicRemoteFileResolverTest {
         assertEquals(3, object.remoteMultiMap.size());
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-multi-map");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
         RemoteFileResolverArgs args2 = new RemoteFileResolverArgs();
-        args2.setConsideredFile(new File("gs:/fake/path2"));
+        args2.setConsideredFile(new File("gs:/fake/path2"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-multi-map");
         when(mMockResolver.resolveRemoteFile(args2)).thenReturn(new ResolvedFile(fake2));
         RemoteFileResolverArgs args3 = new RemoteFileResolverArgs();
-        args3.setConsideredFile(new File("gs:/fake/path3"));
+        args3.setConsideredFile(new File("gs:/fake/path3"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-multi-map");
         when(mMockResolver.resolveRemoteFile(args3)).thenReturn(new ResolvedFile(fake3));
 
         Set<File> downloadedFile = setter.validateRemoteFilePath(mResolver);
@@ -330,7 +342,8 @@ public class DynamicRemoteFileResolverTest {
         assertEquals(1, object.remoteMultiMap.size());
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-multi-map");
         when(mMockResolver.resolveRemoteFile(args1))
                 .thenAnswer(
                         invocation -> {
@@ -339,11 +352,13 @@ public class DynamicRemoteFileResolverTest {
                         });
 
         RemoteFileResolverArgs args2 = new RemoteFileResolverArgs();
-        args2.setConsideredFile(new File("gs:/fake/path2"));
+        args2.setConsideredFile(new File("gs:/fake/path2"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-multi-map");
         when(mMockResolver.resolveRemoteFile(args2)).thenReturn(new ResolvedFile(fake2));
 
         RemoteFileResolverArgs args3 = new RemoteFileResolverArgs();
-        args3.setConsideredFile(new File("gs:/fake/path3"));
+        args3.setConsideredFile(new File("gs:/fake/path3"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-multi-map");
         when(mMockResolver.resolveRemoteFile(args3)).thenReturn(new ResolvedFile(fake3));
 
         List<Callable<Set<File>>> call = new ArrayList<>();
@@ -353,7 +368,7 @@ public class DynamicRemoteFileResolverTest {
                     () -> {
                         OptionSetter setter2 = new OptionSetter(object);
                         return setter2.validateRemoteFilePath(
-                                new DynamicRemoteFileResolver(mResolverLoader));
+                                new DynamicRemoteFileResolver(mResolverLoader, true));
                     };
             call.add(callableTask);
             devices.add(Mockito.mock(ITestDevice.class));
@@ -389,7 +404,8 @@ public class DynamicRemoteFileResolverTest {
         // File is downloaded the first time, then is ignored since it doesn't have the protocol
         // anymore
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
 
         Set<File> downloadedFile = setter.validateRemoteFilePath(mResolver);
@@ -467,11 +483,13 @@ public class DynamicRemoteFileResolverTest {
         assertEquals("gs:/fake2/path2", object2.remoteFile.getPath());
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
 
         RemoteFileResolverArgs args2 = new RemoteFileResolverArgs();
-        args2.setConsideredFile(new File("gs:/fake2/path2"));
+        args2.setConsideredFile(new File("gs:/fake2/path2"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file");
         when(mMockResolver.resolveRemoteFile(args2)).thenReturn(new ResolvedFile(fake2));
 
         Set<File> downloadedFile = setter.validateRemoteFilePath(mResolver);
@@ -498,7 +516,8 @@ public class DynamicRemoteFileResolverTest {
         assertEquals("gs:/fake/path", object2.remoteFile.getPath());
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "remote-file");
         when(mMockResolver.resolveRemoteFile(args1))
                 .thenReturn(new ResolvedFile(fake))
                 .thenReturn(new ResolvedFile(fake2));
@@ -817,7 +836,8 @@ public class DynamicRemoteFileResolverTest {
         File fake2 = temporaryFolder.newFile();
 
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "tests-dir");
         when(mMockResolver.resolveRemoteFile(args1))
                 .thenReturn(new ResolvedFile(fake))
                 .thenReturn(new ResolvedFile(fake2));
@@ -866,7 +886,8 @@ public class DynamicRemoteFileResolverTest {
 
         File fake = temporaryFolder.newFile();
         RemoteFileResolverArgs args1 = new RemoteFileResolverArgs();
-        args1.setConsideredFile(new File("gs:/fake/path"));
+        args1.setConsideredFile(new File("gs:/fake/path"))
+                .addQueryArg(DynamicRemoteFileResolver.OPTION_NAME_KEY, "tests-dir");
         when(mMockResolver.resolveRemoteFile(args1)).thenReturn(new ResolvedFile(fake));
 
         configuration.resolveDynamicOptions(mResolver);

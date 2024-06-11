@@ -21,6 +21,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TimeUtil;
@@ -29,42 +30,47 @@ import com.android.tradefed.util.TimeUtil;
  * A {@link ITargetPreparer} that waits for datetime to be set on device
  *
  * <p>Optionally this preparer can force a {@link TargetSetupError} if datetime is not set within
- * timeout, or force host datetime onto device,
+ * timeout.
  */
 @OptionClass(alias = "wait-for-datetime")
 public class WaitForDeviceDatetimePreparer extends BaseTargetPreparer {
 
-    // 30s to wait for device datetime
-    private static final long DATETIME_WAIT_TIMEOUT = 30 * 1000;
-    // poll every 5s when waiting correct device datetime
-    private static final long DATETIME_CHECK_INTERVAL = 5 * 1000;
+    // 6s to wait for device datetime
+    private static final long DATETIME_WAIT_TIMEOUT = 6 * 1000;
+    // poll every 2s when waiting correct device datetime
+    private static final long DATETIME_CHECK_INTERVAL = 2 * 1000;
     // allow 10s of margin for datetime difference between host/device
-    private static final long DATETIME_MARGIN = 10;
+    private static final long DATETIME_MARGIN = 10 * 1000;
 
-    @Option(name = "force-datetime", description = "Force sync host datetime to device if device "
-            + "fails to set datetime automatically.")
-    private boolean mForceDatetime = false;
+    @Option(
+            name = "force-datetime",
+            description =
+                    "Force sync host datetime to device if device "
+                            + "fails to set datetime automatically.")
+    @Deprecated
+    private boolean mForceDatetime = true;
 
     @Option(name = "datetime-wait-timeout",
             description = "Timeout in ms to wait for correct datetime on device.")
     private long mDatetimeWaitTimeout = DATETIME_WAIT_TIMEOUT;
 
-    @Option(name = "force-setup-error",
-            description = "Throw an TargetSetupError if correct datetime was not set. "
-                    + "Only meaningful if \"force-datetime\" is not used.")
+    @Option(
+            name = "force-setup-error",
+            description = "Throw a TargetSetupError if correct datetime was not set.")
     private boolean mForceSetupError = false;
 
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInfo.getDevice();
-        if (!waitForDeviceDatetime(device, mForceDatetime)) {
+        if (!waitForDeviceDatetime(device)) {
             if (mForceSetupError) {
                 throw new TargetSetupError(
                         String.format(
-                                "datetime on device is incorrect after " + "wait timeout of '%s'",
+                                "datetime on device is incorrect after wait timeout of '%s'",
                                 TimeUtil.formatElapsedTime(mDatetimeWaitTimeout)),
-                        device.getDeviceDescriptor());
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
             } else {
                 CLog.w("datetime on device is incorrect after wait timeout.");
             }
@@ -78,9 +84,8 @@ public class WaitForDeviceDatetimePreparer extends BaseTargetPreparer {
         mDatetimeWaitTimeout = datetimeWaitTimeout;
     }
 
-    /**
-     * Sets the if datetime should be forced from host to device
-     */
+    /** Sets the if datetime should be forced from host to device */
+    @Deprecated
     public void setForceDatetime(boolean forceDatetime) {
         mForceDatetime = forceDatetime;
     }
@@ -94,64 +99,23 @@ public class WaitForDeviceDatetimePreparer extends BaseTargetPreparer {
 
     /**
      * Waits for a correct datetime on device, optionally force host datetime onto device
-     * @param forceDatetime
+     *
+     * @param device {@link ITestDevice} where date time will be set
      * @return <code>true</code> if datetime is correct or forced, <code>false</code> otherwise
      */
-    boolean waitForDeviceDatetime(ITestDevice device, boolean forceDatetime)
-            throws DeviceNotAvailableException {
-        return waitForDeviceDatetime(device, forceDatetime,
-                mDatetimeWaitTimeout, DATETIME_CHECK_INTERVAL);
-    }
-
-    /**
-     * Waits for a correct datetime on device, optionally force host datetime onto device
-     * @param forceDatetime
-     * @param datetimeWaitTimeout
-     * @param datetimeCheckInterval
-     * @return <code>true</code> if datetime is correct or forced, <code>false</code> otherwise
-     */
-    boolean waitForDeviceDatetime(ITestDevice device, boolean forceDatetime,
-            long datetimeWaitTimeout, long datetimeCheckInterval)
-            throws DeviceNotAvailableException {
+    boolean waitForDeviceDatetime(ITestDevice device) throws DeviceNotAvailableException {
         long start = System.currentTimeMillis();
-        while ((System.currentTimeMillis() - start) < datetimeWaitTimeout) {
-            long datetime = getDeviceDatetimeEpoch(device);
-            long now = System.currentTimeMillis() / 1000;
-            if (datetime == -1) {
-                if (forceDatetime) {
-                    throw new UnsupportedOperationException(
-                            "unexpected return from \"date\" command on device");
-                } else {
-                    return false;
-                }
-            }
-            if ((Math.abs(now - datetime) < DATETIME_MARGIN)) {
+        while ((System.currentTimeMillis() - start) < mDatetimeWaitTimeout) {
+            device.setDate(null);
+            // check if the date is set within margin
+            long timeOffset = device.getDeviceTimeOffset(null);
+            if (Math.abs(timeOffset) < DATETIME_MARGIN) {
+                CLog.d("Device date time is set with offset: %s.", Math.abs(timeOffset));
                 return true;
             }
-            CLog.d("device time: %s, host time: %s", datetime, now);
-            getRunUtil().sleep(datetimeCheckInterval);
+            getRunUtil().sleep(DATETIME_CHECK_INTERVAL);
         }
-        if (forceDatetime) {
-            device.setDate(null);
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Retrieve device datetime in epoch format
-     * @param device
-     * @return datetime on device in epoch format, -1 if failed
-     */
-    long getDeviceDatetimeEpoch(ITestDevice device) throws DeviceNotAvailableException {
-        String datetime = device.executeShellCommand("date '+%s'").trim();
-        try {
-            return Long.parseLong(datetime);
-        } catch (NumberFormatException nfe) {
-            CLog.v("returned datetime from device is not a number: '%s'", datetime);
-            return -1;
-        }
+        return false;
     }
 
     /**
