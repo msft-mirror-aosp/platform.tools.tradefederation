@@ -44,6 +44,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
@@ -58,6 +59,7 @@ import org.junit.Test;
 /** Tests for {@link RemoteCacheClient}. */
 @RunWith(JUnit4.class)
 public class RemoteCacheClientTest {
+    private static final String INSTANCE = "test instance";
     private final String mFakeServerName = "fake server for " + getClass();
     private final MutableHandlerRegistry mServiceRegistry = new MutableHandlerRegistry();
     private ManagedChannel mChannel;
@@ -69,6 +71,7 @@ public class RemoteCacheClientTest {
         private final Map<Digest, String> mData;
 
         public FakeByteStreamDownloader(Map<Digest, String> data) {
+            super(INSTANCE, null, null, Duration.ofSeconds(5));
             mData = data;
         }
 
@@ -198,6 +201,6 @@ public class RemoteCacheClientTest {
     }
 
     private RemoteCacheClient newClient(ByteStreamDownloader downloader) {
-        return new RemoteCacheClient(mWorkFolder, "test instance", mChannel, null, downloader);
+        return new RemoteCacheClient(mWorkFolder, INSTANCE, mChannel, null, downloader);
     }
 }
