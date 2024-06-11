@@ -149,4 +149,9 @@ public final class ITestDeviceMockHelper {
             throws Exception {
         verify(mMockDevice, never()).listDisplayIdsForStartingVisibleBackgroundUsers();
     }
+
+    public void verifyUserSettings(int userId, String namespace, String key, String value)
+            throws Exception {
+        verify(mMockDevice).setSetting(userId, namespace, key, value);
+    }
 }

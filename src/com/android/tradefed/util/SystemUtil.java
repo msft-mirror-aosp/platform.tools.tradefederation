@@ -52,6 +52,7 @@ public class SystemUtil {
     private static final String TARGET_TESTCASES = "target/testcases";
 
     private static final String LOCAL_AUTH_VARIABLE = "LOCAL_AUTH";
+    private static final String LOCAL_MODE = "LOCAL_MODE";
 
     /** Keep track of the mapping of the variables to the subpath it takes in the tests dir. */
     public static final Map<EnvVariable, String> ENV_VARIABLE_PATHS_IN_TESTS_DIR = new HashMap<>();
@@ -184,6 +185,9 @@ public class SystemUtil {
      * Returns true if Tradefed is running in local mode and should automate some actions for user.
      */
     public static boolean isLocalMode() {
+        if (System.getenv(LOCAL_MODE) != null) {
+            return true;
+        }
         if (System.getenv(LOCAL_AUTH_VARIABLE) != null) {
             return true;
         }
@@ -192,15 +196,25 @@ public class SystemUtil {
 
     /** Returns the path to the Java binary that current test harness is running in */
     public static File getRunningJavaBinaryPath() {
+        return getRunningJavaBinaryPath(false);
+    }
+
+    /**
+     * This version with explicit feature server is only for special situation such as noisy dry
+     * run.
+     */
+    public static File getRunningJavaBinaryPath(boolean skipJavaCheck) {
         String javaHome = System.getProperty("java.home");
-        try (TradefedFeatureClient client = new TradefedFeatureClient()) {
-            Map<String, String> args = new HashMap<String, String>();
-            args.put(CommandOptionsGetter.OPTION_NAME, CommandOptions.JDK_FOLDER_OPTION_NAME);
-            FeatureResponse rep =
-                    client.triggerFeature(CommandOptionsGetter.COMMAND_OPTIONS_GETTER, args);
-            if (!rep.hasErrorInfo()) {
-                javaHome = rep.getResponse();
-                CLog.d("Using jdk: %s", javaHome);
+        if (!skipJavaCheck) {
+            try (TradefedFeatureClient client = new TradefedFeatureClient()) {
+                Map<String, String> args = new HashMap<String, String>();
+                args.put(CommandOptionsGetter.OPTION_NAME, CommandOptions.JDK_FOLDER_OPTION_NAME);
+                FeatureResponse rep =
+                        client.triggerFeature(CommandOptionsGetter.COMMAND_OPTIONS_GETTER, args);
+                if (!rep.hasErrorInfo()) {
+                    javaHome = rep.getResponse();
+                    CLog.d("Using jdk: %s", javaHome);
+                }
             }
         }
         if (javaHome == null) {

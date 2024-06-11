@@ -76,7 +76,6 @@ public final class SecondaryUserOnSecondaryDisplayHandlerTest {
         ITargetPreparer preparer2 = mModuleConfig.getTargetPreparers().get(1);
         assertThat(preparer2).isInstanceOf(RunCommandTargetPreparer.class);
         assertThat(((RunCommandTargetPreparer) preparer2).getCommands())
-                .containsExactlyElementsIn(
-                        SecondaryUserOnSecondaryDisplayHandler.LOCATION_COMMANDS);
+                .containsExactly(SecondaryUserOnSecondaryDisplayHandler.CMD_SET_LOCATION_ENABLED);
     }
 }

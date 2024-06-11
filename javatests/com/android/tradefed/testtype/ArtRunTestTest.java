@@ -76,6 +76,8 @@ public class ArtRunTestTest {
         mMockInvocationListener = mock(ITestInvocationListener.class);
         mMockAbi = mock(IAbi.class);
         mMockITestDevice = mock(ITestDevice.class);
+        mTmpDepsDir = FileUtil.createTempDir("art-run-test-deps");
+        mTmpTestLocalDir = FileUtil.createTempDir("tmp-test-local", mTmpDepsDir);
         mArtRunTest =
                 new ArtRunTest() {
                     @Override
@@ -89,8 +91,6 @@ public class ArtRunTestTest {
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockITestDevice);
 
-        mTmpDepsDir = FileUtil.createTempDir("art-run-test-deps");
-        mTmpTestLocalDir = FileUtil.createTempDir("tmp-test-local", mTmpDepsDir);
         mTestInfo =
                 TestInformation.newBuilder()
                         .setInvocationContext(context)

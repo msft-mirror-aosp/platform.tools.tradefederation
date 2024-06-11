@@ -47,6 +47,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.android.tradefed.util.ExtensionAtomsRegistry;
+
 /**
  * A post processor that processes binary proto statsd reports into key-value pairs by expanding the
  * report as a tree structure.
@@ -132,7 +134,8 @@ public class StatsdGenericPostProcessor extends BasePostProcessor {
             File reportFile = new File(logs.get(key).getPath());
             try (FileInputStream reportStream = new FileInputStream(reportFile)) {
                 ConfigMetricsReportList reportList =
-                        ConfigMetricsReportList.parseFrom(reportStream);
+                        ConfigMetricsReportList.parseFrom(
+                                reportStream, ExtensionAtomsRegistry.registry);
                 if (reportList.getReportsList().isEmpty()) {
                     CLog.i("No reports collected for %s.", key);
                     continue;

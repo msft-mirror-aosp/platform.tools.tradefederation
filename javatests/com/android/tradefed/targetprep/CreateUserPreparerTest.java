@@ -17,6 +17,8 @@ package com.android.tradefed.targetprep;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import static com.android.tradefed.targetprep.UserHelper.USER_SETUP_COMPLETE;
+
 import static org.junit.Assert.assertThrows;
 
 import com.android.tradefed.config.ConfigurationException;
@@ -69,6 +71,7 @@ public final class CreateUserPreparerTest {
         mockStartUser(5);
         mPreparer.setUp(mTestInfo);
         verifyUserCreated();
+        verifyUserSettings(5, USER_SETUP_COMPLETE, "1");
         verifyUserSwitched(5);
 
         mockSwitchUser(10);
@@ -255,5 +258,9 @@ public final class CreateUserPreparerTest {
 
     private void verifyUserNotRemoved(int userId) throws Exception {
         mTestDeviceMockHelper.verifyUserNotRemoved(userId);
+    }
+
+    private void verifyUserSettings(int userId, String key, String value) throws Exception {
+        mTestDeviceMockHelper.verifyUserSettings(userId, "secure", key, value);
     }
 }

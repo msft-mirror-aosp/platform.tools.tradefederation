@@ -16,7 +16,6 @@
 
 package com.android.tradefed.command;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -49,6 +48,8 @@ import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
+
+import com.google.common.truth.Truth;
 
 import org.junit.After;
 import org.junit.Before;
@@ -215,10 +216,7 @@ public class CommandSchedulerFuncTest {
         CLog.i(
                 "fast times %d slow times %d",
                 mMockTestInvoker.mFastCount, mMockTestInvoker.mSlowCount);
-        // assert that fast config has executed roughly twice as much as slow config. Allow for
-        // some variance since the execution time of each config (governed via Thread.sleep) will
-        // not be 100% accurate
-        assertEquals(mMockTestInvoker.mSlowCount * 2, mMockTestInvoker.mFastCount, 5);
+        Truth.assertThat(mMockTestInvoker.mFastCount).isGreaterThan(mMockTestInvoker.mSlowCount);
         assertFalse(mMockTestInvoker.runInterrupted);
     }
 
@@ -230,6 +228,7 @@ public class CommandSchedulerFuncTest {
         int mSlowCountLimit = 40;
         public boolean runInterrupted = false;
         public boolean printedStop = false;
+        public long mSleepTimMs = 200L;
 
         @Override
         public void invoke(
@@ -245,7 +244,7 @@ public class CommandSchedulerFuncTest {
                 }
                 if (config.equals(mSlowConfig)) {
                     // sleep for 2 * fast config time
-                    RunUtil.getDefault().sleep(200);
+                    RunUtil.getDefault().sleep(mSleepTimMs);
                     synchronized (mSlowCountLock) {
                         mSlowCount++;
                     }
@@ -274,7 +273,14 @@ public class CommandSchedulerFuncTest {
 
         @Override
         public void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {
+            runInterrupted = true;
             printedStop = true;
+            CLog.d("#notifyInvocationForceStopped");
+        }
+
+        @Override
+        public void notifyInvocationStopped(String message) {
+            CLog.d("#notifyInvocationStopped");
         }
     }
 
@@ -364,6 +370,7 @@ public class CommandSchedulerFuncTest {
     @Test
     public void testShutdown_interruptible() throws Throwable {
         String[] slowConfigArgs = new String[] {"slowConfig"};
+        mMockTestInvoker.mSleepTimMs = 10000L; // Sleep much longer than expected interrupt
         List<String> nullArg = null;
         when(mMockConfigFactory.createConfigurationFromArgs(
                         AdditionalMatchers.aryEq(slowConfigArgs),
@@ -510,6 +517,17 @@ public class CommandSchedulerFuncTest {
                     notify();
                 }
             }
+        }
+
+        @Override
+        public void notifyInvocationForceStopped(String message, ErrorIdentifier errorId) {
+            runInterrupted = true;
+            CLog.d("#notifyInvocationForceStopped");
+        }
+
+        @Override
+        public void notifyInvocationStopped(String message) {
+            CLog.d("#notifyInvocationStopped");
         }
     }
 

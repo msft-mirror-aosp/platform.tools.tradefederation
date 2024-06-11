@@ -22,6 +22,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IAbi;
@@ -42,12 +43,14 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -68,16 +71,25 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     private String mTestGroup = null;
 
     @Option(
-        name = "test-mapping-keyword",
-        description =
-                "Keyword to be matched to the `keywords` setting of a test configured in "
-                        + "a TEST_MAPPING file. The test will only run if it has all the keywords "
-                        + "specified in the option. If option test-mapping-test-group is not set, "
-                        + "test-mapping-keyword option is ignored as the tests to run are not "
-                        + "loaded directly from TEST_MAPPING files but is supplied via the "
-                        + "--include-filter arg."
-    )
-    private Set<String> mKeywords = new HashSet<>();
+            name = "test-mapping-keyword",
+            description =
+                    "Keyword to be matched to the `keywords` setting of a test configured in a"
+                        + " TEST_MAPPING file. The test will only run if it has all the keywords"
+                        + " specified in the option. If option test-mapping-test-group is not set,"
+                        + " test-mapping-keyword option is ignored as the tests to run are not"
+                        + " loaded directly from TEST_MAPPING files but is supplied via the"
+                        + " --include-filter arg.")
+    private Set<String> mKeywords = new LinkedHashSet<>();
+
+    @Option(
+            name = "test-mapping-ignore-keyword",
+            description =
+                    "Keyword to be ignored to the `keywords` setting of a test configured in "
+                            + "a TEST_MAPPING file. If a test entry has specified keywords in "
+                            + "their `keywords` attribute, the given keywords will be ignored. "
+                            + "This allows a test mapping suite to support test entries requiring "
+                            + "a keyword without running them on a new test suite.")
+    private Set<String> mIgnoreKeywords = new LinkedHashSet<>();
 
     @Option(
         name = "force-test-mapping-module",
@@ -127,15 +139,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     private List<String> mAdditionalTestMappingZips = new ArrayList<>();
 
     @Option(
-            name = "test-mapping-unmatched-file-pattern-paths",
-            description =
-                    "A list of modified paths that does not match with a certain file_pattern in "
-                            + "the TEST_MAPPING file. This is used only for Work Node, and handled "
-                            + "by provider service. If none is specified, all tests are needed "
-                            + "to run for the given change.")
-    private Set<String> mUnmatchedFilePatternPaths = new HashSet<>();
-
-    @Option(
             name = "test-mapping-matched-pattern-paths",
             description =
                     "A list of modified paths that matches with a certain file_pattern in "
@@ -157,8 +160,17 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                             + "kernel branches. The option should only be used for kernel tests.")
     private boolean mForceFullRun = false;
 
-    /** Flag to indicate whether the test mapping suite runner is in test discovery mode. */
-    private Boolean mIsTestDiscovery = false;
+    @Option(
+            name = "report-import-paths",
+            description = "Whether or not to report import paths into AnTS.")
+    private boolean mReportImportPaths = false;
+
+    @Option(
+            name = "skip-option-check-in-child-proc",
+            description =
+                    "Whether or not to skip @Options validations only in the subprocess"
+                            + "Note that this shouldn't be set True by default or GCL.")
+    private boolean mSkipOptionCheckInChildProc = false;
 
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
@@ -171,9 +183,57 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         setSkipjarLoading(true);
     }
 
-    /** Set the test discovery mode flag. */
-    public void setTestDiscovery(Boolean testDiscovery) {
-        mIsTestDiscovery = testDiscovery;
+    public Set<TestInfo> loadTestInfos() {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("loadTestInfos")) {
+            // Name of the tests
+            Set<String> testNames = new LinkedHashSet<>();
+            Set<TestInfo> testInfosToRun = new LinkedHashSet<>();
+            mBuildInfo = getBuildInfo();
+            checkTestMappingOptions();
+            if (mTestGroup != null) {
+                if (mForceFullRun) {
+                    CLog.d(
+                            "--force-full-run is specified, all tests in test group %s will be"
+                                    + " ran.",
+                            mTestGroup);
+                    mTestMappingPaths.clear();
+                }
+                TestMapping testMapping =
+                        new TestMapping(mTestMappingPaths, mIgnoreTestMappingImports);
+                testInfosToRun =
+                        testMapping.getTests(
+                                mBuildInfo,
+                                mTestGroup,
+                                getPrioritizeHostConfig(),
+                                mKeywords,
+                                mIgnoreKeywords,
+                                mAdditionalTestMappingZips,
+                                mMatchedPatternPaths);
+                if (!mTestModulesForced.isEmpty()) {
+                    CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
+                    testInfosToRun =
+                            testInfosToRun.stream()
+                                    .filter(
+                                            testInfo ->
+                                                    mTestModulesForced.contains(testInfo.getName()))
+                                    .collect(Collectors.toSet());
+                }
+                if (!mAllowedTestLists.isEmpty()) {
+                    CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
+                    testInfosToRun = filterByAllowedTestLists(mBuildInfo, testInfosToRun);
+                }
+                if (testInfosToRun.isEmpty() && !mAllowEmptyTests) {
+                    throw new HarnessRuntimeException(
+                            String.format("No test found for the given group: %s.", mTestGroup),
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+                for (TestInfo testInfo : testInfosToRun) {
+                    testNames.add(testInfo.getName());
+                }
+                setIncludeFilter(testNames);
+            }
+            return testInfosToRun;
+        }
     }
 
     /**
@@ -193,90 +253,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
      */
     @Override
     public LinkedHashMap<String, IConfiguration> loadTests() {
-        Set<String> includeFilter = getIncludeFilter();
-        // Name of the tests
-        Set<String> testNames = new HashSet<>();
-        Set<TestInfo> testInfosToRun = new HashSet<>();
-        mBuildInfo = getBuildInfo();
-        if (mTestGroup == null && includeFilter.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "At least one of the options, --test-mapping-test-group or --include-filter, "
-                            + "should be set.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (mTestGroup == null && !mKeywords.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "Must specify --test-mapping-test-group when applying --test-mapping-keyword.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "Must specify --test-mapping-test-group when applying "
-                            + "--force-test-mapping-module.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (mTestGroup != null && !includeFilter.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "If options --test-mapping-test-group is set, option --include-filter should "
-                            + "not be set.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-        if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
-            throw new HarnessRuntimeException(
-                    "If option --include-filter is set, option --test-mapping-path should "
-                            + "not be set.",
-                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-        }
-
-        if (mTestGroup != null) {
-            TestMapping.setIgnoreTestMappingImports(mIgnoreTestMappingImports);
-            if (mForceFullRun) {
-                CLog.d("--force-full-run is specified, all tests in test group %s will be ran.",
-                        mTestGroup);
-                mTestMappingPaths.clear();
-            }
-            if (!mTestMappingPaths.isEmpty()) {
-                TestMapping.setTestMappingPaths(mTestMappingPaths);
-            }
-            testInfosToRun =
-                    TestMapping.getTests(
-                            mBuildInfo,
-                            mTestGroup,
-                            getPrioritizeHostConfig(),
-                            mKeywords,
-                            mAdditionalTestMappingZips,
-                            mMatchedPatternPaths);
-            if (!mTestModulesForced.isEmpty()) {
-                CLog.i("Filtering tests for the given names: %s", mTestModulesForced);
-                testInfosToRun =
-                        testInfosToRun
-                                .stream()
-                                .filter(testInfo -> mTestModulesForced.contains(testInfo.getName()))
-                                .collect(Collectors.toSet());
-            }
-            if (!mAllowedTestLists.isEmpty()) {
-                CLog.i("Filtering tests from allowed test lists: %s", mAllowedTestLists);
-                testInfosToRun = filterByAllowedTestLists(testInfosToRun);
-            }
-            if (testInfosToRun.isEmpty() && !mAllowEmptyTests) {
-                throw new HarnessRuntimeException(
-                        String.format("No test found for the given group: %s.", mTestGroup),
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            }
-            for (TestInfo testInfo : testInfosToRun) {
-                testNames.add(testInfo.getName());
-            }
-            setIncludeFilter(testNames);
-            // With include filters being set, the test no longer needs group and path settings.
-            // Clear the settings to avoid conflict when the test is running in a shard.
-            mTestGroup = null;
-            mTestMappingPaths.clear();
-            mUseTestMappingPath = false;
-        }
-
-        // In test discovery mode, abort here and the return value should not be used.
-        if (mIsTestDiscovery) {
-            return null;
+        Set<TestInfo> testInfosToRun = loadTestInfos();
+        if (testInfosToRun.isEmpty() && getIncludeFilter().isEmpty()) {
+            // No need to load any test configs as there is no test info to run based on
+            // TEST_MAPPING files and include-filters.
+            return new LinkedHashMap<String, IConfiguration>();
         }
 
         // load all the configurations with include-filter injected.
@@ -308,28 +289,12 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                         mRemoteTestTimeOut.toString()
                 );
             }
-
         }
         return testConfigs;
     }
 
-    @VisibleForTesting
-    String getTestGroup() {
-        return mTestGroup;
-    }
-
     public void clearTestGroup() {
         mTestGroup = null;
-    }
-
-    @VisibleForTesting
-    List<String> getTestMappingPaths() {
-        return mTestMappingPaths;
-    }
-
-    @VisibleForTesting
-    boolean getUseTestMappingPath() {
-        return mUseTestMappingPath;
     }
 
     /**
@@ -337,6 +302,7 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
      *
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @param moduleConfig The {@link IConfiguration} of the module config.
+     * @param abi The {@link IAbi} of abi information.
      * @return The {@link List} that are injected with the test options.
      */
     @VisibleForTesting
@@ -355,8 +321,10 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             configFile = null;
         }
         // De-duplicate test infos so that there won't be duplicate test options.
-        testInfos = dedupTestInfos(testInfos);
-        Set<String> duplicateSources = new LinkedHashSet<>();
+        testInfos = dedupTestInfos(configFile, testInfos);
+        if (testInfos.size() > 1) {
+            moduleConfig.getConfigurationDescription().setNotIRemoteTestShardable(true);
+        }
 
         for (TestInfo testInfo : testInfos) {
             // Clean up all the test options injected in SuiteModuleLoader.
@@ -378,26 +346,25 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     continue;
                 }
                 List<IRemoteTest> remoteTests = entry.getValue().getTests();
-                if (mRemoteTestTimeOut != null) {
-                    addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
+                addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getSources());
+                if (mReportImportPaths && !mIgnoreTestMappingImports) {
+                    addTestSourcesToConfig(moduleConfig, remoteTests, testInfo.getImportPaths());
                 }
-                duplicateSources.addAll(testInfo.getSources());
                 tests.addAll(remoteTests);
             }
-        }
-        // If size above 1 that means we have duplicated modules with different options
-        if (duplicateSources.size() > 1) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
-                    String.format(
-                            "%s:" + Joiner.on("+").join(duplicateSources), configPath));
         }
         return tests;
     }
 
-    /** Add test mapping's path into module configuration. */
-    private void addTestSourcesToConfig(IConfiguration config, List<IRemoteTest> tests,
-            Set<String> sources) {
+    /**
+     * Add test mapping's path into module configuration.
+     *
+     * @param config The {@link IConfiguration} of the module config.
+     * @param tests The {@link List<IRemoteTest>} of the tests.
+     * @param sources The {@link Set<String>} of test mapping sources.
+     */
+    private void addTestSourcesToConfig(
+            IConfiguration config, List<IRemoteTest> tests, Set<String> sources) {
         for (IRemoteTest test : tests) {
             config.getConfigurationDescription().addMetadata(
                 Integer.toString(test.hashCode()), new ArrayList<>(sources)
@@ -470,23 +437,59 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
     /**
      * De-duplicate test infos and aggregate test-mapping sources with the same test options.
      *
+     * @param config the config file being deduplicated
      * @param testInfos A {@code Set<TestInfo>} containing multiple test options.
      * @return A {@code Set<TestInfo>} of tests without duplicated test options.
      */
     @VisibleForTesting
-    Set<TestInfo> dedupTestInfos(Set<TestInfo> testInfos) {
+    Set<TestInfo> dedupTestInfos(File config, Set<TestInfo> testInfos) {
         Set<String> nameOptions = new HashSet<>();
-        Set<TestInfo> dedupTestInfos = new HashSet<>();
+        Set<TestInfo> dedupTestInfos = new TreeSet<TestInfo>(new TestInfoComparator());
+        Set<String> duplicateSources = new LinkedHashSet<String>();
         for (TestInfo testInfo : testInfos) {
             String nameOption = testInfo.getNameOption();
             if (!nameOptions.contains(nameOption)) {
                 dedupTestInfos.add(testInfo);
+                duplicateSources.addAll(testInfo.getSources());
                 nameOptions.add(nameOption);
             } else {
                 aggregateTestInfo(testInfo, dedupTestInfos);
             }
         }
+
+        // If size above 1 that means we have duplicated modules with different options
+        if (dedupTestInfos.size() > 1) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DUPLICATE_MAPPING_DIFFERENT_OPTIONS,
+                    String.format("%s:" + Joiner.on("+").join(duplicateSources), config));
+        }
+
         return dedupTestInfos;
+    }
+
+    private class TestInfoComparator implements Comparator<TestInfo> {
+
+        @Override
+        public int compare(TestInfo a, TestInfo b) {
+            if (a.getNameOption().equals(b.getNameOption())) {
+                return 0;
+            }
+            // If a is subset of b
+            if (createComparableNames(a).equals(b.getNameOption())) {
+                return -1;
+            }
+            // If b is subset of a
+            if (a.getNameOption().equals(createComparableNames(b))) {
+                return 1;
+            }
+            return 1;
+        }
+    }
+
+    private static String createComparableNames(TestInfo a) {
+        List<TestOption> copyOptions = new ArrayList<>(a.getOptions());
+        copyOptions.removeIf(o -> (o.isExclusive() || (!o.isExclusive() && !o.isInclusive())));
+        return String.format("%s%s", a.getName(), copyOptions.toString());
     }
 
     /**
@@ -525,21 +528,36 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
      * @return A {@code Set<TestInfo>} of tests matching the allowed test lists.
      */
     @VisibleForTesting
-    Set<TestInfo> filterByAllowedTestLists(Set<TestInfo> testInfos) {
+    Set<TestInfo> filterByAllowedTestLists(IBuildInfo info, Set<TestInfo> testInfos) {
         // Read the list of allowed tests, and compile a set of allowed test module names.
         Set<String> allowedTests = new HashSet<String>();
         for (String testList : mAllowedTestLists) {
-            File testListZip = getBuildInfo().getFile(testList);
+            File testListZip = null;
+            if (info == null) {
+                String envBackfill = System.getenv(testList);
+                if (envBackfill != null) {
+                    testListZip = new File(envBackfill);
+                }
+            } else {
+                testListZip = info.getFile(testList);
+            }
             if (testListZip == null) {
                 throw new RuntimeException("Failed to locate allowed test list " + testList);
             }
             File testListFile = null;
+            boolean deleteFile = true;
             try {
-                ZipFile zipFile = new ZipFile(testListZip);
-                testListFile =
-                        ZipUtil2.extractFileFromZip(
-                                zipFile, Files.getNameWithoutExtension(testList));
-                zipFile.close();
+                if (testListZip.isDirectory()) {
+                    // A single file should be under the zip
+                    testListFile = testListZip.listFiles()[0];
+                } else {
+                    try (ZipFile zipFile = new ZipFile(testListZip)) {
+                        testListFile =
+                                ZipUtil2.extractFileFromZip(
+                                        zipFile, Files.getNameWithoutExtension(testList));
+                        deleteFile = true;
+                    }
+                }
                 String content = FileUtil.readStringFromFile(testListFile);
                 final String pattern = "([^//]*).config$";
                 Pattern namePattern = Pattern.compile(pattern);
@@ -556,12 +574,70 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                                 e.getMessage(), testList),
                         e);
             } finally {
+                if (deleteFile) {
                 FileUtil.recursiveDelete(testListFile);
+                }
             }
         }
 
         return testInfos.stream()
                 .filter(testInfo -> allowedTests.contains(testInfo.getName()))
                 .collect(Collectors.toSet());
+    }
+
+    @VisibleForTesting
+    void checkTestMappingOptions() {
+        if (mSkipOptionCheckInChildProc) {
+            CLog.i("Skip checking options because they are already validated.");
+            return;
+        }
+        Set<String> includeFilter = getIncludeFilter();
+        if (mTestGroup == null && includeFilter.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "At least one of the options, --test-mapping-test-group or"
+                            + " --include-filter, should be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (mTestGroup == null && !mKeywords.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "Must specify --test-mapping-test-group when applying"
+                            + " --test-mapping-keyword.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (!mIgnoreKeywords.isEmpty() && !mKeywords.isEmpty()) {
+            for (String keyword : mKeywords) {
+                if (mIgnoreKeywords.contains(keyword)) {
+                    throw new HarnessRuntimeException(
+                            "Keyword cannot be in both required and ignored.",
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+            }
+        }
+        if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "Must specify --test-mapping-test-group when applying "
+                            + "--force-test-mapping-module.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (mTestGroup != null && !includeFilter.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "If options --test-mapping-test-group is set, option --include-filter"
+                            + " should not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "If option --include-filter is set, option --test-mapping-path should "
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (mReportImportPaths && !mIgnoreTestMappingImports) {
+            CLog.i(
+                    "Option \"no-ignore-test-mapping-imports\" and \"report-import-paths\" are"
+                            + " enabled, TestMapping will report tests with sources and import"
+                            + " paths to AnTS");
+        }
+        CLog.i("Options check is done, set skip-option-check-in-child-proc to true.");
+        mSkipOptionCheckInChildProc = true;
     }
 }

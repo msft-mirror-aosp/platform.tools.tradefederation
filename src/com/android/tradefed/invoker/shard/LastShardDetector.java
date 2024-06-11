@@ -16,6 +16,7 @@
 package com.android.tradefed.invoker.shard;
 
 import com.android.tradefed.invoker.ShardMainResultForwarder;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 
 /**
@@ -30,6 +31,7 @@ public final class LastShardDetector implements ITestInvocationListener {
 
     @Override
     public void invocationEnded(long elapsedTime) {
+        CLog.d("Last shard invocationEnded was reported.");
         mLastShardDone = true;
     }
 

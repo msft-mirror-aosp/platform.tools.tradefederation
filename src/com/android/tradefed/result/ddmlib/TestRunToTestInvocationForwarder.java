@@ -52,7 +52,8 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
     // Sometimes the instrumentation runner (Android JUnit Runner / AJUR) fails to load some class
     // and report a "null" as a test method. This creates a lot of issues in the reporting pipeline
     // so catch it, and avoid it at the root.
-    private TestIdentifier mNullMethod = null;
+    private TestIdentifier mInvalidMethod = null;
+    private boolean mNullMethodIsIgnored = false;
     private String mNullStack = null;
 
     public TestRunToTestInvocationForwarder(Collection<ITestLifeCycleReceiver> listeners) {
@@ -67,10 +68,11 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
     @Override
     public void testStarted(TestIdentifier testId) {
         if (INVALID_METHODS.contains(testId.getTestName())) {
-            mNullMethod = testId;
+            mInvalidMethod = testId;
             return;
         }
-        mNullMethod = null;
+        mNullMethodIsIgnored = false;
+        mInvalidMethod = null;
         for (ITestLifeCycleReceiver listener : mListeners) {
             try {
                 listener.testStarted(TestDescription.createFromTestIdentifier(testId));
@@ -85,7 +87,7 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
 
     @Override
     public void testAssumptionFailure(TestIdentifier testId, String trace) {
-        if (mNullMethod != null && mNullMethod.equals(testId)) {
+        if (mInvalidMethod != null && mInvalidMethod.equals(testId)) {
             return;
         }
         for (ITestLifeCycleReceiver listener : mListeners) {
@@ -103,7 +105,7 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
 
     @Override
     public void testFailed(TestIdentifier testId, String trace) {
-        if (mNullMethod != null && mNullMethod.equals(testId)) {
+        if (mInvalidMethod != null && mInvalidMethod.equals(testId)) {
             mNullStack = trace;
             return;
         }
@@ -123,7 +125,8 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
 
     @Override
     public void testIgnored(TestIdentifier testId) {
-        if (mNullMethod != null && mNullMethod.equals(testId)) {
+        if (mInvalidMethod != null && mInvalidMethod.equals(testId)) {
+            mNullMethodIsIgnored = true;
             return;
         }
         for (ITestLifeCycleReceiver listener : mListeners) {
@@ -140,20 +143,31 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
 
     @Override
     public void testEnded(TestIdentifier testId, Map<String, String> testMetrics) {
-        if (mNullMethod != null && mNullMethod.equals(testId)) {
-            String message =
-                    String.format(ERROR_MESSAGE_FORMAT, mNullMethod.getTestName(), mNullMethod);
-            if (mNullStack != null) {
-                message = String.format("%s Stack:%s", message, mNullStack);
+        if (mInvalidMethod != null && mInvalidMethod.equals(testId)) {
+            if (mNullMethodIsIgnored) {
+                CLog.d("ignored null method reported, most likely an @ignored class");
+                for (ITestLifeCycleReceiver listener : mListeners) {
+                    listener.testStarted(TestDescription.createFromTestIdentifier(testId));
+                    listener.testIgnored(TestDescription.createFromTestIdentifier(testId));
+                    // testEnded is reported below
+                }
+            } else {
+                String message =
+                        String.format(
+                                ERROR_MESSAGE_FORMAT, mInvalidMethod.getTestName(), mInvalidMethod);
+                if (mNullStack != null) {
+                    message = String.format("%s Stack:%s", message, mNullStack);
+                }
+                FailureDescription failure =
+                        FailureDescription.create(message, FailureStatus.TEST_FAILURE)
+                                .setErrorIdentifier(
+                                        TestErrorIdentifier.INSTRUMENTATION_NULL_METHOD);
+                for (ITestLifeCycleReceiver listener : mListeners) {
+                    listener.testRunFailed(failure);
+                }
+                mNullStack = null;
+                return;
             }
-            FailureDescription failure =
-                    FailureDescription.create(message, FailureStatus.TEST_FAILURE)
-                            .setErrorIdentifier(TestErrorIdentifier.INSTRUMENTATION_NULL_METHOD);
-            for (ITestLifeCycleReceiver listener : mListeners) {
-                listener.testRunFailed(failure);
-            }
-            mNullStack = null;
-            return;
         }
         for (ITestLifeCycleReceiver listener : mListeners) {
             try {

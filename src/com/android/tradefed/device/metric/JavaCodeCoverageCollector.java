@@ -146,6 +146,10 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
 
                 // Pull and log the test coverage file.
                 if (testCoveragePath != null) {
+                    if (!new File(testCoveragePath).isAbsolute()) {
+                        testCoveragePath =
+                                "/sdcard/googletest/internal_use/" + testCoveragePath;
+                    }
                     testCoverage = device.pullFile(testCoveragePath);
                     if (testCoverage == null) {
                         // Log a warning only, since multi-device tests will not have this file on

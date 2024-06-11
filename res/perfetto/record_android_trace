@@ -569,12 +569,14 @@ def main():
     if match is None:
       prt('Failed to read the pid from perfetto --background', ANSI.RED)
       prt(proc_out)
+      adb('shell', 'rm -f ' + device_file).wait()
       sys.exit(1)
     bg_pid = match.group(1)
     exit_code = proc.wait()
 
   if exit_code != 0:
     prt('Perfetto invocation failed', ANSI.RED)
+    adb('shell', 'rm -f ' + device_file).wait()
     sys.exit(1)
 
   prt('Trace started. Press CTRL+C to stop', ANSI.BLACK + ANSI.BG_BLUE)
@@ -608,6 +610,7 @@ def main():
       adb_failure_count += 1
       if adb_failure_count >= MAX_ADB_FAILURES:
         prt('Too many unrecoverable ADB failures, bailing out', ANSI.RED)
+        adb('shell', 'rm -f ' + device_file).wait()
         sys.exit(1)
       time.sleep(2)
     except KeyboardInterrupt:

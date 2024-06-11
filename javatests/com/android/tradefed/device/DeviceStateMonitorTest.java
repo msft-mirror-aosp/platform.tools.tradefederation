@@ -197,7 +197,7 @@ public class DeviceStateMonitorTest {
                         return new CollectingOutputReceiver() {
                             @Override
                             public String getOutput() {
-                                return "/system/bin/adb";
+                                return "uid=0(root)";
                             }
                         };
                     }
@@ -231,7 +231,7 @@ public class DeviceStateMonitorTest {
                             @Override
                             public String getOutput() {
                                 if (mAtomicBoolean.get()) {
-                                  return "/system/bin/adb";
+                                    return "uid=0(root)";
                                 }
                                 return "not found";
                             }

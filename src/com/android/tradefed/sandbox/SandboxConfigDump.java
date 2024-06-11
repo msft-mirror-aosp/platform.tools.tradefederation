@@ -33,6 +33,8 @@ import com.android.tradefed.result.SubprocessResultsReporter;
 import com.android.tradefed.result.proto.StreamProtoResultReporter;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.keystore.IKeyStoreClient;
+import com.android.tradefed.util.keystore.KeyStoreException;
 
 import java.io.File;
 import java.io.IOException;
@@ -42,6 +44,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Runner class that creates a {@link IConfiguration} based on a command line and dump it to a file.
@@ -71,6 +75,7 @@ public class SandboxConfigDump {
     static {
         VERSIONED_ELEMENTS.add(Configuration.SYSTEM_STATUS_CHECKER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.DEVICE_METRICS_COLLECTOR_TYPE_NAME);
+        VERSIONED_ELEMENTS.add(Configuration.METRIC_POST_PROCESSOR_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.MULTI_PRE_TARGET_PREPARER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.MULTI_PREPARER_TYPE_NAME);
         VERSIONED_ELEMENTS.add(Configuration.TARGET_PREPARER_TYPE_NAME);
@@ -94,6 +99,7 @@ public class SandboxConfigDump {
         NON_TEST_ELEMENTS.add(Configuration.CMD_OPTIONS_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.CONFIGURATION_DESCRIPTION_TYPE_NAME);
         NON_TEST_ELEMENTS.add(Configuration.GLOBAL_FILTERS_TYPE_NAME);
+        NON_TEST_ELEMENTS.add(Configuration.SKIP_MANAGER_TYPE_NAME);
     }
 
     /**
@@ -107,6 +113,14 @@ public class SandboxConfigDump {
         SandboxConfigurationFactory factory = SandboxConfigurationFactory.getInstance();
         PrintWriter pw = null;
         try {
+            if (DumpCmd.RUN_CONFIG.equals(cmd)
+                    && GlobalConfiguration.getInstance().getKeyStoreFactory() != null) {
+                IKeyStoreClient keyClient =
+                        GlobalConfiguration.getInstance()
+                                .getKeyStoreFactory()
+                                .createKeyStoreClient();
+                replaceKeystore(keyClient, argList);
+            }
             IConfiguration config =
                     factory.createConfigurationFromArgs(argList.toArray(new String[0]), cmd);
             if (DumpCmd.RUN_CONFIG.equals(cmd) || DumpCmd.TEST_MODE.equals(cmd)) {
@@ -176,7 +190,7 @@ public class SandboxConfigDump {
                 config.dumpXml(pw, new ArrayList<>(), true,
                         /* Don't print unchanged options */ false);
             }
-        } catch (ConfigurationException | IOException e) {
+        } catch (ConfigurationException | IOException | KeyStoreException e) {
             e.printStackTrace();
             return 1;
         } finally {
@@ -197,6 +211,20 @@ public class SandboxConfigDump {
         System.exit(code);
     }
 
+    /** Replace keystore options in place. */
+    public static void replaceKeystore(IKeyStoreClient keyClient, List<String> argList) {
+        Pattern USE_KEYSTORE_REGEX = Pattern.compile("(.*)USE_KEYSTORE@([^:]*)(.*)");
+        for (int i = 0; i < argList.size(); i++) {
+            Matcher m = USE_KEYSTORE_REGEX.matcher(argList.get(i));
+            if (m.matches() && m.groupCount() > 0) {
+                String key = m.group(2);
+                String keyValue = keyClient.fetchKey(key);
+                String newValue = argList.get(i).replaceAll("USE_KEYSTORE@" + key, keyValue);
+                argList.set(i, newValue);
+            }
+        }
+    }
+
     private SandboxOptions getSandboxOptions(IConfiguration config) {
         return (SandboxOptions)
                 config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME);
@@ -206,11 +234,14 @@ public class SandboxConfigDump {
         for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
             IDeviceSelection requirements = deviceConfig.getDeviceRequirements();
             if (requirements.nullDeviceRequested()
-                    || requirements.tcpDeviceRequested()
                     || requirements.gceDeviceRequested()) {
-                // Reset serials, ensure any null/tcp/gce-device can be selected.
+                // Reset serials, ensure any null/gce-device can be selected.
                 requirements.setSerial();
             }
+            // Reset device requested type, we don't need it in the sandbox
+            requirements.setBaseDeviceTypeRequested(null);
+            // In sandbox it's pointless to check again for battery for allocation
+            requirements.setRequireBatteryCheck(false);
         }
     }
 }

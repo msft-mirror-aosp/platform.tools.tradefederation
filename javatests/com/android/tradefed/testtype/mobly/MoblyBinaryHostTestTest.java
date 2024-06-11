@@ -20,12 +20,13 @@ import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -40,6 +41,8 @@ import com.android.tradefed.log.LogUtil;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.proto.TestRecordProto;
+import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -53,21 +56,22 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringWriter;
 import java.io.Writer;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Unit tests for {@link MoblyBinaryHostTest}. */
 @RunWith(JUnit4.class)
@@ -91,7 +95,6 @@ public class MoblyBinaryHostTestTest {
     private File mVenvDir;
     private DeviceBuildInfo mMockBuildInfo;
     private TestInformation mTestInfo;
-    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     @Before
     public void setUp() throws Exception {
@@ -134,21 +137,23 @@ public class MoblyBinaryHostTestTest {
         // Mimics the behavior of a successful test run.
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
-                        new Answer<CommandResult>() {
-                            @Override
-                            public CommandResult answer(InvocationOnMock invocation)
-                                    throws Throwable {
-                                FileUtils.createFile(testResult, "");
-                                FileUtils.createFile(
-                                        new File(mSpyTest.getLogDirAbsolutePath(), "log"),
-                                        "log content");
-                                return new CommandResult(CommandStatus.SUCCESS);
-                            }
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
                         });
 
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
-        verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any());
+        verify(mSpyTest.getRunUtil(), times(2)).runTimedCmd(anyLong(), any());
         assertNull(mSpyTest.getLogDirFile());
     }
 
@@ -173,21 +178,23 @@ public class MoblyBinaryHostTestTest {
         File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
-                        new Answer<CommandResult>() {
-                            @Override
-                            public CommandResult answer(InvocationOnMock invocation)
-                                    throws Throwable {
-                                FileUtils.createFile(testResult, "");
-                                FileUtils.createFile(
-                                        new File(mSpyTest.getLogDirAbsolutePath(), "log"),
-                                        "log content");
-                                return new CommandResult(CommandStatus.SUCCESS);
-                            }
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
                         });
 
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
-        verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any());
+        verify(mSpyTest.getRunUtil(), times(2)).runTimedCmd(anyLong(), any());
         assertNull(mSpyTest.getLogDirFile());
     }
 
@@ -210,29 +217,53 @@ public class MoblyBinaryHostTestTest {
     }
 
     @Test
+    public void testRun_withStdLogOption() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-std-log", "true");
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        // Mimics the behavior of a successful test run.
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        });
+        Mockito.when(
+                        mMockRunUtil.runTimedCmd(
+                                anyLong(), any(OutputStream.class), any(OutputStream.class), any()))
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
+    }
+
+    @Test
     public void testRun_testResultIsMissing() throws Exception {
         OptionSetter setter = new OptionSetter(mSpyTest);
         setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
         // Test result and log files were not created for some reasons during test run.
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
-                        new Answer<CommandResult>() {
-                            @Override
-                            public CommandResult answer(InvocationOnMock invocation)
-                                    throws Throwable {
-                                return new CommandResult(CommandStatus.SUCCESS);
-                            }
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            return new CommandResult(CommandStatus.SUCCESS);
                         });
 
-        try {
-            mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
-            fail("Should have thrown an exception");
-        } catch (RuntimeException e) {
-            assertThat(e)
-                    .hasMessageThat()
-                    .contains("Fail to find test summary file test_summary.yaml under directory");
-            assertNull(mSpyTest.getLogDirFile());
-        }
+        mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
+        assertFalse(testResult.exists());
     }
 
     @Test
@@ -241,25 +272,30 @@ public class MoblyBinaryHostTestTest {
         OptionSetter setter = new OptionSetter(mSpyTest);
         setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
         File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
-        Mockito.when(
-                        mMockRunUtil.runTimedCmd(
-                                anyLong(),
-                                anyString(),
-                                eq("--"),
-                                contains("--config="),
-                                contains("--device_serial="),
-                                contains("--log_path=")))
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
-                        new Answer<CommandResult>() {
-                            @Override
-                            public CommandResult answer(InvocationOnMock invocation)
-                                    throws Throwable {
-                                FileUtils.createFile(testResult, "");
-                                FileUtils.createFile(
-                                        new File(mSpyTest.getLogDirAbsolutePath(), "log"),
-                                        "log content");
-                                return new CommandResult(CommandStatus.SUCCESS);
-                            }
+                        invocation -> {
+                            CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                            result.setStdout(
+                                    "Name: pip\nLocation: "
+                                            + new File(
+                                                    mVenvDir.getAbsolutePath(),
+                                                    "lib/python3.8/site-packages"));
+                            return result;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
                         });
         CommandResult result = new CommandResult(CommandStatus.SUCCESS);
         result.setStdout(
@@ -270,9 +306,10 @@ public class MoblyBinaryHostTestTest {
 
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
+        verify(mSpyTest.getRunUtil(), times(3)).runTimedCmd(anyLong(), any());
         verify(mSpyTest.getRunUtil(), times(1))
                 .setEnvVariable(eq("VIRTUAL_ENV"), eq(mVenvDir.getAbsolutePath()));
-        assertFalse(mVenvDir.exists());
+        assertTrue(mVenvDir.exists());
     }
 
     @Test
@@ -283,22 +320,180 @@ public class MoblyBinaryHostTestTest {
         File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
         Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
-                        new Answer<CommandResult>() {
-                            @Override
-                            public CommandResult answer(InvocationOnMock invocation)
-                                    throws Throwable {
-                                FileUtils.createFile(testResult, "");
-                                FileUtils.createFile(
-                                        new File(mSpyTest.getLogDirAbsolutePath(), "log"),
-                                        "log content");
-                                return new CommandResult(CommandStatus.SUCCESS);
-                            }
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
                         });
 
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
         verify(mSpyTest.getRunUtil(), never())
                 .setEnvVariable(eq("VIRTUAL_ENV"), eq(mVenvDir.getAbsolutePath()));
+    }
+
+    @Test
+    public void testRun_exitSuccess_withTestResultFileComplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent = "---\n" + "{Executed: 0, Skipped: 0, Type: Summary}\n" + "...";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, never()).testRunFailed(any(FailureDescription.class));
+        verify(mockListener, never()).testRunFailed(anyString());
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitSuccess_withTestResultFileIncomplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent = "";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, never()).testRunFailed(any(FailureDescription.class));
+        verify(mockListener, never()).testRunFailed(anyString());
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitFailed_withTestResultFileComplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent = "---\n" + "{Executed: 0, Skipped: 0, Type: Summary}\n" + "...";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            return new CommandResult(CommandStatus.FAILED);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, never()).testRunFailed(any(FailureDescription.class));
+        verify(mockListener, never()).testRunFailed(anyString());
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitFailed_withTestResultFileIncomplete() throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent = "";
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, testResultContent);
+                            CommandResult res = new CommandResult(CommandStatus.FAILED);
+                            res.setStderr("Some error message");
+                            return res;
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, times(1)).testRunFailed(eq("Some error message"));
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
+    }
+
+    @Test
+    public void testRun_exitFailed_withTestResultFileIncomplete_whenAlreadyFailed()
+            throws Exception {
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        String testResultContent =
+                "---\n"
+                    + "{Result: ERROR, Stacktrace: 'Some other error message', Test Name:"
+                    + " setup_test, Type: Record}\n"
+                    + "...";
+        FileUtil.writeToFile(testResultContent, testResult);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.FAILED);
+                            res.setStderr("Some error message");
+                            return res;
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        FailureDescription failureDescription =
+                FailureDescription.create(
+                        "Some other error message", TestRecordProto.FailureStatus.TEST_FAILURE);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+        verify(mockListener, times(1)).testRunFailed(eq(failureDescription));
+        verify(mockListener, times(1)).testRunEnded(anyLong(), eq(new HashMap<String, String>()));
     }
 
     @Test
@@ -332,31 +527,29 @@ public class MoblyBinaryHostTestTest {
                 .when(mTestInfo)
                 .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
         File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
-        Mockito.when(
-                        mMockRunUtil.runTimedCmd(
-                                anyLong(),
-                                any(),
-                                eq("--"),
-                                contains("--config="),
-                                contains("--device_serial="),
-                                contains("--log_path=")))
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
                 .thenAnswer(
-                        new Answer<CommandResult>() {
-                            @Override
-                            public CommandResult answer(InvocationOnMock invocation)
-                                    throws Throwable {
-                                FileUtils.createFile(testResult, "");
-                                FileUtils.createFile(
-                                        new File(mSpyTest.getLogDirAbsolutePath(), "log"),
-                                        "log content");
-                                return new CommandResult(CommandStatus.SUCCESS);
-                            }
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
                         });
 
         mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
 
         // Verify the command line contains "--config"
-        verify(mSpyTest.getRunUtil(), times(1))
+        InOrder inOrder = inOrder(mSpyTest.getRunUtil());
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+        inOrder.verify(mSpyTest.getRunUtil())
                 .runTimedCmd(
                         anyLong(),
                         any(),
@@ -364,6 +557,821 @@ public class MoblyBinaryHostTestTest {
                         contains("--config="),
                         contains("--device_serial="),
                         contains("--log_path="));
+    }
+
+    @Test
+    public void testRun_testListWithOnlyBadTestNames() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> ClassTest <==========\nabc\nClassTest.\ntest");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+    }
+
+    @Test
+    public void testRun_testListWithOnlyGoodTestNames() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> ClassTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "ClassTest.test_bar");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(3));
+    }
+
+    @Test
+    public void testRun_testListWithBadTestNames() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> ClassTest <==========\n"
+                                        + "test_foo\n"
+                                        + "abc\n"
+                                        + "test_baz\n"
+                                        + "ClassTest.test_bar\n"
+                                        + "ClassTest.\n"
+                                        + "test");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(3));
+    }
+
+    @Test
+    public void testRun_withoutTests() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-par-file-name", mMoblyBinary2.getName());
+        Mockito.doReturn(mMoblyTestDir)
+                .when(mTestInfo)
+                .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(""); // No tests.
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        // Verify no tests where run.
+        verify(mSpyTest.getRunUtil()).runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+    }
+
+    @Test
+    public void testRun_withoutFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-par-file-name", mMoblyBinary2.getName());
+        Mockito.doReturn(mMoblyTestDir)
+                .when(mTestInfo)
+                .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        mSpyTest.run(mTestInfo, Mockito.mock(ITestInvocationListener.class));
+
+        // Verify the command line contains "--tests"
+        InOrder inOrder = inOrder(mSpyTest.getRunUtil());
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(
+                        anyLong(),
+                        any(),
+                        eq("--"),
+                        contains("--config="),
+                        contains("--device_serial="),
+                        contains("--log_path="));
+    }
+
+    @Test
+    public void testRun_withInvalidIncludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addIncludeFilter("test_bar");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+        verify(mockListener, times(1)).testRunFailed(any(FailureDescription.class));
+        verify(mockListener, times(1)).testRunEnded(eq(0L), eq(new HashMap<String, Metric>()));
+    }
+
+    @Test
+    public void testRun_withInvalidExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addExcludeFilter("test_bar");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+    }
+
+    @Test
+    public void testRun_withInvalidExcludeFiltersPrefix() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addExcludeFilter("test_f");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("==========> FooTest <==========\ntest_foo");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+    }
+
+    @Test
+    public void testRun_withIncludeFiltersExact() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addIncludeFilter("test_bar");
+        mSpyTest.addIncludeFilter("test_foo");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(2));
+
+        // Verify the command line contains "--tests"
+        InOrder inOrder = inOrder(mSpyTest.getRunUtil());
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(
+                        anyLong(),
+                        any(),
+                        eq("--"),
+                        contains("--config="),
+                        contains("--device_serial="),
+                        contains("--log_path="),
+                        eq("--tests"),
+                        eq("test_foo"),
+                        eq("test_bar"));
+    }
+
+    @Test
+    public void testRun_withIncludeFiltersPrefix() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addIncludeFilter("test_b");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(2));
+
+        // Verify the command line contains "--tests"
+        InOrder inOrder = inOrder(mSpyTest.getRunUtil());
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(
+                        anyLong(),
+                        any(),
+                        eq("--"),
+                        contains("--config="),
+                        contains("--device_serial="),
+                        contains("--log_path="),
+                        eq("--tests"),
+                        eq("test_baz"),
+                        eq("test_bar"));
+    }
+
+    @Test
+    public void testRun_withExcludeFiltersExact() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addExcludeFilter("test_bar");
+        mSpyTest.addExcludeFilter("test_foo");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+
+        // Verify the command line contains "--tests"
+        InOrder inOrder = inOrder(mSpyTest.getRunUtil());
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(
+                        anyLong(),
+                        any(),
+                        eq("--"),
+                        contains("--config="),
+                        contains("--device_serial="),
+                        contains("--log_path="),
+                        eq("--tests"),
+                        eq("test_baz"));
+    }
+
+    @Test
+    public void testRun_withExcludeFiltersNoTests() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addExcludeFilter("test_bar");
+        mSpyTest.addExcludeFilter("test_baz");
+        mSpyTest.addExcludeFilter("test_foo");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+    }
+
+    @Test
+    public void testRun_withBothIncludeAndExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-binaries", mMoblyBinary.getAbsolutePath());
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        mSpyTest.addIncludeFilter("test_b");
+        mSpyTest.addExcludeFilter("test_bar");
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "==========> FooTest <==========\n"
+                                        + "test_foo\n"
+                                        + "test_baz\n"
+                                        + "test_bar");
+                            return res;
+                        })
+                .thenAnswer(
+                        invocation -> {
+                            FileUtils.createFile(testResult, "");
+                            FileUtils.createFile(
+                                    new File(mSpyTest.getLogDirAbsolutePath(), "log"),
+                                    "log content");
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        });
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.run(mTestInfo, mockListener);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+
+        // Verify the command line contains "--tests"
+        InOrder inOrder = inOrder(mSpyTest.getRunUtil());
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(anyLong(), any(), eq("--"), eq("--list_tests"));
+        inOrder.verify(mSpyTest.getRunUtil())
+                .runTimedCmd(
+                        anyLong(),
+                        any(),
+                        eq("--"),
+                        contains("--config="),
+                        contains("--device_serial="),
+                        contains("--log_path="),
+                        eq("--tests"),
+                        eq("test_baz"));
+    }
+
+    @Test
+    public void testRun_withSharding() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-par-file-name", mMoblyBinary2.getName());
+        Mockito.doReturn(mMoblyTestDir)
+                .when(mTestInfo)
+                .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        int shardCountHint = 2;
+        Collection<IRemoteTest> shards = mSpyTest.split(shardCountHint, mTestInfo);
+        assertTrue(shards.size() == shardCountHint);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout(
+                                    "test_foo\n"
+                                            + "test_bar\n"
+                                            + "test_cafe\n"
+                                            + "test_baguette\n");
+                            return res;
+                        });
+
+        for (IRemoteTest shard : shards) {
+            ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+            MoblyBinaryHostTest test = Mockito.spy((MoblyBinaryHostTest) shard);
+            Mockito.doReturn(mMockRunUtil).when(test).getRunUtil();
+            test.run(mTestInfo, mockListener);
+            verify(mockListener, times(1)).testRunStarted(anyString(), eq(2));
+        }
+    }
+
+    @Test
+    public void testRun_oneTest_twoShards() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+        OptionSetter setter = new OptionSetter(mSpyTest);
+        setter.setOptionValue("mobly-par-file-name", mMoblyBinary2.getName());
+        Mockito.doReturn(mMoblyTestDir)
+                .when(mTestInfo)
+                .getDependencyFile(eq(mMoblyBinary2.getName()), eq(false));
+        File testResult = new File(mSpyTest.getLogDirAbsolutePath(), TEST_RESULT_FILE_NAME);
+        int shardCountHint = 2;
+        Collection<IRemoteTest> shards = mSpyTest.split(shardCountHint, mTestInfo);
+        assertTrue(shards.size() == shardCountHint);
+        Mockito.when(mMockRunUtil.runTimedCmd(anyLong(), any()))
+                .thenAnswer(
+                        invocation -> {
+                            CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                            res.setStdout("test_baguette\n");
+                            return res;
+                        });
+
+        int shardIndex = 0;
+        for (IRemoteTest shard : shards) {
+            ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+            MoblyBinaryHostTest test = Mockito.spy((MoblyBinaryHostTest) shard);
+            Mockito.doReturn(mMockRunUtil).when(test).getRunUtil();
+
+            test.run(mTestInfo, mockListener);
+
+            if (shardIndex == 0) {
+                verify(mockListener, times(1)).testRunStarted(anyString(), eq(1));
+            } else {
+                verify(mockListener, never()).testRunStarted(anyString(), eq(1));
+            }
+            shardIndex++;
+        }
+    }
+
+    @Test
+    public void testFilterTests_withInvalidIncludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        Set<String> invalidIncludeFilters =
+                Set.of(
+                        "FooTest#test_bar_1",
+                        "BarTest#test_foo_1",
+                        "BazTest#test_baz_1",
+                        "BazTest#",
+                        "BazTest",
+                        "#test_baz_1",
+                        "test_baz_1",
+                        "#test_baz",
+                        "test_baz",
+                        "foo",
+                        "foo_test",
+                        "bar",
+                        "bar_test",
+                        "baz",
+                        "baz_test",
+                        "@#!",
+                        "",
+                        "#",
+                        ".");
+
+        Set<String> validIncludeFilters =
+                Set.of(
+                        "FooTest#test_foo_1",
+                        "FooTest#test_foo_2",
+                        "BarTest#test_bar_1",
+                        "BarTest#test_bar_2",
+                        "FooTest#",
+                        "FooTest",
+                        "BarTest#",
+                        "BarTest",
+                        "#test_foo",
+                        "test_foo",
+                        "#test_bar",
+                        "test_bar",
+                        "#test_",
+                        "test_");
+
+        mSpyTest.addAllIncludeFilters(invalidIncludeFilters);
+        mSpyTest.addAllIncludeFilters(validIncludeFilters);
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.filterTests(
+                new String[] {
+                    "invalid line",
+                    "==========> FooTest <==========",
+                    "FooTest.test_foo_1",
+                    "test_foo_2",
+                    "==========> BarTest <==========",
+                    "BarTest.test_bar_1",
+                    "test_bar_2",
+                },
+                BINARY_PATH,
+                mockListener);
+
+        String invalidIncludeFiltersString =
+                invalidIncludeFilters.stream().collect(Collectors.joining(", "));
+
+        FailureDescription failureDescription =
+                FailureDescription.create(
+                        "Invalid include filters: [" + invalidIncludeFiltersString + "]",
+                        TestRecordProto.FailureStatus.TEST_FAILURE);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+        verify(mockListener, times(1)).testRunFailed(eq(failureDescription));
+        verify(mockListener, times(1)).testRunEnded(eq(0L), eq(new HashMap<String, Metric>()));
+    }
+
+    @Test
+    public void testFilterTests_withInvalidExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        Set<String> invalidExcludeFilters =
+                Set.of(
+                        "FooTest#test_bar_1",
+                        "BarTest#test_foo_1",
+                        "BazTest#test_baz_1",
+                        "BazTest#",
+                        "BazTest",
+                        "#test_foo",
+                        "test_foo",
+                        "#test_bar",
+                        "test_bar",
+                        "#test_",
+                        "test_",
+                        "#test_baz_1",
+                        "test_baz_1",
+                        "#test_baz",
+                        "test_baz",
+                        "foo",
+                        "foo_test",
+                        "bar",
+                        "bar_test",
+                        "baz",
+                        "baz_test",
+                        "@#!",
+                        "",
+                        "#",
+                        ".");
+
+        Set<String> validExcludeFilters =
+                Set.of(
+                        "FooTest#test_foo_1",
+                        "FooTest#test_foo_2",
+                        "BarTest#test_bar_1",
+                        "BarTest#test_bar_2",
+                        "FooTest#",
+                        "FooTest",
+                        "BarTest#",
+                        "BarTest");
+
+        mSpyTest.addAllExcludeFilters(invalidExcludeFilters);
+        mSpyTest.addAllExcludeFilters(validExcludeFilters);
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        mSpyTest.filterTests(
+                new String[] {
+                    "invalid line",
+                    "==========> FooTest <==========",
+                    "FooTest.test_foo_1",
+                    "test_foo_2",
+                    "==========> BarTest <==========",
+                    "BarTest.test_bar_1",
+                    "test_bar_2",
+                },
+                BINARY_PATH,
+                mockListener);
+
+        String invalidExcludeFiltersString =
+                invalidExcludeFilters.stream().collect(Collectors.joining(", "));
+
+        FailureDescription failureDescription =
+                FailureDescription.create(
+                        "Invalid exclude filters: [" + invalidExcludeFiltersString + "]",
+                        TestRecordProto.FailureStatus.TEST_FAILURE);
+
+        verify(mockListener, times(1)).testRunStarted(anyString(), eq(0));
+        verify(mockListener, times(1)).testRunFailed(eq(failureDescription));
+        verify(mockListener, times(1)).testRunEnded(eq(0L), eq(new HashMap<String, Metric>()));
+    }
+
+    @Test
+    public void testFilterTests_withIncludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        mSpyTest.addAllIncludeFilters(
+                Set.of("test_foo", "BarTest#test_bar_1", "BarTest#test_bar_3"));
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        List<String> includedTests =
+                mSpyTest.filterTests(
+                                new String[] {
+                                    "invalid line",
+                                    "==========> FooTest <==========",
+                                    "FooTest.test_foo_1",
+                                    "test_foo_2",
+                                    "==========> BarTest <==========",
+                                    "BarTest.test_bar_1",
+                                    "test_bar_2",
+                                    "test_bar_3",
+                                },
+                                BINARY_PATH,
+                                mockListener)
+                        .get()
+                        .second;
+
+        Truth.assertThat(includedTests)
+                .isEqualTo(
+                        List.of(
+                                "FooTest.test_foo_1",
+                                "test_foo_2",
+                                "BarTest.test_bar_1",
+                                "test_bar_3"));
+    }
+
+    @Test
+    public void testFilterTests_withExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        mSpyTest.addAllExcludeFilters(
+                Set.of("FooTest", "BarTest#test_bar_1", "BarTest#test_bar_3"));
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        List<String> includedTests =
+                mSpyTest.filterTests(
+                                new String[] {
+                                    "invalid line",
+                                    "==========> FooTest <==========",
+                                    "FooTest.test_foo_1",
+                                    "test_foo_2",
+                                    "==========> BarTest <==========",
+                                    "BarTest.test_bar_1",
+                                    "test_bar_2",
+                                    "test_bar_3",
+                                },
+                                BINARY_PATH,
+                                mockListener)
+                        .get()
+                        .second;
+
+        Truth.assertThat(includedTests).isEqualTo(List.of("test_bar_2"));
+    }
+
+    @Test
+    public void testFilterTests_withBothIncludeAndExcludeFilters() throws Exception {
+        Mockito.doNothing().when(mSpyTest).reportLogs(any(), any());
+
+        mSpyTest.addAllIncludeFilters(Set.of("BarTest"));
+        mSpyTest.addAllExcludeFilters(Set.of("test_bar_1", "BarTest#test_bar_3"));
+
+        ITestInvocationListener mockListener = Mockito.mock(ITestInvocationListener.class);
+
+        List<String> includedTests =
+                mSpyTest.filterTests(
+                                new String[] {
+                                    "invalid line",
+                                    "==========> FooTest <==========",
+                                    "FooTest.test_foo_1",
+                                    "test_foo_2",
+                                    "==========> BarTest <==========",
+                                    "BarTest.test_bar_1",
+                                    "test_bar_2",
+                                    "test_bar_3",
+                                },
+                                BINARY_PATH,
+                                mockListener)
+                        .get()
+                        .second;
+
+        Truth.assertThat(includedTests).isEqualTo(List.of("test_bar_2"));
     }
 
     @Test
@@ -388,13 +1396,12 @@ public class MoblyBinaryHostTestTest {
     }
 
     @Test
-    public void testBuildCommandLineArrayWithIncludeFilter() throws Exception {
+    public void testBuildCommandLineArrayWithTests() throws Exception {
         Mockito.doReturn(DEVICE_SERIAL).when(mMockDevice).getSerialNumber();
         Mockito.doReturn(LOG_PATH).when(mSpyTest).getLogDirAbsolutePath();
-        mIncludeFilters.addAll(
-            Arrays.asList("ExampleTest#test_print_addresses", "ExampleTest#test_le_connect"));
-        mSpyTest.addAllIncludeFilters(mIncludeFilters);
-        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, "path");
+        List<String> tests =
+                Arrays.asList("ExampleTest#test_print_addresses", "ExampleTest#test_le_connect");
+        String[] cmdArray = mSpyTest.buildCommandLineArray(BINARY_PATH, "path", tests);
         Truth.assertThat(cmdArray)
                 .isEqualTo(
                         new String[] {

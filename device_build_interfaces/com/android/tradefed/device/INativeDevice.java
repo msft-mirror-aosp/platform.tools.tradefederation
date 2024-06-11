@@ -23,11 +23,11 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.ITestDevice.MountPointInfo;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.connection.AbstractConnection;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.targetprep.TargetSetupError;
-import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ProcessInfo;
@@ -36,7 +36,6 @@ import com.android.tradefed.util.TimeUtil;
 import com.google.errorprone.annotations.MustBeClosed;
 
 import java.io.File;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Date;
@@ -746,6 +745,19 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Recursively pull directory contents from device.
+     *
+     * @param deviceFilePath the absolute file path of the remote source
+     * @param localDir the local directory to pull files into
+     * @param userId the user id to pull from
+     * @return <code>true</code> if file was pulled successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pullDir(String deviceFilePath, File localDir, int userId)
+            throws DeviceNotAvailableException;
+
+    /**
      * Push a file to device. By default using a content provider.
      *
      * @param localFile the local file to push
@@ -755,6 +767,19 @@ public interface INativeDevice {
      *     recovered.
      */
     public boolean pushFile(File localFile, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Push a file to device. By default using a content provider.
+     *
+     * @param localFile the local file to push
+     * @param deviceFilePath the remote destination absolute file path
+     * @param userId the userId to push to
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushFile(File localFile, String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
 
     /**
@@ -796,6 +821,19 @@ public interface INativeDevice {
      * recovered.
      */
     public boolean pushDir(File localDir, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Recursively push directory contents to device.
+     *
+     * @param localDir the local directory to push
+     * @param deviceFilePath the absolute file path of the remote destination
+     * @param userId the user id to push to
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushDir(File localDir, String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
 
     /**
@@ -852,6 +890,15 @@ public interface INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public void deleteFile(String deviceFilePath) throws DeviceNotAvailableException;
+
+    /**
+     * Helper method to delete a file or directory on the device.
+     *
+     * @param deviceFilePath The absolute path of the file on the device.
+     * @param userId The user id to delete from
+     * @throws DeviceNotAvailableException
+     */
+    public void deleteFile(String deviceFilePath, int userId) throws DeviceNotAvailableException;
 
     /**
      * Retrieve a reference to a remote file on device.
@@ -1230,6 +1277,16 @@ public interface INativeDevice {
     public boolean waitForDeviceAvailable() throws DeviceNotAvailableException;
 
     /**
+     * Waits for the device to be responsive and available without considering recovery path.
+     *
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     * @return True if device is available, False if unavailable.
+     */
+    public boolean waitForDeviceAvailableInRecoverPath(final long waitTime)
+            throws DeviceNotAvailableException;
+
+    /**
      * Blocks until device is visible via adb.
      * <p/>
      * Note the device may not necessarily be responsive to commands on completion. Use
@@ -1437,6 +1494,20 @@ public interface INativeDevice {
     public void remountVendorWritable() throws DeviceNotAvailableException;
 
     /**
+     * Make the system partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountSystemReadOnly() throws DeviceNotAvailableException;
+
+    /**
+     * Make the vendor partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountVendorReadOnly() throws DeviceNotAvailableException;
+
+    /**
      * Returns the key type used to sign the device image
      * <p>
      * Typically Android devices may be signed with test-keys (like in AOSP) or release-keys
@@ -1445,46 +1516,6 @@ public interface INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public String getBuildSigningKeys() throws DeviceNotAvailableException;
-
-    /**
-     * Retrieves a bugreport from the device.
-     * <p/>
-     * The implementation of this is guaranteed to continue to work on a device without an sdcard
-     * (or where the sdcard is not yet mounted).
-     *
-     * @return An {@link InputStreamSource} which will produce the bugreport contents on demand.  In
-     *         case of failure, the {@code InputStreamSource} will produce an empty
-     *         {@link InputStream}.
-     */
-    public InputStreamSource getBugreport();
-
-    /**
-     * Retrieves a bugreportz from the device. Zip format bugreport contains the main bugreport
-     * and other log files that are useful for debugging.
-     * <p/>
-     * Only supported for 'adb version' > 1.0.36
-     *
-     * @return a {@link InputStreamSource} of the zip file containing the bugreportz, return null
-     *         in case of failure.
-     */
-    public InputStreamSource getBugreportz();
-
-    /**
-     * Helper method to take a bugreport and log it to the reporters.
-     *
-     * @param dataName name under which the bugreport will be reported.
-     * @param listener an {@link ITestLogger} to log the bugreport.
-     * @return True if the logging was successful, false otherwise.
-     */
-    public boolean logBugreport(String dataName, ITestLogger listener);
-
-    /**
-     * Take a bugreport and returns it inside a {@link Bugreport} object to handle it. Return null
-     * in case of issue.
-     * </p>
-     * File referenced in the Bugreport object need to be cleaned via {@link Bugreport#close()}.
-     */
-    public Bugreport takeBugreport();
 
     /**
      * Collects and log ANRs from the device.
@@ -1665,5 +1696,28 @@ public interface INativeDevice {
      */
     public List<File> getTombstones() throws DeviceNotAvailableException;
 
+    /** Returns the connection associated with the device. */
+    public AbstractConnection getConnection();
 
+    /**
+     * Check if debugfs is mounted.
+     *
+     * @return {@code true} if debugfs is mounted
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isDebugfsMounted() throws DeviceNotAvailableException;
+
+    /**
+     * Mount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void mountDebugfs() throws DeviceNotAvailableException;
+
+    /**
+     * Unmount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void unmountDebugfs() throws DeviceNotAvailableException;
 }

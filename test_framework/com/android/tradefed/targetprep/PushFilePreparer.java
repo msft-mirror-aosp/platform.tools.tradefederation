@@ -123,10 +123,12 @@ public class PushFilePreparer extends BaseTargetPreparer
             "After pushing files, trigger a media scan of external storage on device.")
     private boolean mTriggerMediaScan = false;
 
-    @Option(name="cleanup", description = "Whether files pushed onto device should be cleaned up "
-            + "after test. Note that the preparer does not verify that files/directories have "
-            + "been deleted.")
-    private boolean mCleanup = false;
+    @Option(
+            name = "cleanup",
+            description =
+                    "Whether files pushed onto device should be cleaned up after test. Note that"
+                        + " the preparer does not verify that files/directories have been deleted.")
+    private boolean mCleanup = true;
 
     @Option(
             name = "remount-system",
@@ -161,15 +163,14 @@ public class PushFilePreparer extends BaseTargetPreparer
     }
 
     /** Create the list of files to be pushed. */
-    public final Map<String, File> getPushSpecs(DeviceDescriptor descriptor)
-            throws TargetSetupError {
+    public final Map<String, File> getPushSpecs(ITestDevice device) throws TargetSetupError {
         Map<String, File> remoteToLocalMapping = new LinkedHashMap<>();
         for (String pushspec : mPushSpecs) {
             String[] pair = pushspec.split("->");
             if (pair.length != 2) {
                 fail(
                         String.format("Invalid pushspec: '%s'", Arrays.asList(pair)),
-                        descriptor,
+                        device.getDeviceDescriptor(),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 continue;
             }
@@ -370,7 +371,7 @@ public class PushFilePreparer extends BaseTargetPreparer
                     "mv \"" + entry.getKey() + "\" \"" + entry.getValue() + "\"");
         }
 
-        Map<String, File> remoteToLocalMapping = getPushSpecs(device.getDeviceDescriptor());
+        Map<String, File> remoteToLocalMapping = getPushSpecs(device);
         for (String remotePath : remoteToLocalMapping.keySet()) {
             File local = remoteToLocalMapping.get(remotePath);
             CLog.d("Trying to push local '%s' to remote '%s'", local.getPath(), remotePath);
@@ -393,10 +394,10 @@ public class PushFilePreparer extends BaseTargetPreparer
         ITestDevice device = testInfo.getDevice();
         if (!(e instanceof DeviceNotAvailableException) && mCleanup && mFilesPushed != null) {
             if (mRemountSystem) {
-                device.remountSystemWritable();
+                device.remountSystemReadOnly();
             }
             if (mRemountVendor) {
-                device.remountVendorWritable();
+                device.remountVendorReadOnly();
             }
             for (String devicePath : mFilesPushed) {
                 device.deleteFile(devicePath);
@@ -489,5 +490,17 @@ public class PushFilePreparer extends BaseTargetPreparer
             CLog.e(e);
         }
         return deps;
+    }
+
+    public boolean shouldRemountSystem() {
+        return mRemountSystem;
+    }
+
+    public boolean shouldRemountVendor() {
+        return mRemountVendor;
+    }
+
+    public boolean isCleanUpEnabled() {
+        return mCleanup;
     }
 }

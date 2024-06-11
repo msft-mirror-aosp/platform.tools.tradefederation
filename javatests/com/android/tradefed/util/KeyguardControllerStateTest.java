@@ -51,5 +51,6 @@ public class KeyguardControllerStateTest {
         KeyguardControllerState state = KeyguardControllerState.create(testOutput);
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertFalse(state.isKeyguardGoingAway());
     }
 }
