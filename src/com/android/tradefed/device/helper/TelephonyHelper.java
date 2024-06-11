@@ -17,7 +17,6 @@ package com.android.tradefed.device.helper;
 
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -25,6 +24,7 @@ import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ResourceUtil;
@@ -121,7 +121,7 @@ public class TelephonyHelper {
                 return null;
             }
             SimCardInformation info = new SimCardInformation();
-            info.mHasTelephonySupport = !TestStatus.FAILURE.equals(testResult.getStatus());
+            info.mHasTelephonySupport = !TestStatus.FAILURE.equals(testResult.getResultStatus());
             info.mSimState = testResult.getMetrics().get(SIM_STATE_KEY);
             info.mCarrierPrivileges =
                     stringToBool(testResult.getMetrics().get(CARRIER_PRIVILEGES_KEY));

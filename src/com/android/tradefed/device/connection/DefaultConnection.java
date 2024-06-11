@@ -21,10 +21,13 @@ import com.android.tradefed.device.IConfigurableVirtualDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.device.NativeDevice;
+import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
+import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.log.ITestLogger;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 
@@ -44,34 +47,46 @@ public class DefaultConnection extends AbstractConnection {
     private final String mInitialSerial;
     private final ITestLogger mTestLogger;
 
+    private final boolean mTemporaryHolder;
+
     public static DefaultConnection createInopConnection(ConnectionBuilder builder) {
         return new DefaultConnection(builder);
     }
 
     /** Create the requested connection. */
     public static DefaultConnection createConnection(ConnectionBuilder builder) {
-        if (builder.device != null && builder.device instanceof RemoteAndroidVirtualDevice) {
-            ((NativeDevice) builder.device).setLogStartDelay(0);
-            ((NativeDevice) builder.device).setFastbootEnabled(false);
+        ITestDevice device = builder.device;
+        if (device == null) {
+            return new DefaultConnection(builder);
+        }
+
+        final InstanceType type = device.getOptions().getInstanceType();
+        CLog.d("Instance type for connection: %s", type);
+
+        final boolean isCuttlefish = type.equals(InstanceType.CUTTLEFISH)
+                || type.equals(InstanceType.REMOTE_NESTED_AVD);
+
+        if (device instanceof RemoteAndroidVirtualDevice) {
+            ((NativeDevice) device).setFastbootEnabled(isCuttlefish);
+            ((NativeDevice) device).setLogStartDelay(0);
             return new AdbSshConnection(builder);
         }
-        if (builder.device != null && builder.device instanceof RemoteAndroidDevice) {
+        if (device instanceof RemoteAndroidDevice) {
             return new AdbTcpConnection(builder);
         }
-        if (builder.device != null) {
-            InstanceType type = builder.device.getOptions().getInstanceType();
-            if (InstanceType.CUTTLEFISH.equals(type)
-                    || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
-                if (ManagedTestDeviceFactory.isTcpDeviceSerial(builder.device.getSerialNumber())) {
-                    // If the device is already started just go for TcpConnection
-                    return new AdbTcpConnection(builder);
-                } else {
-                    ((NativeDevice) builder.device).setLogStartDelay(0);
-                    ((NativeDevice) builder.device).setFastbootEnabled(false);
-                    return new AdbSshConnection(builder);
-                }
+
+        CLog.d("Instance type for connection: %s", type);
+        if (isCuttlefish) {
+            if (ManagedTestDeviceFactory.isTcpDeviceSerial(device.getSerialNumber())) {
+                // TODO: Add support for remote environment
+                // If the device is already started just go for TcpConnection
+                return new AdbTcpConnection(builder);
+            } else {
+                ((NativeDevice) device).setLogStartDelay(0);
+                return new AdbSshConnection(builder);
             }
         }
+
         return new DefaultConnection(builder);
     }
 
@@ -83,6 +98,7 @@ public class DefaultConnection extends AbstractConnection {
         MultiMap<String, String> attributes;
         IRunUtil runUtil;
         ITestLogger logger;
+        GceAvdInfo existingAvdInfo;
 
         public ConnectionBuilder(
                 IRunUtil runUtil, ITestDevice device, IBuildInfo buildInfo, ITestLogger logger) {
@@ -95,6 +111,11 @@ public class DefaultConnection extends AbstractConnection {
 
         public ConnectionBuilder addAttributes(MultiMap<String, String> attributes) {
             this.attributes.putAll(attributes);
+            return this;
+        }
+
+        public ConnectionBuilder setExistingAvdInfo(GceAvdInfo info) {
+            existingAvdInfo = info;
             return this;
         }
     }
@@ -116,6 +137,11 @@ public class DefaultConnection extends AbstractConnection {
             mInitialIpDevice = null;
             mInitialUser = null;
             mInitialDeviceNumOffset = null;
+        }
+        if (idevice instanceof NullDevice) {
+            mTemporaryHolder = ((NullDevice) idevice).isTemporary();
+        } else {
+            mTemporaryHolder = false;
         }
     }
 
@@ -161,5 +187,9 @@ public class DefaultConnection extends AbstractConnection {
     /** Returns the {@link ITestLogger} to log files. */
     public ITestLogger getLogger() {
         return mTestLogger;
+    }
+
+    public boolean wasTemporaryHolder() {
+        return mTemporaryHolder;
     }
 }

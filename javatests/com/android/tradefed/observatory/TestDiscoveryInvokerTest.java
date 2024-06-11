@@ -23,8 +23,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.command.ICommandOptions;
-import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.result.skipped.SkipManager;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -43,6 +43,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -70,6 +71,7 @@ public class TestDiscoveryInvokerTest {
         mConfiguration = Mockito.mock(IConfiguration.class);
         mCommandOptions = Mockito.mock(ICommandOptions.class);
         when(mConfiguration.getCommandOptions()).thenReturn(mCommandOptions);
+        when(mConfiguration.getSkipManager()).thenReturn(new SkipManager());
         when(mCommandOptions.getInvocationData()).thenReturn(new UniqueMultiMap<String, String>());
         mRootDir = FileUtil.createTempDir("test_suite_root");
         File mainDir = FileUtil.createNamedTempDir(mRootDir, "android-xts");
@@ -86,11 +88,22 @@ public class TestDiscoveryInvokerTest {
     /** Test the invocation when all necessary information are in the command line. */
     @Test
     public void testSuccessTestDependencyDiscovery() throws Exception {
+        File output = FileUtil.createTempFile("output-discovery", ".txt");
         mTestDiscoveryInvoker =
                 new TestDiscoveryInvoker(mConfiguration, mRootDir) {
                     @Override
                     IRunUtil getRunUtil() {
                         return mRunUtil;
+                    }
+
+                    @Override
+                    String getJava() {
+                        return "java";
+                    }
+
+                    @Override
+                    File createOutputFile() throws IOException {
+                        return output;
                     }
                 };
         String successStdout =
@@ -141,6 +154,7 @@ public class TestDiscoveryInvokerTest {
                                 res.setExitCode(0);
                                 res.setStatus(CommandStatus.SUCCESS);
                                 res.setStdout(successStdout);
+                                FileUtil.writeToFile(successStdout, output);
                                 return res;
                             }
                         })
@@ -189,8 +203,8 @@ public class TestDiscoveryInvokerTest {
         when(mConfiguration.getCommandLine()).thenReturn(commandLine);
         try {
             mTestDiscoveryInvoker.discoverTestDependencies();
-            fail("Should throw a ConfigurationException");
-        } catch (ConfigurationException expected) {
+            fail("Should throw a TestDiscoveryException");
+        } catch (TestDiscoveryException expected) {
             // Expected
         }
     }
@@ -201,11 +215,22 @@ public class TestDiscoveryInvokerTest {
      */
     @Test
     public void testTestDependencyDiscovery_NoConfigNameInArgs() throws Exception {
+        File output = FileUtil.createTempFile("output-discovery", ".txt");
         mTestDiscoveryInvoker =
                 new TestDiscoveryInvoker(mConfiguration, DEFAULT_TEST_CONFIG_NAME, mRootDir) {
                     @Override
                     IRunUtil getRunUtil() {
                         return mRunUtil;
+                    }
+
+                    @Override
+                    String getJava() {
+                        return "java";
+                    }
+
+                    @Override
+                    File createOutputFile() throws IOException {
+                        return output;
                     }
                 };
         String successStdout =
@@ -256,6 +281,7 @@ public class TestDiscoveryInvokerTest {
                                 res.setExitCode(0);
                                 res.setStatus(CommandStatus.SUCCESS);
                                 res.setStdout(successStdout);
+                                FileUtil.writeToFile(successStdout, output);
                                 return res;
                             }
                         })
@@ -280,11 +306,22 @@ public class TestDiscoveryInvokerTest {
      */
     @Test
     public void testTestMappingDependencyDiscovery() throws Exception {
+        File output = FileUtil.createTempFile("output-discovery", ".txt");
         mTestDiscoveryInvoker =
                 new TestDiscoveryInvoker(mConfiguration, DEFAULT_TEST_CONFIG_NAME, mRootDir) {
                     @Override
                     IRunUtil getRunUtil() {
                         return mRunUtil;
+                    }
+
+                    @Override
+                    String getJava() {
+                        return "java";
+                    }
+
+                    @Override
+                    File createOutputFile() throws IOException {
+                        return output;
                     }
                 };
         mTestDiscoveryInvoker.setTestDir(mRootDir);
@@ -314,6 +351,7 @@ public class TestDiscoveryInvokerTest {
                                 res.setExitCode(0);
                                 res.setStatus(CommandStatus.SUCCESS);
                                 res.setStdout(successStdout);
+                                FileUtil.writeToFile(successStdout, output);
                                 return res;
                             }
                         })

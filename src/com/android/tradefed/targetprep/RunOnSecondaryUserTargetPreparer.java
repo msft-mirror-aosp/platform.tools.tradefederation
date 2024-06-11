@@ -28,17 +28,21 @@ import com.android.tradefed.invoker.TestInformation;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * An {@link ITargetPreparer} that creates a secondary user in setup, and marks that tests should be
- * run in that user.
+ * An {@link ITargetPreparer} to ensure that the test runs as a secondary user. In addition, if
+ * the option {@link START_BACKGROUND_USER} is {@code true} and the current user is already
+ * a secondary user, it will ensure that there is a visble background secondary user run on a
+ * secondary display.
  *
- * <p>In teardown, the secondary user is removed.
- *
- * <p>If a secondary user already exists, it will be used rather than creating a new one, and it
- * will not be removed in teardown.
+ * <p>If the target secondary user doesn't exist, it will create a new one and remove it in
+ * teardown. Otherwise, it will be used rather than creating a new one, and it will not be removed
+ * in teardown.
  *
  * <p>If the device does not have capacity to create a new user when one is required, then the
  * instrumentation argument skip-tests-reason will be set, and the user will not be changed. Tests
@@ -51,6 +55,8 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
 
     @VisibleForTesting static final String SKIP_TESTS_REASON_KEY = "skip-tests-reason";
 
+    @VisibleForTesting static final String START_BACKGROUND_USER = "start-background-user";
+
     private int userIdToDelete = -1;
     private int originalUserId;
 
@@ -62,10 +68,26 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
             importance = Option.Importance.IF_UNSET)
     private List<String> mTestPackages = new ArrayList<>();
 
+    @Option(
+            name = START_BACKGROUND_USER,
+            description =
+                    "If true and the current user is a secondary user, it will create a "
+                            + "background secondary user (if such user doesn't exist) and "
+                            + "start the background user on secondary display")
+    private boolean mStartBackgroundUser;
+
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
-        int secondaryUserId = getSecondaryUserId(testInfo.getDevice());
+        removeNonForTestingUsers(testInfo.getDevice());
+
+        originalUserId = testInfo.getDevice().getCurrentUser();
+        // This must be a for-testing user because we removed the not-for-testing ones
+        int secondaryUserId = getTargetSecondaryUserId(testInfo.getDevice());
+
+        if (secondaryUserId == originalUserId) {
+            return;
+        }
 
         if (secondaryUserId == -1) {
             if (!assumeTrue(
@@ -80,29 +102,49 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
         }
 
         // The wait flag is only supported on Android 29+
-        testInfo.getDevice()
-                .startUser(
-                        secondaryUserId, /* waitFlag= */ testInfo.getDevice().getApiLevel() >= 29);
+        boolean waitFlag = testInfo.getDevice().getApiLevel() >= 29;
+        if (!testInfo.getDevice().isUserSecondary(originalUserId)) {
 
-        originalUserId = testInfo.getDevice().getCurrentUser();
-
-        if (originalUserId != secondaryUserId) {
+            testInfo.getDevice().startUser(secondaryUserId, waitFlag);
             testInfo.getDevice().switchUser(secondaryUserId);
+            testInfo.properties().put(RUN_TESTS_AS_USER_KEY, Integer.toString(secondaryUserId));
+        } else {
+            Set<Integer> secondaryDisplayIdSet =
+                    testInfo.getDevice().listDisplayIdsForStartingVisibleBackgroundUsers();
+            if (!assumeTrue(
+                    !secondaryDisplayIdSet.isEmpty(),
+                    "This device has no secondary display",
+                    testInfo)) {
+                return;
+            }
+            int secondaryDisplayId = secondaryDisplayIdSet.stream().findFirst().get();
+            testInfo.getDevice()
+                    .startVisibleBackgroundUser(secondaryUserId, secondaryDisplayId, waitFlag);
         }
-
         for (String pkg : mTestPackages) {
             testInfo.getDevice()
                     .executeShellCommand(
                             "pm install-existing --user " + secondaryUserId + " " + pkg);
         }
 
-        testInfo.properties().put(RUN_TESTS_AS_USER_KEY, Integer.toString(secondaryUserId));
+        testInfo.getDevice().executeShellCommand("pm list packages --user all -U");
     }
 
-    /** Get the id of a secondary user currently on the device. -1 if there is none */
-    private static int getSecondaryUserId(ITestDevice device) throws DeviceNotAvailableException {
+    /** Get the id of a target secondary user currently on the device. -1 if there is none. */
+    private int getTargetSecondaryUserId(ITestDevice device) throws DeviceNotAvailableException {
         for (Map.Entry<Integer, UserInfo> userInfo : device.getUserInfos().entrySet()) {
-            if (userInfo.getValue().isSecondary()) {
+            if (!userInfo.getValue().isSecondary()) {
+                continue;
+            }
+            // If mStartBackgroundUser is true and the current user is a secondary user,
+            // we need the target secondary user to be a non-current user (For example, on AAOS
+            // the current user is user 10, if mStartBackgroundUser is true, we need to create user
+            // 11). Otherwise, any secondary user is fine.
+            if (mStartBackgroundUser && device.isUserSecondary(originalUserId)) {
+                if (userInfo.getValue().userId() != originalUserId) {
+                    return userInfo.getKey();
+                }
+            } else {
                 return userInfo.getKey();
             }
         }
@@ -124,12 +166,15 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
         }
 
         testInfo.properties().remove(RUN_TESTS_AS_USER_KEY);
-        int currentUser = testInfo.getDevice().getCurrentUser();
+
+        ITestDevice device = testInfo.getDevice();
+        int currentUser = device.getCurrentUser();
+
         if (currentUser != originalUserId) {
-            testInfo.getDevice().switchUser(originalUserId);
+            device.switchUser(originalUserId);
         }
         if (userIdToDelete != -1) {
-            testInfo.getDevice().removeUser(userIdToDelete);
+            device.removeUser(userIdToDelete);
         }
     }
 
@@ -144,6 +189,50 @@ public class RunOnSecondaryUserTargetPreparer extends BaseTargetPreparer {
         }
 
         return value;
+    }
+
+    /**
+     * Remove all non for-testing users.
+     *
+     * <p>For a headless device, if {@code mStartBackgroundUser} is true, it would remove every non
+     * for-testing user except the first two secondary users and the system user; otherwise, it
+     * would remove every non for-testing user except the first secondary user and the system user.
+     *
+     * <p>For a non-headless device, it would remove every non for-testing user except the system
+     * user.
+     *
+     * <p>A communal profile is never removed.
+     */
+    private void removeNonForTestingUsers(ITestDevice device) throws DeviceNotAvailableException {
+        Map<Integer, UserInfo> userInfoMap = device.getUserInfos();
+
+        List<UserInfo> userInfos = new ArrayList<>(userInfoMap.values());
+        Collections.sort(userInfos, Comparator.comparing(UserInfo::userId));
+
+        int maxSkippedUsers =
+                device.isHeadlessSystemUserMode() ? (mStartBackgroundUser ? 2 : 1) : 0;
+        int skippedUsers = 0;
+
+        for (UserInfo userInfo : userInfos) {
+            if (isForTesting(userInfo)) {
+                continue;
+            }
+
+            if (skippedUsers < maxSkippedUsers) {
+                skippedUsers++;
+                continue;
+            }
+
+            device.removeUser(userInfo.userId());
+        }
+    }
+
+    private static boolean isForTesting(UserInfo userInfo) {
+        return userInfo.isSystem()
+                || userInfo.isFlagForTesting()
+                // Communal profile doesn't align with DPM implementation - it's only acceptable
+                // here for now because no test with communal profile also uses enterprise
+                || userInfo.isCommunalProfile();
     }
 
     /** Checks whether it is possible to create the desired number of users. */

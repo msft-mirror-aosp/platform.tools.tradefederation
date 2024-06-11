@@ -20,6 +20,7 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
 import com.android.tradefed.error.HarnessRuntimeException;
@@ -32,9 +33,11 @@ import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.BundletoolUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 
 import java.io.File;
@@ -77,10 +80,16 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     protected static final String PARENT_SESSION_CREATION_CMD = "pm install-create --multi-package";
     protected static final String CHILD_SESSION_CREATION_CMD = "pm install-create";
     protected static final String APEX_OPTION = "--apex";
+    protected static final String APK_ZIP_OPTION = "--apks-zip";
     // The dump logic in {@link com.android.server.pm.ComputerEngine#generateApexPackageInfo} is
     // invalid.
     private static final ImmutableList<String> PACKAGES_WITH_INVALID_DUMP_INFO =
             ImmutableList.of("com.google.mainline.primary.libs");
+    private static final String STAGED_READY_TIMEOUT_OPTION = "--staged-ready-timeout";
+    private static final String TIMEOUT_MILLIS_OPTION = "--timeout-millis=";
+    private static final Pattern ROLLBACK_STATE_PATTERN = Pattern.compile("-state\\:\\s\\w+[\n\r]");
+    public static final String ROLLBACK_STATE_COMMITTED = "committed";
+    public static final String ROLLBACK_STATE_UNKNOWN = "unknown";
 
     private List<ApexInfo> mTestApexInfoList = new ArrayList<>();
     private List<String> mApexModulesToUninstall = new ArrayList<>();
@@ -89,9 +98,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private Set<String> mApkToInstall = new LinkedHashSet<>();
     private List<String> mApkInstalled = new ArrayList<>();
     private List<String> mSplitsInstallArgs = new ArrayList<>();
+    private List<File> mSplitsDir = new ArrayList<>();
     private BundletoolUtil mBundletoolUtil;
     private String mDeviceSpecFilePath = "";
     private boolean mOptimizeMainlineTest = false;
+    private String mParentSessionId = "";
 
     @Option(name = "bundletool-file-name", description = "The file name of the bundletool jar.")
     private String mBundletoolFilename;
@@ -132,9 +143,33 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     private boolean mSkipApexTearDown = false;
 
     @Option(
+            name = "module-teardown",
+            description = "Option for uninstalling mainline modules after running the tests.")
+    private boolean mModuleTearDown = false;
+
+    @Option(
+            name = "detect-module-rollback",
+            description =
+                    "Option for checking if installed mainline modules rollbacked during testing.")
+    private boolean mDetectModuleRollback = false;
+
+    @Option(
             name = "enable-rollback",
             description = "Add the '--enable-rollback' flag when installing modules.")
     private boolean mEnableRollback = true;
+
+    @Option(
+            name = "apks-zip-file-name",
+            description = "Install modules from apk zip file. Accepts a single file.")
+    private String mApksZipFileName = null;
+
+    @Option(
+            name = "staged-ready-timeout-ms",
+            description =
+                    "Time option in millis to wait for session stage. It will be passed to"
+                            + " --staged-ready-timeout for adb install-multi-package and"
+                            + " --timeout-millis for bundletool install-apks.")
+    private long mStagedReadyTimeoutMs = 0;
 
     @Override
     public void setUp(TestInformation testInfo)
@@ -147,7 +182,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         }
 
         List<File> moduleFileNames = getTestsFileName();
-        if (moduleFileNames.isEmpty()) {
+        if (moduleFileNames.isEmpty() && Strings.isNullOrEmpty(mApksZipFileName)) {
             CLog.i("No apk/apex module file to install. Skipping.");
             return;
         }
@@ -156,8 +191,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             // Cleanup the device if skip-apex-teardown isn't set. It will always run with the
             // target preparer.
             cleanUpStagedAndActiveSession(device);
-        }
-        else {
+        } else {
             mOptimizeMainlineTest = true;
         }
 
@@ -166,6 +200,14 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         CLog.i("Activated apex packages list before module/train installation:");
         for (ApexInfo info : activatedApexes) {
             CLog.i("Activated apex: %s", info.toString());
+        }
+
+        if (!Strings.isNullOrEmpty(mApksZipFileName)) {
+            CLog.i("Installing modules using apks zip %s", mApksZipFileName);
+            installModulesFromZipUsingBundletool(testInfo, mApksZipFileName);
+            activateStagedInstall(device);
+            CLog.i("Required modules are installed from zip");
+            return;
         }
 
         List<File> testAppFiles = getModulesToInstall(testInfo);
@@ -322,7 +364,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         Set<String> unInstallModules = new HashSet<>(modulesInData);
         List<File> filesToSkipInstall = new ArrayList<>();
         for (File testFile : testFiles) {
-            String packageName = parsePackageName(testFile, device.getDeviceDescriptor());
+            String packageName = parsePackageName(testFile);
             for (String moduleInData : modulesInData) {
                 if (moduleInData.equals(packageName)) {
                     unInstallModules.remove(moduleInData);
@@ -394,59 +436,122 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         return apkModuleInData;
     }
 
-    @Override
-    public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
-        if (mOptimizeMainlineTest) {
-            if (!mApkInstalled.isEmpty() && mMainlineModuleInfos.isEmpty()) {
-                CLog.d("Proceeding tearDown as no MODULE METADATA existing on the device.");
-            }
-            else {
-                CLog.d("Skipping tearDown as the installed modules may be used for the next test.");
-                return;
+    /**
+     * Rollback/Uninstall any module installed during the invocation setup.
+     *
+     * @param device under test.
+     * @throws DeviceNotAvailableException when device is not available.
+     * @throws HarnessRuntimeException when this method fails to rollback module
+     */
+    private void moduleTearDown(ITestDevice device)
+            throws DeviceNotAvailableException, HarnessRuntimeException {
+        // Uninstall any installed APKs
+        if (!getApkInstalled().isEmpty()) {
+            CLog.i("Performing a rollback for mainline modules to previous versions");
+            for (String apkPkgName : getApkInstalled()) {
+                uninstallPackage(device, apkPkgName);
             }
         }
+
+        // Uninstall any installed APEXes
+        if (!mTestApexInfoList.isEmpty()) {
+            CLog.i("Performing a rollback for installed modules");
+            // Select the first module to rollback. Performing a rollback on one
+            // of the module will rollback all other modules as well.
+            ApexInfo apex = mTestApexInfoList.get(0);
+            String output =
+                    device.executeShellCommand(String.format("pm rollback-app %s", apex.name));
+            if (!output.contains("Success")) {
+                throw new HarnessRuntimeException(
+                        String.format("Failed to rollback %s, Output: %s", apex.name, output),
+                        DeviceErrorIdentifier.APEX_ROLLBACK_FAILED);
+            }
+            CLog.i("Waiting for rollback to complete.");
+            RunUtil.getDefault().sleep(mApexRollbackWaitTime);
+            CLog.i("Cleaning up staged and active session information from data/.");
+            cleanUpStagedAndActiveSession(device);
+        }
+    }
+
+    /**
+     * Check if there was a rollback for installed modules
+     *
+     * @param sessionId Parent session ID where the modules were installed.
+     * @param device under test.
+     * @throws DeviceNotAvailableException when device is not available.
+     * @throws HarnessRuntimeException when this method fails to rollback module
+     */
+    private void detectModuleRollback(String sessionId, ITestDevice device)
+            throws DeviceNotAvailableException, HarnessRuntimeException {
+        String rollbackState = ROLLBACK_STATE_UNKNOWN;
+        String rollbacks = device.executeShellCommand("dumpsys rollback");
+        // On Android R, the SessionId line is on the third line of the dumpsys rollback output,
+        // while on Android S/T it is on the fourth line.
+        // On Android R/S, "stagedSessionId" identifier is used in the dumpsys rollback output. On
+        // Android T, "originalSessionId" identifier is used. Both identifiers will need to be
+        // supported in pattern matching.
+        Pattern rollbackPattern =
+                Pattern.compile(
+                        "(.*[\\r\\n]+){3,4}.*-(staged|original)SessionId\\:\\s" + sessionId);
+        Matcher rollbackMatcher = rollbackPattern.matcher(rollbacks);
+        if (rollbackMatcher.find()) {
+            Matcher stateMatcher = ROLLBACK_STATE_PATTERN.matcher(rollbackMatcher.group());
+            if (stateMatcher.find()) {
+                String rawState = stateMatcher.group().replace("\n", "").replace("\r", "");
+                rollbackState = rawState.substring(rawState.indexOf(":") + 1).trim();
+            }
+        }
+
+        CLog.i("For session: %s the rollback state was: %s", sessionId, rollbackState);
+        if (rollbackState.equals(ROLLBACK_STATE_COMMITTED)) {
+            // Show Mainline rollback detection as a warning for now.
+            CLog.w(
+                    new HarnessRuntimeException(
+                            "Test results are invalid, detected a rollback on mainline",
+                            DeviceErrorIdentifier.MAINLINE_MODULE_ROLLBACK_DETECTED));
+        }
+    }
+
+    @Override
+    public void tearDown(TestInformation testInfo, Throwable e)
+            throws DeviceNotAvailableException, DeviceRuntimeException {
+        for (File dir : mSplitsDir) {
+            FileUtil.recursiveDelete(dir);
+        }
+        mSplitsDir.clear();
         ITestDevice device = testInfo.getDevice();
         if (e instanceof DeviceNotAvailableException) {
             CLog.e("Device %s is not available. Teardown() skipped.", device.getSerialNumber());
             return;
-        } else {
-            if (mTestApexInfoList.isEmpty() && getApkInstalled().isEmpty()) {
-                super.tearDown(testInfo, e);
-            } else {
-                if (mTestApexInfoList.isEmpty()) {
-                    for (String apkPkgName : getApkInstalled()) {
-                        uninstallPackage(device, apkPkgName);
-                    }
-                } else {
-                    for (ApexInfo apex : mTestApexInfoList) {
-                        String output =
-                                device.executeShellCommand(
-                                        String.format("pm rollback-app %s", apex.name));
-                        // Rolling back one newly installed module will rollback all other newly
-                        // installed modules.
-                        if (output.contains("Success")) {
-                            break;
-                        } else {
-                            throw new HarnessRuntimeException(
-                                    String.format(
-                                            "Failed to rollback %s, Output: %s", apex.name, output),
-                                    DeviceErrorIdentifier.APEX_ROLLBACK_FAILED);
-                        }
-                    }
-                    CLog.i("Wait for rollback fully done.");
-                    RunUtil.getDefault().sleep(mApexRollbackWaitTime);
-                    CLog.i("Device Rebooting");
-                    device.reboot();
-                    CLog.i("Reboot finished. Wait for rollback fully propagate.");
-                    RunUtil.getDefault().sleep(mApexRollbackWaitTime);
-                    device.waitForDeviceAvailable();
-                    // TODO(b/262626794): Remove after confirming with framework team about the
-                    // behavior of rollbaking mainline modules.
-                    CLog.i("Clean up staged and active session for mainline test mapping.");
-                    cleanUpStagedAndActiveSession(device);
-                }
-            }
         }
+        // Check if mainline modules were rolled-back before tearDown()
+        if (mDetectModuleRollback && !Strings.isNullOrEmpty(mParentSessionId)) {
+            detectModuleRollback(mParentSessionId, device);
+        }
+
+        // Check if mainline module should be removed during teardown
+        if (mModuleTearDown) {
+            moduleTearDown(device);
+        }
+    }
+
+    private File resolveFilePath(TestInformation testInfo, String path, String notFoundMessage)
+            throws TargetSetupError {
+        File resolvedFile;
+        File f = new File(path);
+
+        if (!f.isAbsolute()) {
+            resolvedFile = getLocalPathForFilename(testInfo, path);
+        } else {
+            resolvedFile = f;
+        }
+        if (resolvedFile == null) {
+            throw new TargetSetupError(
+                    String.format(notFoundMessage),
+                    testInfo.getDevice().getDeviceDescriptor(),
+                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+        }
+        return resolvedFile;
     }
 
     /**
@@ -460,21 +565,14 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             return;
         }
 
-        File bundletoolJar;
-        File f = new File(getBundletoolFileName());
-
-        if (!f.isAbsolute()) {
-            bundletoolJar = getLocalPathForFilename(testInfo, getBundletoolFileName());
-        } else {
-            bundletoolJar = f;
-        }
-        if (bundletoolJar == null) {
-            throw new TargetSetupError(
-                    String.format("Failed to find bundletool jar %s.", getBundletoolFileName()),
-                    testInfo.getDevice().getDeviceDescriptor(),
-                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-        }
-        mBundletoolUtil = new BundletoolUtil(bundletoolJar);
+        mBundletoolUtil =
+                new BundletoolUtil(
+                        resolveFilePath(
+                                testInfo,
+                                getBundletoolFileName(),
+                                String.format(
+                                        "Failed to find bundletool jar %s.",
+                                        getBundletoolFileName())));
     }
 
     /**
@@ -484,11 +582,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
      * @throws TargetSetupError if fails to generate the device spec file.
      */
     private void initDeviceSpecFilePath(ITestDevice device) throws TargetSetupError {
-        if (!mDeviceSpecFilePath.equals("")) {
+        if (!"".equals(mDeviceSpecFilePath)) {
             return;
         }
         try {
-            mDeviceSpecFilePath = getBundletoolUtil().generateDeviceSpecFile(device);
+            // Sets to be the initial value (which is "") if failed to generateDeviceSpecFile.
+            mDeviceSpecFilePath =
+                    Strings.nullToEmpty(getBundletoolUtil().generateDeviceSpecFile(device));
         } catch (IOException e) {
             throw new TargetSetupError(
                     String.format(
@@ -521,6 +621,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (splitsDir == null || splitsDir.listFiles() == null) {
             return null;
         }
+        mSplitsDir.add(splitsDir);
         return Arrays.asList(splitsDir.listFiles());
     }
 
@@ -562,9 +663,9 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                             moduleFileName, mDeviceSpecFilePath);
                     continue;
                 }
-                modulePackageName = parsePackageName(splits.get(0), device.getDeviceDescriptor());
+                modulePackageName = parsePackageName(splits.get(0));
             } else {
-                modulePackageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                modulePackageName = parsePackageName(moduleFile);
             }
             if (installedPackages.contains(modulePackageName)) {
                 CLog.i("Found preloaded module for %s.", modulePackageName);
@@ -640,10 +741,11 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             if (mEnableRollback) {
                 trainInstallCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
             }
+            addStagedReadyTimeoutForAdb(trainInstallCmd);
             for (File moduleFile : moduleFilenames) {
                 trainInstallCmd.add(moduleFile.getAbsolutePath());
                 if (moduleFile.getName().endsWith(APK_SUFFIX)) {
-                    String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                    String packageName = parsePackageName(moduleFile);
                     apkPackageNames.add(packageName);
                 }
             }
@@ -687,7 +789,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                         moduleFile.getName(), MODULE_PUSH_REMOTE_PATH + moduleFile.getName());
             }
             if (moduleFile.getName().endsWith(APK_SUFFIX)) {
-                String packageName = parsePackageName(moduleFile, device.getDeviceDescriptor());
+                String packageName = parsePackageName(moduleFile);
                 apkPackageNames.add(packageName);
             }
         }
@@ -700,7 +802,12 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         String parentSessionId;
         if (res.getStatus() == CommandStatus.SUCCESS) {
             parentSessionId = res.getStdout();
+            // Strip any non-numeric character from session ID
+            if (!Strings.isNullOrEmpty(parentSessionId)) {
+                parentSessionId = parentSessionId.trim();
+            }
             CLog.d("Parent session %s created successfully. ", parentSessionId);
+            mParentSessionId = parentSessionId;
         } else {
             throw new TargetSetupError(
                     String.format(
@@ -749,6 +856,10 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
             if (res.getStatus() == CommandStatus.SUCCESS) {
                 childSessionId = res.getStdout();
+                // Strip any non-numeric character from session ID
+                if (!Strings.isNullOrEmpty(childSessionId)) {
+                    childSessionId = childSessionId.trim();
+                }
                 CLog.d(
                         "Child session %s created successfully for %s. ",
                         childSessionId, moduleFile.getName());
@@ -759,12 +870,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                             moduleFile.getName(), res.getStderr(), res.getStdout()),
                         device.getDeviceDescriptor());
             }
-            res = device.executeShellV2Command(
+            res =
+                    device.executeShellV2Command(
                             String.format(
                                     "pm install-write -S %d %s %s %s",
                                     moduleFile.length(),
                                     childSessionId,
-                                    parsePackageName(moduleFile, device.getDeviceDescriptor()),
+                                    parsePackageName(moduleFile),
                                     MODULE_PUSH_REMOTE_PATH + moduleFile.getName()));
             if (res.getStatus() == CommandStatus.SUCCESS) {
                 CLog.d(
@@ -852,16 +964,49 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         // Install .apks that contain apex module.
         if (containsApex(splits)) {
             Map<File, String> appFilesAndPackages = new LinkedHashMap<>();
-            appFilesAndPackages.put(
-                    splits.get(0), parsePackageName(splits.get(0), device.getDeviceDescriptor()));
+            appFilesAndPackages.put(splits.get(0), parsePackageName(splits.get(0)));
             super.installer(testInfo, appFilesAndPackages);
             mTestApexInfoList = collectApexInfoFromApexModules(appFilesAndPackages, testInfo);
         } else {
             // Install .apks that contain apk module.
-            getBundletoolUtil().installApks(apks, device);
-            mApkToInstall.add(parsePackageName(splits.get(0), device.getDeviceDescriptor()));
+            List<String> extraArgs = new ArrayList<>();
+            addTimeoutMillisForBundletool(extraArgs);
+            getBundletoolUtil().installApks(apks, device, extraArgs);
+            mApkToInstall.add(parsePackageName(splits.get(0)));
         }
         return;
+    }
+
+    /**
+     * Attempts to install mainline modules contained in a zip file
+     *
+     * @param testInfo the {@link TestInformation}
+     * @param zipFileName the name of the zip file containing the train
+     */
+    private void installModulesFromZipUsingBundletool(TestInformation testInfo, String zipFilePath)
+            throws TargetSetupError, DeviceNotAvailableException {
+        initBundletoolUtil(testInfo);
+        initDeviceSpecFilePath(testInfo.getDevice());
+
+        File apksZipFile =
+                resolveFilePath(
+                        testInfo,
+                        zipFilePath,
+                        String.format("Failed to find apks zip file %s", mApksZipFileName));
+
+        ITestDevice device = testInfo.getDevice();
+
+        List<String> extraOptions = new ArrayList<>();
+        extraOptions.add("--update-only");
+
+        if (mEnableRollback) {
+            extraOptions.add(ENABLE_ROLLBACK_INSTALL_OPTION);
+        }
+        addTimeoutMillisForBundletool(extraOptions);
+
+        device.waitForDeviceAvailable();
+
+        getBundletoolUtil().installApksFromZip(apksZipFile, device, extraOptions);
     }
 
     /**
@@ -892,7 +1037,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                     ApexInfo apexInfo = retrieveApexInfo(moduleFile, device.getDeviceDescriptor());
                     mTestApexInfoList.add(apexInfo);
                 } else {
-                    mApkToInstall.add(parsePackageName(moduleFile, device.getDeviceDescriptor()));
+                    mApkToInstall.add(parsePackageName(moduleFile));
                 }
                 mSplitsInstallArgs.add(moduleFile.getAbsolutePath());
             }
@@ -904,6 +1049,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
         if (mEnableRollback) {
             installCmd.add(ENABLE_ROLLBACK_INSTALL_OPTION);
         }
+        addStagedReadyTimeoutForAdb(installCmd);
         for (String arg : mSplitsInstallArgs) {
             installCmd.add(arg);
         }
@@ -1022,6 +1168,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             }
         }
         if (reboot) {
+            CLog.i("Device Rebooting");
             device.reboot();
         }
     }
@@ -1042,7 +1189,7 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                 mTestApexInfoList.add(apexInfo);
             }
             if (f.getName().endsWith(APK_SUFFIX)) {
-                mApkToInstall.add(parsePackageName(f, device.getDeviceDescriptor()));
+                mApkToInstall.add(parsePackageName(f));
             }
             if (!splitsArgs.isEmpty()) {
                 splitsArgs += ":" + f.getAbsolutePath();
@@ -1142,5 +1289,20 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
     @VisibleForTesting
     public void setIgnoreIfNotPreloaded(boolean skip) {
         mIgnoreIfNotPreloaded = skip;
+    }
+
+    @VisibleForTesting
+    protected void addStagedReadyTimeoutForAdb(List<String> cmd) {
+        if (mStagedReadyTimeoutMs > 0) {
+            cmd.add(STAGED_READY_TIMEOUT_OPTION);
+            cmd.add(Long.toString(mStagedReadyTimeoutMs));
+        }
+    }
+
+    @VisibleForTesting
+    protected void addTimeoutMillisForBundletool(List<String> extraArgs) {
+        if (mStagedReadyTimeoutMs > 0) {
+            extraArgs.add(TIMEOUT_MILLIS_OPTION + mStagedReadyTimeoutMs);
+        }
     }
 }

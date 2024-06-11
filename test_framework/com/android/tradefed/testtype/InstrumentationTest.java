@@ -48,22 +48,30 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
+import com.android.tradefed.result.ddmlib.AndroidTestOrchestratorRemoteTestRunner;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
+import com.android.tradefed.targetprep.BuildError;
+import com.android.tradefed.targetprep.TargetSetupError;
+import com.android.tradefed.targetprep.TestAppInstallSetup;
 import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
 import com.android.tradefed.util.ListInstrumentationParser.InstrumentationTarget;
+import com.android.tradefed.util.ResourceUtil;
 import com.android.tradefed.util.StringEscapeUtils;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -87,6 +95,7 @@ public class InstrumentationTest
 
     /** max number of attempts to collect list of tests in package */
     private static final int COLLECT_TESTS_ATTEMPTS = 3;
+
     /** instrumentation test runner argument key used for test execution using a file */
     private static final String TEST_FILE_INST_ARGS_KEY = "testFile";
 
@@ -126,6 +135,19 @@ public class InstrumentationTest
                     "Only run tests within this specific java package. "
                             + "Will be ignored if --class is set.")
     private String mTestPackageName = null;
+
+    /**
+     * See <a *
+     * href="https://developer.android.com/training/testing/instrumented-tests/androidx-test-libraries/runner#use-android">AndroidX-Orchestrator
+     * * </a> documentation for more details on how AndroidX-Orchestrator works and the
+     * functionality which it provides.
+     */
+    @Option(
+            name = "orchestrator",
+            description =
+                    "Each test will be executed in its own individual process through"
+                            + " androidx-orchestrator.")
+    private boolean mOrchestrator = false;
 
     /**
      * @deprecated use shell-timeout or test-timeout option instead.
@@ -312,6 +334,18 @@ public class InstrumentationTest
                             + "instrument command. Only works for S or later.")
     private boolean mRestart = true;
 
+    @Option(
+            name = "instrument-sdk-sandbox",
+            description = "If set to true, the test will run exclusively in an SDK sandbox.")
+    protected boolean mInstrumentSdkSandbox = false;
+
+    @Option(
+            name = "instrument-sdk-in-sandbox",
+            description =
+                    "If set to true, will exclusively run the test as an SDK in an SDK sandbox with"
+                            + "an SDK context instead of the sandbox context.")
+    protected boolean mInstrumentSdkInSandbox = false;
+
     private IAbi mAbi = null;
 
     private Collection<String> mInstallArgs = new ArrayList<>();
@@ -319,6 +353,10 @@ public class InstrumentationTest
     private ITestDevice mDevice = null;
 
     private IRemoteAndroidTestRunner mRunner;
+
+    private TestAppInstallSetup mOrchestratorSetup;
+
+    private TestAppInstallSetup mTestServicesSetup;
 
     private Collection<TestDescription> mTestsToRun = null;
 
@@ -329,7 +367,7 @@ public class InstrumentationTest
     private ListInstrumentationParser mListInstrumentationParser = null;
     private GcovCodeCoverageCollector mNativeCoverageListener = null;
 
-    private List<String> mExtraDeviceListener = new ArrayList<>();
+    private Set<String> mExtraDeviceListener = new LinkedHashSet<>();
 
     private boolean mIsRerun = false;
 
@@ -585,32 +623,35 @@ public class InstrumentationTest
         return mForceAbi;
     }
 
+    /** Returns the value of {@link InstrumentationTest#mOrchestrator} */
+    public boolean isOrchestrator() {
+        return mOrchestrator;
+    }
+
+    /** Sets the --orchestrator option */
+    public void setOrchestrator(boolean useOrchestrator) {
+        mOrchestrator = useOrchestrator;
+    }
+
     /** Sets the --rerun-from-file option. */
     public void setReRunUsingTestFile(boolean reRunUsingTestFile) {
         mReRunUsingTestFile = reRunUsingTestFile;
     }
 
     /** Allows to add more custom listeners to the runner */
-    public void addDeviceListeners(List<String> extraListeners) {
+    public void addDeviceListeners(Set<String> extraListeners) {
         mExtraDeviceListener.addAll(extraListeners);
     }
 
-    /**
-     * @return the {@link IRemoteAndroidTestRunner} to use.
-     * @throws DeviceNotAvailableException
-     */
-    IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
-            String packageName, String runnerName, IDevice device, TestInformation testInformation)
+    private List<String> getRunOptions(TestInformation testInformation)
             throws DeviceNotAvailableException {
-        RemoteAndroidTestRunner runner =
-                new DefaultRemoteAndroidTestRunner(packageName, runnerName, device);
         String abiName = resolveAbiName();
-        String runOptions = "";
+        List<String> runOptions = new ArrayList<>();
         // hidden-api-checks flag only exists in P and after.
         // Using a temp variable to consolidate the dynamic checks
         int apiLevel = !mHiddenApiChecks || !mWindowAnimation ? getDevice().getApiLevel() : 0;
         if (!mHiddenApiChecks && apiLevel >= 28) {
-            runOptions += "--no-hidden-api-checks ";
+            runOptions.add("--no-hidden-api-checks");
         }
         // test-api-access flag only exists in R and after.
         // Test API checks are subset of hidden API checks, so only make sense if hidden API
@@ -618,38 +659,73 @@ public class InstrumentationTest
         if (mHiddenApiChecks
                 && !mTestApiAccess
                 && getDevice().checkApiLevelAgainstNextRelease(30)) {
-            runOptions += "--no-test-api-access ";
+            runOptions.add("--no-test-api-access");
         }
         // isolated-storage flag only exists in Q and after.
         if (!mIsolatedStorage && getDevice().checkApiLevelAgainstNextRelease(29)) {
-            runOptions += "--no-isolated-storage ";
+            runOptions.add("--no-isolated-storage");
         }
         // window-animation flag only exists in ICS and after
         if (!mWindowAnimation && apiLevel >= 14) {
-            runOptions += "--no-window-animation ";
+            runOptions.add("--no-window-animation");
         }
         if (!mRestart && getDevice().checkApiLevelAgainstNextRelease(31)) {
-            runOptions += "--no-restart ";
+            runOptions.add("--no-restart");
         }
-        if (getDevice().checkApiLevelAgainstNextRelease(33)
-                && Optional.ofNullable(testInformation)
-                        .map(TestInformation::properties)
-                        .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
-                        .map(value -> Boolean.TRUE.toString().equals(value))
-                        .orElse(false)) {
-            runOptions += "--instrument-sdk-in-sandbox ";
+        if (mInstrumentSdkInSandbox || testHasRunOnSdkSandboxProperty(testInformation)) {
+            runOptions.add("--instrument-sdk-in-sandbox");
+        }
+        if (mInstrumentSdkSandbox) {
+            runOptions.add("--instrument-sdk-sandbox");
         }
 
         if (abiName != null && getDevice().getApiLevel() > 20) {
             mInstallArgs.add(String.format("--abi %s", abiName));
-            runOptions += String.format("--abi %s", abiName);
+            runOptions.add(String.format("--abi %s", abiName));
         }
-        // Set the run options if any.
-        if (!runOptions.isEmpty()) {
-            runner.setRunOptions(runOptions);
-        }
+        return runOptions;
+    }
 
-        return runner;
+    private boolean testHasRunOnSdkSandboxProperty(TestInformation testInformation)
+            throws DeviceNotAvailableException {
+        return getDevice().checkApiLevelAgainstNextRelease(33)
+                && Optional.ofNullable(testInformation)
+                        .map(TestInformation::properties)
+                        .map(properties -> properties.get(RUN_TESTS_ON_SDK_SANDBOX))
+                        .map(value -> Boolean.TRUE.toString().equals(value))
+                        .orElse(false);
+    }
+
+    boolean isTestRunningOnSdkSandbox(TestInformation testInfo) throws DeviceNotAvailableException {
+        return mInstrumentSdkSandbox
+                || mInstrumentSdkInSandbox
+                || testHasRunOnSdkSandboxProperty(testInfo);
+    }
+
+    /**
+     * Configures the passed {@link RemoteAndroidTestRunner runner} with the run options that are
+     * fetched from {@link InstrumentationTest#getRunOptions(TestInformation)}
+     */
+    IRemoteAndroidTestRunner createRemoteAndroidTestRunner(
+            String packageName, String runnerName, IDevice device, TestInformation testInformation)
+            throws DeviceNotAvailableException {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope("createRemoteAndroidTestRunner")) {
+            RemoteAndroidTestRunner runner;
+            String runOptions =
+                    String.join(mOrchestrator ? "," : " ", getRunOptions(testInformation));
+            if (!mOrchestrator) {
+                runner = new DefaultRemoteAndroidTestRunner(packageName, runnerName, device);
+            } else {
+                runner =
+                        new AndroidTestOrchestratorRemoteTestRunner(
+                                packageName, runnerName, device);
+            }
+            if (!runOptions.isEmpty()) {
+                runner.setRunOptions(runOptions);
+            }
+            return runner;
+        }
     }
 
     private String resolveAbiName() throws DeviceNotAvailableException {
@@ -692,27 +768,57 @@ public class InstrumentationTest
      * @throws DeviceNotAvailableException
      */
     protected String queryRunnerName() throws DeviceNotAvailableException {
-        ListInstrumentationParser parser = getListInstrumentationParser();
-        getDevice().executeShellCommand("pm list instrumentation", parser);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("query_runner_name")) {
+            ListInstrumentationParser parser = getListInstrumentationParser();
+            getDevice().executeShellCommand("pm list instrumentation", parser);
 
-        Set<String> candidates = new LinkedHashSet<>();
-        for (InstrumentationTarget target : parser.getInstrumentationTargets()) {
-            if (mPackageName.equals(target.packageName)) {
-                candidates.add(target.runnerName);
+            Set<String> candidates = new LinkedHashSet<>();
+            for (InstrumentationTarget target : parser.getInstrumentationTargets()) {
+                if (mPackageName.equals(target.packageName)) {
+                    candidates.add(target.runnerName);
+                }
             }
+            if (candidates.isEmpty()) {
+                CLog.w("Unable to determine runner name for package: %s", mPackageName);
+                return null;
+            }
+            // Bias toward using one of the AJUR runner when available, otherwise use the first
+            // runner
+            // available.
+            Set<String> intersection =
+                    Sets.intersection(candidates, ListInstrumentationParser.SHARDABLE_RUNNERS);
+            if (intersection.isEmpty()) {
+                return candidates.iterator().next();
+            }
+            return intersection.iterator().next();
         }
-        if (candidates.isEmpty()) {
-            CLog.w("Unable to determine runner name for package: %s", mPackageName);
-            return null;
+    }
+
+    private TestAppInstallSetup installApk(String apkResourcePath, TestInformation testInfo)
+            throws DeviceNotAvailableException, IOException, BuildError, TargetSetupError {
+        File apkOnDisk = null;
+        try (CloseableTraceScope apkInstall =
+                new CloseableTraceScope(String.format("install_%s", apkResourcePath))) {
+            apkOnDisk = FileUtil.createTempFile(apkResourcePath, ".apk");
+            ResourceUtil.extractResourceToFile(String.format("/%s", apkResourcePath), apkOnDisk);
+            TestAppInstallSetup appInstaller = new TestAppInstallSetup();
+            appInstaller.setForceQueryable(true);
+            appInstaller.addTestFile(apkOnDisk);
+            appInstaller.setUp(testInfo);
+            CLog.i("Successfully installed %s", apkResourcePath);
+            return appInstaller;
+        } finally {
+            FileUtil.deleteFile(apkOnDisk);
         }
-        // Bias toward using one of the AJUR runner when available, otherwise use the first runner
-        // available.
-        Set<String> intersection =
-                Sets.intersection(candidates, ListInstrumentationParser.SHARDABLE_RUNNERS);
-        if (intersection.isEmpty()) {
-            return candidates.iterator().next();
+    }
+
+    private void installOrchestratorHelperApks(TestInformation testInfo) {
+        try {
+            mOrchestratorSetup = installApk("test-orchestrator-normalized.apk", testInfo);
+            mTestServicesSetup = installApk("test-services-normalized.apk", testInfo);
+        } catch (IOException | BuildError | TargetSetupError | DeviceNotAvailableException e) {
+            throw new IllegalStateException("Could not install test orchestrator", e);
         }
-        return intersection.iterator().next();
     }
 
     /** {@inheritDoc} */
@@ -747,6 +853,14 @@ public class InstrumentationTest
             }
             CLog.i("No runner name specified. Using: %s.", mRunnerName);
         }
+        if (mOrchestrator && mCollectTestsOnly) {
+            // Disable the orchestrator when running in dry-mode as the orchestrator does not
+            // support the dry-mode, which means we need to switch over to the default mode.
+            mOrchestrator = false;
+        }
+        if (mOrchestrator) {
+            installOrchestratorHelperApks(testInfo);
+        }
         mRunner =
                 createRemoteAndroidTestRunner(
                         mPackageName, mRunnerName, mDevice.getIDevice(), testInfo);
@@ -759,6 +873,10 @@ public class InstrumentationTest
         doTestRun(testInfo, listener);
         if (mInstallFile != null) {
             mDevice.uninstallPackage(mPackageName);
+        }
+        if (mOrchestrator) {
+            mOrchestratorSetup.tearDown(testInfo, null);
+            mTestServicesSetup.tearDown(testInfo, null);
         }
     }
 
@@ -841,7 +959,9 @@ public class InstrumentationTest
 
         // If the tests to run weren't provided explicitly, collect them.
         Collection<TestDescription> testsToRun = mTestsToRun;
-        if (testsToRun == null) {
+        // Don't collect tests when running in orchestrator mode as the orchestrator(proxy) will
+        // handle this step for us.
+        if (testsToRun == null && !mOrchestrator) {
             // Don't notify the listener since it's not a real run.
             testsToRun = collectTestsToRun(testInfo, mRunner, null);
         }
@@ -913,15 +1033,17 @@ public class InstrumentationTest
         }
         instrumentationListener.setReportUnexecutedTests(mReportUnexecuted);
 
-        if (testsToRun == null) {
-            // Failed to collect the tests or collection is off. Just try to run them all.
-            runInstrumentationTests(testInfo, mRunner, instrumentationListener);
-        } else if (!testsToRun.isEmpty()) {
-            runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
-        } else {
-            CLog.i("No tests expected for %s, skipping", mPackageName);
-            listener.testRunStarted(mPackageName, 0);
-            listener.testRunEnded(0, new HashMap<String, Metric>());
+        try (CloseableTraceScope instru = new CloseableTraceScope("run_instrumentation")) {
+            if (testsToRun == null) {
+                // Failed to collect the tests or collection is off. Just try to run them all.
+                runInstrumentationTests(testInfo, mRunner, instrumentationListener);
+            } else if (!testsToRun.isEmpty()) {
+                runWithRerun(testInfo, listener, instrumentationListener, testsToRun);
+            } else {
+                CLog.i("No tests expected for %s, skipping", mPackageName);
+                listener.testRunStarted(mPackageName, 0);
+                listener.testRunEnded(0, new HashMap<String, Metric>());
+            }
         }
     }
 
@@ -974,7 +1096,7 @@ public class InstrumentationTest
         }
     }
 
-    /** Filter out "NOT_EXECUTED" for the purpose of tracking what needs to be rerun. */
+    /** Filter out "NOT_EXECUTED" and Skipped for the purpose of tracking what needs to be rerun. */
     protected static Set<TestDescription> excludeNonExecuted(TestRunResult results) {
         Set<TestDescription> completedTest = results.getCompletedTests();
         for (Entry<TestDescription, TestResult> entry : results.getTestResults().entrySet()) {
@@ -983,6 +1105,10 @@ public class InstrumentationTest
                         entry.getValue().getFailure().getFailureStatus())) {
                     completedTest.remove(entry.getKey());
                 }
+            }
+            if (completedTest.contains(entry.getKey())
+                    && TestStatus.SKIPPED.equals(entry.getValue().getResultStatus())) {
+                completedTest.remove(entry.getKey());
             }
         }
         return completedTest;

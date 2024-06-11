@@ -18,6 +18,7 @@ package com.android.tradefed.testtype.suite;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -48,7 +49,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
-import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
@@ -57,11 +58,15 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.DataType;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric.Builder;
+import com.android.tradefed.postprocessor.BasePostProcessor;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.MultiFailureDescription;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -1725,7 +1730,7 @@ public class ITestSuiteTest {
     @Test
     public void testNoAbi() throws Exception {
         Mockito.reset(mMockDevice);
-        when(mMockDevice.getIDevice()).thenReturn(new TcpDevice("tcp-device-0"));
+        when(mMockDevice.getIDevice()).thenReturn(new RemoteAvdIDevice("gce-device-0"));
         when(mMockDevice.getProperty("ro.product.cpu.abilist")).thenReturn(null);
         when(mMockDevice.getProperty("ro.product.cpu.abi")).thenReturn(null);
         when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
@@ -1745,7 +1750,7 @@ public class ITestSuiteTest {
         OptionSetter setter = new OptionSetter(mTestSuite);
         setter.setOptionValue(ITestSuite.PRIMARY_ABI_RUN, "true");
         Mockito.reset(mMockDevice);
-        when(mMockDevice.getIDevice()).thenReturn(new TcpDevice("tcp-device-0"));
+        when(mMockDevice.getIDevice()).thenReturn(new RemoteAvdIDevice("gce-device-0"));
         when(mMockDevice.getProperty("ro.product.cpu.abi")).thenReturn(null);
         when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
 
@@ -1833,7 +1838,8 @@ public class ITestSuiteTest {
                         assertEquals(destDir, testsDir);
                         assertEquals(remoteFilePath, remoteFilePath);
                         assertArrayEquals(new String[] {"/test/"}, includeFilters.toArray());
-                        assertArrayEquals(new String[] {"[.]config$"}, excludeFilters.toArray());
+                        assertArrayEquals(
+                                new String[] {"[.]config$", "[.]jar$"}, excludeFilters.toArray());
                     }
                 };
         OptionSetter setter = new OptionSetter(mTestSuite);
@@ -1850,7 +1856,7 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        verify(mockBuildInfo, times(4)).getRemoteFiles();
+        verify(mockBuildInfo, times(3)).getRemoteFiles();
     }
 
     /** Test for {@link ITestSuite#reportNotExecuted(ITestInvocationListener, String)}. */
@@ -1927,5 +1933,72 @@ public class ITestSuiteTest {
         assertEquals(FailureStatus.NOT_EXECUTED, failures.get(0).getFailureStatus());
         assertTrue(failures.get(1).getErrorMessage().equals("Injected message"));
         assertEquals(FailureStatus.NOT_EXECUTED, failures.get(1).getFailureStatus());
+    }
+
+    public static class FakePostProcessor extends BasePostProcessor {
+        public static final String FAKE_KEY = "FAKE_KEY";
+
+        @Override
+        public Map<String, Builder> processRunMetricsAndLogs(
+                HashMap<String, Metric> rawMetrics, Map<String, LogFile> runLogs) {
+            Map<String, Builder> newMetrics = new HashMap<>();
+            newMetrics.put(
+                    FAKE_KEY,
+                    Metric.newBuilder()
+                            .setType(DataType.RAW)
+                            .setMeasurements(Measurements.newBuilder().setSingleString("")));
+            return newMetrics;
+        }
+    }
+
+    /** Test for module-level post-processor for perf module. */
+    @Test
+    public void testPostProcessorAddsMetricsForPerfModule() throws Exception {
+        mTestSuite =
+                new TestSuiteImpl() {
+                    @Override
+                    public LinkedHashMap<String, IConfiguration> loadTests() {
+                        LinkedHashMap<String, IConfiguration> testConfig = new LinkedHashMap<>();
+                        try {
+                            IConfiguration config =
+                                    ConfigurationFactory.getInstance()
+                                            .createConfigurationFromArgs(
+                                                    new String[] {EMPTY_CONFIG});
+                            config.setTest(new StubCollectingTest());
+                            config.getConfigurationDescription().setModuleName(TEST_CONFIG_NAME);
+                            testConfig.put(TEST_CONFIG_NAME, config);
+
+                            // Mark module as perf module.
+                            config.getConfigurationDescription()
+                                    .addMetadata(
+                                            ITestSuite.TEST_TYPE_KEY,
+                                            ITestSuite.TEST_TYPE_VALUE_PERFORMANCE);
+                            // Add module-level post processor for perf module.
+                            config.setPostProcessors(Arrays.asList(new FakePostProcessor()));
+                        } catch (ConfigurationException e) {
+                            CLog.e(e);
+                            throw new RuntimeException(e);
+                        }
+                        return testConfig;
+                    }
+                };
+        mTestSuite.setDevice(mMockDevice);
+        mTestSuite.setBuild(mMockBuildInfo);
+        mTestSuite.setInvocationContext(mContext);
+        mTestSuite.setConfiguration(mStubMainConfiguration);
+        List<ISystemStatusChecker> sysChecker = new ArrayList<ISystemStatusChecker>();
+        sysChecker.add(mMockSysChecker);
+        mTestSuite.setSystemStatusChecker(sysChecker);
+        when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+        when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice)))
+                .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
+
+        mTestSuite.run(mTestInfo, mMockListener);
+
+        // Verify the post processor has added metric.
+        ArgumentCaptor<HashMap<String, Metric>> captured = ArgumentCaptor.forClass(HashMap.class);
+        verify(mMockListener).testRunEnded(Mockito.anyLong(), captured.capture());
+        assertNotNull(captured.getValue().get(FakePostProcessor.FAKE_KEY));
     }
 }

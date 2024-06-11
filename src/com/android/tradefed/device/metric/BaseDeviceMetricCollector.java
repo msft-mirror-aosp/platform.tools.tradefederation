@@ -38,6 +38,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 
@@ -269,6 +270,11 @@ public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActio
     @Override
     public final void invocationFailed(FailureDescription failure) {
         mForwarder.invocationFailed(failure);
+    }
+
+    @Override
+    public void invocationSkipped(SkipReason reason) {
+        mForwarder.invocationSkipped(reason);
     }
 
     @Override
@@ -530,6 +536,11 @@ public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActio
             CLog.d("Skipping %s collection for %s.", this.getClass().getName(), test.toString());
         }
         mForwarder.testEnded(test, endTime, testMetrics);
+    }
+
+    @Override
+    public final void testSkipped(TestDescription test, SkipReason reason) {
+        mForwarder.testSkipped(test, reason);
     }
 
     @Override

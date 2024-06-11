@@ -82,7 +82,7 @@ public class BaseTestSuite extends ITestSuite {
                         + " documentation:"
                         + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
-    private Set<String> mIncludeFilters = new HashSet<>();
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = EXCLUDE_FILTER_OPTION,
@@ -91,7 +91,7 @@ public class BaseTestSuite extends ITestSuite {
                         + " documentation:"
                         + "https://source.android.com/docs/core/tests/tradefed/testing/through-suite/option-passing",
             importance = Importance.ALWAYS)
-    private Set<String> mExcludeFilters = new HashSet<>();
+    private Set<String> mExcludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = REVERSE_EXCLUDE_FILTERS,
@@ -239,7 +239,12 @@ public class BaseTestSuite extends ITestSuite {
     public LinkedHashMap<String, IConfiguration> loadTests() {
         try {
             File testsDir = getTestsDir();
-            mFoldableStates = getFoldableStates(getDevice());
+            try {
+                mFoldableStates = getFoldableStates(getDevice());
+            } catch (UnsupportedOperationException e) {
+                // Foldable state isn't always supported
+                CLog.e(e);
+            }
             setupFilters(testsDir);
             mAbis = getAbis(getDevice());
 
@@ -467,7 +472,7 @@ public class BaseTestSuite extends ITestSuite {
 
     /** Gets a copy of include-filters for the compatibility test */
     public Set<String> getIncludeFilter() {
-        return new HashSet<String>(mIncludeFilters);
+        return new LinkedHashSet<String>(mIncludeFilters);
     }
 
     public void clearIncludeFilter() {
@@ -498,6 +503,17 @@ public class BaseTestSuite extends ITestSuite {
                 mIncludeFilters, mIncludeFiltersParsed, mAbis, mFoldableStates);
         SuiteModuleLoader.addFilters(
                 mExcludeFilters, mExcludeFiltersParsed, mAbis, mFoldableStates);
+        if (getDirectModule() != null) {
+            // Remove all entries for unrelated modules
+            mExcludeFiltersParsed.keySet().removeIf(key -> !key.equals(getDirectModule().getId()));
+            // Also clean exclude filters left over
+            for (String filterString : new HashSet<>(mExcludeFilters)) {
+                SuiteTestFilter parentFilter = SuiteTestFilter.createFrom(filterString);
+                if (!parentFilter.getModuleId().equals(getDirectModule().getId())) {
+                    mExcludeFilters.remove(filterString);
+                }
+            }
+        }
     }
 
     /** Adds module args */
@@ -642,7 +658,7 @@ public class BaseTestSuite extends ITestSuite {
     }
 
     @Override
-    void cleanUpSuiteSetup() {
+    public void cleanUpSuiteSetup() {
         super.cleanUpSuiteSetup();
         // Clean the filters because at that point they have been applied to the runners.
         // This can save several GB of memories during sharding.
@@ -755,5 +771,13 @@ public class BaseTestSuite extends ITestSuite {
         }
         mFoldableStates = device.getFoldableStates();
         return mFoldableStates;
+    }
+
+    public String getRunSuiteTag() {
+        return mSuiteTag;
+    }
+
+    public boolean reverseExcludeFilters() {
+        return mReverseExcludeFilters;
     }
 }

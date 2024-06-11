@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
@@ -33,6 +34,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.IDeviceActionReceiver;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
@@ -141,27 +143,8 @@ public class GcovKernelCodeCoverageCollectorTest {
                 .when(mMockDevice)
                 .reboot();
 
-        // Mock various device `adb` calls embedded in collector methods.
-        //
+        doReturn(true).when(mMockDevice).isDebugfsMounted();
 
-        // isDebugfsMounted() happy path: fail, success, success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(mFailedResult) // Inside mountDebugfs() expects it not mounted
-                .thenReturn(mSuccessResult) // Inside collectGcovDebugfsCoverage()
-                .thenReturn(mSuccessResult); // Inside unmountDebugfs()
-
-        // mountDebugFs() happy path: success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.MOUNT_DEBUGFS_COMMAND))
-                .thenReturn(mSuccessResult);
-
-        // unmountDebugFs() happy path: success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.UNMOUNT_DEBUGFS_COMMAND))
-                .thenReturn(mSuccessResult);
-
-        // resetGcovCounts() happy path: success
         when(mMockDevice.executeShellV2Command(
                         GcovKernelCodeCoverageCollector.RESET_GCOV_COUNTS_COMMAND))
                 .thenReturn(mSuccessResult);
@@ -292,9 +275,7 @@ public class GcovKernelCodeCoverageCollectorTest {
         var moduleName = name.getMethodName();
 
         // Set mount command to fail
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.MOUNT_DEBUGFS_COMMAND))
-                .thenReturn(mFailedResult);
+        doThrow(DeviceRuntimeException.class).when(mMockDevice).mountDebugfs();
 
         configuredRun(List.of(moduleName), 1, false);
         assertThat(mFakeListener.getLogs()).hasSize(0);
@@ -375,28 +356,10 @@ public class GcovKernelCodeCoverageCollectorTest {
     public void debugfsMountGoneBeforeGather_noTar() throws Exception {
         var moduleName = name.getMethodName();
 
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(mFailedResult) // Inside mountDebugfs() expects it not mounted
-                .thenReturn(mFailedResult); // Inside collectGcovDebugfsCoverage()
+        doReturn(false).when(mMockDevice).isDebugfsMounted();
 
         configuredRun(List.of(moduleName), 1, false);
         assertThat(mFakeListener.getLogs()).hasSize(0);
-    }
-
-    @Test
-    public void debugfsMountAlreadyExists_justWarn() throws Exception {
-        var moduleName = name.getMethodName();
-
-        // All cases return success
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(mSuccessResult);
-
-        configuredRun(List.of(moduleName), 1, false);
-
-        assertThat(mFakeListener.getLogs()).hasSize(1);
-        assertThat(mFakeListener.getLogFilenames().get(0)).startsWith(moduleName);
     }
 
     @Test
@@ -442,29 +405,6 @@ public class GcovKernelCodeCoverageCollectorTest {
 
     private void clearModuleName() {
         mContextAttributes.remove(ModuleDefinition.MODULE_NAME);
-    }
-
-    private void failMountDebugfs() throws Exception {
-        CommandResult result = new CommandResult(CommandStatus.FAILED);
-        result.setExitCode(-1);
-        when(mMockDevice.executeShellV2Command(startsWith("mount -t debugfs debugfs")))
-                .thenReturn(result);
-    }
-
-    private void failDebugfsMountCheck() throws Exception {
-        CommandResult result = new CommandResult(CommandStatus.FAILED);
-        result.setExitCode(-1);
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(result);
-    }
-
-    private void passDebugfsMountCheck() throws Exception {
-        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
-        result.setExitCode(0);
-        when(mMockDevice.executeShellV2Command(
-                        GcovKernelCodeCoverageCollector.CHECK_DEBUGFS_MNT_COMMAND))
-                .thenReturn(result);
     }
 
     /** An {@link ITestInvocationListener} which reads test log data streams for verification. */

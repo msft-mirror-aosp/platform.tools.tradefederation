@@ -45,6 +45,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.KeyguardControllerState;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -61,6 +62,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.io.Reader;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -92,6 +94,12 @@ public class TestDevice extends NativeDevice {
     private static final int NUM_CLEAR_ATTEMPTS = 5;
     /** the command used to dismiss a error dialog. Currently sends a DPAD_CENTER key event */
     static final String DISMISS_DIALOG_CMD = "input keyevent 23";
+
+    static final String DISMISS_DIALOG_BROADCAST =
+            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS";
+    // Collapse notifications
+    private static final String COLLAPSE_STATUS_BAR = "cmd statusbar collapse";
+
     /** Commands that can be used to dismiss the keyguard. */
     public static final String DISMISS_KEYGUARD_CMD = "input keyevent 82";
 
@@ -100,6 +108,13 @@ public class TestDevice extends NativeDevice {
      * it. Api 23 and after.
      */
     static final String DISMISS_KEYGUARD_WM_CMD = "wm dismiss-keyguard";
+
+    /** Maximum time to wait for keyguard to be dismissed. */
+    private static final long DISMISS_KEYGUARD_TIMEOUT = 3 * 1000;
+
+    /** Command to construct KeyguardControllerState. */
+    static final String KEYGUARD_CONTROLLER_CMD =
+            "dumpsys activity activities | grep -A3 KeyguardController:";
 
     /** Timeout to wait for input dispatch to become ready **/
     private static final long INPUT_DISPATCH_READY_TIMEOUT = 5 * 1000;
@@ -160,8 +175,9 @@ public class TestDevice extends NativeDevice {
     /** Contains a set of Microdroid instances running in this TestDevice, and their resources. */
     private Map<Process, MicrodroidTracker> mStartedMicrodroids = new HashMap<>();
 
-    private static final String TEST_ROOT = "/data/local/tmp/virt/";
+    private static final String TEST_ROOT = "/data/local/tmp/virt/tradefed/";
     private static final String VIRT_APEX = "/apex/com.android.virt/";
+    private static final String INSTANCE_ID_FILE = "instance_id";
     private static final String INSTANCE_IMG = "instance.img";
 
     // This is really slow on GCE (2m 40s) but fast on localhost or actual Android phones (< 10s).
@@ -184,10 +200,18 @@ public class TestDevice extends NativeDevice {
     private static final String BUGREPORTZ_CMD = "bugreportz";
     private static final Pattern BUGREPORTZ_RESPONSE_PATTERN = Pattern.compile("(OK:)(.*)");
 
+    /** Number of attempts made to get user info. */
+    private static final int NUM_USER_INFO_ATTEMPTS = 3;
+
     /** Track microdroid and its resources */
     private class MicrodroidTracker {
         ExecutorService executor;
+        String cid;
     }
+
+    private boolean mWaitForSnapuserd = false;
+    private SnapuserdWaitPhase mWaitPhase = null;
+    private long mSnapuserNotificationTimestamp = 0L;
 
     /**
      * @param device
@@ -328,14 +352,6 @@ public class TestDevice extends NativeDevice {
         try {
             bugreport = getBugreportz();
             type = LogDataType.BUGREPORTZ;
-            // Limit fallback to older devices
-            if (!TestDeviceState.RECOVERY.equals(getDeviceState())) {
-                if (bugreport == null && getApiLevelSafe() < 24) {
-                    CLog.d("Bugreportz failed, attempting bugreport collection instead.");
-                    bugreport = getBugreportInternal();
-                    type = LogDataType.BUGREPORT;
-                }
-            }
             // log what we managed to capture.
             if (bugreport != null && bugreport.size() > 0L) {
                 listener.testLog(dataName, type, bugreport);
@@ -1074,6 +1090,13 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     public boolean clearErrorDialogs() throws DeviceNotAvailableException {
+        CommandResult dismissResult =
+                executeShellV2Command(
+                        DISMISS_DIALOG_BROADCAST, 60000L, TimeUnit.MILLISECONDS, 0 /*retry*/);
+        if (!CommandStatus.SUCCESS.equals(dismissResult.getStatus())) {
+            CLog.w("Issue with dimissing dialog broadcast. %s", dismissResult);
+        }
+        executeShellCommand(COLLAPSE_STATUS_BAR);
         // attempt to clear error dialogs multiple times
         for (int i = 0; i < NUM_CLEAR_ATTEMPTS; i++) {
             int numErrorDialogs = getErrorDialogCount();
@@ -1164,14 +1187,36 @@ public class TestDevice extends NativeDevice {
                     DISMISS_KEYGUARD_CMD);
             executeShellCommand(DISMISS_KEYGUARD_CMD);
         }
-        // TODO: check that keyguard was actually dismissed.
+        verifyKeyguardDismissed();
+    }
+
+    private void verifyKeyguardDismissed() throws DeviceNotAvailableException {
+        long start = System.currentTimeMillis();
+        while (true) {
+            KeyguardControllerState state = getKeyguardState();
+            if (state == null) {
+                return; // unsupported
+            }
+            if (!state.isKeyguardShowing()) {
+                return; // keyguard dismissed successfully
+            }
+            long timeSpent = System.currentTimeMillis() - start;
+            if (timeSpent > DISMISS_KEYGUARD_TIMEOUT) {
+                if (state.isKeyguardGoingAway()) {
+                    CLog.w("Keyguard still going away %dms after being dismissed", timeSpent);
+                } else {
+                    CLog.w("No response from keyguard %dms after being dismissed", timeSpent);
+                }
+                return; // proceed anyway, may be dismissed in a later step
+            }
+            getRunUtil().sleep(500);
+        }
     }
 
     /** {@inheritDoc} */
     @Override
     public KeyguardControllerState getKeyguardState() throws DeviceNotAvailableException {
-        String output =
-                executeShellCommand("dumpsys activity activities | grep -A3 KeyguardController:");
+        String output = executeShellCommand(KEYGUARD_CONTROLLER_CMD);
         CLog.d("Output from KeyguardController: %s", output);
         KeyguardControllerState state =
                 KeyguardControllerState.create(Arrays.asList(output.trim().split("\n")));
@@ -1532,7 +1577,25 @@ public class TestDevice extends NativeDevice {
 
     private ArrayList<String[]> tokenizeListUserPostT() throws DeviceNotAvailableException {
         String command = "cmd user list -v";
-        String commandOutput = executeShellCommand(command);
+        String commandOutput = null;
+        for (int i = 0; i < NUM_USER_INFO_ATTEMPTS; i++) {
+            commandOutput = executeShellCommand(command);
+            if (commandOutput == null || commandOutput.trim().isEmpty()) {
+                CLog.d("Command `%s` executed with no output. (attempt %d)", command, i);
+                // Throw exception if the last attempt failed too.
+                if (i == NUM_USER_INFO_ATTEMPTS - 1) {
+                    throw new DeviceRuntimeException(
+                            String.format(
+                                    "Command `%s` executed with no output. Attempts made = %d.",
+                                    command, NUM_USER_INFO_ATTEMPTS),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                }
+            } else {
+                break;
+            }
+            // wait before retrying
+            RunUtil.getDefault().sleep(1000);
+        }
         // Extract the id of all existing users.
         List<String> lines =
                 Arrays.stream(commandOutput.split("\\r?\\n"))
@@ -1540,6 +1603,12 @@ public class TestDevice extends NativeDevice {
                         .collect(Collectors.toList());
 
         if (!lines.get(0).contains("users:")) {
+            if (commandOutput.contains("cmd: Can't find service: package")) {
+                throw new DeviceNotAvailableException(
+                        String.format(
+                                "'%s' in not a valid output for 'user list -v'", commandOutput),
+                        getSerialNumber());
+            }
             throw new DeviceRuntimeException(
                     String.format("'%s' in not a valid output for 'user list -v'", commandOutput),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
@@ -1586,7 +1655,25 @@ public class TestDevice extends NativeDevice {
 
     private ArrayList<String[]> tokenizeListUsersPreT() throws DeviceNotAvailableException {
         String command = "pm list users";
-        String commandOutput = executeShellCommand(command);
+        String commandOutput = null;
+        for (int i = 0; i < NUM_USER_INFO_ATTEMPTS; i++) {
+            commandOutput = executeShellCommand(command);
+            if (commandOutput == null || commandOutput.trim().isEmpty()) {
+                CLog.d("Command `%s` executed with no output. (attempt %d)", command, i);
+                // Throw exception if the last attempt failed too.
+                if (i == NUM_USER_INFO_ATTEMPTS - 1) {
+                    throw new DeviceRuntimeException(
+                            String.format(
+                                    "Command `%s` executed with no output. Attempts made = %d.",
+                                    command, NUM_USER_INFO_ATTEMPTS),
+                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                }
+            } else {
+                break;
+            }
+            // wait before retrying
+            RunUtil.getDefault().sleep(1000);
+        }
         // Extract the id of all existing users.
         String[] lines = commandOutput.split("\\r?\\n");
         if (!lines[0].equals("Users:")) {
@@ -2120,7 +2207,15 @@ public class TestDevice extends NativeDevice {
             feature = "feature:" + feature;
         }
         final String versionedFeature = feature + "=";
-        String commandOutput = executeShellCommand("pm list features");
+        CommandResult commandResult = executeShellV2Command("pm list features");
+        if (!CommandStatus.SUCCESS.equals(commandResult.getStatus())) {
+            throw new DeviceRuntimeException(
+                    String.format(
+                            "Failed to list features, command returned: stdout: %s, stderr: %s",
+                            commandResult.getStdout(), commandResult.getStderr()),
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+        String commandOutput = commandResult.getStdout();
         for (String line: commandOutput.split("\\s+")) {
             // Each line in the output of the command has the format
             // "feature:{FEATURE_VALUE}[={FEATURE_VERSION}]".
@@ -2242,7 +2337,7 @@ public class TestDevice extends NativeDevice {
     public String getAndroidId(int userId) throws DeviceNotAvailableException {
         if (isAdbRoot()) {
             String cmd = String.format(
-                    "sqlite3 /data/user/%d/com.google.android.gsf/databases/gservices.db "
+                    "sqlite3 /data/user/%d/*/databases/gservices.db "
                     + "'select value from main where name = \"android_id\"'", userId);
             String output = executeShellCommand(cmd).trim();
             if (!output.contains("unable to open database")) {
@@ -2277,7 +2372,18 @@ public class TestDevice extends NativeDevice {
      */
     @Override
     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
-        return createWifiHelper(true);
+        return createWifiHelper(false);
+    }
+
+    @Override
+    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+        if (useV2) {
+            CLog.d("Using WifiHelper V2. WifiUtil apk installation skipped.");
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_HELPER_V2, "true");
+            return createWifiHelper(useV2, false);
+        } else {
+            return createWifiHelper(useV2, true);
+        }
     }
 
     /**
@@ -2285,13 +2391,14 @@ public class TestDevice extends NativeDevice {
      * setup or not.
      */
     @VisibleForTesting
-    IWifiHelper createWifiHelper(boolean doSetup) throws DeviceNotAvailableException {
+    IWifiHelper createWifiHelper(boolean useV2, boolean doSetup)
+            throws DeviceNotAvailableException {
         if (doSetup) {
             mWasWifiHelperInstalled = true;
             // Ensure device is ready before attempting wifi setup
             waitForDeviceAvailable();
         }
-        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup);
+        return new WifiHelper(this, mOptions.getWifiUtilAPKPath(), doSetup, useV2);
     }
 
     /** {@inheritDoc} */
@@ -2313,7 +2420,7 @@ public class TestDevice extends NativeDevice {
             }
             try {
                 // Uninstall the wifi utility if it was installed.
-                IWifiHelper wifi = createWifiHelper(false);
+                IWifiHelper wifi = createWifiHelper(false, false);
                 wifi.cleanUp();
             } catch (DeviceNotAvailableException e) {
                 CLog.e("Device became unavailable while uninstalling wifi util.");
@@ -2519,28 +2626,93 @@ public class TestDevice extends NativeDevice {
         if (getIDevice() instanceof StubDevice) {
             return new HashSet<>();
         }
-        CommandResult result = executeShellV2Command("cmd device_state print-states");
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-            // Can't throw an exception since it would fail on non-supported version
-            return new HashSet<>();
-        }
-        Set<DeviceFoldableState> foldableStates = new LinkedHashSet<>();
-        Pattern deviceStatePattern =
-                Pattern.compile(
-                        "DeviceState\\{identifier=(\\d+), name='(\\S+)'"
-                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
-        for (String line : result.getStdout().split("\n")) {
-            Matcher m = deviceStatePattern.matcher(line.trim());
-            if (m.matches()) {
-                // Move onto the next state if the device state is not accessible by apps
-                if (m.groupCount() > 2 && m.group(3) != null && !Boolean.parseBoolean(m.group(3))) {
-                    continue;
-                }
-                foldableStates.add(
-                        new DeviceFoldableState(Integer.parseInt(m.group(1)), m.group(2)));
+        try (CloseableTraceScope foldable = new CloseableTraceScope("getFoldableStates")) {
+            CommandResult result = executeShellV2Command("cmd device_state print-states");
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                // Can't throw an exception since it would fail on non-supported version
+                return new HashSet<>();
             }
+            Set<DeviceFoldableState> foldableStates = new LinkedHashSet<>();
+            Pattern deviceStatePattern =
+                    Pattern.compile(
+                            "DeviceState\\{identifier=(\\d+), name='(\\S+)'"
+                                    + "(?:, app_accessible=)?(\\S+)?"
+                                    + "(?:, cancel_when_requester_not_on_top=)?(\\S+)?"
+                                    + "\\}\\S*");
+            for (String line : result.getStdout().split("\n")) {
+                Matcher m = deviceStatePattern.matcher(line.trim());
+                if (m.matches()) {
+                    // Move onto the next state if the device state is not accessible by apps
+                    if (m.groupCount() > 2
+                            && m.group(3) != null
+                            && !Boolean.parseBoolean(m.group(3))) {
+                        continue;
+                    }
+                    // Move onto the next state if the device state is canceled when the requesting
+                    // app
+                    // is not on top.
+                    if (m.groupCount() > 3
+                            && m.group(4) != null
+                            && Boolean.parseBoolean(m.group(4))) {
+                        continue;
+                    }
+                    foldableStates.add(
+                            new DeviceFoldableState(Integer.parseInt(m.group(1)), m.group(2)));
+                }
+            }
+            return foldableStates;
         }
-        return foldableStates;
+    }
+
+    @Override
+    public void notifySnapuserd(SnapuserdWaitPhase waitPhase) {
+        mWaitForSnapuserd = true;
+        mSnapuserNotificationTimestamp = System.currentTimeMillis();
+        mWaitPhase = waitPhase;
+        CLog.d("Notified to wait for snapuserd at %s", waitPhase);
+    }
+
+    @Override
+    public void waitForSnapuserd(SnapuserdWaitPhase currentPhase)
+            throws DeviceNotAvailableException {
+        if (!mWaitForSnapuserd) {
+            CLog.d("No snapuserd notification in progress for %s", currentPhase);
+            return;
+        }
+        // At releasing or at the reported phase, block for snapuserd.
+        if (!SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING.equals(currentPhase)
+                && !currentPhase.equals(mWaitPhase)) {
+            return;
+        }
+        long startTime = System.currentTimeMillis();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_snapuserd")) {
+            long maxTimeout = getOptions().getSnapuserdTimeout();
+            while (System.currentTimeMillis() - startTime < maxTimeout) {
+                CommandResult psOutput = executeShellV2Command("ps -ef | grep snapuserd");
+                CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+                if (psOutput.getStdout().contains("snapuserd -")) {
+                    RunUtil.getDefault().sleep(2500);
+                    CLog.d("waiting for snapuserd to complete.");
+                } else {
+                    return;
+                }
+            }
+            throw new DeviceRuntimeException(
+                    String.format(
+                            "snapuserd didn't complete in %s",
+                            TimeUtil.formatElapsedTime(maxTimeout)),
+                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_TIME,
+                    System.currentTimeMillis() - mSnapuserNotificationTimestamp);
+            mWaitForSnapuserd = false;
+            mSnapuserNotificationTimestamp = 0L;
+            mWaitPhase = null;
+        }
     }
 
     @Override
@@ -2552,7 +2724,9 @@ public class TestDevice extends NativeDevice {
         Pattern deviceStatePattern =
                 Pattern.compile(
                         "Committed state: DeviceState\\{identifier=(\\d+), name='(\\S+)'"
-                                + "(?:, app_accessible=)?(\\S+)?\\}\\S*");
+                                + "(?:, app_accessible=)?(\\S+)?"
+                                + "(?:, cancel_when_requester_not_on_top=)?(\\S+)?"
+                                + "\\}\\S*");
         for (String line : result.getStdout().split("\n")) {
             Matcher m = deviceStatePattern.matcher(line.trim());
             if (m.matches()) {
@@ -2649,6 +2823,12 @@ public class TestDevice extends NativeDevice {
         }
     }
 
+    private boolean isVirtFeatureEnabled(String feature) throws DeviceNotAvailableException {
+        CommandResult result =
+                executeShellV2Command(VIRT_APEX + "bin/vm check-feature-enabled " + feature);
+        return result.getExitCode() == 0 && result.getStdout().contains("is enabled");
+    }
+
     /**
      * Starts a Microdroid TestDevice.
      *
@@ -2664,25 +2844,7 @@ public class TestDevice extends NativeDevice {
                     String.format(
                             "Microdroid with cid '%s' already exists in device. Cannot create"
                                     + " another one.",
-                            mStartedMicrodroids.values().iterator().next()));
-
-        String microdroidSerial;
-        int vmAdbPort = -1;
-        try {
-            ServerSocket microdroidServerSocket = new ServerSocket(0);
-            vmAdbPort = microdroidServerSocket.getLocalPort();
-            microdroidServerSocket.close();
-        } catch (IOException e) {
-            throw new DeviceRuntimeException(
-                    "Unable to get an unused port for Microdroid.",
-                    e,
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
-        }
-
-        microdroidSerial = "localhost:" + vmAdbPort;
-
-        // disconnect from microdroid
-        getRunUtil().runTimedCmd(10000, deviceManager.getAdbPath(), "disconnect", microdroidSerial);
+                            mStartedMicrodroids.values().iterator().next().cid));
 
         // remove any leftover files under test root
         executeShellV2Command("rm -rf " + TEST_ROOT + "*");
@@ -2693,6 +2855,7 @@ public class TestDevice extends NativeDevice {
                     "mkdir -p " + TEST_ROOT + " has failed: " + result,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
+
         for (File localFile : builder.mBootFiles.keySet()) {
             String remoteFileName = builder.mBootFiles.get(localFile);
             pushFile(localFile, TEST_ROOT + remoteFileName);
@@ -2713,7 +2876,6 @@ public class TestDevice extends NativeDevice {
                 TEST_ROOT
                         + (builder.mApkFile != null ? builder.mApkFile.getName() : "NULL")
                         + ".idsig";
-        final String instanceImg = TEST_ROOT + INSTANCE_IMG;
         final String consolePath = TEST_ROOT + "console.txt";
         final String logPath = TEST_ROOT + "log.txt";
         final String debugFlag =
@@ -2727,6 +2889,8 @@ public class TestDevice extends NativeDevice {
                 Strings.isNullOrEmpty(builder.mCpuTopology)
                         ? ""
                         : "--cpu-topology " + builder.mCpuTopology;
+        final String gkiFlag = Strings.isNullOrEmpty(builder.mGki) ? "" : "--gki " + builder.mGki;
+        final String hugePagesFlag = builder.mHugePages ? "--hugepages" : "";
 
         List<String> args =
                 new ArrayList<>(
@@ -2744,11 +2908,17 @@ public class TestDevice extends NativeDevice {
                                 cpuFlag,
                                 cpuAffinityFlag,
                                 cpuTopologyFlag,
+                                gkiFlag,
+                                hugePagesFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
-                                instanceImg,
+                                builder.mInstanceImg,
                                 "--config-path",
                                 builder.mConfigPath));
+        if (isVirtFeatureEnabled("com.android.kvm.LLPVM_CHANGES")) {
+            args.add("--instance-id-file");
+            args.add(builder.mInstanceIdFile);
+        }
         if (builder.mProtectedVm) {
             args.add("--protected");
         }
@@ -2756,34 +2926,28 @@ public class TestDevice extends NativeDevice {
             args.add("--extra-idsig");
             args.add(path);
         }
+        for (String path : builder.mAssignedDevices) {
+            args.add("--devices");
+            args.add(path);
+        }
 
         // Run the VM
-        String cid;
-        Process process;
+        String cid = null;
+        Process process = null;
         try {
             PipedInputStream pipe = new PipedInputStream();
             process = getRunUtil().runCmdInBackground(args, new PipedOutputStream(pipe));
-            BufferedReader stdout = new BufferedReader(new InputStreamReader(pipe));
-
-            // Retrieve the CID from the vm tool output
-            Pattern pattern = Pattern.compile("with CID (\\d+)");
-            while ((cid = stdout.readLine()) != null) {
-                Matcher matcher = pattern.matcher(cid);
-                if (matcher.find()) {
-                    cid = matcher.group(1);
-                    break;
-                }
-            }
-            if (cid == null) {
-                throw new DeviceRuntimeException(
-                        "Failed to find the CID of the VM",
-                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-            }
+            cid = getCidFromVmRunOutput(new InputStreamReader(pipe));
         } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    "IOException trying to start a VM",
+                    "Exception trying to start a VM",
                     ex,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        } finally {
+            if (cid == null) {
+                // Don't leak the process on failure
+                process.destroyForcibly();
+            }
         }
 
         // Redirect log.txt to logd using logwrapper
@@ -2796,6 +2960,9 @@ public class TestDevice extends NativeDevice {
                 () -> {
                     forwardFileToLog(logPath, "MicrodroidLog");
                 });
+
+        int vmAdbPort = forwardMicrodroidAdbPort(cid);
+        String microdroidSerial = "localhost:" + vmAdbPort;
 
         DeviceSelectionOptions microSelection = new DeviceSelectionOptions();
         microSelection.setSerial(microdroidSerial);
@@ -2831,8 +2998,87 @@ public class TestDevice extends NativeDevice {
         }
         MicrodroidTracker tracker = new MicrodroidTracker();
         tracker.executor = executor;
+        tracker.cid = cid;
         mStartedMicrodroids.put(process, tracker);
         return microdroid;
+    }
+
+    private static String getCidFromVmRunOutput(Reader outputReader) {
+        BufferedReader stdout = new BufferedReader(outputReader);
+
+        StringBuilder output = new StringBuilder();
+
+        // Retrieve the CID from the vm tool output
+        String cid = null;
+        Pattern pattern = Pattern.compile("with CID (\\d+)");
+        String line;
+        try {
+            while ((line = stdout.readLine()) != null) {
+                output.append(line);
+                output.append(' ');
+
+                Matcher matcher = pattern.matcher(line);
+                if (matcher.find()) {
+                    cid = matcher.group(1);
+                    break;
+                }
+            }
+        } catch (IOException ex) {
+            throw new DeviceRuntimeException(
+                    "Failed to find the CID of the VM: " + output,
+                    ex,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        if (cid == null) {
+            throw new DeviceRuntimeException(
+                    "Failed to find the CID of the VM: " + output,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        return cid;
+    }
+
+    /** Find an unused port and forward microdroid's adb connection. Returns the port number. */
+    private int forwardMicrodroidAdbPort(String cid) {
+        IDeviceManager deviceManager = GlobalConfiguration.getDeviceManagerInstance();
+        for (int trial = 0; trial < 10; trial++) {
+            int vmAdbPort;
+            try (ServerSocket serverSocket = new ServerSocket(0)) {
+                vmAdbPort = serverSocket.getLocalPort();
+            } catch (IOException e) {
+                throw new DeviceRuntimeException(
+                        "Unable to get an unused port for Microdroid.",
+                        e,
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+            String from = "tcp:" + vmAdbPort;
+            String to = "vsock:" + cid + ":5555";
+
+            CommandResult result =
+                    getRunUtil()
+                            .runTimedCmd(
+                                    10000,
+                                    deviceManager.getAdbPath(),
+                                    "-s",
+                                    getSerialNumber(),
+                                    "forward",
+                                    from,
+                                    to);
+            if (result.getStatus() == CommandStatus.SUCCESS) {
+                return vmAdbPort;
+            }
+
+            if (result.getStderr().contains("Address already in use")) {
+                // retry with other ports
+                continue;
+            } else {
+                throw new DeviceRuntimeException(
+                        "Unable to forward vsock:" + cid + ":5555: " + result.getStderr(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
+        }
+        throw new DeviceRuntimeException(
+                "Unable to get an unused port for Microdroid.",
+                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
     }
 
     /**
@@ -2855,7 +3101,7 @@ public class TestDevice extends NativeDevice {
                 .runTimedCmd(10000, deviceManager.getAdbPath(), "-s", serial, "forward", from, to);
 
         boolean disconnected = true;
-        while (disconnected) {
+        while (disconnected && timeoutMillis >= 0) {
             elapsed = System.currentTimeMillis() - start;
             timeoutMillis -= elapsed;
             start = System.currentTimeMillis();
@@ -2888,14 +3134,15 @@ public class TestDevice extends NativeDevice {
 
         elapsed = System.currentTimeMillis() - start;
         timeoutMillis -= elapsed;
-        getRunUtil()
-                .runTimedCmd(
-                        timeoutMillis,
-                        deviceManager.getAdbPath(),
-                        "-s",
-                        microdroidSerial,
-                        "wait-for-device");
-
+        if (timeoutMillis > 0) {
+            getRunUtil()
+                    .runTimedCmd(
+                            timeoutMillis,
+                            deviceManager.getAdbPath(),
+                            "-s",
+                            microdroidSerial,
+                            "wait-for-device");
+        }
         boolean dataAvailable = false;
         while (!dataAvailable && timeoutMillis >= 0) {
             elapsed = System.currentTimeMillis() - start;
@@ -3005,6 +3252,11 @@ public class TestDevice extends NativeDevice {
         private Map<String, String> mTestDeviceOptions;
         private Map<File, String> mBootFiles;
         private long mAdbConnectTimeoutMs;
+        private List<String> mAssignedDevices;
+        private String mGki;
+        private String mInstanceIdFile; // Path to instance_id file
+        private String mInstanceImg; // Path to instance_img file
+        private boolean mHugePages;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3020,6 +3272,9 @@ public class TestDevice extends NativeDevice {
             mTestDeviceOptions = new LinkedHashMap<>();
             mBootFiles = new LinkedHashMap<>();
             mAdbConnectTimeoutMs = MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
+            mAssignedDevices = new ArrayList<>();
+            mInstanceIdFile = null;
+            mInstanceImg = null;
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -3126,12 +3381,63 @@ public class TestDevice extends NativeDevice {
         }
 
         /**
+         * Adds a device to assign to microdroid.
+         *
+         * @param sysfsNode The path to the sysfs node to assign
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder addAssignableDevice(String sysfsNode) {
+            mAssignedDevices.add(sysfsNode);
+            return this;
+        }
+
+        /**
          * Sets the timeout for adb connect to microdroid TestDevice in millis.
          *
          * @param timeoutMs The timeout in millis
          */
         public MicrodroidBuilder setAdbConnectTimeoutMs(long timeoutMs) {
             mAdbConnectTimeoutMs = timeoutMs;
+            return this;
+        }
+
+        /**
+         * Uses GKI kernel instead of microdroid kernel
+         *
+         * @param version The GKI version to use
+         */
+        public MicrodroidBuilder gki(String version) {
+            mGki = version;
+            return this;
+        }
+
+        /**
+         * Sets the instance_id path.
+         *
+         * @param instanceIdPath: Path to the instanceId
+         */
+        public MicrodroidBuilder instanceIdFile(String instanceIdPath) {
+            mInstanceIdFile = instanceIdPath;
+            return this;
+        }
+
+        /**
+         * Sets instance.img file path.
+         *
+         * @param instanceIdPath: Path to the instanceId
+         */
+        public MicrodroidBuilder instanceImgFile(String instanceImgPath) {
+            mInstanceImg = instanceImgPath;
+            return this;
+        }
+
+        /**
+         * Sets whether to hint the kernel for transparent hugepages.
+         *
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder hugePages(boolean hintHugePages) {
+            mHugePages = hintHugePages;
             return this;
         }
 
@@ -3161,6 +3467,12 @@ public class TestDevice extends NativeDevice {
                     throw new IllegalArgumentException(
                             "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
                 }
+            }
+            if (mInstanceIdFile == null) {
+                mInstanceIdFile = TEST_ROOT + INSTANCE_ID_FILE;
+            }
+            if (mInstanceImg == null) {
+                mInstanceImg = TEST_ROOT + INSTANCE_IMG;
             }
 
             return device.startMicrodroid(this);

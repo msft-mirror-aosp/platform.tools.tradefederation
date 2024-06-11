@@ -745,6 +745,19 @@ public interface INativeDevice {
             throws DeviceNotAvailableException;
 
     /**
+     * Recursively pull directory contents from device.
+     *
+     * @param deviceFilePath the absolute file path of the remote source
+     * @param localDir the local directory to pull files into
+     * @param userId the user id to pull from
+     * @return <code>true</code> if file was pulled successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pullDir(String deviceFilePath, File localDir, int userId)
+            throws DeviceNotAvailableException;
+
+    /**
      * Push a file to device. By default using a content provider.
      *
      * @param localFile the local file to push
@@ -754,6 +767,19 @@ public interface INativeDevice {
      *     recovered.
      */
     public boolean pushFile(File localFile, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Push a file to device. By default using a content provider.
+     *
+     * @param localFile the local file to push
+     * @param deviceFilePath the remote destination absolute file path
+     * @param userId the userId to push to
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushFile(File localFile, String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
 
     /**
@@ -795,6 +821,19 @@ public interface INativeDevice {
      * recovered.
      */
     public boolean pushDir(File localDir, String deviceFilePath)
+            throws DeviceNotAvailableException;
+
+    /**
+     * Recursively push directory contents to device.
+     *
+     * @param localDir the local directory to push
+     * @param deviceFilePath the absolute file path of the remote destination
+     * @param userId the user id to push to
+     * @return <code>true</code> if file was pushed successfully. <code>false</code> otherwise.
+     * @throws DeviceNotAvailableException if connection with device is lost and cannot be
+     *     recovered.
+     */
+    public boolean pushDir(File localDir, String deviceFilePath, int userId)
             throws DeviceNotAvailableException;
 
     /**
@@ -851,6 +890,15 @@ public interface INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public void deleteFile(String deviceFilePath) throws DeviceNotAvailableException;
+
+    /**
+     * Helper method to delete a file or directory on the device.
+     *
+     * @param deviceFilePath The absolute path of the file on the device.
+     * @param userId The user id to delete from
+     * @throws DeviceNotAvailableException
+     */
+    public void deleteFile(String deviceFilePath, int userId) throws DeviceNotAvailableException;
 
     /**
      * Retrieve a reference to a remote file on device.
@@ -1446,6 +1494,20 @@ public interface INativeDevice {
     public void remountVendorWritable() throws DeviceNotAvailableException;
 
     /**
+     * Make the system partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountSystemReadOnly() throws DeviceNotAvailableException;
+
+    /**
+     * Make the vendor partition on the device read-only. May reboot the device.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void remountVendorReadOnly() throws DeviceNotAvailableException;
+
+    /**
      * Returns the key type used to sign the device image
      * <p>
      * Typically Android devices may be signed with test-keys (like in AOSP) or release-keys
@@ -1636,4 +1698,26 @@ public interface INativeDevice {
 
     /** Returns the connection associated with the device. */
     public AbstractConnection getConnection();
+
+    /**
+     * Check if debugfs is mounted.
+     *
+     * @return {@code true} if debugfs is mounted
+     * @throws DeviceNotAvailableException
+     */
+    public boolean isDebugfsMounted() throws DeviceNotAvailableException;
+
+    /**
+     * Mount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void mountDebugfs() throws DeviceNotAvailableException;
+
+    /**
+     * Unmount debugfs.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void unmountDebugfs() throws DeviceNotAvailableException;
 }

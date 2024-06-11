@@ -43,11 +43,16 @@ public class RemoteFileUtilTest {
 
     private TestDeviceOptions mOptions;
     private IRunUtil mMockRunUtil;
+    private GceAvdInfo mMockGceAvdInfo;
+    private File mMockFile;
 
     @Before
     public void setUp() {
         mMockRunUtil = Mockito.mock(IRunUtil.class);
+        mMockGceAvdInfo = Mockito.mock(GceAvdInfo.class);
+        mMockFile = Mockito.mock(File.class);
         mOptions = new TestDeviceOptions();
+        mOptions.setAvdDriverBinary(mMockFile);
     }
 
     /** Test fetching a remote file via scp. */
@@ -222,6 +227,43 @@ public class RemoteFileUtilTest {
                             fakeInfo,
                             mOptions,
                             Arrays.asList("-R"),
+                            mMockRunUtil,
+                            500L,
+                            remotePath,
+                            localFile);
+            assertFalse(result);
+        } finally {
+            FileUtil.recursiveDelete(localFile);
+        }
+    }
+
+    /** Test checking if a file exists in the remote oxygenation instance */
+    @Test
+    public void testDoesRemoteFileExistInOxygenation() throws Exception {
+        String remotePath = "/home/vsoc-01/cuttlefish_runtime/kernel.log";
+        when(mMockGceAvdInfo.isOxygenationDevice()).thenReturn(true);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        boolean result =
+                RemoteFileUtil.doesRemoteFileExist(
+                        mMockGceAvdInfo, mOptions, mMockRunUtil, 500L, remotePath);
+        assertFalse(result);
+    }
+
+    /** Test pushing a file to a remote oxygenation instance via scp */
+    @Test
+    public void testPushFileToRemoteOxygenation() throws Exception {
+        String remotePath = "/home/vsoc-01/cuttlefish_runtime/kernel.log";
+        File localFile = FileUtil.createTempDir("test-remote-push-dir");
+        when(mMockGceAvdInfo.isOxygenationDevice()).thenReturn(true);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        try {
+            boolean result =
+                    RemoteFileUtil.pushFileToRemote(
+                            mMockGceAvdInfo,
+                            mOptions,
+                            Arrays.asList(""),
                             mMockRunUtil,
                             500L,
                             remotePath,

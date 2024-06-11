@@ -153,6 +153,28 @@ public class HostTest
                     + "none of the annotations in this list to run.")
     private Set<String> mExcludeAnnotations = new HashSet<>();
 
+    /**
+     * It is strongly recommended that clients set include and exclude filters at the suite level
+     * via the ITestFilter interface rather than relying on include-filter and
+     * exclude-filter @Options.
+     */
+    @Option(
+            name = "include-filter",
+            description = "The set of annotations a test must have to be run.")
+    private Set<String> mIncludeFilters = new HashSet<>();
+
+    /**
+     * It is strongly recommended that clients set include and exclude filters at the suite level
+     * via the ITestFilter interface rather than relying on include-filter and
+     * exclude-filter @Options.
+     */
+    @Option(
+            name = "exclude-filter",
+            description =
+                    "The set of annotations to exclude tests from running. A test must have "
+                            + "none of the annotations in this list to run.")
+    private Set<String> mExcludeFilters = new HashSet<>();
+
     @Option(name = "collect-tests-only",
             description = "Only invoke the instrumentation to collect list of applicable test "
                     + "cases. All test run callbacks will be triggered, but test execution will "
@@ -212,8 +234,9 @@ public class HostTest
     private List<File> mDownloadedFiles = new ArrayList<>();
 
     public HostTest() {
-        mFilterHelper = new TestFilterHelper(new ArrayList<String>(), new ArrayList<String>(),
-                mIncludeAnnotations, mExcludeAnnotations);
+        mFilterHelper =
+                new TestFilterHelper(
+                        mIncludeFilters, mExcludeFilters, mIncludeAnnotations, mExcludeAnnotations);
     }
 
     public void setTestInformation(TestInformation testInfo) {
@@ -358,6 +381,8 @@ public class HostTest
         // Ensure filters are set in the helper
         mFilterHelper.addAllIncludeAnnotation(mIncludeAnnotations);
         mFilterHelper.addAllExcludeAnnotation(mExcludeAnnotations);
+        mFilterHelper.addAllIncludeFilters(mIncludeFilters);
+        mFilterHelper.addAllExcludeFilters(mExcludeFilters);
 
         int count = 0;
         for (Class<?> classObj : getClasses()) {
@@ -527,6 +552,8 @@ public class HostTest
         // Ensure filters are set in the helper
         mFilterHelper.addAllIncludeAnnotation(mIncludeAnnotations);
         mFilterHelper.addAllExcludeAnnotation(mExcludeAnnotations);
+        mFilterHelper.addAllIncludeFilters(mIncludeFilters);
+        mFilterHelper.addAllExcludeFilters(mExcludeFilters);
 
         try {
             try {

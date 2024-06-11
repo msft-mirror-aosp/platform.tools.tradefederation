@@ -20,6 +20,7 @@ import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.CommandLineBuildInfoBuilder;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.command.CommandRunner.ExitCode;
 import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandOptions;
@@ -33,6 +34,7 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.filter.OptionFetcher;
 import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.config.proxy.TradefedDelegator;
+import com.android.tradefed.config.remote.ExtendedFile;
 import com.android.tradefed.dependencies.ExternalDependency;
 import com.android.tradefed.dependencies.IExternalDependency;
 import com.android.tradefed.device.DeviceManager;
@@ -43,13 +45,16 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.StubLocalAndroidVirtualDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.ManagedRemoteDevice;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.device.internal.DeviceReleaseReporter;
+import com.android.tradefed.error.HarnessException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -85,6 +90,7 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.ResultAggregator;
 import com.android.tradefed.retry.RetryStrategy;
@@ -102,6 +108,7 @@ import com.android.tradefed.util.PrettyPrintDelimiter;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
@@ -122,6 +129,8 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
 
 /**
  * Default implementation of {@link ITestInvocation}.
@@ -161,6 +170,7 @@ public class TestInvocation implements ITestInvocation {
     public static final String INVOCATION_EXTERNAL_DEPENDENCIES =
             "invocation-external-dependencies";
     public static final long AVAILABILITY_CHECK_TIMEOUT = 180000L; // 3 minutes
+    static final String GOOGLE_USB_VENDOR_ID = "0x18d1";
 
     public enum Stage {
         ERROR("error"),
@@ -197,6 +207,7 @@ public class TestInvocation implements ITestInvocation {
     private boolean mTestStarted = false;
     private boolean mTestDone = false;
     private boolean mForcedStopRequestedAfterTest = false;
+    private boolean mIsRemoteInvocation = false;
 
     private boolean mInvocationFailed = false;
     private boolean mDelegatedInvocation = false;
@@ -206,7 +217,9 @@ public class TestInvocation implements ITestInvocation {
     private ExitCode mExitCode = ExitCode.NO_ERROR;
     private Throwable mExitStack = null;
     private EventsLoggerListener mEventsLogger = null;
+    private ClearcutClient mClient = null;
 
+    private List<ExtendedFile> mParallelDynamicDownloads = new ArrayList<>();
     /**
      * Display a log message informing the user of a invocation being started.
      *
@@ -370,17 +383,27 @@ public class TestInvocation implements ITestInvocation {
                         bugreportName = INVOCATION_ENDED_BUGREPORT_NAME;
                     }
                 }
-                if (exception == null) {
-                    try (CloseableTraceScope ignore =
-                            new CloseableTraceScope("responsiveness_check")) {
-                        exception = bareMinimumResponsiveness(context.getDevices());
+                if (exception == null && !SystemUtil.isLocalMode()) {
+                    exception = mUnavailableMonitor.getUnavailableException();
+                    if (exception != null) {
+                        CLog.e("Found a test level only device unavailable exception:");
+                        CLog.e(exception);
+                    }
+                    if (exception == null) {
+                        try (CloseableTraceScope ignore =
+                                new CloseableTraceScope("responsiveness_check")) {
+                            exception = bareMinimumResponsiveness(context.getDevices());
+                        }
                     }
                     if (exception != null) {
                         bugreportName = null;
                     }
                 }
+
+                // reset bugreportName to null if shouldSkipBugreportError(exception) == true
+                bugreportName = shouldSkipBugreportError(exception) ? null : bugreportName;
                 if (bugreportName != null) {
-                    try (CloseableTraceScope ignore =
+                    try (CloseableTraceScope _ignore =
                             new CloseableTraceScope(InvocationMetricKey.bugreport.name())) {
                         if (context.getDevices().size() == 1 || badDevice != null) {
                             ITestDevice collectBugreport = badDevice;
@@ -417,21 +440,18 @@ public class TestInvocation implements ITestInvocation {
                             executor.invokeAll(callableTasks, 5, TimeUnit.MINUTES);
                         }
                     }
-                    reportRecoveryLogs(context.getDevices(), listener);
                 }
+                reportRecoveryLogs(context.getDevices(), listener);
+            }
+            try (CloseableTraceScope ignore = new CloseableTraceScope("logExecuteShellCommand")) {
+                // Save the device executeShellCommand logs
+                logExecuteShellCommand(context.getDevices(), listener);
             }
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope(InvocationMetricKey.check_device_availability.name())) {
-                // Save the device executeShellCommand logs
-                logExecuteShellCommand(context.getDevices(), listener);
-                if (exception == null) {
-                    exception = mUnavailableMonitor.getUnavailableException();
-                    if (exception != null) {
-                        CLog.e("Found a test level only device unavailable exception:");
-                        CLog.e(exception);
-                    }
-                }
-                if (exception == null) {
+                if (SystemUtil.isLocalMode()) {
+                    CLog.d("Skipping check for device availability for local run.");
+                } else if (exception == null) {
                     CLog.d("Checking that devices are online.");
                     exception = checkDevicesAvailable(context.getDevices(), listener);
                 } else {
@@ -478,9 +498,9 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
 
-                Map<ITestDevice, FreeDeviceState> devicesStates =
-                        handleAndLogReleaseState(context, exception, tearDownException);
                 if (config.getCommandOptions().earlyDeviceRelease()) {
+                    Map<ITestDevice, FreeDeviceState> devicesStates =
+                            handleAndLogReleaseState(context, exception, tearDownException);
                     context.markReleasedEarly();
                     for (IScheduledInvocationListener scheduleListener : mSchedulerListeners) {
                         scheduleListener.releaseDevices(context, devicesStates);
@@ -497,6 +517,7 @@ public class TestInvocation implements ITestInvocation {
                     new CloseableTraceScope(InvocationMetricKey.test_cleanup.name())) {
                 // Clean up host.
                 invocationPath.doCleanUp(context, config, exception);
+                waitForSnapuserd(testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
                 if (mSoftStopRequestTime != null) { // soft stop occurred
                     long latency = System.currentTimeMillis() - mSoftStopRequestTime;
                     InvocationMetricLogger.addInvocationMetrics(
@@ -572,16 +593,8 @@ public class TestInvocation implements ITestInvocation {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.TEAR_DOWN_DISK_USAGE, size);
                 }
-                // Only log Invocation ended in parent
-                if (invocationPath instanceof RemoteInvocationExecution || !isSubprocess(config)) {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.INVOCATION_END, System.currentTimeMillis());
-                }
                 elapsedTime = System.currentTimeMillis() - startTime;
                 reportInvocationEnded(config, context, listener, elapsedTime);
-            } finally {
-                TfObjectTracker.clearTracking();
-                CurrentInvocation.clearInvocationInfos();
             }
         }
         if (tearDownException != null) {
@@ -599,22 +612,30 @@ public class TestInvocation implements ITestInvocation {
             IInvocationExecution invocationPath,
             ITestInvocationListener listener)
             throws Throwable {
-        getRunUtil().allowInterrupt(true);
-        logDeviceBatteryLevel(testInfo.getContext(), "initial -> setup");
-        CurrentInvocation.setActionInProgress(ActionInProgress.SETUP);
-        invocationPath.doSetup(testInfo, config, listener);
-        // Don't run tests if notified of soft/forced shutdown
-        if (mSoftStopRequestTime != null || mStopRequestTime != null) {
-            // Throw an exception so that it can be reported as an invocation failure
-            // and command can be un-leased
-            throw new RunInterruptedException(
-                    "Notified of shut down. Will not run tests",
-                    InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+        long startTimeNano = System.nanoTime();
+        try {
+            getRunUtil().allowInterrupt(true);
+            logDeviceBatteryLevel(testInfo.getContext(), "initial -> setup");
+            CurrentInvocation.setActionInProgress(ActionInProgress.SETUP);
+            invocationPath.doSetup(testInfo, config, listener);
+            // Don't run tests if notified of soft/forced shutdown
+            if (mSoftStopRequestTime != null || mStopRequestTime != null) {
+                // Throw an exception so that it can be reported as an invocation failure
+                // and command can be un-leased
+                throw new RunInterruptedException(
+                        "Notified of shut down. Will not run tests",
+                        InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+            }
+            logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
+            mTestStarted = true;
+            CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
+            waitForSnapuserd(testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_TEST);
+            invocationPath.runTests(testInfo, config, listener);
+        } finally {
+            if (mClient != null) {
+                mClient.notifyTestRunFinished(startTimeNano);
+            }
         }
-        logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
-        mTestStarted = true;
-        CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
-        invocationPath.runTests(testInfo, config, listener);
         logDeviceBatteryLevel(testInfo.getContext(), "after test");
         CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
     }
@@ -781,6 +802,10 @@ public class TestInvocation implements ITestInvocation {
      */
     @VisibleForTesting
     void logDeviceBatteryLevel(IInvocationContext context, String event) {
+        if (SystemUtil.isLocalMode()) {
+            CLog.d("Skipping battery level log for local invocation on event: %s.", event);
+            return;
+        }
         for (ITestDevice testDevice : context.getDevices()) {
             if (testDevice == null) {
                 continue;
@@ -793,19 +818,21 @@ public class TestInvocation implements ITestInvocation {
                 // Vritual devices have a fake battery there is no point in logging it.
                 continue;
             }
-            Integer batteryLevel = testDevice.getBattery();
-            if (batteryLevel == null) {
-                CLog.v("Failed to get battery level for %s", testDevice.getSerialNumber());
-                continue;
+            try (CloseableTraceScope ignored = new CloseableTraceScope("log_battery")) {
+                Integer batteryLevel = testDevice.getBattery();
+                if (batteryLevel == null) {
+                    CLog.v("Failed to get battery level for %s", testDevice.getSerialNumber());
+                    continue;
+                }
+                CLog.v("%s - %s - %d%%", BATT_TAG, event, batteryLevel);
+                context.getBuildInfo(testDevice)
+                        .addBuildAttribute(
+                                String.format(
+                                        BATTERY_ATTRIBUTE_FORMAT_KEY,
+                                        testDevice.getSerialNumber(),
+                                        event),
+                                batteryLevel.toString());
             }
-            CLog.v("%s - %s - %d%%", BATT_TAG, event, batteryLevel);
-            context.getBuildInfo(testDevice)
-                    .addBuildAttribute(
-                            String.format(
-                                    BATTERY_ATTRIBUTE_FORMAT_KEY,
-                                    testDevice.getSerialNumber(),
-                                    event),
-                            batteryLevel.toString());
         }
     }
 
@@ -883,6 +910,13 @@ public class TestInvocation implements ITestInvocation {
         try {
             res = invocationPath.fetchBuild(testInfo, config, rescheduler, listener);
             if (res) {
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope("wait_for_dynamic_download")) {
+                    for (ExtendedFile file : mParallelDynamicDownloads) {
+                        CLog.d("Wait for %s to finish downloading", file);
+                        file.waitForDownload();
+                    }
+                }
                 // Successful fetch of build.
                 CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
                 return true;
@@ -895,6 +929,9 @@ public class TestInvocation implements ITestInvocation {
                             "No build found to test.", InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
         } catch (BuildRetrievalError | RuntimeException | DeviceNotAvailableException e) {
             buildException = e;
+        }
+        for (ExtendedFile file : mParallelDynamicDownloads) {
+            file.cancelDownload();
         }
         setExitCode(ExitCode.NO_BUILD, buildException);
         // If somehow we don't have builds
@@ -938,19 +975,25 @@ public class TestInvocation implements ITestInvocation {
             IInvocationExecution invocationPath,
             RunMode mode)
             throws BuildRetrievalError, ConfigurationException {
+        DynamicRemoteFileResolver resolver =
+                new DynamicRemoteFileResolver(true /* allow parallelization */);
         try {
             // Don't resolve for remote invocation, wait until we are inside the remote.
             if (RunMode.REMOTE_INVOCATION.equals(mode)) {
                 return true;
             }
             CurrentInvocation.setActionInProgress(ActionInProgress.FETCHING_ARTIFACTS);
-            DynamicRemoteFileResolver resolver = new DynamicRemoteFileResolver();
             resolver.setDevice(context.getDevices().get(0));
             resolver.addExtraArgs(config.getCommandOptions().getDynamicDownloadArgs());
             config.resolveDynamicOptions(resolver);
+            mParallelDynamicDownloads.addAll(resolver.getParallelDownloads());
             CurrentInvocation.setActionInProgress(ActionInProgress.UNSET);
             return true;
         } catch (RuntimeException | BuildRetrievalError | ConfigurationException e) {
+            // Cancel running downloads
+            for (ExtendedFile file : resolver.getParallelDownloads()) {
+                file.cancelDownload();
+            }
             // We don't have a reporting buildInfo at this point
             IBuildInfo info = backFillBuildInfoForReporting(config.getCommandLine());
 
@@ -1006,15 +1049,15 @@ public class TestInvocation implements ITestInvocation {
                                 .get(TradefedFeatureServer.SERVER_REFERENCE));
             }
             // Only log invocation_start in parent
-            boolean isSuprocess = isSubprocess(config);
-            if (!isSuprocess) {
+            boolean isCurrentlySubprocess = isSubprocess(config);
+            if (!isCurrentlySubprocess) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.INVOCATION_START, System.currentTimeMillis());
             } else {
                 CLog.d("Fetching options from parent.");
                 // Get options from the parent process
-                try (OptionFetcher fetchOtpions = new OptionFetcher()) {
-                    fetchOtpions.fetchParentOptions(config);
+                try (OptionFetcher fetchOptions = new OptionFetcher()) {
+                    fetchOptions.fetchParentOptions(config);
                 }
             }
             // Handle the automated reporting
@@ -1087,6 +1130,9 @@ public class TestInvocation implements ITestInvocation {
             if (decision instanceof ITestInformationReceiver) {
                 ((ITestInformationReceiver) decision).setTestInformation(info);
             }
+            updateInvocationContext(context, config);
+            CurrentInvocation.setInvocationContext(context);
+            config.getLogSaver().init(context);
             // We don't need the aggregator in the subprocess because the parent will take care of
             // it.
             if (!config.getCommandOptions()
@@ -1141,7 +1187,6 @@ public class TestInvocation implements ITestInvocation {
             }
         }
         IInvocationExecution invocationPath = createInvocationExec(mode);
-        updateInvocationContext(context, config);
 
         boolean sharding = false;
         try {
@@ -1151,6 +1196,10 @@ public class TestInvocation implements ITestInvocation {
                 ((BaseLeveledLogOutput) leveledLogOutput).initFilters(config);
             }
             getLogRegistry().registerLogger(leveledLogOutput);
+
+            // Only in parent fetch demotion information
+            config.getSkipManager().setup(config, context);
+
             mStatus = "resolving dynamic options";
             long startDynamic = System.currentTimeMillis();
             boolean resolverSuccess = false;
@@ -1159,10 +1208,14 @@ public class TestInvocation implements ITestInvocation {
                 resolverSuccess =
                         invokeRemoteDynamic(context, config, listener, invocationPath, mode);
             } finally {
-                InvocationMetricLogger.addInvocationPairMetrics(
-                        InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
-                        startDynamic,
-                        System.currentTimeMillis());
+                // Do not report the pair for subprocess as it would be part
+                // of a test specific setup instead.
+                if (!isSubprocess(config)) {
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.DYNAMIC_FILE_RESOLVER_PAIR,
+                            startDynamic,
+                            System.currentTimeMillis());
+                }
             }
             if (!resolverSuccess) {
                 return;
@@ -1196,6 +1249,39 @@ public class TestInvocation implements ITestInvocation {
             if (!providerSuccess) {
                 return;
             }
+            // Skip invocation can only happen in the parent process and not in the parent
+            // delegator.
+            if (!config.getCommandOptions()
+                            .getInvocationData()
+                            .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
+                    && !RunMode.DELEGATED_INVOCATION.equals(mode)) {
+                if (config.getSkipManager().shouldSkipInvocation(info)) {
+                    CLog.d("Skipping invocation early.");
+                    startInvocation(config, info.getContext(), listener);
+                    // Backfill accounting metrics with zeros
+                    long timestamp = System.currentTimeMillis();
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_SETUP_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.SETUP, 0);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.SETUP_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SETUP_START, timestamp);
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.SETUP_END, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEARDOWN_PAIR, timestamp, timestamp);
+                    InvocationMetricLogger.addInvocationPairMetrics(
+                            InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
+                    listener.invocationSkipped(
+                            new SkipReason(config.getSkipManager().getInvocationSkipReason(), ""));
+                    reportHostLog(listener, config);
+                    reportInvocationEnded(config, info.getContext(), listener, 0L);
+                    return;
+                }
+            }
             try (CloseableTraceScope ignore =
                     new CloseableTraceScope(InvocationMetricKey.start_logcat.name())) {
                 for (String deviceName : context.getDeviceConfigNames()) {
@@ -1224,6 +1310,9 @@ public class TestInvocation implements ITestInvocation {
                 return;
             }
 
+            // Apply global filters before sharding so they are taken into account.
+            config.getGlobalFilters()
+                    .setUpFilters(config, config.getSkipManager().getDemotedTests().keySet());
             boolean deviceInit = false;
             // If the top level invocation has --use-sandbox do not shard there. It will shard in
             // the child invocation.
@@ -1272,9 +1361,6 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
 
-                // Apply global filters before sharding so they are taken into account.
-                config.getGlobalFilters().setUpFilters(config);
-
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(InvocationMetricKey.sharding.name())) {
                     sharding = invocationPath.shardConfig(config, info, rescheduler, listener);
@@ -1316,7 +1402,9 @@ public class TestInvocation implements ITestInvocation {
             }
             // Once we have all the information we can start the invocation.
             if (!deviceInit) {
-                startInvocation(config, context, listener);
+                try (CloseableTraceScope s = new CloseableTraceScope("startInvocation")) {
+                    startInvocation(config, context, listener);
+                }
             }
             if (!RunMode.DELEGATED_INVOCATION.equals(mode)
                     && (config.getTests() == null || config.getTests().isEmpty())) {
@@ -1337,6 +1425,9 @@ public class TestInvocation implements ITestInvocation {
         } catch (IOException e) {
             CLog.e(e);
         } finally {
+            TfObjectTracker.clearTracking();
+            CurrentInvocation.clearInvocationInfos();
+            config.getSkipManager().clearManager();
             // Ensure build infos are always cleaned up at the end of invocation.
             CLog.i("Cleaning up builds");
             invocationPath.cleanUpBuilds(context, config);
@@ -1423,6 +1514,7 @@ public class TestInvocation implements ITestInvocation {
             case SANDBOX:
                 return new SandboxedInvocationExecution();
             case REMOTE_INVOCATION:
+                mIsRemoteInvocation = true;
                 return new RemoteInvocationExecution();
             case DELEGATED_INVOCATION:
                 return new DelegatedInvocationExecution();
@@ -1569,7 +1661,8 @@ public class TestInvocation implements ITestInvocation {
         int countVirtualLost = 0;
         for (Entry<ITestDevice, FreeDeviceState> fds : devicesStates.entrySet()) {
             // TODO: Rely on the FailureStatus for lost devices instead
-            if ((fds.getKey().getIDevice() instanceof TcpDevice)
+            if ((fds.getKey().getIDevice() instanceof RemoteAvdIDevice
+                            || fds.getKey().getIDevice() instanceof StubLocalAndroidVirtualDevice)
                     && exception instanceof DeviceNotAvailableException) {
                 countVirtualLost++;
                 continue;
@@ -1604,6 +1697,12 @@ public class TestInvocation implements ITestInvocation {
                                                 .getFastbootPath(),
                                         "devices");
                 CLog.d("'fastboot devices' output:\n%s", fastbootResult.getStdout());
+
+                CommandResult lsusbResult =
+                        getRunUtil()
+                                .runTimedCmdSilently(
+                                        60000L, "lsusb", "-d", GOOGLE_USB_VENDOR_ID + ":");
+                CLog.d("'lsusb -d %s:' output:\n%s", GOOGLE_USB_VENDOR_ID, lsusbResult.getStdout());
             }
         } else if (countVirtualLost > 0) {
             CLog.e("Counting as virtual_device_lost.");
@@ -1654,6 +1753,11 @@ public class TestInvocation implements ITestInvocation {
             IInvocationContext context,
             ITestInvocationListener listener,
             long elapsedTime) {
+        // Only log Invocation ended in parent
+        if (mIsRemoteInvocation || !isSubprocess(config)) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INVOCATION_END, System.currentTimeMillis());
+        }
         // Init a log for the end of the host_log.
         ILeveledLogOutput endHostLog = config.getLogOutput();
         try {
@@ -1712,7 +1816,12 @@ public class TestInvocation implements ITestInvocation {
             }
             RecoveryMode current = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
+            CLog.d("Testing minimum responsiveness.");
             try {
+                if (device instanceof NativeDevice) {
+                    ((NativeDevice) device).invalidatePropertyCache();
+                }
+                device.waitForDeviceOnline(60000L);
                 device.getApiLevel();
             } catch (DeviceNotAvailableException e) {
                 return e;
@@ -1878,6 +1987,23 @@ public class TestInvocation implements ITestInvocation {
         return info;
     }
 
+    @Override
+    public void setClearcutClient(ClearcutClient client) {
+        mClient = client;
+    }
+
+    /** Always complete snapuserd before proceeding into test. */
+    private void waitForSnapuserd(
+            TestInformation testInfo, IConfiguration config, SnapuserdWaitPhase currentPhase)
+            throws DeviceNotAvailableException {
+        for (ITestDevice device : testInfo.getDevices()) {
+            if (device instanceof StubDevice) {
+                continue;
+            }
+            device.waitForSnapuserd(currentPhase); // Should be inop if not waiting on any updates.
+        }
+    }
+
     /** Returns true if the invocation is currently within a subprocess scope. */
     public static boolean isSubprocess(IConfiguration config) {
         if (System.getenv(DelegatedInvocationExecution.DELEGATED_MODE_VAR) != null) {
@@ -1886,5 +2012,49 @@ public class TestInvocation implements ITestInvocation {
         return config.getCommandOptions()
                 .getInvocationData()
                 .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME);
+    }
+
+    /** Helper method that identifies errors when the bugreport should be skipped */
+    public static boolean shouldSkipBugreportError(@Nullable Throwable t) {
+        if (t == null) {
+            return false;
+        }
+
+        if (!(t instanceof HarnessException)) {
+            return false;
+        }
+
+        HarnessException e = (HarnessException) t;
+
+        if (e.getErrorId() == null) {
+            // Can't tell, better take a bugreport just in case.
+            return false;
+        }
+
+        long errorId = e.getErrorId().code();
+
+        // Configuration Errors
+        if (errorId >= 505_250 && errorId < 505_300) {
+            return true;
+        }
+
+        // Artifact Errors
+        if (errorId >= 500_501 && errorId < 501_000) {
+            return true;
+        }
+
+        // Certain General Errors
+        if (errorId == 500_501
+                || errorId == 500_003
+                || errorId == 500_008
+                || errorId == 500_009
+                || errorId == 500_010
+                || errorId == 500_013
+                || errorId == 500_014
+                || errorId == 500_017) {
+            return true;
+        }
+
+        return false;
     }
 }

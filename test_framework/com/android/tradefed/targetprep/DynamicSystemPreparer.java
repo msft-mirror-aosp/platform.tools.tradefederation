@@ -30,7 +30,9 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.SparseImageUtil.SparseInputStream;
 import com.android.tradefed.util.StreamUtil;
+
 import com.google.common.annotations.VisibleForTesting;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -55,7 +57,7 @@ import java.util.zip.ZipOutputStream;
  * System Update.
  */
 @OptionClass(alias = "dynamic-system-update")
-public class DynamicSystemPreparer extends BaseTargetPreparer {
+public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPreparer {
     static final int DSU_MAX_WAIT_SEC = 10 * 60;
 
     private static final int ANDROID_API_R = 30;
@@ -63,6 +65,7 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
     private static final String SYSTEM_IMAGE_NAME = "system.img";
     private static final String SYSTEM_EXT_IMAGE_NAME = "system_ext.img";
     private static final String PRODUCT_IMAGE_NAME = "product.img";
+    private static final String[] IMAGE_NAME_PREFIXES = {"", "IMAGES"};
 
     private static final long COPY_STREAM_SIZE = 16 << 20;
     private static final String DEST_PATH = "/sdcard/system.raw.gz";
@@ -122,8 +125,16 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
         try {
             long imageSize = 0;
             if (imageZipFile.isDirectory()) {
-                File localImageFile = new File(imageZipFile, imageName);
-                if (!localImageFile.isFile()) {
+                File localImageFile = null;
+                for (String prefix : IMAGE_NAME_PREFIXES) {
+                    localImageFile =
+                            imageZipFile.toPath().resolve(prefix).resolve(imageName).toFile();
+                    if (localImageFile.isFile()) {
+                        break;
+                    }
+                    localImageFile = null;
+                }
+                if (localImageFile == null) {
                     return null;
                 }
                 imageSize = localImageFile.length();
@@ -131,7 +142,15 @@ public class DynamicSystemPreparer extends BaseTargetPreparer {
             } else {
                 ZipFile zipFile = new ZipFile(imageZipFile);
                 try {
-                    ZipEntry entry = zipFile.getEntry(imageName);
+                    ZipEntry entry = null;
+                    for (String prefix : IMAGE_NAME_PREFIXES) {
+                        entry =
+                                zipFile.getEntry(
+                                        (prefix.isEmpty() ? "" : prefix + "/") + imageName);
+                        if (entry != null) {
+                            break;
+                        }
+                    }
                     if (entry == null) {
                         StreamUtil.close(zipFile);
                         return null;

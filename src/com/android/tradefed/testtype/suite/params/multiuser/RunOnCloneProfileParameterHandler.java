@@ -17,7 +17,10 @@
 package com.android.tradefed.testtype.suite.params.multiuser;
 
 import com.android.tradefed.targetprep.RunOnCloneProfileTargetPreparer;
+import com.android.tradefed.testtype.suite.module.Sdk34ModuleController;
 import com.android.tradefed.testtype.suite.params.IModuleParameterHandler;
+
+import java.util.Arrays;
 
 public class RunOnCloneProfileParameterHandler extends ProfileParameterHandler
         implements IModuleParameterHandler {
@@ -26,7 +29,10 @@ public class RunOnCloneProfileParameterHandler extends ProfileParameterHandler
             "com.android.bedstead.harrier.annotations.RequireRunOnCloneProfile";
 
     public RunOnCloneProfileParameterHandler() {
-        super(REQUIRE_RUN_ON_CLONE_PROFILE_NAME, new RunOnCloneProfileTargetPreparer());
+        super(
+                REQUIRE_RUN_ON_CLONE_PROFILE_NAME,
+                new RunOnCloneProfileTargetPreparer(),
+                Arrays.asList(new Sdk34ModuleController()));
     }
 
     @Override

@@ -90,13 +90,13 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
             }
             index++;
         }
+        mTestInformation.setActiveDeviceIndex(index);
         String response =
                 String.format(
                         "Attempting device reset on %s (%s).",
                         mTestInformation.getDevice().getSerialNumber(),
                         mTestInformation.getDevice().getClass().getSimpleName());
         try {
-            mTestInformation.setActiveDeviceIndex(index);
             AbstractConnection connection = mTestInformation.getDevice().getConnection();
             if ((mTestInformation.getDevice() instanceof RemoteAndroidVirtualDevice)
                     || (connection instanceof AdbSshConnection)) {
@@ -107,8 +107,7 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
                 Integer offset = info.getDeviceOffset();
                 String user = info.getInstanceUser();
                 long startTime = System.currentTimeMillis();
-                CommandResult powerwashResult =
-                        powerwash(mTestInformation.getDevice(), connection, user, offset);
+                CommandResult powerwashResult = powerwash(connection, user, offset);
                 if (!CommandStatus.SUCCESS.equals(powerwashResult.getStatus())) {
                     throw new DeviceNotAvailableException(
                             String.format(
@@ -171,20 +170,13 @@ public class DeviceResetFeature implements IRemoteFeature, IConfigurationReceive
         if (connection instanceof AdbSshConnection) {
             return ((AdbSshConnection) connection).getAvdInfo();
         }
-        if (device instanceof RemoteAndroidVirtualDevice) {
-            return ((RemoteAndroidVirtualDevice) device).getAvdInfo();
-        }
         return null;
     }
 
-    private CommandResult powerwash(
-            ITestDevice device, AbstractConnection connection, String user, Integer offset)
+    private CommandResult powerwash(AbstractConnection connection, String user, Integer offset)
             throws TargetSetupError {
         if (connection instanceof AdbSshConnection) {
             return ((AdbSshConnection) connection).powerwashGce(user, offset);
-        }
-        if (device instanceof RemoteAndroidVirtualDevice) {
-            return ((RemoteAndroidVirtualDevice) device).powerwashGce(user, offset);
         }
         return new CommandResult(CommandStatus.EXCEPTION);
     }

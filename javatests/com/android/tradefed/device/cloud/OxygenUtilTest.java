@@ -21,6 +21,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
@@ -111,7 +113,10 @@ public class OxygenUtilTest {
         }
     }
 
-    /** Test collectDeviceLaunchMetrics. */
+    /**
+     * Test collectDeviceLaunchMetrics before introducing cuttlefish-host-resources and
+     * cuttlefish-operator replacing cuttlefish-common.
+     */
     @Test
     public void testCollectDeviceLaunchMetrics() throws Exception {
         File tmpDir = null;
@@ -135,5 +140,66 @@ public class OxygenUtilTest {
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
+    }
+
+    /**
+     * Test collectDeviceLaunchMetrics after replacing cuttlefish-common into
+     * cuttlefish-host-resources and cuttlefish-operator.
+     */
+    @Test
+    public void testCollectDeviceLaunchMetricsV2() throws Exception {
+        File tmpDir = null;
+        try {
+            tmpDir = FileUtil.createTempDir("logs");
+            File file1 = FileUtil.createTempFile("vdl_stdout.txt", ".randomstring", tmpDir);
+            String content =
+                    "some content\n"
+                        + "2023/12/01 12:12:00 launch_cvd exited.2023/12/01 12:12:12   Ended At  |"
+                        + " Duration | Event Name\n"
+                        + "2023/12/01 12:12:12      50.50  |    0.00  | SetupDependencies\n"
+                        + "2023/12/01 12:12:12      51.51  |    1.01  | CuttlefishHostResources\n"
+                        + "2023/12/01 12:12:12      52.52  |    2.02  | CuttlefishOperator\n"
+                        + "2023/12/01 12:12:12     131.30  |   80.80  | LaunchDevice\n"
+                        + "2023/12/01 12:12:12     131.30  |  131.30  |"
+                        + " CuttlefishLauncherMainstart\n"
+                        + "tailing string";
+            FileUtil.writeToFile(content, file1);
+            long[] metrics = OxygenUtil.collectDeviceLaunchMetrics(tmpDir);
+            assertEquals(47470, metrics[0]);
+            assertEquals(80800, metrics[1]);
+
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
+        }
+    }
+
+    @Test
+    public void testCollectOxygenVersion() throws Exception {
+        File tmpDir = null;
+        try {
+            tmpDir = FileUtil.createTempDir("logs");
+            File file1 = FileUtil.createTempFile("oxygen_version.txt", "", tmpDir);
+            String content = "version_number \n\n\n";
+            FileUtil.writeToFile(content, file1);
+            assertEquals("version_number", OxygenUtil.collectOxygenVersion(tmpDir));
+
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
+        }
+    }
+
+    @Test
+    public void testGetTargetRegion_WithExplicitRegion() throws Exception {
+        TestDeviceOptions deviceOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(deviceOptions);
+        setter.setOptionValue("oxygen-target-region", "us-east");
+        String targetRegion = OxygenUtil.getTargetRegion(deviceOptions);
+        assertEquals("us-east", targetRegion);
+    }
+
+    @Test
+    public void testGetRegionFromZoneMeta() throws Exception {
+        assertEquals(
+                "us-west12", OxygenUtil.getRegionFromZoneMeta("projects/12345/zones/us-west12-a"));
     }
 }

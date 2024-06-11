@@ -80,7 +80,13 @@ public class FileDownloadCacheTest {
         MockitoAnnotations.initMocks(this);
 
         mCacheDir = FileUtil.createTempDir("unittest");
-        mCache = new FileDownloadCache(mCacheDir);
+        mCache =
+                new FileDownloadCache(mCacheDir) {
+                    @Override
+                    File getWorkFolder() {
+                        return null;
+                    }
+                };
     }
 
     @After
@@ -260,6 +266,11 @@ public class FileDownloadCacheTest {
                         }
                         return super.copyFile(remotePath, cachedFile, desFile);
                     }
+
+                    @Override
+                    File getWorkFolder() {
+                        return null;
+                    }
                 };
         // perform successful download
         setDownloadExpectations(REMOTE_PATH);
@@ -304,7 +315,13 @@ public class FileDownloadCacheTest {
         FileUtil.writeToFile("test", file);
         File cacheFile = null;
         try {
-            mCache = new FileDownloadCache(cacheDir);
+            mCache =
+                    new FileDownloadCache(cacheDir) {
+                        @Override
+                        File getWorkFolder() {
+                            return null;
+                        }
+                    };
             setFreshnessExpectations(true);
 
             cacheFile =
@@ -331,7 +348,13 @@ public class FileDownloadCacheTest {
             assertNotNull(cachedFile);
 
             // Now rebuild the cache and try to find our file
-            mCache = new FileDownloadCache(mCacheDir);
+            mCache =
+                    new FileDownloadCache(mCacheDir) {
+                        @Override
+                        File getWorkFolder() {
+                            return null;
+                        }
+                    };
             File cachedFileRebuilt = mCache.getCachedFile(gsPath);
             assertNotNull(cachedFileRebuilt);
 

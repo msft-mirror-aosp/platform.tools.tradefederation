@@ -146,6 +146,7 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
                     Pattern.DOTALL);
     static final Pattern PATTERN_FAIL_MESSAGE =
             Pattern.compile("(FAIL|ERROR): (\\S*) \\((\\S*)\\)( \\(.*\\))?");
+
     static final Pattern PATTERN_RUN_SUMMARY =
             Pattern.compile("Ran (\\d+) tests? in (\\d+(.\\d*)?)s(.*)");
 
@@ -312,7 +313,9 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
                         !lineMatchesPattern(line, PATTERN_MULTILINE_RESULT_FIRST_NEGATIVE);
                 if (canBeMultiline && lineMatchesPattern(line, PATTERN_MULTILINE_RESULT_FIRST)) {
                     mCurrentTestName = mCurrentMatcher.group(1);
-                    mCurrentTestClass = mCurrentMatcher.group(2);
+                    mCurrentTestClass =
+                            removeTestNameFromClassNameGroup(
+                                    mCurrentMatcher.group(2), mCurrentTestName);
                     mCurrentTestCaseString = null;
                 }
                 return; // The entire line doesn't match so just ignore it.
@@ -320,7 +323,7 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
 
             for (MatchResult r : matchResults) {
                 mCurrentTestName = r.group(1);
-                mCurrentTestClass = r.group(2);
+                mCurrentTestClass = removeTestNameFromClassNameGroup(r.group(2), mCurrentTestName);
                 mCurrentTestStatus = r.group(3);
 
                 // Tests with failed subtests have no status printed so we add an entry with 'FAIL'
@@ -341,7 +344,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
             mCurrentTestCaseString = null;
         } else if (lineMatchesPattern(line, PATTERN_TWO_LINE_RESULT_FIRST)) {
             mCurrentTestName = mCurrentMatcher.group(1);
-            mCurrentTestClass = mCurrentMatcher.group(2);
+            mCurrentTestClass =
+                    removeTestNameFromClassNameGroup(mCurrentMatcher.group(2), mCurrentTestName);
             mCurrentTestCaseString = null;
         } else if (lineMatchesPattern(line, PATTERN_TWO_LINE_RESULT_SECOND)) {
             mCurrentTestStatus = mCurrentMatcher.group(2);
@@ -363,6 +367,18 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
         }
     }
 
+    String removeTestNameFromClassNameGroup(String classNameGroup, String testName) {
+        if (!classNameGroup.endsWith(testName)) {
+            return classNameGroup;
+        }
+        Pattern p = Pattern.compile("(.*)\\." + testName);
+        Matcher matcher = p.matcher(classNameGroup);
+        if (!matcher.matches()) {
+            return classNameGroup;
+        }
+        return matcher.group(1);
+    }
+
     /** Process a fail message line and collect the test name, class, and status. */
     void processFailMessage(String line) {
         if (isDashLine(line)) {
@@ -371,7 +387,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
             mCurrentTraceback = new StringBuilder();
         } else if (lineMatchesPattern(line, PATTERN_FAIL_MESSAGE)) {
             mCurrentTestName = mCurrentMatcher.group(2);
-            mCurrentTestClass = mCurrentMatcher.group(3);
+            mCurrentTestClass =
+                    removeTestNameFromClassNameGroup(mCurrentMatcher.group(3), mCurrentTestName);
             mCurrentTestStatus = mCurrentMatcher.group(1);
         }
         // optional docstring - do nothing
@@ -495,9 +512,13 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
             if (mIncludeFilters.contains(mCurrentTestClass + "#" + mCurrentTestName)
                     || mIncludeFilters.contains(mCurrentTestClass)) {
                 return false;
-            } else {
-                return true;
             }
+            for (String filter : mIncludeFilters) {
+                if ((mCurrentTestClass + "#" + mCurrentTestName).matches(filter)) {
+                    return false;
+                }
+            }
+            return true;
         }
         return false;
     }

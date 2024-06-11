@@ -119,6 +119,14 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
     private List<String> mTestOptions = new ArrayList<>();
 
     @Option(
+            name = "inject-build-key",
+            description =
+                    "Link a file from the build by its key to the python subprocess via"
+                            + " environment. This breaks test dependencies so shouldn't be used in"
+                            + " standard suites.")
+    private Set<String> mBuildKeyToLink = new LinkedHashSet<String>();
+
+    @Option(
             name = USE_TEST_OUTPUT_FILE_OPTION,
             description =
                     "Whether the test should write results to the file specified via the --"
@@ -274,6 +282,14 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
         if (mInjectAndroidSerialVar) {
             getRunUtil()
                     .setEnvVariable(ANDROID_SERIAL_VAR, mTestInfo.getDevice().getSerialNumber());
+        }
+        // This is not standard, but sometimes non-module data artifacts might be needed
+        for (String key : mBuildKeyToLink) {
+            if (mTestInfo.getBuildInfo().getFile(key) != null) {
+                getRunUtil()
+                        .setEnvVariable(
+                                key, mTestInfo.getBuildInfo().getFile(key).getAbsolutePath());
+            }
         }
 
         File tempTestOutputFile = null;

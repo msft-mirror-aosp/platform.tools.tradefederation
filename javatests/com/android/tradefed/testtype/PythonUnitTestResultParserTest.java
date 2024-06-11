@@ -100,6 +100,8 @@ public class PythonUnitTestResultParserTest {
         assertTrue(PythonUnitTestResultParser.PATTERN_FAIL_MESSAGE.matcher(s).matches());
         s = "FAIL: a (b) (i=3)";
         assertTrue(PythonUnitTestResultParser.PATTERN_FAIL_MESSAGE.matcher(s).matches());
+        s = "FAIL: my_test_method (__main__.MyExampleTest.my_test_method)";
+        assertTrue(PythonUnitTestResultParser.PATTERN_FAIL_MESSAGE.matcher(s).matches());
     }
 
     @Test
@@ -184,6 +186,28 @@ public class PythonUnitTestResultParserTest {
             "OK (expected failures=1)"
         };
         TestDescription id = new TestDescription("a", "b");
+
+        mParser.processNewLines(output);
+
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener, times(1)).testRunStarted("test", 1);
+        inOrder.verify(mMockListener, times(1)).testStarted(Mockito.eq(id));
+        inOrder.verify(mMockListener, times(1))
+                .testEnded(Mockito.eq(id), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener, times(1)).testRunEnded(1000L, new HashMap<String, Metric>());
+    }
+
+    @Test
+    public void testParseSingleWithModuleClass() throws Exception {
+        String[] output = {
+            "test_1_pass (__main__.MyExampleTest.test_1_pass) ... ok",
+            "",
+            PythonUnitTestResultParser.DASH_LINE,
+            "Ran 1 test in 1s",
+            "",
+            "OK"
+        };
+        TestDescription id = new TestDescription("__main__.MyExampleTest", "test_1_pass");
 
         mParser.processNewLines(output);
 
@@ -375,6 +399,41 @@ public class PythonUnitTestResultParserTest {
         inOrder.verify(mMockListener, times(1))
                 .testEnded(Mockito.eq(id2), Mockito.<HashMap<String, Metric>>any());
         inOrder.verify(mMockListener, times(1)).testRunEnded(1000L, new HashMap<String, Metric>());
+    }
+
+    @Test
+    public void testParseMultiTestWithModuleClassAndMixedResults() throws Exception {
+        String[] output = {
+            "test_example1_fail (__main__.MyExampleTest.test_example1_fail) ... FAIL",
+            "test_example1_pass (__main__.MyExampleTest.test_example1_pass) ... ok",
+            "",
+            PythonUnitTestResultParser.EQUAL_LINE,
+            "FAIL: test_example1_fail (__main__.MyExampleTest.test_example1_fail)",
+            PythonUnitTestResultParser.DASH_LINE,
+            "Traceback (most recent call last",
+            "  File example.py line 43, in test_example1_fail",
+            "      self.assertEqual(1, 2)",
+            "AssertionError: 1 != 2",
+            "",
+            PythonUnitTestResultParser.DASH_LINE,
+            "Ran 2 test in 1s",
+            "",
+            "FAILED (failures=1)"
+        };
+        TestDescription id = new TestDescription("__main__.MyExampleTest", "test_example1_fail");
+        TestDescription id2 = new TestDescription("__main__.MyExampleTest", "test_example1_pass");
+
+        mParser.processNewLines(output);
+
+        verify(mMockListener, times(1)).testRunStarted("test", 2);
+        verify(mMockListener, times(1)).testStarted(Mockito.eq(id));
+        verify(mMockListener, times(1))
+                .testEnded(Mockito.eq(id), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockListener, times(1)).testStarted(Mockito.eq(id2));
+        verify(mMockListener, times(1)).testFailed(Mockito.any(), (String) Mockito.any());
+        verify(mMockListener, times(1))
+                .testEnded(Mockito.eq(id2), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockListener, times(1)).testRunEnded(1000L, new HashMap<String, Metric>());
     }
 
     @Test

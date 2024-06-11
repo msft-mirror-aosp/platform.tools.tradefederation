@@ -34,6 +34,22 @@ public class GCSDownloaderHelper {
     /**
      * Fetch the resource from the GS path.
      *
+     * @param destFile The {@link File} pointing to the retrieved resource.
+     * @param gsPath the path where the resource is located. For example: gs://bucket/path/file
+     * @throws BuildRetrievalError
+     */
+    public void fetchTestResource(File destFile, String gsPath) throws BuildRetrievalError {
+        try {
+            getGCSFileDownloader().downloadFile(gsPath, destFile);
+        } catch (BuildRetrievalError e) {
+            deleteCacheEntry(gsPath);
+            throw e;
+        }
+    }
+
+    /**
+     * Fetch the resource from the GS path.
+     *
      * @param gsPath the path where the resource is located. For example: gs://bucket/path/file
      * @return The {@link File} pointing to the retrieved resource.
      * @throws BuildRetrievalError

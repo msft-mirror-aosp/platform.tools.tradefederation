@@ -86,6 +86,12 @@ public class IsolatedHostTestTest {
         return jarFile;
     }
 
+    private void makeDirAndAddToList(File parentDir, String dirName, List<String> list) {
+        File lib = new File(parentDir, dirName);
+        lib.mkdir();
+        list.add(lib.getAbsolutePath());
+    }
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
@@ -110,6 +116,7 @@ public class IsolatedHostTestTest {
     @After
     public void tearDown() throws Exception {
         FileUtil.recursiveDelete(mMockTestDir);
+        mHostTest.deleteTempFiles();
     }
 
     @Test
@@ -134,6 +141,32 @@ public class IsolatedHostTestTest {
                                                 "-Drobolectric.dependency.dir="
                                                         + androidAll.getAbsolutePath()
                                                         + "/")));
+    }
+
+    @Test
+    public void testRavenwoodResourcesPositive() throws Exception {
+        OptionSetter setter = new OptionSetter(mHostTest);
+        setter.setOptionValue("use-ravenwood-resources", "true");
+
+        File dir = new File(mMockTestDir, "ravenwood-runtime");
+        dir.mkdirs();
+        File.createTempFile("temp", ".jar", dir);
+
+        // Create the JNI directories.
+        List<String> ldLibraryPath = new ArrayList<>();
+        makeDirAndAddToList(dir, "lib", ldLibraryPath);
+        makeDirAndAddToList(dir, "lib64", ldLibraryPath);
+
+        doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        doReturn(36000).when(mMockServer).getLocalPort();
+        doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
+        assertTrue(mHostTest.compileClassPath().contains("ravenwood-runtime"));
+
+        String expectedLdLibraryPath = String.join(java.io.File.pathSeparator, ldLibraryPath);
+        assertEquals(expectedLdLibraryPath, mHostTest.compileLdLibraryPathInner(null));
+
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertTrue(commandArgs.contains("-Dandroid.junit.runner=org.junit.runners.JUnit4"));
     }
 
     @Test
@@ -164,6 +197,19 @@ public class IsolatedHostTestTest {
     }
 
     @Test
+    public void testRavenwoodResourcesNegative() throws Exception {
+        OptionSetter setter = new OptionSetter(mHostTest);
+        setter.setOptionValue("use-ravenwood-resources", "false");
+        doReturn(mMockTestDir).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        doReturn(36000).when(mMockServer).getLocalPort();
+        doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
+        assertFalse(mHostTest.compileClassPath().contains("ravenwood-runtime"));
+
+        List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertFalse(commandArgs.contains("-Dandroid.junit.runner=org.junit.runners.JUnit4"));
+    }
+
+    @Test
     public void testCoverageArgsAreAdded_whenCoverageIsTurnedOn() throws Exception {
         CoverageOptions coverageOptions = new CoverageOptions();
         OptionSetter setter = new OptionSetter(coverageOptions);
@@ -180,7 +226,9 @@ public class IsolatedHostTestTest {
 
         String javaAgent =
                 String.format(
-                        "-javaagent:path/to/jacocoagent.jar=destfile=%s",
+                        "-javaagent:path/to/jacocoagent.jar=destfile=%s,"
+                                + "inclnolocationclasses=true,"
+                                + "exclclassloader=jdk.internal.reflect.DelegatingClassLoader",
                         mHostTest.getCoverageExecFile().getAbsolutePath());
         assertTrue(commandArgs.contains(javaAgent));
         FileUtil.deleteFile(mHostTest.getCoverageExecFile());
@@ -507,14 +555,19 @@ public class IsolatedHostTestTest {
     public void testCompileLdLibraryPath() throws Exception {
         setUpSimpleMockJarTest("SimplePassingTest.jar");
         List<String> paths = new ArrayList<>();
-        File lib = new File(mMockTestDir, "lib");
-        lib.mkdir();
-        paths.add(lib.getAbsolutePath());
-        File lib64 = new File(mMockTestDir, "lib64");
-        lib64.mkdir();
-        paths.add(lib64.getAbsolutePath());
+
+        makeDirAndAddToList(mMockTestDir, "lib", paths);
+        makeDirAndAddToList(mMockTestDir, "lib64", paths);
+
+        // Simulate $ANDROID_HOST_OUT
+        File androidHostOut = new File(mMockTestDir, "ANDROID_HOST_OUT");
+        androidHostOut.mkdirs();
+        makeDirAndAddToList(androidHostOut, "lib", paths);
+        makeDirAndAddToList(androidHostOut, "lib64", paths);
+
         final String expectedLdLibraryPath = String.join(java.io.File.pathSeparator, paths);
-        final String ldLibraryPath = mHostTest.compileLdLibraryPath();
+        final String ldLibraryPath =
+                mHostTest.compileLdLibraryPathInner(androidHostOut.getAbsolutePath());
         assertEquals(expectedLdLibraryPath, ldLibraryPath);
     }
 

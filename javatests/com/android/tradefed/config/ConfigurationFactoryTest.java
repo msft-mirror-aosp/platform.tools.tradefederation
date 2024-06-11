@@ -1754,7 +1754,7 @@ public class ConfigurationFactoryTest {
         assertFalse(deviceSetup1.getTestBooleanOption());
         // default value of test-boolean-option-false is false, we set it to true.
         assertTrue(deviceSetup1.getTestBooleanOptionFalse());
-        assertTrue(device1.getDeviceRequirements().tcpDeviceRequested());
+        assertTrue(device1.getDeviceRequirements().gceDeviceRequested());
         assertFalse(device1.getDeviceRequirements().nullDeviceRequested());
 
         // Check that the second preparer, outside device1 can still receive option as {device1}.
@@ -1767,7 +1767,7 @@ public class ConfigurationFactoryTest {
         assertFalse(config.isDeviceConfiguredFake(ConfigurationDef.DEFAULT_DEVICE_NAME));
         assertTrue(config.isDeviceConfiguredFake("device2"));
         IDeviceConfiguration device2 = config.getDeviceConfigByName("device2");
-        assertFalse(device2.getDeviceRequirements().tcpDeviceRequested());
+        assertFalse(device2.getDeviceRequirements().gceDeviceRequested());
         assertTrue(device2.getDeviceRequirements().nullDeviceRequested());
     }
 

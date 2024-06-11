@@ -118,10 +118,13 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         if (mTradefedUserType.isManagedProfile()
                 && !requireFeatures(testInfo, "android.software.managed_users")) {
             return true;
-        } else if (mTradefedUserType.isCloneProfile() && !matchesApiLevel(testInfo, 33)) {
+        } else if (mTradefedUserType.isCloneProfile() && !matchesApiLevel(testInfo, 34)) {
             // Clone profile type was introduced in Android S(api 31).
-            // However, adb support to get usertype was added in 33.
-            // Android T = 33
+            // However, major functionalities supporting clone got added in 34.
+            // Android U = 34
+            return true;
+        } else if (mTradefedUserType.isPrivateProfile() && isPrivateProfileSupported(
+                testInfo.getDevice())) {
             return true;
         }
         return false;
@@ -135,6 +138,24 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
                         + apiLevel
                         + " requirement does not match",
                 testInfo);
+    }
+
+    private boolean isPrivateProfileSupported(ITestDevice device)
+            throws DeviceNotAvailableException {
+        String command = "dumpsys user";
+        String dumpsysOutput = device.executeShellCommand(command);
+        if (dumpsysOutput == null || !dumpsysOutput.contains("Can add private profile:")) {
+            return false;
+        }
+
+        try {
+            String supportPSOnwards = dumpsysOutput.split("Can add private profile:", 2)[1].trim();
+            String supportsPSValue = supportPSOnwards.split("\n")[0].trim();
+            return Boolean.parseBoolean(supportsPSValue);
+        } catch (RuntimeException e) {
+            throw commandError("Error reading user service information", command, dumpsysOutput, e,
+                    SHELL_COMMAND_ERROR);
+        }
     }
 
     private int getExistingProfileId(ITestDevice device) throws DeviceNotAvailableException {
@@ -166,7 +187,7 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
 
         command += " user";
 
-        if (mTradefedUserType.isCloneProfile() || mTradefedUserType.isManagedProfile()) {
+        if (mTradefedUserType.isProfile()) {
             removeDeviceOwnerIfPresent(device);
         }
 

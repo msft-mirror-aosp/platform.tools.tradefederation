@@ -20,16 +20,21 @@ import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
-import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
+import com.google.common.collect.Lists;
+
 import java.io.File;
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -37,6 +42,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -44,6 +50,12 @@ import com.google.common.base.Strings;
 
 /** A class that manages the use of Oxygen client binary to lease or release Oxygen device. */
 public class OxygenClient {
+
+    public enum LHPTunnelMode {
+        SSH,
+        ADB,
+        CURL;
+    }
 
     private final File mClientBinary;
 
@@ -72,7 +84,19 @@ public class OxygenClient {
                                 {"--kernel-build-id", "-kernel_build_id"},
                                 {"--kernel_build_id", "-kernel_build_id"},
                                 {"--kernel-build-target", "-kernel_build_target"},
-                                {"--kernel_build_target", "-kernel_build_target"}
+                                {"--kernel_build_target", "-kernel_build_target"},
+                                {"--boot-build-id", "-boot_build_id"},
+                                {"--boot_build_id", "-boot_build_id"},
+                                {"--boot-build-target", "-boot_build_target"},
+                                {"--boot_build_target", "-boot_build_target"},
+                                {"--boot-artifact", "-boot_artifact"},
+                                {"--boot_artifact", "-boot_artifact"},
+                                {"--host_package_build_id", "-host_package_build_id"},
+                                {"--host_package_build_target", "-host_package_build_target"},
+                                {"--bootloader-build-id", "-bootloader_build_id"},
+                                {"--bootloader_build_id", "-bootloader_build_id"},
+                                {"--bootloader-build-target", "-bootloader_build_target"},
+                                {"--bootloader_build_target", "-bootloader_build_target"}
                             })
                     .collect(
                             Collectors.collectingAndThen(
@@ -130,19 +154,17 @@ public class OxygenClient {
     }
 
     /**
-     * Returns the value of the 'override_fetch_cvd_path' argument in the given TestDeviceOptions.
+     * Returns the value of the 'override_cvd_path' argument in the given TestDeviceOptions.
      *
      * @param deviceOptions {@link TestDeviceOptions}
-     * @return the value of 'override_fetch_cvd_path', or null if it is not present
+     * @return the value of 'override_cvd_path', or null if it is not present
      */
-    public String getOverrideFetchCvdPath(TestDeviceOptions deviceOptions) {
-        if (!deviceOptions.getExtraOxygenArgs().containsKey("override_fetch_cvd_path")) {
+    public String getOverrideCvdPath(TestDeviceOptions deviceOptions) {
+        if (!deviceOptions.getExtraOxygenArgs().containsKey("override_cvd_path")) {
             return null;
         }
 
-        String path = deviceOptions.getExtraOxygenArgs().get("override_fetch_cvd_path");
-        // An empty string is used to represent fetch_cvd from the build being tested.
-        return path == null ? "" : path;
+        return deviceOptions.getExtraOxygenArgs().get("override_cvd_path");
     }
 
     /**
@@ -177,7 +199,16 @@ public class OxygenClient {
      */
     public CommandResult leaseDevice(
             IBuildInfo b, TestDeviceOptions deviceOptions, MultiMap<String, String> attributes) {
-        List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+        if (deviceOptions.useOxygenationDevice()) {
+            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
+            // Lease an oxygenation device with additional options passed in when
+            // use-oxygenation-device is set.
+            // For now, return failure with exceptions first.
+            CommandResult ret = new CommandResult(CommandStatus.EXCEPTION);
+            ret.setStderr("OxygenClient: Leasing an oxygenation device is not supported for now.");
+            return ret;
+        }
+        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
         List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
@@ -226,23 +257,17 @@ public class OxygenClient {
 
         // add oxygen side lease options
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(deviceOptions.getOxygenTargetRegion());
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-accounting_user");
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
         oxygenClientArgs.add(Long.toString(deviceOptions.getOxygenLeaseLength() / 1000));
 
-        // Check if there is a new fetch CVD path to override
-        String override_fetch_cvd_path = getOverrideFetchCvdPath(deviceOptions);
-        if (override_fetch_cvd_path != null) {
-            oxygenClientArgs.add("-override_fetch_cvd_path");
-            // If the path is not specified, use the fetch_cvd in BuildInfo.
-            if (override_fetch_cvd_path.isEmpty()) {
-                String build_target =
-                        b.getBuildAttributes().getOrDefault("build_target", b.getBuildFlavor());
-                override_fetch_cvd_path = String.format("ab/%s/%s", b.getBuildId(), build_target);
-            }
-            oxygenClientArgs.add(override_fetch_cvd_path);
+        // Check if there is a new CVD path to override
+        String override_cvd_path = getOverrideCvdPath(deviceOptions);
+        if (override_cvd_path != null) {
+            oxygenClientArgs.add("-override_cvd_path");
+            oxygenClientArgs.add(override_cvd_path);
         }
 
         for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
@@ -272,7 +297,7 @@ public class OxygenClient {
             List<IBuildInfo> buildInfos,
             TestDeviceOptions deviceOptions,
             MultiMap<String, String> attributes) {
-        List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
         oxygenClientArgs.add("-lease");
 
         List<String> buildTargets = new ArrayList<>();
@@ -306,7 +331,7 @@ public class OxygenClient {
         oxygenClientArgs.add("-multidevice_size");
         oxygenClientArgs.add(String.valueOf(buildInfos.size()));
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(deviceOptions.getOxygenTargetRegion());
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-accounting_user");
         oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
         oxygenClientArgs.add("-lease_length_secs");
@@ -343,7 +368,14 @@ public class OxygenClient {
                 || gceAvdInfo.hostAndPort().getHost() == null) {
             return true;
         }
-        List<String> oxygenClientArgs = ArrayUtil.list(mClientBinary.getAbsolutePath());
+        if (deviceOptions.useOxygenationDevice()) {
+            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
+            // Release an oxygenation device with additional options passed in when
+            // use-oxygenation-device is set.
+            // For now, return false first.
+            return false;
+        }
+        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
 
         for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
             oxygenClientArgs.add("-" + arg.getKey());
@@ -353,6 +385,8 @@ public class OxygenClient {
         }
 
         oxygenClientArgs.add("-release");
+        oxygenClientArgs.add("-target_region");
+        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
         oxygenClientArgs.add("-server_url");
         oxygenClientArgs.add(gceAvdInfo.hostAndPort().getHost());
         oxygenClientArgs.add("-session_id");
@@ -364,7 +398,71 @@ public class OxygenClient {
                 runOxygenTimedCmd(
                         oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
                         deviceOptions.getGceCmdTimeout());
+        if (!res.getStatus().equals(CommandStatus.SUCCESS)) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_COUNT, 1);
+            if (res.getStderr() != null) {
+                String error = "Unknown";
+                if (res.getStderr().contains("context deadline exceeded")) {
+                    error = "SERVER_CALL_TIMEOUT";
+                }
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE, error);
+            }
+        }
         return res.getStatus().equals(CommandStatus.SUCCESS);
+    }
+
+    /**
+     * Create an adb or ssh tunnel to a given instance name and assign the endpoint to a device via
+     * LHP based on the given tunnel mode.
+     *
+     * @return {@link Process} of the adb over LHP tunnel.
+     */
+    public Process createTunnelViaLHP(
+            LHPTunnelMode mode, String portNumber, String instanceName, String deviceId) {
+        // TODO(easoncylee): Flesh out this section once the oxygen client is ready.
+        // At high level, the logic would look like as following steps:
+        // Step1: Create an unused ServerSocket port for establishing the adb tunnel.
+        // Step2: Establish ssh over LHP connection by running command.
+        // Step3: return the process of the connection, or null if the tunnel can't be established.
+        if (LHPTunnelMode.ADB.equals(mode)) {
+            return null;
+        } else if (LHPTunnelMode.CURL.equals(mode)) {
+            return null;
+        } else {
+            return null;
+        }
+    }
+
+    /** Helper to create an unused server socket. */
+    public Integer createServerSocket() {
+        ServerSocket s = null;
+        try {
+            s = new ServerSocket(0);
+            // even after being closed, socket may remain in TIME_WAIT state
+            // reuse address allows to connect to it even in this state.
+            s.setReuseAddress(true);
+            s.close();
+        } catch (IOException e) {
+            CLog.d("Failed to connect to remote GCE using adb tunnel %s", e.getMessage());
+        }
+        return s.getLocalPort();
+    }
+
+    /** Close the connection to the remote oxygenation device with a given {@link Process}. */
+    public void closeLHPConnection(Process p) {
+        if (p != null) {
+            p.destroy();
+            try {
+                boolean res = p.waitFor(20 * 1000, TimeUnit.MILLISECONDS);
+                if (!res) {
+                    CLog.e("Tunnel may not have properly terminated.");
+                }
+            } catch (InterruptedException e) {
+                CLog.e("Tunnel interrupted during shutdown: %s", e.getMessage());
+            }
+        }
     }
 
     /**

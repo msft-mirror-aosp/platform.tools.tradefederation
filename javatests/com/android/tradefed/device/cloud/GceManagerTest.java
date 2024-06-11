@@ -69,6 +69,7 @@ public class GceManagerTest {
     private IBuildInfo mMockBuildInfo;
     @Mock IRunUtil mMockRunUtil;
     private File mAvdBinary;
+    @Mock OxygenClient mMockOxygenClient;
 
     @Before
     public void setUp() throws Exception {
@@ -435,7 +436,6 @@ public class GceManagerTest {
                             reportFile.getAbsolutePath(),
                             "--base-instance-num",
                             "3",
-                            "--launch-args=\"--base_instance_num=3\"",
                             "-v");
             assertEquals(expected, result);
         } finally {
@@ -1190,5 +1190,13 @@ public class GceManagerTest {
         assertEquals(1800000L, mOptions.getGceCmdTimeout());
         mGceManager = new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo);
         assertEquals(1800000L, mOptions.getGceCmdTimeout());
+    }
+
+    @Test(expected = TargetSetupError.class)
+    public void testStartGce_oxygenation() throws Exception {
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        mGceManager = new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo);
+        mGceManager.startGce();
     }
 }

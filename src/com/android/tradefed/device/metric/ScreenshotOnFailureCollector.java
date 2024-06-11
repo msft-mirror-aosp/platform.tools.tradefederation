@@ -56,6 +56,7 @@ public class ScreenshotOnFailureCollector extends BaseDeviceMetricCollector {
             RecoveryMode mode = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try (InputStreamSource screenSource = device.getScreenshot()) {
+                CLog.d("Captured screenshot-on-failure.");
                 super.testLog(
                         String.format(NAME_FORMAT, test.toString(), device.getSerialNumber()),
                         LogDataType.PNG,

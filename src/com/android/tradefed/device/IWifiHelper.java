@@ -245,6 +245,22 @@ interface IWifiHelper {
             throws DeviceNotAvailableException;
 
     /**
+     * Connects to a wifi network and check connectivity.
+     *
+     * @param ssid the ssid of network to connect
+     * @param psk the WPA-PSK passphrase to use. This can be null.
+     * @param urlToCheck a destination url for a HTTP request check
+     * @param scanSsid whether to scan for hidden SSID for this network
+     * @param defaultType Default network type to fall back to if ssid's network type is not
+     *     determined
+     * @return WifiConnectionResult representing the wifi connection result
+     * @throws DeviceNotAvailableException
+     */
+    WifiConnectionResult connectToNetwork(
+            String ssid, String psk, String urlToCheck, boolean scanSsid, String defaultType)
+            throws DeviceNotAvailableException;
+
+    /**
      * Disconnect from the current wifi network and disable wifi.
      *
      * @return <code>true</code> if the operation succeeded.

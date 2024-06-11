@@ -30,8 +30,8 @@ import com.proto.tradefed.feature.PartResponse;
 public class GlobalFilterGetter implements IRemoteFeature, IConfigurationReceiver {
 
     public static final String GLOBAL_FILTER_GETTER = "getGlobalFilters";
-    private static final String DELIMITER = ",";
-    private static final String ESCAPED_DELIMITER = ","; // TODO: RE-update the delimiter
+    private static final String DELIMITER = "+,";
+    private static final String ESCAPED_DELIMITER = "\\+,";
 
     private IConfiguration mConfig;
 

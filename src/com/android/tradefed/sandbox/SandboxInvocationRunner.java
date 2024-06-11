@@ -18,6 +18,8 @@ package com.android.tradefed.sandbox;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.util.CommandResult;
@@ -82,11 +84,18 @@ public class SandboxInvocationRunner {
         if (sandbox == null) {
             throw new RuntimeException("Couldn't find the sandbox object.");
         }
+        long start = System.currentTimeMillis();
         try {
             CommandResult result = sandbox.run(info, config, listener);
             return CommandStatus.SUCCESS.equals(result.getStatus());
         } finally {
             sandbox.tearDown();
+            // Only log if it was no already logged to keep the value closest to execution
+            if (!InvocationMetricLogger.getInvocationMetrics()
+                    .containsKey(InvocationMetricKey.TEST_PAIR.toString())) {
+                InvocationMetricLogger.addInvocationPairMetrics(
+                        InvocationMetricKey.TEST_PAIR, start, System.currentTimeMillis());
+            }
         }
     }
 }

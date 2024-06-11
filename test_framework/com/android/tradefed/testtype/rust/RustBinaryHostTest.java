@@ -214,6 +214,8 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     private CommandResult runInvocation(final Invocation invocation, final String... extraArgs) {
         IRunUtil runUtil = getRunUtil();
         runUtil.setWorkingDir(invocation.workingDir);
+        runUtil.unsetEnvVariable(
+                "TERM"); // Environment TERM can affect output format and fail parser
         boolean ldLibraryPathSetInEnv = false;
         for (EnvPair envPair : invocation.env) {
             runUtil.setEnvVariable(envPair.key, envPair.val);

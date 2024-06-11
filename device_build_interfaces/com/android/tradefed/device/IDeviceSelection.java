@@ -87,12 +87,17 @@ public interface IDeviceSelection extends IMatcher<IDevice> {
      */
     public boolean nullDeviceRequested();
 
-    /** @return <code>true</code> if a tcp device (aka a adb connected device) has been requested */
-    public boolean tcpDeviceRequested();
+    /**
+     * @return <code>true</code> if a tcp device (aka a adb connected device) has been requested
+     */
+    @Deprecated
+    public default boolean tcpDeviceRequested() {
+        return false;
+    }
 
     /** @return <code>true</code> if a gce device (aka a remote device) has been requested */
     public boolean gceDeviceRequested();
-    
+
     /**
      * Gets the given devices product type
      *
@@ -134,4 +139,7 @@ public interface IDeviceSelection extends IMatcher<IDevice> {
 
     /** Sets the device type we should use. */
     public void setBaseDeviceTypeRequested(BaseDeviceType type);
+
+    /** Sets whether or not we want to do the battery check. */
+    public void setRequireBatteryCheck(boolean requireCheck);
 }

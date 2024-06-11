@@ -20,6 +20,7 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 
 import java.io.File;
@@ -236,8 +237,13 @@ public class TestInformation {
                 // approach to do individual download from remote artifact.
                 // Try to stage the files from remote zip files.
                 file = getBuildInfo().stageRemoteFile(fileName, testsDir);
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
+                if (file != null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
+                }
+            } else if (file.isDirectory()) {
+                CLog.d("Found %s as a directory, searching further.", fileName);
+                file = FileUtil.findFile(file, fileName);
             }
             return file;
         }

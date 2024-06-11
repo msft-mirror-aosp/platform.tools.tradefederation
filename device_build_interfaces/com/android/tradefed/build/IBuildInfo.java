@@ -320,4 +320,7 @@ public interface IBuildInfo extends Serializable {
     public default File stageRemoteFile(String fileName, File workingDir) {
         return null;
     }
+
+    /** Sets permission to allow staging remote files. */
+    public default void allowStagingRemoteFile(boolean stageRemoteFile) {}
 }

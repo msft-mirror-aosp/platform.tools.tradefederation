@@ -1,6 +1,7 @@
 package com.android.tradefed.service.management;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceAllocationState;
@@ -157,6 +158,16 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             responseObserver.onCompleted();
             return;
         }
+        if (mCommandScheduler instanceof CommandScheduler) {
+            if (((CommandScheduler) mCommandScheduler).isShuttingDown()) {
+                responseBuilder
+                        .setResult(Result.UNKNOWN)
+                        .setMessage("Tradefed is shutting down, rejecting reservation.");
+                responseObserver.onNext(responseBuilder.build());
+                responseObserver.onCompleted();
+                return;
+            }
+        }
 
         DeviceDescriptor descriptor = mDeviceManager.getDeviceDescriptor(serial);
         if (descriptor == null) {
@@ -179,6 +190,15 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                     .setMessage("device is currently in unavailable state.");
         } else if (!serverCallStreamObserver.isCancelled()) {
             DeviceSelectionOptions selection = new DeviceSelectionOptions();
+            // Allow reservation to hold any placeholder
+            // We have to match serial because selection is exclusive and doesn't
+            // currently allow a wide match. We could improve that in the future.
+            if (serial.startsWith("gce-device")) {
+                selection.setGceDeviceRequested(true);
+            }
+            if (serial.startsWith("null-device")) {
+                selection.setNullDeviceRequested(true);
+            }
             selection.addSerial(serial);
             ITestDevice device = mDeviceManager.allocateDevice(selection);
             if (device == null) {
@@ -217,7 +237,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
 
         // Notify to stop leasing
         try {
-            mCommandScheduler.shutdown();
+            mCommandScheduler.stopScheduling();
             responseBuilder.setResult(StopLeasingResponse.Result.SUCCEED);
         } catch (RuntimeException e) {
             // This might happen in case scheduler isn't started or in bad state.
@@ -230,9 +250,11 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     }
 
     private void releaseReservationInternal(String reservationId) {
-        ITestDevice device = getDeviceFromReservationAndClear(reservationId);
-        if (device != null) {
-            mDeviceManager.freeDevice(device, FreeDeviceState.AVAILABLE);
+        Entry<String, ReservationInformation> entry = getDeviceEntryFromReservation(reservationId);
+        if (entry != null) {
+            mDeviceManager.freeDevice(entry.getValue().device, FreeDeviceState.AVAILABLE);
+            // Only release reservation when done with free.
+            mSerialToReservation.remove(entry.getKey());
         }
     }
 
@@ -270,15 +292,6 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             if (info.getValue().reservationId.equals(reservationId)) {
                 return info;
             }
-        }
-        return null;
-    }
-
-    private ITestDevice getDeviceFromReservationAndClear(String reservationId) {
-        Entry<String, ReservationInformation> entry = getDeviceEntryFromReservation(reservationId);
-        if (entry != null) {
-            mSerialToReservation.remove(entry.getKey());
-            return entry.getValue().device;
         }
         return null;
     }

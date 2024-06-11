@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.presubmit;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import static java.lang.String.format;
@@ -35,6 +36,7 @@ import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.ModuleTestTypeUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.testmapping.TestInfo;
 import com.android.tradefed.util.testmapping.TestMapping;
@@ -89,7 +91,7 @@ public class TestMappingsValidation implements IBuildReceiver {
     private static final Pattern CLASS_OR_METHOD_REGEX =
             Pattern.compile(
                     "^([\\p{L}_$][\\p{L}\\p{N}_$]*\\.)*[\\p{Lu}_$][\\p{L}\\p{N}_$]*"
-                            + "(#[\\p{L}_$][\\p{L}\\p{N}_$]*)?$");
+                            + "(#[\\p{L}_$][\\p{L}\\p{N}_$]*)?(\\[.*\\])?$");
     // pattern used to identify if this is regular expression with at least 1 '*' or '?'.
     private static final Pattern REGULAR_EXPRESSION = Pattern.compile("(\\?+)|(\\*+)");
     private static final String MODULE_INFO = "module-info.json";
@@ -113,6 +115,7 @@ public class TestMappingsValidation implements IBuildReceiver {
             new HashSet<>(Arrays.asList(".apk", ".apks", ".apex"));
 
     private File testMappingsDir = null;
+    private boolean deleteUnzip = true;
     private IConfigurationFactory mConfigFactory = null;
     private IDeviceBuildInfo deviceBuildInfo = null;
     private IBuildInfo mBuild;
@@ -143,27 +146,33 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsOsTestCases",
                     "CtsStatsdAtomHostTestCases",
                     "CtsPermission3TestCases",
+                    "CtsPermissionUiTestCases",// Renamed from Permission3 in 2023
                     "CtsMediaAudioTestCases");
 
-    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST = ImmutableSet.of(
+    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST =
+            ImmutableSet.of(
                     "binderRpcTestNoKernel",
+                    "CtsLibcoreOjTestCases_time",
                     "CtsTelecomTestCases",
                     "CtsAppTestCases",
                     "binderRpcTestSingleThreadedNoKernel",
                     "CtsSuspendAppsPermissionTestCases",
                     "CtsAppSecurityHostTestCases",
+                    "CtsPackageManagerTestCases", // Renamed from CtsAppSecurityHostTestCases
                     "FrameworksServicesTests",
                     "NeuralNetworksTest_static",
                     "CtsNNAPITestCases",
                     "CtsLibcoreTestCases",
                     "OverlayRemountedTest",
                     "CtsPermission3TestCases",
+                    "CtsPermissionUiTestCases",
                     "sharedlibs_host_tests",
                     "CtsDevicePolicyManagerTestCases",
                     "CtsMediaAudioTestCases",
                     "CtsScopedStoragePublicVolumeHostTest",
                     "CtsContentTestCases",
                     "CtsHostsideNetworkTests",
+                    "CtsHostsideNetworkPolicyTests",
                     "vm-tests-tf",
                     "CtsStatsdAtomHostTestCases",
                     "CtsMediaPlayerTestCases",
@@ -215,8 +224,14 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(mBuild instanceof IDeviceBuildInfo);
         mConfigFactory = ConfigurationFactory.getInstance();
         deviceBuildInfo = (IDeviceBuildInfo) mBuild;
-        testMappingsDir =
-                TestMapping.extractTestMappingsZip(deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP));
+        if (deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP).isDirectory()) {
+            testMappingsDir = deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP);
+            deleteUnzip = false;
+        } else {
+            testMappingsDir =
+                    TestMapping.extractTestMappingsZip(deviceBuildInfo.getFile(TEST_MAPPINGS_ZIP));
+            deleteUnzip = true;
+        }
         mergeModuleInfo(deviceBuildInfo.getFile(MODULE_INFO));
         for (String fileKey : deviceBuildInfo.getVersionedFileKeys()) {
             if (fileKey.contains("additional-module-info")) {
@@ -224,12 +239,15 @@ public class TestMappingsValidation implements IBuildReceiver {
                 mergeModuleInfo(deviceBuildInfo.getFile(fileKey));
             }
         }
-        allTests = TestMapping.getAllTests(testMappingsDir);
+        TestMapping testMapping = new TestMapping();
+        allTests = testMapping.getAllTests(testMappingsDir);
     }
 
     @After
     public void tearDown() {
-        FileUtil.recursiveDelete(testMappingsDir);
+        if (deleteUnzip) {
+            FileUtil.recursiveDelete(testMappingsDir);
+        }
     }
 
     /**
@@ -242,7 +260,12 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(configZip != null);
         List<String> errors = new ArrayList<>();
         List<String> testConfigs = new ArrayList<>();
-        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        File testConfigDir = null;
+        if (configZip.isDirectory()) {
+            testConfigDir = configZip;
+        } else {
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        }
         testConfigs.addAll(
                 ConfigurationUtil.getConfigNamesFromDirs(null, Arrays.asList(testConfigDir)));
         for (String configName : testConfigs) {
@@ -403,6 +426,81 @@ public class TestMappingsValidation implements IBuildReceiver {
         }
     }
 
+    /** Test to ensure performance test modules are not included for test mapping. */
+    @Test
+    public void testNoPerformanceTests() throws IOException {
+        Set<String> modules = new HashSet<>();
+
+        for (String testGroup : allTests.keySet()) {
+            if (!mTestGroupToValidate.contains(testGroup)) {
+                CLog.d("Skip checking tests with group: %s", testGroup);
+                continue;
+            }
+            for (TestInfo testInfo : allTests.get(testGroup)) {
+                modules.add(testInfo.getName());
+            }
+        }
+
+        File testConfigDir = null;
+        File deviceTestConfigDir = null;
+        boolean deleteConfigDir = false;
+        boolean deleteDeviceConfigDir = false;
+        try {
+            File configZip = deviceBuildInfo.getFile("general-tests_configs.zip");
+            File deviceConfigZip = deviceBuildInfo.getFile("device-tests_configs.zip");
+            Assume.assumeTrue(configZip != null);
+            List<String> testConfigs = new ArrayList<>();
+            List<File> dirToLoad = new ArrayList<>();
+            if (configZip.isDirectory()) {
+                testConfigDir = configZip;
+            } else {
+                testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+                deleteConfigDir = true;
+            }
+            dirToLoad.add(testConfigDir);
+            if (deviceConfigZip != null) {
+                if (deviceConfigZip.isDirectory()) {
+                    deviceTestConfigDir = deviceConfigZip;
+                } else {
+                    deviceTestConfigDir =
+                            ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                    deleteDeviceConfigDir = true;
+                }
+                dirToLoad.add(deviceTestConfigDir);
+            }
+            testConfigs.addAll(ConfigurationUtil.getConfigNamesFromDirs(null, dirToLoad));
+            CLog.d("Checking modules: %s. And configs: %s", modules, testConfigs);
+
+            List<String> performanceModules = new ArrayList<>();
+            for (String configName : testConfigs) {
+                String module = FileUtil.getBaseName(new File(configName).getName());
+                if (!modules.contains(module)) {
+                    continue;
+                }
+                IConfiguration config =
+                        mConfigFactory.createConfigurationFromArgs(new String[] {configName});
+                if (ModuleTestTypeUtil.isPerformanceModule(config)) {
+                    performanceModules.add(module);
+                }
+            }
+            if (!performanceModules.isEmpty()) {
+                fail(
+                        String.format(
+                                "Performance modules not allowed in test mapping:\n%s",
+                                Joiner.on("\n").join(performanceModules)));
+            }
+        } catch (ConfigurationException e) {
+            fail(e.toString());
+        } finally {
+            if (deleteConfigDir) {
+                FileUtil.recursiveDelete(testConfigDir);
+            }
+            if (deleteDeviceConfigDir) {
+                FileUtil.recursiveDelete(deviceTestConfigDir);
+            }
+        }
+    }
+
     /**
      * Validate if the filter option of a test contains both class/method and package. options.
      *
@@ -488,6 +586,18 @@ public class TestMappingsValidation implements IBuildReceiver {
             return Filters.CLASS_OR_METHOD;
         }
         return Filters.PACKAGE;
+    }
+
+    /** Test {@link TestMappingsValidation#getOptionType(String)} */
+    @Test
+    public void testGetOptionType() throws Exception {
+        assertEquals(Filters.PACKAGE, getOptionType("a.b"));
+        assertEquals(Filters.CLASS_OR_METHOD, getOptionType("a.b.Class#someMethod"));
+        assertEquals(Filters.CLASS_OR_METHOD, getOptionType("a.b.Class#someMethod[some_param]"));
+        assertEquals(Filters.CLASS_OR_METHOD, getOptionType("a.b.Class"));
+        assertEquals(Filters.REGEX, getOptionType("a.b.c\\.*"));
+        assertEquals(Filters.REGEX, getOptionType("a.b.Class.\\.*"));
+        assertEquals(Filters.REGEX, getOptionType("a.b.Class#method.*"));
     }
 
     /**
@@ -639,12 +749,25 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(configZip != null);
         List<String> testConfigs = new ArrayList<>();
         List<File> dirToLoad = new ArrayList<>();
-        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
-        File deviceTestConfigDir = null;
+        File testConfigDir = null;
+        boolean deleteConfigDir = false;
+        if (configZip.isDirectory()) {
+            testConfigDir = configZip;
+        } else {
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+            deleteConfigDir = true;
+        }
         dirToLoad.add(testConfigDir);
+        File deviceTestConfigDir = null;
+        boolean deleteDeviceConfigDir = false;
         if (deviceConfigZip != null) {
-            deviceTestConfigDir =
-                    ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+            if (deviceConfigZip.isDirectory()) {
+                deviceTestConfigDir = deviceConfigZip;
+            } else {
+                deviceTestConfigDir =
+                        ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                deleteDeviceConfigDir = true;
+            }
             dirToLoad.add(deviceTestConfigDir);
         }
         try {
@@ -687,8 +810,12 @@ public class TestMappingsValidation implements IBuildReceiver {
                 fail(Joiner.on("\n").join(errors));
             }
         } finally {
-            FileUtil.recursiveDelete(testConfigDir);
-            FileUtil.recursiveDelete(deviceTestConfigDir);
+            if (deleteConfigDir) {
+                FileUtil.recursiveDelete(testConfigDir);
+            }
+            if (deleteDeviceConfigDir) {
+                FileUtil.recursiveDelete(deviceTestConfigDir);
+            }
         }
     }
 

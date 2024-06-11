@@ -50,16 +50,13 @@ public class RunOnSdkSandboxHandler implements IModuleParameterHandler {
         for (IRemoteTest test : moduleConfiguration.getTests()) {
             if (test instanceof ITestAnnotationFilterReceiver) {
                 ITestAnnotationFilterReceiver filterTest = (ITestAnnotationFilterReceiver) test;
-                Set<String> includeAnnotations = new HashSet<>(filterTest.getIncludeAnnotations());
-                // Only run tests explicitly marked to run in the SDK sandbox.
-                includeAnnotations.add("android.platform.test.annotations.AppModeSdkSandbox");
                 Set<String> excludeAnnotations = new HashSet<>(filterTest.getExcludeAnnotations());
                 // The sandbox is more restrictive than instant apps, ignore @AppModeFull tests.
                 excludeAnnotations.add("android.platform.test.annotations.AppModeFull");
+                // Ignore tests that are not applicable to the sandbox.
+                excludeAnnotations.add("android.platform.test.annotations.AppModeNonSdkSandbox");
 
                 // Reset the annotations of the tests.
-                filterTest.clearIncludeAnnotations();
-                filterTest.addAllIncludeAnnotation(includeAnnotations);
                 filterTest.clearExcludeAnnotations();
                 filterTest.addAllExcludeAnnotation(excludeAnnotations);
             }

@@ -29,12 +29,14 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.LocalAndroidVirtualDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -42,6 +44,7 @@ import com.android.tradefed.util.BinaryState;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -331,6 +334,14 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             "system property options will be ignored")
     protected boolean mForceSkipSystemProps = false;
 
+    @Option(
+            name = "force-root-setup",
+            description =
+                    "Force switching to root before the setup.Root should only be need for system"
+                        + " props, but adding this flag while transitioning in case someone reports"
+                        + " issues.")
+    private boolean mForceRoot = false;
+
     @Option(name = "force-skip-settings",
             description = "Force setup to not modify any device settings. All other setting " +
             "options will be ignored.")
@@ -347,6 +358,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     // setprop ro.monkey 1
     // setprop ro.test_harness 1
     // setprop persist.sys.test_harness 1
+
+    @Option(name = "hide-error-dialogs", description = "Turn on or off the error dialogs.")
+    protected BinaryState mHideErrorDialogs = BinaryState.ON;
+    // ON:  settings put global hide_error_dialogs 1
+    // OFF: settings put global hide_error_dialogs 0
 
     @Option(
             name = "disable-dalvik-verifier",
@@ -393,6 +409,26 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         description = "Restore settings modified by this preparer on tear down."
     )
     protected boolean mRestoreSettings = false;
+
+    @Option(
+            name = "optimized-non-persistent-setup",
+            description = "Feature to evaluate a faster non-persistent props setup.")
+    private boolean mOptimizeNonPersistentSetup = true;
+
+    @Option(
+            name = "dismiss-setup-wizard",
+            description = "Attempt to dismiss the setup wizard if present.")
+    private boolean mDismissSetupWizard = true;
+
+    @Option(
+            name = "dismiss-setup-wizard-timeout",
+            description = "Set the timeout for dismissing setup wizard in milli seconds.")
+    private Long mDismissSetupWizardTimeout = 60 * 1000L;
+
+    @Option(
+            name = "dismiss-setup-wizard-retry-count",
+            description = "Number of times to retry to dismiss setup wizard.")
+    private int mDismissSetupWizardRetry = 2;
 
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
@@ -476,8 +512,20 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     @Option(name = "parallelize-core-setup")
     private boolean mParallelCoreSetup = false;
 
+    @Option(name = "dismiss-keyguard-via-wm", description = "Flag to dismiss keyguard via wm")
+    private boolean mDismissViaWm = false;
+
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
+
+    private static final List<String> PROPERTIES_NEEDING_REBOOT =
+            List.of(
+                    // MEMTAG_BOOTCTL stores a value in the misc partition that gets applied on
+                    // reboot.
+                    MEMTAG_BOOTCTL,
+                    // Zygote caches the value of this property because it's expected to reboot the
+                    // system whenever this property changes.
+                    "persist.debug.dalvik.vm.jdwp.enabled");
 
     public ITestDevice getDevice(TestInformation testInfo) {
         return testInfo.getDevice();
@@ -490,11 +538,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         ITestDevice device = getDevice(testInfo);
         CLog.i("Performing setup on %s", device.getSerialNumber());
 
-        if (device.getOptions().isEnableAdbRoot() && !device.enableAdbRoot()) {
-            throw new TargetSetupError(
-                    String.format("Failed to enable adb root on %s", device.getSerialNumber()),
-                    device.getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        if (mForceRoot && device.getOptions().isEnableAdbRoot()) {
+            if (!device.enableAdbRoot()) {
+                throw new TargetSetupError(
+                        String.format("Failed to enable adb root on %s", device.getSerialNumber()),
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
         }
 
         // Convert deprecated options into current options
@@ -537,6 +587,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     checkExternalStoreSpace(device);
                     return true;
                 });
+        if (mDismissSetupWizard) {
+            callableTasks.add(
+                    () -> {
+                        dismissSetupWizard(device);
+                        return true;
+                    });
+        }
         if (mParallelCoreSetup) {
             ParallelDeviceExecutor<Boolean> executor =
                     new ParallelDeviceExecutor<Boolean>(callableTasks.size());
@@ -568,6 +625,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             syncTestData(device);
             // Throw an error if there is not enough storage space
             checkExternalStoreSpace(device);
+            if (mDismissSetupWizard) {
+                dismissSetupWizard(device);
+            }
         }
         // Run commands designated to be run after changing settings
         runCommands(device, mRunCommandAfterSettings);
@@ -797,6 +857,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                 mTimezone = TimeZone.getDefault().getID();
             }
         }
+
+        setSettingForBinaryState(
+                mHideErrorDialogs, mGlobalSettings, "hide_error_dialogs", "1", "0");
+
         if (mTimezone != null) {
             CLog.i("The actual timezone we set here is  %s", mTimezone);
             mSetProps.put("persist.sys.timezone", mTimezone);
@@ -853,7 +917,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             return;
         }
 
-        if (mSetProps.size() > 0 && !device.getOptions().isEnableAdbRoot()) {
+        if (mSetProps.size() > 0 && !device.enableAdbRoot()) {
             throw new TargetSetupError(
                     String.format(
                             "Cannot set system props %s on %s without adb root. Setting "
@@ -867,24 +931,32 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         // Set persistent props and build a map of all the nonpersistent ones
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
-            if (prop.getKey().startsWith(PERSIST_PREFIX)) {
-                // TODO: Check that set was successful
+            // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
+            // stores the value in the misc partition, and gets applied and restored on
+            // reboot.
+            boolean isPersistProperty =
+                    prop.getKey().startsWith(PERSIST_PREFIX)
+                            || prop.getKey().equals(MEMTAG_BOOTCTL);
+
+            if (isPersistProperty || mOptimizeNonPersistentSetup) {
                 device.setProperty(prop.getKey(), prop.getValue());
-            } else if (prop.getKey().equals(MEMTAG_BOOTCTL)) {
-                // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
-                // stores the value in the misc partition, and gets applied and restored on
-                // reboot.
-                device.setProperty(prop.getKey(), prop.getValue());
-                needsReboot = true;
-            } else {
+            }
+
+            if (!isPersistProperty) {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
+            }
+
+            if (PROPERTIES_NEEDING_REBOOT.contains(prop.getKey())) {
+                needsReboot = true;
             }
         }
 
         // If the reboot optimization is enabled, only set nonpersistent props if
         // there are changed values from what the device is running.
         boolean shouldSetProps = true;
-        if (mOptimizedPropertySetting && !nonpersistentProps.isEmpty()) {
+        if (!mOptimizeNonPersistentSetup
+                && mOptimizedPropertySetting
+                && !nonpersistentProps.isEmpty()) {
             boolean allPropsAlreadySet = true;
             for (Map.Entry<String, String> prop : nonpersistentProps.entrySet()) {
                 if (!prop.getValue().equals(device.getProperty(prop.getKey()))) {
@@ -935,7 +1007,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                             resultRampdump.getStderr());
                 }
             }
-            needsReboot = true;
+            if (!mOptimizeNonPersistentSetup) {
+                // non-persistent properties do not trigger a reboot in this
+                // new setup, if not explicitly set.
+                needsReboot = true;
+            }
         }
 
         if (needsReboot) {
@@ -974,18 +1050,34 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         String cmd = "svc power stayon %s";
         switch (mScreenAlwaysOn) {
             case ON:
-                CLog.d("Setting screen always on to true");
-                device.executeShellCommand(String.format(cmd, "true"));
-                // send MENU press in case keygaurd needs to be dismissed again
-                device.executeShellCommand("input keyevent 82");
-                // send HOME press in case keyguard was already dismissed, so we bring device back
-                // to home screen
-                // No need for this on Wear OS, since that causes the launcher to show
-                // instead of the home screen
-                if (!device.hasFeature("android.hardware.type.watch")) {
-                    device.executeShellCommand("input keyevent 3");
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(InvocationMetricKey.screen_on_setup.toString())) {
+                    CLog.d("Setting screen always on to true");
+                    String cmdStayOn = String.format(cmd, "true");
+                    CommandResult stayOn = device.executeShellV2Command(cmdStayOn);
+                    CLog.d("%s output: %s", cmdStayOn, stayOn);
+                    if (mDismissViaWm) {
+                        CommandResult res =
+                                device.executeShellV2Command(
+                                        "wm dismiss-keyguard", 30000L, TimeUnit.MILLISECONDS, 0);
+                        CLog.d("Output of dismiss-keyguard: %s", res);
+                    } else {
+                        // send MENU press in case keyguard needs to be dismissed again
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 82");
+                        CLog.d("Output of input keyevent 82: %s", inputKey);
+                    }
+                    // send HOME press in case keyguard was already dismissed, so we bring device
+                    // back
+                    // to home screen
+                    // No need for this on Wear OS, since that causes the launcher to show
+                    // instead of the home screen
+                    if ((device instanceof TestDevice)
+                            && !device.hasFeature("android.hardware.type.watch")) {
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 3");
+                        CLog.d("Output of input keyevent 3: %s", inputKey);
+                    }
+                    break;
                 }
-                break;
             case OFF:
                 CLog.d("Setting screen always on to false");
                 device.executeShellCommand(String.format(cmd, "false"));
@@ -1193,6 +1285,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         if (mMinExternalStorageKb <= 0) {
             return;
         }
+        if (!(device instanceof TestDevice)) {
+            // TODO: instead check that sdcard exists
+            return;
+        }
         // Wait for device available to ensure the mounting of sdcard
         device.waitForDeviceAvailable();
         long freeSpace = device.getExternalStoreFreeSpace();
@@ -1203,6 +1299,44 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                             freeSpace, mMinExternalStorageKb, device.getSerialNumber()),
                     device.getSerialNumber(),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+    }
+
+    private void dismissSetupWizard(ITestDevice device) throws DeviceNotAvailableException {
+        for (int i = 0; i < mDismissSetupWizardRetry; i++) {
+            CommandResult cmd1 =
+                    device.executeShellV2Command(
+                            "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
+            // UDC+
+            CommandResult cmd2 =
+                    device.executeShellV2Command(
+                            "am start -a com.android.setupwizard.EXIT"); // Android L - T
+            // if either of the command is successful, count it as success. Otherwise, retry.
+            if (CommandStatus.SUCCESS.equals(cmd1.getStatus())
+                    || CommandStatus.SUCCESS.equals(cmd2.getStatus())) {
+                break;
+            }
+        }
+        // verify setup wizard is dismissed
+        CLog.d("Waiting %d ms for setup wizard to be dismissed.", mDismissSetupWizardTimeout);
+        boolean dismissed = false;
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startTime < mDismissSetupWizardTimeout) {
+            CommandResult cmdOut =
+                    device.executeShellV2Command("dumpsys window displays | grep mCurrentFocus");
+            if (CommandStatus.SUCCESS.equals(cmdOut.getStatus())
+                    && !cmdOut.getStdout().contains("setupwizard")) {
+                CLog.d("Setup wizard is dismissed.");
+                dismissed = true;
+                break;
+            } else {
+                RunUtil.getDefault().sleep(2 * 1000);
+            }
+        }
+        if (!dismissed) {
+            CLog.w(
+                    "Setup wizard was not dismissed within the timeout limit: %d ms.",
+                    mDismissSetupWizardTimeout);
         }
     }
 
@@ -1260,6 +1394,10 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     /** Exposed for unit testing */
     protected void setForceSkipSystemProps(boolean force) {
         mForceSkipSystemProps = force;
+    }
+
+    protected void setForceRootSetup(boolean force) {
+        mForceRoot = force;
     }
 
     public boolean isForceSkipSystemProps() {
