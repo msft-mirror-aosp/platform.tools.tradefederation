@@ -21,7 +21,7 @@ import javax.annotation.Nullable;
 public class UsbException extends RuntimeException {
     private static final long serialVersionUID = -8880998872299531980L;
 
-    UsbException(@Nullable String template, @Nullable Object... args) {
+    public UsbException(@Nullable String template, @Nullable Object... args) {
         super(String.format(String.valueOf(template), args));
     }
 }

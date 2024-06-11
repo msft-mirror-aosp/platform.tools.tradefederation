@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -24,6 +23,9 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.util.FileUtil;
+
+import com.google.common.truth.Truth;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -31,6 +33,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Collections;
 
 /** Unit tests for {@link ReportPassedTests}. */
@@ -44,9 +48,14 @@ public class ReportPassedTestsTest {
     private ReportPassedTests mReporter =
             new ReportPassedTests() {
                 @Override
-                void testLog(String toBeLogged) {
+                void testLog(File toBeLogged) {
                     mTestLogCalled = true;
-                    assertEquals(mExpectedString, toBeLogged);
+                    try {
+                        Truth.assertThat(mExpectedString)
+                                .isEqualTo(FileUtil.readStringFromFile(toBeLogged));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             };
 
@@ -54,6 +63,7 @@ public class ReportPassedTestsTest {
     public void setUp() {
         mLogger = Mockito.mock(ITestLogger.class);
         mReporter.setLogger(mLogger);
+        mReporter.invocationStarted(null);
     }
 
     @Test

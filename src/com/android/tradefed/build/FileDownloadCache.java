@@ -16,10 +16,12 @@
 package com.android.tradefed.build;
 
 import com.android.tradefed.command.FatalHostError;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.FileUtil;
@@ -72,7 +74,8 @@ public class FileDownloadCache {
     private long mCurrentCacheSize = 0;
 
     /** The approximate maximum allowed size of the local file cache. Default to 20 gig */
-    private long mMaxFileCacheSize = 20L * 1024L * 1024L * 1024L;
+    private long mMaxFileCacheSize =
+            GlobalConfiguration.getInstance().getHostOptions().getCacheSizeLimit();
 
     /**
      * Struct for a {@link File} and its remote relative path
@@ -111,8 +114,11 @@ public class FileDownloadCache {
         if (!mCacheRoot.exists()) {
             CLog.d("Creating file cache at %s", mCacheRoot.getAbsolutePath());
             if (!mCacheRoot.mkdirs()) {
-                throw new FatalHostError(String.format("Could not create cache directory at %s",
-                        mCacheRoot.getAbsolutePath()));
+                throw new FatalHostError(
+                        String.format(
+                                "Could not create cache directory at %s",
+                                mCacheRoot.getAbsolutePath()),
+                        InfraErrorIdentifier.LAB_HOST_FILESYSTEM_ERROR);
             }
         } else {
             mCacheMapLock.lock();
@@ -254,7 +260,9 @@ public class FileDownloadCache {
                 if (!fileLock.hasQueuedThreads()) {
                     mFileLocks.remove(remoteFilePath);
                 }
-                fileLock.unlock();
+                if (fileLock.isHeldByCurrentThread()) {
+                    fileLock.unlock();
+                }
             }
         }
         // Release the JVM level lock
@@ -328,6 +336,8 @@ public class FileDownloadCache {
                     "remote path was null.", InfraErrorIdentifier.ARTIFACT_REMOTE_PATH_NULL);
         }
 
+        long start = System.currentTimeMillis();
+        CloseableTraceScope scope = new CloseableTraceScope("cache_lock");
         lockFile(remotePath);
         try {
             mCacheMapLock.lock();
@@ -342,6 +352,9 @@ public class FileDownloadCache {
             } finally {
                 mCacheMapLock.unlock();
             }
+            scope.close();
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CACHE_WAIT_FOR_LOCK, System.currentTimeMillis() - start);
             try {
                 if (!download
                         && cachedFile.exists()
@@ -361,6 +374,8 @@ public class FileDownloadCache {
                     }
                     downloadFile(downloader, remotePath, cachedFile);
                 } else {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.CACHE_HIT_COUNT, 1);
                     CLog.d(
                             "Retrieved remote file %s from cached file %s",
                             remotePath, cachedFile.getAbsolutePath());
@@ -397,9 +412,7 @@ public class FileDownloadCache {
         File hardlinkFile = destFile;
         try {
             if (hardlinkFile == null) {
-                hardlinkFile =
-                        FileUtil.createTempFileForRemote(
-                                remotePath, CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
+                hardlinkFile = FileUtil.createTempFileForRemote(remotePath, getWorkFolder());
             }
             hardlinkFile.delete();
             CLog.d(
@@ -420,6 +433,11 @@ public class FileDownloadCache {
                     e,
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
+    }
+
+    @VisibleForTesting
+    File getWorkFolder() {
+        return CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER);
     }
 
     /**

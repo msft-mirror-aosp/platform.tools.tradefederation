@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.invoker.IInvocationContext;
 
@@ -38,7 +37,7 @@ public class PassingTestFileReporter extends TestResultListener implements ITest
 
     @Override
     public void testResult(TestDescription test, TestResult result) {
-        if (result.getStatus() == TestStatus.PASSED) {
+        if (TestStatus.PASSED.equals(result.getResultStatus())) {
             mResults.add(test);
         }
     }

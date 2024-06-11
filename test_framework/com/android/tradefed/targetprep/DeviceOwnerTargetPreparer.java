@@ -94,7 +94,7 @@ public class DeviceOwnerTargetPreparer extends BaseTargetPreparer
 
     private int getDeviceOwnerUserId() throws DeviceNotAvailableException {
         if (isHeadlessSystemUserMode()) {
-            return mDevice.getPrimaryUserId();
+            return mDevice.getMainUserId();
         } else {
             return USER_SYSTEM;
         }

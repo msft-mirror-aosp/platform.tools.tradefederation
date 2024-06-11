@@ -41,6 +41,8 @@ import java.util.StringJoiner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.annotation.Nullable;
+
 /**
  * Handler that abstract the content provider interactions and allow to use the device side content
  * provider for different operations.
@@ -80,13 +82,25 @@ public class ContentProviderHandler {
     private static final String ERROR_PROVIDER_NOT_INSTALLED =
             "Could not find provider: android.tradefed.contentprovider";
 
+    private final Integer mUserId;
     private ITestDevice mDevice;
     private File mContentProviderApk = null;
     private boolean mReportNotFound = false;
 
     /** Constructor. */
-    public ContentProviderHandler(ITestDevice device) {
+    public ContentProviderHandler(ITestDevice device) throws DeviceNotAvailableException {
+        this(device, /* userId= */ null);
+    }
+
+    public ContentProviderHandler(ITestDevice device, @Nullable Integer userId) {
+        mUserId = userId;
         mDevice = device;
+    }
+
+    /** Returns the userId that this instance is initialized with. */
+    @Nullable
+    public Integer getUserId() {
+        return mUserId;
     }
 
     /**
@@ -103,7 +117,7 @@ public class ContentProviderHandler {
      * @return True if ready to be used, False otherwise.
      */
     public boolean setUp() throws DeviceNotAvailableException {
-        if (mDevice.isPackageInstalled(PACKAGE_NAME, Integer.toString(mDevice.getCurrentUser()))) {
+        if (mDevice.isPackageInstalled(PACKAGE_NAME, Integer.toString(getEffectiveUserId()))) {
             mReportNotFound = false;
             return true;
         }
@@ -173,7 +187,7 @@ public class ContentProviderHandler {
         String contentUri = createEscapedContentUri(deviceFilePath);
         String deleteCommand =
                 String.format(
-                        "content delete --user %d --uri %s", mDevice.getCurrentUser(), contentUri);
+                        "content delete --user %d --uri %s", getEffectiveUserId(), contentUri);
         CommandResult deleteResult = mDevice.executeShellV2Command(deleteCommand);
 
         if (isSuccessful(deleteResult)) {
@@ -196,7 +210,7 @@ public class ContentProviderHandler {
      */
     public boolean pullDir(String deviceFilePath, File localDir)
             throws DeviceNotAvailableException {
-        return pullDirInternal(deviceFilePath, localDir, /* currentUser */ null);
+        return pullDirInternal(deviceFilePath, localDir, getEffectiveUserId());
     }
 
     /**
@@ -210,7 +224,7 @@ public class ContentProviderHandler {
      */
     public boolean pullFile(String deviceFilePath, File localFile)
             throws DeviceNotAvailableException {
-        return pullFileInternal(deviceFilePath, localFile, /* currentUser */ null);
+        return pullFileInternal(deviceFilePath, localFile, getEffectiveUserId());
     }
 
     /**
@@ -232,15 +246,15 @@ public class ContentProviderHandler {
             CLog.w("'%s' is not a file but a directory, can't use #pushFile on it.", fileToPush);
             return false;
         }
-        Integer currentUser = mDevice.getCurrentUser();
-        boolean res = pushFileInternal(fileToPush, deviceFilePath, currentUser);
+        int userId = getEffectiveUserId();
+        boolean res = pushFileInternal(fileToPush, deviceFilePath, userId);
         if (!res && mReportNotFound) {
             // Re-run setup to ensure we have the content provider installed
             boolean installed = setUp();
             if (!installed) {
                 return false;
             }
-            res = pushFileInternal(fileToPush, deviceFilePath, currentUser);
+            res = pushFileInternal(fileToPush, deviceFilePath, userId);
         }
         return res;
     }
@@ -257,7 +271,7 @@ public class ContentProviderHandler {
     public boolean pushDir(File localFileDir, String deviceFilePath,
                            Set<String> excludedDirectories) throws DeviceNotAvailableException {
         return pushDirInternal(
-                localFileDir, deviceFilePath, excludedDirectories, mDevice.getCurrentUser());
+                localFileDir, deviceFilePath, excludedDirectories, getEffectiveUserId());
     }
 
     /**
@@ -270,9 +284,7 @@ public class ContentProviderHandler {
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
         String contentUri = createEscapedContentUri(deviceFilePath);
         String queryContentCommand =
-                String.format(
-                        "content query --user %d --uri %s", mDevice.getCurrentUser(), contentUri);
-
+                String.format("content query --user %d --uri %s", getEffectiveUserId(), contentUri);
         String listCommandResult = mDevice.executeShellCommand(queryContentCommand);
 
         if (NO_RESULTS_STRING.equals(listCommandResult.trim())) {
@@ -364,10 +376,16 @@ public class ContentProviderHandler {
     }
 
     /**
-     * Internal method to actually do the pull directory but without re-querying the current user
-     * while doing the recursive pull.
+     * Returns the effective userId that this instance is initialized with. If the userId is null,
+     * returns the current user.
      */
-    private boolean pullDirInternal(String deviceFilePath, File localDir, Integer currentUser)
+    @VisibleForTesting
+    int getEffectiveUserId() throws DeviceNotAvailableException {
+        return mUserId == null ? mDevice.getCurrentUser() : mUserId;
+    }
+
+    /** Internal method to actually do the pull directory. */
+    private boolean pullDirInternal(String deviceFilePath, File localDir, int userId)
             throws DeviceNotAvailableException {
         if (!localDir.isDirectory()) {
             CLog.e("Local path %s is not a directory", localDir.getAbsolutePath());
@@ -375,12 +393,8 @@ public class ContentProviderHandler {
         }
 
         String contentUri = createEscapedContentUri(deviceFilePath);
-        if (currentUser == null) {
-            // Keep track of the user so if we recursively pull dir we don't re-query it.
-            currentUser = mDevice.getCurrentUser();
-        }
         String queryContentCommand =
-                String.format("content query --user %d --uri %s", currentUser, contentUri);
+                String.format("content query --user %d --uri %s", userId, contentUri);
 
         String listCommandResult = mDevice.executeShellCommand(queryContentCommand);
 
@@ -411,13 +425,13 @@ public class ContentProviderHandler {
                     return false;
                 }
 
-                if (!pullDirInternal(path, localChild, currentUser)) {
+                if (!pullDirInternal(path, localChild, userId)) {
                     CLog.w("Failed to pull sub directory %s from device, aborting", path);
                     return false;
                 }
             } else {
                 // handle regular file
-                if (!pullFileInternal(path, localChild, currentUser)) {
+                if (!pullFileInternal(path, localChild, userId)) {
                     CLog.w("Failed to pull file %s from device, aborting", path);
                     return false;
                 }
@@ -426,14 +440,10 @@ public class ContentProviderHandler {
         return true;
     }
 
-    private boolean pullFileInternal(String deviceFilePath, File localFile, Integer currentUser)
+    private boolean pullFileInternal(String deviceFilePath, File localFile, int userId)
             throws DeviceNotAvailableException {
         String contentUri = createEscapedContentUri(deviceFilePath);
-        if (currentUser == null) {
-            currentUser = mDevice.getCurrentUser();
-        }
-        String pullCommand =
-                String.format("content read --user %d --uri %s", currentUser, contentUri);
+        String pullCommand = String.format("content read --user %d --uri %s", userId, contentUri);
 
         // Open the output stream to the local file.
         OutputStream localFileStream;
@@ -462,15 +472,10 @@ public class ContentProviderHandler {
         }
     }
 
-    private boolean pushFileInternal(File fileToPush, String deviceFilePath, Integer currentUser)
+    private boolean pushFileInternal(File fileToPush, String deviceFilePath, int userId)
             throws DeviceNotAvailableException {
-        if (currentUser == null) {
-            currentUser = mDevice.getCurrentUser();
-        }
         String contentUri = createEscapedContentUri(deviceFilePath);
-        String pushCommand =
-                String.format(
-                        "content write --user %d --uri %s", currentUser, contentUri);
+        String pushCommand = String.format("content write --user %d --uri %s", userId, contentUri);
         CommandResult pushResult = mDevice.executeShellV2Command(pushCommand, fileToPush);
 
         if (isSuccessful(pushResult)) {
@@ -483,16 +488,13 @@ public class ContentProviderHandler {
         return false;
     }
 
-    private boolean pushDirInternal(File localFileDir, String deviceFilePath,
-            Set<String> excludedDirectories, Integer currentUser)
+    private boolean pushDirInternal(
+            File localFileDir, String deviceFilePath, Set<String> excludedDirectories, int userId)
             throws DeviceNotAvailableException {
         File[] childFiles = localFileDir.listFiles();
         if (childFiles == null) {
             CLog.e("Could not read files in %s", localFileDir.getAbsolutePath());
             return false;
-        }
-        if (currentUser == null) {
-            currentUser = mDevice.getCurrentUser();
         }
         for (File childFile : childFiles) {
             String remotePath = String.format("%s/%s", deviceFilePath, childFile.getName());
@@ -505,11 +507,11 @@ public class ContentProviderHandler {
                     continue;
                 }
                 mDevice.executeShellCommand(String.format("mkdir -p \"%s\"", remotePath));
-                if (!pushDirInternal(childFile, remotePath, excludedDirectories, currentUser)) {
+                if (!pushDirInternal(childFile, remotePath, excludedDirectories, userId)) {
                     return false;
                 }
             } else if (childFile.isFile()) {
-                if (!pushFileInternal(childFile, remotePath, currentUser)) {
+                if (!pushFileInternal(childFile, remotePath, userId)) {
                     return false;
                 }
             }

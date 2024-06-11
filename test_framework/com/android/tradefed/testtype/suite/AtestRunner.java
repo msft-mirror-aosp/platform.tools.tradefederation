@@ -29,6 +29,7 @@ import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.InstrumentationTest;
+import com.android.tradefed.testtype.IsolatedHostTest;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -224,6 +225,9 @@ public class AtestRunner extends BaseTestSuite {
         for (IRemoteTest test : testConfig.getTests()) {
             if (test instanceof InstrumentationTest) {
                 ((InstrumentationTest) test).setDebug(true);
+            }
+            if (test instanceof IsolatedHostTest) {
+                ((IsolatedHostTest) test).setDebug(true);
             }
         }
     }

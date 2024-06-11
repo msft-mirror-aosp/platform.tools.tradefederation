@@ -89,6 +89,7 @@ public class InstallApkSetupTest {
     @Test
     public void testSetupForceQueryable()
             throws DeviceNotAvailableException, BuildError, TargetSetupError {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(false);
         when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
 
         testCollectionFiles.add(testFile);
@@ -102,6 +103,23 @@ public class InstallApkSetupTest {
         verify(mMockTestDevice, times(2))
                 .installPackage(
                         (File) Mockito.any(), Mockito.eq(true), Mockito.eq("--force-queryable"));
+    }
+
+    /** Test {@link InstallApkSetupTest#setUp()} by successfully installing 2 Apk files */
+    @Test
+    public void testSetupDeviceApi34ForceQueryableIsFalse()
+            throws DeviceNotAvailableException, BuildError, TargetSetupError {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(true);
+        when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
+
+        testCollectionFiles.add(testFile);
+        testCollectionFiles.add(testFile);
+        mInstallApkSetup.setApkPaths(testCollectionFiles);
+        when(mMockTestDevice.installPackage((File) Mockito.any(), Mockito.eq(true)))
+                .thenReturn(null);
+
+        mInstallApkSetup.setUp(mMockTestDevice, mMockBuildInfo);
+        verify(mMockTestDevice, times(2)).installPackage((File) Mockito.any(), Mockito.eq(true));
     }
 
     /** Test {@link InstallApkSetupTest#setUp()} by installing a non-existing Apk */

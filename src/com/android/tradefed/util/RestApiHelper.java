@@ -23,12 +23,15 @@ import com.google.api.client.http.HttpBackOffIOExceptionHandler;
 import com.google.api.client.http.HttpContent;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpRequestFactory;
+import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpResponse;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.ExponentialBackOff;
+import com.google.auth.Credentials;
+import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.common.annotations.VisibleForTesting;
 
 import org.json.JSONObject;
@@ -65,29 +68,6 @@ public class RestApiHelper implements IRestApiHelper {
      * Creates an API helper instance which uses a {@link Credential} for authentication.
      *
      * @param baseUri the base URI of the API
-     * @param serviceAccount the name of the service account to use
-     * @param keyFile the service account key file
-     * @param scopes the collection of OAuth scopes to use with the service account
-     * @throws GeneralSecurityException
-     * @throws IOException
-     */
-    @Deprecated
-    public static RestApiHelper newInstanceWithGoogleCredential(
-            String baseUri, String serviceAccount, File keyFile, Collection<String> scopes)
-            throws GeneralSecurityException, IOException {
-
-        HttpTransport transport = GoogleNetHttpTransport.newTrustedTransport();
-        Credential credential =
-                GoogleApiClientUtil.createCredentialFromP12File(serviceAccount, keyFile, scopes);
-        HttpRequestFactory requestFactory = transport.createRequestFactory(credential);
-
-        return new RestApiHelper(requestFactory, baseUri);
-    }
-
-    /**
-     * Creates an API helper instance which uses a {@link Credential} for authentication.
-     *
-     * @param baseUri the base URI of the API
      * @param jsonKeyFile the service account json key file
      * @param scopes the collection of OAuth scopes to use with the service account
      * @throws GeneralSecurityException
@@ -97,9 +77,10 @@ public class RestApiHelper implements IRestApiHelper {
             String baseUri, File jsonKeyFile, Collection<String> scopes)
             throws GeneralSecurityException, IOException {
         HttpTransport transport = GoogleNetHttpTransport.newTrustedTransport();
-        Credential credential =
+        Credentials credential =
                 GoogleApiClientUtil.createCredentialFromJsonKeyFile(jsonKeyFile, scopes);
-        HttpRequestFactory requestFactory = transport.createRequestFactory(credential);
+        HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credential);
+        HttpRequestFactory requestFactory = transport.createRequestFactory(requestInitializer);
         return new RestApiHelper(requestFactory, baseUri);
     }
 

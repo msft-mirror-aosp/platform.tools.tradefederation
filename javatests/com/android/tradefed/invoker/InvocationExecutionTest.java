@@ -17,13 +17,18 @@ package com.android.tradefed.invoker;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.any;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.Configuration;
@@ -33,6 +38,7 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.metric.AutoLogCollector;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
@@ -61,6 +67,8 @@ import org.junit.runners.JUnit4;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -184,15 +192,14 @@ public class InvocationExecutionTest {
         private boolean mFirstInit = true;
 
         @Override
-        public ITestInvocationListener init(
-                IInvocationContext context, ITestInvocationListener listener) {
+        public void extraInit(IInvocationContext context, ITestInvocationListener listener)
+                throws DeviceNotAvailableException {
             if (mFirstInit) {
                 sTotalInit++;
                 mFirstInit = false;
             } else {
                 fail("Init should only be called once per instance.");
             }
-            return super.init(context, listener);
         }
     }
 
@@ -306,6 +313,60 @@ public class InvocationExecutionTest {
         assertEquals(1, RemoteTestCollector.sTotalInit);
     }
 
+    /** Test parallel pre-invocation setup. */
+    @Test
+    public void testRunPreInvocationSetup_parallel() throws Throwable {
+        ITestDevice mockDevice1 = mock(ITestDevice.class);
+        ITestDevice mockDevice2 = mock(ITestDevice.class);
+        CountDownLatch latch = new CountDownLatch(2);
+        Answer answer =
+                new Answer() {
+                    @Override
+                    public Object answer(InvocationOnMock invocation) throws InterruptedException {
+                        latch.countDown();
+                        assertTrue(
+                                "preInvocationSetup does not run in parallel.",
+                                latch.await(1L, TimeUnit.SECONDS));
+                        return null;
+                    }
+                };
+        doAnswer(answer).when(mockDevice1).preInvocationSetup(any(), any());
+        doAnswer(answer).when(mockDevice2).preInvocationSetup(any(), any());
+        mContext.addAllocatedDevice("device1", mockDevice1);
+        mContext.addAllocatedDevice("device2", mockDevice2);
+
+        OptionSetter setter = new OptionSetter(mConfig.getCommandOptions());
+        setter.setOptionValue("parallel-pre-invocation-setup", "true");
+        setter.setOptionValue("parallel-pre-invocation-setup-timeout", "2s");
+
+        mExec.runDevicePreInvocationSetup(mContext, mConfig, mMockLogger);
+
+        verify(mockDevice1).preInvocationSetup(any(), any());
+        verify(mockDevice2).preInvocationSetup(any(), any());
+    }
+
+    /** Test parallel pre-invocation setup with an exception. */
+    @Test
+    public void testRunPreInvocationSetup_parallelException() throws Throwable {
+        ITestDevice mockDevice1 = mock(ITestDevice.class);
+        ITestDevice mockDevice2 = mock(ITestDevice.class);
+        doThrow(new DeviceNotAvailableException("msg", "serial"))
+                .when(mockDevice2)
+                .preInvocationSetup(any(), any());
+        mContext.addAllocatedDevice("device1", mockDevice1);
+        mContext.addAllocatedDevice("device2", mockDevice2);
+
+        OptionSetter setter = new OptionSetter(mConfig.getCommandOptions());
+        setter.setOptionValue("parallel-pre-invocation-setup", "true");
+        setter.setOptionValue("parallel-pre-invocation-setup-timeout", "2s");
+
+        assertThrows(
+                DeviceNotAvailableException.class,
+                () -> {
+                    mExec.runDevicePreInvocationSetup(mContext, mConfig, mMockLogger);
+                });
+    }
+
     /**
      * Test the ordering of multi_pre_target_preparer/target_preparer/multi_target_preparer during
      * setup and tearDown.
@@ -323,7 +384,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         TestInformation testInfo =
                 TestInformation.newBuilder().setInvocationContext(mContext).build();
         mExec.doSetup(testInfo, mConfig, mMockListener);
@@ -371,7 +436,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         TestInformation testInfo =
                 TestInformation.newBuilder().setInvocationContext(mContext).build();
         mExec.doSetup(testInfo, mConfig, mMockLogger);
@@ -410,8 +479,12 @@ public class InvocationExecutionTest {
         boolean[] wasCalled = new boolean[2];
         wasCalled[0] = false;
         wasCalled[1] = false;
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
         ITestDevice mockDevice1 = mock(ITestDevice.class);
+        when(mockDevice1.getOptions()).thenReturn(options);
         ITestDevice mockDevice2 = mock(ITestDevice.class);
+        when(mockDevice2.getOptions()).thenReturn(options);
         BaseTargetPreparer cleaner =
                 new BaseTargetPreparer() {
                     @Override
@@ -467,7 +540,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         // Ensure that the original error is the one passed around.
         Throwable exception = new Throwable("Original error");
         ITestLogger logger = new CollectingTestListener();
@@ -516,7 +593,11 @@ public class InvocationExecutionTest {
         IDeviceConfiguration holder = new DeviceConfigurationHolder("default");
         holder.addSpecificConfig(cleaner);
         mConfig.setDeviceConfig(holder);
-        mContext.addAllocatedDevice("default", mock(ITestDevice.class));
+        ITestDevice device = mock(ITestDevice.class);
+        TestDeviceOptions options = mock(TestDeviceOptions.class);
+        when(options.shouldSkipTearDown()).thenReturn(false);
+        when(device.getOptions()).thenReturn(options);
+        mContext.addAllocatedDevice("default", device);
         TestInformation testInfo =
                 TestInformation.newBuilder().setInvocationContext(mContext).build();
         // Ensure that the original error is the one passed around.

@@ -109,6 +109,24 @@ public class StreamProtoReceiver implements Closeable {
         this(listener, mainContext, reportInvocation, quietParsing, true, logNamePrefix);
     }
 
+    public StreamProtoReceiver(
+            ITestInvocationListener listener,
+            IInvocationContext mainContext,
+            boolean reportInvocation,
+            boolean quietParsing,
+            boolean reportLogs,
+            String logNamePrefix)
+            throws IOException {
+        this(
+                listener,
+                mainContext,
+                reportInvocation,
+                quietParsing,
+                reportLogs,
+                logNamePrefix,
+                true);
+    }
+
     /**
      * Ctor.
      *
@@ -125,12 +143,14 @@ public class StreamProtoReceiver implements Closeable {
             boolean reportInvocation,
             boolean quietParsing,
             boolean reportLogs,
-            String logNamePrefix)
+            String logNamePrefix,
+            boolean mergeInvocationMetrics)
             throws IOException {
         mListener = listener;
         mParser = new ProtoResultParser(mListener, mainContext, reportInvocation, logNamePrefix);
         mParser.setReportLogs(reportLogs);
         mParser.setQuiet(quietParsing);
+        mParser.setMergeInvocationContext(mergeInvocationMetrics);
         mEventReceiver = new EventReceiverThread();
         mEventReceiver.start();
     }
