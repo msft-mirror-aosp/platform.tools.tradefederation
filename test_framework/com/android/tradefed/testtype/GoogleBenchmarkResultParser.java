@@ -15,12 +15,14 @@
  */
 package com.android.tradefed.testtype;
 
-import com.android.tradefed.device.CollectingOutputReceiver;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.common.base.Strings;
@@ -52,11 +54,11 @@ public class GoogleBenchmarkResultParser {
      * Parse an individual output line.
      * name,iterations,real_time,cpu_time,bytes_per_second,items_per_second,label
      *
-     * @param output  contains the test output
+     * @param cmd_result device command result that contains the test output
      * @return a map containing the number of tests that ran.
      */
-    public Map<String, String> parse(CollectingOutputReceiver output) {
-        String outputLogs = output.getOutput();
+    public Map<String, String> parse(CommandResult cmd_result) {
+        String outputLogs = cmd_result.getStdout();
         Map<String, String> results = new HashMap<String, String>();
         JSONObject res = null;
         outputLogs = sanitizeOutput(outputLogs);
@@ -75,6 +77,18 @@ public class GoogleBenchmarkResultParser {
                 FailureDescription failure =
                         FailureDescription.create(errorMessage)
                                 .setErrorIdentifier(TestErrorIdentifier.TEST_ABORTED);
+                mTestListener.testRunFailed(failure);
+            } else if (!CommandStatus.SUCCESS.equals(cmd_result.getStatus())) {
+                FailureDescription failure;
+                if (CommandStatus.TIMED_OUT.equals(cmd_result.getStatus())) {
+                    failure =
+                            FailureDescription.create("Test timed out.")
+                                    .setErrorIdentifier(TestErrorIdentifier.TEST_TIMEOUT);
+                } else {
+                    failure =
+                            FailureDescription.create(cmd_result.getStderr())
+                                    .setErrorIdentifier(TestErrorIdentifier.HOST_COMMAND_FAILED);
+                }
                 mTestListener.testRunFailed(failure);
             } else {
                 String parserFailedMessage = "Failed to Parse context:";
@@ -98,37 +112,39 @@ public class GoogleBenchmarkResultParser {
                 String name = testRes.getString("name");
                 TestDescription testId = new TestDescription(mTestClassName, name);
                 mTestListener.testStarted(testId);
-                try {
-                    testResults = parseJsonToMap(testRes);
-                } catch (JSONException e) {
-                    CLog.e(e);
-                    mTestListener.testFailed(
-                            testId,
-                            String.format(
-                                    "Test failed to generate " + "proper results: %s",
-                                    e.getMessage()));
-                }
-                // Check iterations to make sure it actual ran
-                String iterations = testResults.get("iterations");
-                if (iterations != null && "0".equals(iterations.trim())) {
-                    mTestListener.testIgnored(testId);
-                }
+                try (CloseableTraceScope ignore = new CloseableTraceScope(testId.toString())) {
+                    try {
+                        testResults = parseJsonToMap(testRes);
+                    } catch (JSONException e) {
+                        CLog.e(e);
+                        mTestListener.testFailed(
+                                testId,
+                                String.format(
+                                        "Test failed to generate proper results: %s",
+                                        e.getMessage()));
+                    }
+                    // Check iterations to make sure it actual ran
+                    String iterations = testResults.get("iterations");
+                    if (iterations != null && "0".equals(iterations.trim())) {
+                        mTestListener.testIgnored(testId);
+                    }
 
-                if (testRes.has("error_occurred")) {
-                    boolean errorOccurred = testRes.getBoolean("error_occurred");
-                    if (errorOccurred) {
-                        String errorMessage = testResults.get("error_message");
-                        if (Strings.isNullOrEmpty(errorMessage)) {
-                            mTestListener.testFailed(
-                                    testId, "Benchmark reported an unspecified error");
-                        } else {
-                            mTestListener.testFailed(
-                                    testId,
-                                    String.format("Benchmark reported an error: %s", errorMessage));
+                    if (testRes.has("error_occurred")) {
+                        boolean errorOccurred = testRes.getBoolean("error_occurred");
+                        if (errorOccurred) {
+                            String errorMessage = testResults.get("error_message");
+                            if (Strings.isNullOrEmpty(errorMessage)) {
+                                mTestListener.testFailed(
+                                        testId, "Benchmark reported an unspecified error");
+                            } else {
+                                mTestListener.testFailed(
+                                        testId,
+                                        String.format(
+                                                "Benchmark reported an error: %s", errorMessage));
+                            }
                         }
                     }
                 }
-
                 mTestListener.testEnded(testId, TfMetricProtoUtil.upgradeConvert(testResults));
             }
             results.put("Pass", Integer.toString(benchmarks.length()));

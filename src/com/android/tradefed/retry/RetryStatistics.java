@@ -17,7 +17,9 @@ package com.android.tradefed.retry;
 
 import com.android.tradefed.testtype.IRemoteTest;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Structure holding the statistics for a retry session of one {@link IRemoteTest}. Not all fields
@@ -26,6 +28,7 @@ import java.util.List;
 public class RetryStatistics {
     // The time spent in retry. Always populated if retries or iterations occurred
     public long mRetryTime = 0L;
+    public Map<Integer, Long> mAttemptIsolationCost = new HashMap<>();
 
     // Success and failure counts. Populated for RETRY_ANY_FAILURE.
     public long mRetrySuccess = 0L;
@@ -40,5 +43,16 @@ public class RetryStatistics {
             aggregatedStats.mRetryFailure += s.mRetryFailure;
         }
         return aggregatedStats;
+    }
+
+    public static long isolationCostPerAttempt(int attempt, List<RetryStatistics> stats) {
+        long isolationCost = 0L;
+        for (RetryStatistics s : stats) {
+            Long attemptCost = s.mAttemptIsolationCost.get(attempt);
+            if (attemptCost != null) {
+                isolationCost += attemptCost;
+            }
+        }
+        return isolationCost;
     }
 }

@@ -16,19 +16,19 @@
 
 package com.android.tradefed.targetprep;
 
-import static com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparer.SKIP_TESTS_REASON_KEY;
+import static com.android.tradefed.device.UserInfo.FLAG_FOR_TESTING;
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 import static com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparer.TEST_PACKAGE_NAME_OPTION;
-import static com.android.tradefed.targetprep.RunOnSecondaryUserTargetPreparer.RUN_TESTS_AS_USER_KEY;
 
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.UserInfo;
 import com.android.tradefed.invoker.TestInformation;
@@ -46,7 +46,9 @@ import org.mockito.junit.MockitoRule;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @RunWith(JUnit4.class)
 public class RunOnSecondaryUserTargetPreparerTest {
@@ -56,9 +58,6 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private TestInformation mTestInfo;
 
-    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
-    private IConfiguration mConfiguration;
-
     private RunOnSecondaryUserTargetPreparer mPreparer;
     private OptionSetter mOptionSetter;
 
@@ -66,24 +65,34 @@ public class RunOnSecondaryUserTargetPreparerTest {
     public void setUp() throws Exception {
         mPreparer = new RunOnSecondaryUserTargetPreparer();
         mOptionSetter = new OptionSetter(mPreparer);
-        mPreparer.setConfiguration(mConfiguration);
 
         ArrayList<Integer> userIds = new ArrayList<>();
         userIds.add(0);
 
-        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(2);
+        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(3);
         when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(false);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(0, new UserInfo(0, "system", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
     }
 
     @Test
     public void setUp_createsStartsAndSwitchesToSecondaryUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice()).createUser("secondary");
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
         verify(mTestInfo.getDevice()).startUser(2, /* waitFlag= */ true);
         verify(mTestInfo.getDevice()).switchUser(2);
     }
@@ -91,13 +100,19 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_oldVersion_createsStartsAndSwitchesToSecondaryUserWithoutWait()
             throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(28);
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice()).createUser("secondary");
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
         verify(mTestInfo.getDevice()).startUser(2, /* waitFlag= */ false);
         verify(mTestInfo.getDevice()).switchUser(2);
     }
@@ -105,19 +120,24 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_doesNotCreateSecondaryUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(2, new UserInfo(2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                2,
+                new UserInfo(2, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice(), never()).createUser(any());
+        verify(mTestInfo.getDevice(), never())
+                .createUser(any(), anyBoolean(), anyBoolean(), anyBoolean());
     }
 
     @Test
     public void setUp_secondaryUserAlreadyExists_startsAndSwitchesToSecondaryUser()
             throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(2, new UserInfo(2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                2,
+                new UserInfo(2, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
 
@@ -129,7 +149,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void tearDown_switchesBackToInitialUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
         mPreparer.setUp(mTestInfo);
         Mockito.reset(mTestInfo);
@@ -143,7 +164,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void tearDown_secondaryUserAlreadyExists_switchesBackToInitialUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(2, new UserInfo(2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                2,
+                new UserInfo(2, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(0);
         mPreparer.setUp(mTestInfo);
@@ -158,7 +181,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_runsTestAsExistingUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
 
         mPreparer.setUp(mTestInfo);
@@ -168,7 +193,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void setUp_setsRunTestsAsUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
 
         mPreparer.setUp(mTestInfo);
 
@@ -178,7 +204,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_installsPackagesInExistingUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue(
                 RunOnWorkProfileTargetPreparer.TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
@@ -191,7 +219,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void setUp_installsPackagesInSecondaryUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         mOptionSetter.setOptionValue(
                 RunOnSecondaryUserTargetPreparer.TEST_PACKAGE_NAME_OPTION,
                 "com.android.testpackage");
@@ -205,7 +234,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
     @Test
     public void setUp_secondaryUserAlreadyExists_doesNotRemoveSecondaryUser() throws Exception {
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
         mPreparer.setUp(mTestInfo);
@@ -216,8 +247,91 @@ public class RunOnSecondaryUserTargetPreparerTest {
     }
 
     @Test
+    public void setUp_secondaryUserIsNonForTesting_createsNewSecondaryUser() throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        Map<Integer, UserInfo> emptyUserInfos = new HashMap<>(); // Used after the user is removed
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos).thenReturn(emptyUserInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
+    }
+
+    @Test
+    public void setUp_secondaryUserIsNonForTesting_removedNonForTestingSecondaryUser()
+            throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice()).removeUser(3);
+    }
+
+    @Test
+    public void setUp_existingUserIsSystemUser_doesNotRemove() throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(0, new UserInfo(3, "system", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never()).removeUser(0);
+    }
+
+    @Test
+    public void
+            setUp_headlessDevice_multipleNonForTestingSecondaryUsers_doesNotRemoveFirstSecondaryUser()
+                    throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                3,
+                new UserInfo(
+                        3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(4, new UserInfo(4, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never()).removeUser(3);
+        verify(mTestInfo.getDevice()).removeUser(4);
+    }
+
+    @Test
+    public void setUp_existingUserIsCommunalProfile_doesNotRemove() throws Exception {
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                13,
+                new UserInfo(
+                        13,
+                        "communal",
+                        /* flag= */ 0,
+                        /* isRunning= */ false,
+                        UserInfo.COMMUNAL_PROFILE_TYPE));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+        mOptionSetter.setOptionValue("disable-tear-down", "false");
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never()).removeUser(13);
+    }
+
+    @Test
     public void setUp_doesNotDisableTearDown() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         mOptionSetter.setOptionValue("disable-tear-down", "false");
 
         mPreparer.setUp(mTestInfo);
@@ -227,7 +341,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
     @Test
     public void tearDown_removesSecondaryUser() throws Exception {
-        when(mTestInfo.getDevice().createUser(any())).thenReturn(2);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(2);
         mPreparer.setUp(mTestInfo);
 
         mPreparer.tearDown(mTestInfo, /* throwable= */ null);
@@ -259,17 +374,8 @@ public class RunOnSecondaryUserTargetPreparerTest {
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mConfiguration)
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
-    }
-
-    @Test
-    public void setUp_doesNotSupportAdditionalUsers_disablesTearDown() throws Exception {
-        when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
-
-        mPreparer.setUp(mTestInfo);
-
-        assertThat(mPreparer.isTearDownDisabled()).isTrue();
+        verify(mTestInfo.properties())
+                .put(eq(RunOnSecondaryUserTargetPreparer.SKIP_TESTS_REASON_KEY), any());
     }
 
     @Test
@@ -277,7 +383,9 @@ public class RunOnSecondaryUserTargetPreparerTest {
             throws Exception {
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue(TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
 
@@ -292,13 +400,154 @@ public class RunOnSecondaryUserTargetPreparerTest {
             throws Exception {
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
         Map<Integer, UserInfo> userInfos = new HashMap<>();
-        userInfos.put(3, new UserInfo(3, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                3,
+                new UserInfo(3, "secondary", /* flag= */ FLAG_FOR_TESTING, /* isRunning= */ true));
         when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
         mOptionSetter.setOptionValue(TEST_PACKAGE_NAME_OPTION, "com.android.testpackage");
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mConfiguration, never())
-                .injectOptionValue(eq("instrumentation-arg"), eq(SKIP_TESTS_REASON_KEY), any());
+        verify(mTestInfo.properties(), never())
+                .put(eq(RunOnSecondaryUserTargetPreparer.SKIP_TESTS_REASON_KEY), any());
+    }
+
+    @Test
+    public void setUp_hasOneSecondaryUser_createSecondaryUserOnSecondaryDisplay() throws Exception {
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
+        when(mTestInfo.getDevice().isVisibleBackgroundUsersSupported()).thenReturn(true);
+        mOptionSetter.setOptionValue(RunOnSecondaryUserTargetPreparer.START_BACKGROUND_USER,
+                "true");
+
+        ArrayList<Integer> userIds = new ArrayList<>();
+        int systemUser = 0;
+        int secondaryUser1 = 100;
+        int secondaryUser2 = 101;
+        userIds.add(systemUser);
+        userIds.add(secondaryUser1);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
+        when(mTestInfo.getDevice().getCurrentUser()).thenReturn(secondaryUser1);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(secondaryUser2);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser1)).thenReturn(true);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser2)).thenReturn(true);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                systemUser,
+                new UserInfo(systemUser, "system", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser1,
+                new UserInfo(secondaryUser1, "current", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+
+        int secondaryDisplayId = 200;
+        Set<Integer> secondaryDisplayIdSet = new HashSet<>();
+        secondaryDisplayIdSet.add(secondaryDisplayId);
+        when(mTestInfo.getDevice().listDisplayIdsForStartingVisibleBackgroundUsers())
+                .thenReturn(secondaryDisplayIdSet);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
+        verify(mTestInfo.getDevice())
+                .startVisibleBackgroundUser(
+                        secondaryUser2, secondaryDisplayId, /* waitFlag= */ true);
+    }
+
+    @Test
+    public void setUp_hasOneSecondaryUser_doNothing() throws Exception {
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
+        when(mTestInfo.getDevice().isVisibleBackgroundUsersSupported()).thenReturn(true);
+        // START_BACKGROUND_USER of this test is false by default.
+
+        ArrayList<Integer> userIds = new ArrayList<>();
+        int systemUser = 0;
+        int secondaryUser1 = 100;
+        int secondaryUser2 = 101;
+        userIds.add(systemUser);
+        userIds.add(secondaryUser1);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
+        when(mTestInfo.getDevice().getCurrentUser()).thenReturn(secondaryUser1);
+        when(mTestInfo.getDevice().createUser(any(), anyBoolean(), anyBoolean(), anyBoolean()))
+                .thenReturn(secondaryUser2);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser1)).thenReturn(true);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser2)).thenReturn(true);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                systemUser,
+                new UserInfo(systemUser, "system", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser1,
+                new UserInfo(secondaryUser1, "current", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+
+        int secondaryDisplayId = 200;
+        Set<Integer> secondaryDisplayIdSet = new HashSet<>();
+        secondaryDisplayIdSet.add(secondaryDisplayId);
+        when(mTestInfo.getDevice().listDisplayIdsForStartingVisibleBackgroundUsers())
+                .thenReturn(secondaryDisplayIdSet);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice(), never())
+                .createUser(
+                        "secondary",
+                        /* guest= */ false,
+                        /* ephemeral= */ false,
+                        /* forTesting= */ true);
+        verify(mTestInfo.getDevice(), never())
+                .startVisibleBackgroundUser(
+                        secondaryUser2, secondaryDisplayId, /* waitFlag= */ true);
+    }
+
+    @Test
+    public void setUp_hasTwoSecondaryUsers_startSecondaryUserOnSecondaryDisplay() throws Exception {
+        when(mTestInfo.getDevice().isHeadlessSystemUserMode()).thenReturn(true);
+        when(mTestInfo.getDevice().isVisibleBackgroundUsersSupported()).thenReturn(true);
+        mOptionSetter.setOptionValue(RunOnSecondaryUserTargetPreparer.START_BACKGROUND_USER,
+                "true");
+
+        ArrayList<Integer> userIds = new ArrayList<>();
+        int systemUser = 0;
+        int secondaryUser1 = 100;
+        int secondaryUser2 = 101;
+        userIds.add(systemUser);
+        userIds.add(secondaryUser1);
+        userIds.add(secondaryUser2);
+        when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
+        when(mTestInfo.getDevice().getCurrentUser()).thenReturn(secondaryUser1);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser1)).thenReturn(true);
+        when(mTestInfo.getDevice().isUserSecondary(secondaryUser2)).thenReturn(true);
+
+        Map<Integer, UserInfo> userInfos = new HashMap<>();
+        userInfos.put(
+                systemUser,
+                new UserInfo(systemUser, "system", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser1,
+                new UserInfo(secondaryUser1, "current", /* flag= */ 0, /* isRunning= */ true));
+        userInfos.put(
+                secondaryUser2,
+                new UserInfo(secondaryUser2, "secondary", /* flag= */ 0, /* isRunning= */ true));
+        when(mTestInfo.getDevice().getUserInfos()).thenReturn(userInfos);
+
+        int secondaryDisplayId = 200;
+        Set<Integer> secondaryDisplayIdSet = new HashSet<>();
+        secondaryDisplayIdSet.add(secondaryDisplayId);
+        when(mTestInfo.getDevice().listDisplayIdsForStartingVisibleBackgroundUsers())
+                .thenReturn(secondaryDisplayIdSet);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.getDevice())
+                .startVisibleBackgroundUser(
+                        secondaryUser2, secondaryDisplayId, /* waitFlag= */ true);
     }
 }

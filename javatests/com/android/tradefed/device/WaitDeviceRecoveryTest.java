@@ -35,6 +35,7 @@ import static org.mockito.Mockito.verify;
 
 import com.android.ddmlib.IDevice;
 import com.android.helper.aoa.UsbDevice;
+import com.android.helper.aoa.UsbException;
 import com.android.helper.aoa.UsbHelper;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.util.CommandResult;
@@ -212,6 +213,27 @@ public class WaitDeviceRecoveryTest {
         verify(mMockRunUtil).sleep(Mockito.anyLong());
         verify(mMockMonitor).waitForDeviceBootloaderStateUpdate();
         verify(mMockDevice).reboot((String) Mockito.isNull());
+    }
+
+    /**
+     * Test {@link WaitDeviceRecovery#recoverDevice(IDeviceStateMonitor, boolean)} when USB cannot
+     * be reset.
+     */
+    @Test
+    public void testRecoverDevice_unavailable_usb_exception() throws Exception {
+        when(mMockMonitor.getDeviceState()).thenReturn(TestDeviceState.ONLINE);
+        when(mMockMonitor.waitForDeviceOnline(Mockito.anyLong())).thenReturn(null);
+        when(mMockUsbHelper.getDevice(Mockito.anyString())).thenThrow(new UsbException("test"));
+
+        try {
+            mRecovery.recoverDevice(mMockMonitor, false);
+            fail("DeviceNotAvailableException not thrown");
+        } catch (DeviceNotAvailableException e) {
+            // expected
+        }
+        verify(mMockRunUtil).sleep(Mockito.anyLong());
+        verify(mMockMonitor).waitForDeviceBootloaderStateUpdate();
+        verify(mMockUsbHelper).getDevice(Mockito.anyString());
     }
 
     /**

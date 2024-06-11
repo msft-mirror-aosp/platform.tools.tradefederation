@@ -21,6 +21,7 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.JUnitToInvocationResultForwarder;
 import com.android.tradefed.testtype.DeviceTestResult.RuntimeDeviceNotAvailableException;
+import com.android.tradefed.testtype.junit4.CarryInterruptedException;
 
 import junit.framework.Test;
 import junit.framework.TestResult;
@@ -40,6 +41,15 @@ public class JUnitRunUtil {
 
     public static boolean runTest(ITestInvocationListener listener, Test junitTest, String runName)
             throws DeviceNotAvailableException {
+        return runTest(listener, junitTest, runName, null);
+    }
+
+    public static boolean runTest(
+            ITestInvocationListener listener,
+            Test junitTest,
+            String runName,
+            TestInformation testInfo)
+            throws DeviceNotAvailableException {
         if (junitTest.countTestCases() == 0) {
             return false;
         }
@@ -49,12 +59,15 @@ public class JUnitRunUtil {
         JUnitToInvocationResultForwarder resultForwarder =
                 new JUnitToInvocationResultForwarder(listener);
         DeviceTestResult result = new DeviceTestResult();
+        result.setTestInfo(testInfo);
         result.addListener(resultForwarder);
         try {
             junitTest.run(result);
         } catch (RuntimeDeviceNotAvailableException e) {
             listener.testRunFailed(e.getDeviceException().getMessage());
             throw e.getDeviceException();
+        } catch (CarryInterruptedException e) {
+            listener.testRunFailed("Test Phase Timeout Reached.");
         } finally {
             listener.testRunEnded(
                     System.currentTimeMillis() - startTime, new HashMap<String, Metric>());

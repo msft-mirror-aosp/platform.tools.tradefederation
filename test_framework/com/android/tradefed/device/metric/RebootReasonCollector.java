@@ -51,7 +51,7 @@ public class RebootReasonCollector extends BaseDeviceMetricCollector {
 
     /** Push the statsd config to each device and store the config Ids. */
     @Override
-    public void onTestRunStart(DeviceMetricData runData) {
+    public void onTestRunStart(DeviceMetricData runData) throws DeviceNotAvailableException {
         mTestDevices = getDevices();
         for (ITestDevice device : mTestDevices) {
             try {
@@ -59,7 +59,7 @@ public class RebootReasonCollector extends BaseDeviceMetricCollector {
                         device.getSerialNumber(),
                         pushStatsConfig(
                                 device, Arrays.asList(Atom.BOOT_SEQUENCE_REPORTED_FIELD_NUMBER)));
-            } catch (DeviceNotAvailableException | IOException e) {
+            } catch (IOException e) {
                 // Error is not thrown as we still want to push the config to other devices.
                 CLog.e(
                         "Failed to push statsd config to device %s. Exception: %s.",
@@ -69,8 +69,8 @@ public class RebootReasonCollector extends BaseDeviceMetricCollector {
     }
 
     @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
         for (ITestDevice device : mTestDevices) {
             List<EventMetricData> metricData = new ArrayList<>();
             if (!mDeviceConfigIds.containsKey(device.getSerialNumber())) {
@@ -112,14 +112,7 @@ public class RebootReasonCollector extends BaseDeviceMetricCollector {
             // Add the count regardless of whether reboots occurred or not.
             runData.addMetricForDevice(
                     device, COUNT_KEY, stringToMetric(String.valueOf(rebootCount)).toBuilder());
-            try {
-                removeConfig(device, configId);
-            } catch (DeviceNotAvailableException e) {
-                // Error is not thrown as we still want to remove the config from other devices.
-                CLog.e(
-                        "Failed to remove statsd config from device %s. Exception: %s.",
-                        device.getSerialNumber(), e.toString());
-            }
+            removeConfig(device, configId);
         }
     }
 

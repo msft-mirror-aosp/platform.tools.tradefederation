@@ -17,10 +17,12 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.host.HostOptions;
 
-import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.storage.Storage;
+import com.google.auth.Credentials;
+import com.google.auth.http.HttpCredentialsAdapter;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,20 +48,25 @@ public abstract class GCSCommon {
 
     public GCSCommon() {}
 
+    void setJsonKeyFile(File jsonKeyFile) {
+        mJsonKeyFile = jsonKeyFile;
+    }
+
     protected Storage getStorage(Collection<String> scopes) throws IOException {
-        Credential credential = null;
+        Credentials credential = null;
         try {
             if (mStorage == null) {
                 credential =
                         GoogleApiClientUtil.createCredential(
                                 scopes, true, mJsonKeyFile, GCS_JSON_KEY);
+                HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credential);
                 mStorage =
                         new Storage.Builder(
                                         GoogleNetHttpTransport.newTrustedTransport(),
                                         GsonFactory.getDefaultInstance(),
                                         GoogleApiClientUtil.configureRetryStrategy(
                                                 GoogleApiClientUtil.setHttpTimeout(
-                                                        credential,
+                                                        requestInitializer,
                                                         DEFAULT_TIMEOUT,
                                                         DEFAULT_TIMEOUT)))
                                 .setApplicationName(GoogleApiClientUtil.APP_NAME)

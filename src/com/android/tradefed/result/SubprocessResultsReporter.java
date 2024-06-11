@@ -20,6 +20,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.retry.ISupportGranularResults;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.SubprocessEventHelper.BaseTestEventInfo;
@@ -28,6 +29,7 @@ import com.android.tradefed.util.SubprocessEventHelper.InvocationEndedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationFailedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationStartedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.LogAssociationEventInfo;
+import com.android.tradefed.util.SubprocessEventHelper.SkippedTestEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestEndedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestLogEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestModuleStartedEventInfo;
@@ -100,6 +102,14 @@ public class SubprocessResultsReporter
         FailedTestEventInfo info =
                 new FailedTestEventInfo(testId.getClassName(), testId.getTestName(), failure);
         printEvent(SubprocessTestResultsParser.StatusKeys.TEST_ASSUMPTION_FAILURE, info);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void testSkipped(TestDescription testId, SkipReason reason) {
+        SkippedTestEventInfo info =
+                new SkippedTestEventInfo(testId.getClassName(), testId.getTestName(), reason);
+        printEvent(SubprocessTestResultsParser.StatusKeys.TEST_SKIPPED, info);
     }
 
     /** {@inheritDoc} */

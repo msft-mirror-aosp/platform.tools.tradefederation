@@ -17,9 +17,9 @@
 package com.android.tradefed.targetprep;
 
 import static com.android.tradefed.targetprep.TestAppInstallSetup.CHECK_MIN_SDK_OPTION;
-import static com.android.tradefed.targetprep.TestAppInstallSetup.RUN_TESTS_AS_USER_KEY;
 import static com.android.tradefed.targetprep.TestAppInstallSetup.TEST_FILE_NAME_OPTION;
 import static com.android.tradefed.targetprep.TestAppInstallSetup.THROW_IF_NOT_FOUND_OPTION;
+import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 
 import static com.google.common.truth.Truth.assertThat;
 
@@ -34,7 +34,6 @@ import static org.mockito.Mockito.when;
 
 import com.android.incfs.install.IncrementalInstallSession;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -120,8 +119,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
 
@@ -185,8 +183,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
 
@@ -225,8 +222,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
 
@@ -316,6 +312,7 @@ public class TestAppInstallSetupTest {
 
     @Test
     public void testSetup_forceQueryable() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(false);
         when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
         when(mMockTestDevice.installPackage(
                         Mockito.eq(fakeApk), Mockito.eq(true), Mockito.eq("--force-queryable")))
@@ -335,7 +332,22 @@ public class TestAppInstallSetupTest {
     }
 
     @Test
+    public void testSetup_deviceApi34_forceQueryableIsFalse() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(true);
+        when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
+        when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
+                .thenReturn(null);
+        when(mMockTestDevice.installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true)))
+                .thenReturn(null);
+
+        mPrep.setUp(mTestInfo);
+        verify(mMockTestDevice, atLeastOnce())
+                .installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true));
+    }
+
+    @Test
     public void testSetup_forceQueryableIsFalse() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(Mockito.eq(34))).thenReturn(false);
         when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
         when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
                 .thenReturn(null);
@@ -357,8 +369,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
 
@@ -415,8 +426,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
 
@@ -468,8 +478,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
 
@@ -611,8 +620,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
                 };
@@ -642,8 +650,7 @@ public class TestAppInstallSetupTest {
         mPrep =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return PACKAGE_NAME;
                     }
                 };
@@ -832,8 +839,7 @@ public class TestAppInstallSetupTest {
                     }
 
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return "fakePackageName";
                     }
                 };
@@ -865,8 +871,7 @@ public class TestAppInstallSetupTest {
                     }
 
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return "fakePackageName";
                     }
                 };
@@ -898,8 +903,7 @@ public class TestAppInstallSetupTest {
         TestAppInstallSetup preparer =
                 new TestAppInstallSetup() {
                     @Override
-                    protected String parsePackageName(
-                            File testAppFile, DeviceDescriptor deviceDescriptor) {
+                    protected String parsePackageName(File testAppFile) {
                         return fileToPackage.apply(testAppFile);
                     }
                 };

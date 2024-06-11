@@ -221,7 +221,9 @@ public class ClusterLogSaverTest {
         final String retryCommandLine = "retry_command_line";
         // create output files (host_log_\d+ will be skipped)
         File fooTxtOutputFile = createMockFile("logs", "foo.txt");
-        File fooHtmlOutputFile = createMockFile("results", "foo.html");
+        File fooHtmlOutputFile = createMockFile("android-cts/results/timestamp", "foo.html");
+        File barHtmlOutputFile =
+                createMockFile("android-cts/results/timestamp/module_reports", "bar.html");
         File fooCtxOutputFile = createMockFile("context", "foo.ctx");
         createMockFile("logs", "host_log_123456.txt");
         mOptionSetter.setOptionValue("cluster:output-file-upload-url", outputFileUploadUrl);
@@ -239,7 +241,7 @@ public class ClusterLogSaverTest {
         // verify that file names are properly stored including any path prefix
         final File fileNamesFile = new File(mWorkDir, ClusterLogSaver.FILE_NAMES_FILE_NAME);
         String expectedFileNames =
-                Stream.of("tool-logs/foo.txt", "foo.html", "foo.ctx")
+                Stream.of("tool-logs/foo.txt", "foo.html", "module_reports/bar.html", "foo.ctx")
                         .sorted()
                         .collect(Collectors.joining("\n"));
         assertEquals(expectedFileNames, FileUtil.readStringFromFile(fileNamesFile));
@@ -248,7 +250,8 @@ public class ClusterLogSaverTest {
         Mockito.verify(mMockTestOutputUploader).uploadFile(fileNamesFile, null);
         Mockito.verify(mMockTestOutputUploader)
                 .uploadFile(fooTxtOutputFile, ClusterLogSaver.TOOL_LOG_PATH);
-        Mockito.verify(mMockTestOutputUploader).uploadFile(fooHtmlOutputFile, null);
+        Mockito.verify(mMockTestOutputUploader).uploadFile(fooHtmlOutputFile, "");
+        Mockito.verify(mMockTestOutputUploader).uploadFile(barHtmlOutputFile, "module_reports");
         Mockito.verify(mMockTestOutputUploader).uploadFile(fooCtxOutputFile, null);
         TestContext expTextContext = new TestContext();
         expTextContext.addTestResource(new TestResource("context/foo.ctx", testOutputUrl));
@@ -302,8 +305,8 @@ public class ClusterLogSaverTest {
         // create two files with same destination, only the second should get picked
         mOptionSetter.setOptionValue("cluster:output-file-pattern", ".*\\.txt");
         mOptionSetter.setOptionValue("cluster:file-picking-strategy", "PICK_LAST");
-        File first = createMockFile("first", "foo.txt");
-        File second = createMockFile("second", "foo.txt");
+        File first = createMockFile("android-gts/results/first", "foo.txt");
+        File second = createMockFile("android-gts/results/second", "foo.txt");
 
         InvocationContext invocationContext = new InvocationContext();
         mClusterLogSaver.invocationStarted(invocationContext);
@@ -316,7 +319,7 @@ public class ClusterLogSaverTest {
         // verify that only the second file is uploaded (and filename file)
         Mockito.verify(mMockTestOutputUploader).setUploadUrl(outputFileUploadUrl);
         Mockito.verify(mMockTestOutputUploader).uploadFile(fileNamesFile, null);
-        Mockito.verify(mMockTestOutputUploader).uploadFile(second, null);
+        Mockito.verify(mMockTestOutputUploader).uploadFile(second, "");
         Mockito.verifyNoMoreInteractions(mMockTestOutputUploader);
     }
 

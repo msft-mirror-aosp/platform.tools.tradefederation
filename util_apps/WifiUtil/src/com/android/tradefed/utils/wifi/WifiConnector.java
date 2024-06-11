@@ -29,7 +29,6 @@ import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -154,8 +153,8 @@ public class WifiConnector {
             config.preSharedKey = quote(psk);
         }
 
-        if (disableMacRandomization && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            config.macRandomizationSetting = WifiConfiguration.RANDOMIZATION_NONE;
+        if (disableMacRandomization && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            config.setMacRandomizationSetting(WifiConfiguration.RANDOMIZATION_NONE);
         }
 
         networkId = mWifiManager.addNetwork(config);
@@ -217,7 +216,8 @@ public class WifiConnector {
         try {
             urlConnection = (HttpURLConnection) url.openConnection();
             urlConnection.connect();
-        } catch (final IOException e) {
+        } catch (final Exception e) {
+            Log.e(TAG, "Failed to open connection to check connectivity", e);
             return false;
         } finally {
             if (urlConnection != null) {

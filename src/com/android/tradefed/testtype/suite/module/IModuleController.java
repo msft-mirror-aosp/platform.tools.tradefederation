@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.suite.module;
 
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.IInvocationContext;
 
 /** Interface for controlling if a module should be executed or not. */
@@ -36,5 +37,6 @@ public interface IModuleController {
      * @param context the {@link IInvocationContext} of the module.
      * @return True if the module should run, false otherwise.
      */
-    public RunStrategy shouldRunModule(IInvocationContext context);
+    public RunStrategy shouldRunModule(IInvocationContext context)
+            throws DeviceNotAvailableException;
 }

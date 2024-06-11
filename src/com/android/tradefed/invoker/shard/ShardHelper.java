@@ -43,6 +43,7 @@ import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IShardableTest;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
 import com.android.tradefed.util.keystore.KeyStoreException;
 
@@ -50,7 +51,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.concurrent.CountDownLatch;
 
 /** Helper class that handles creating the shards and scheduling them for an invocation. */
@@ -121,9 +125,14 @@ public class ShardHelper implements IShardHelper {
         // create the TestInvocationListener that will collect results from all the shards,
         // and forward them to the original set of listeners (minus any ISharddableListeners)
         // once all shards complete
+        Map<Integer, List<IRemoteTest>> multiDevicesShards = buildMultiDevicesShard(shardableTests);
         int expectedShard = shardableTests.size();
         if (shardCount != null) {
             expectedShard = Math.min(shardCount, shardableTests.size());
+        }
+        if (!multiDevicesShards.isEmpty()) {
+            // Account for one shard for the multi-devices
+            expectedShard += multiDevicesShards.size();
         }
         // Add a tracker so we know in invocation if the last shard is done running.
         LastShardDetector lastShard = new LastShardDetector();
@@ -134,6 +143,13 @@ public class ShardHelper implements IShardHelper {
         config.getLogSaver().invocationStarted(context);
         resultCollector.invocationStarted(context);
         synchronized (shardableTests) {
+            scheduledMultiDevicesShard(
+                    multiDevicesShards,
+                    config,
+                    testInfo,
+                    rescheduler,
+                    resultCollector,
+                    expectedShard);
             // When shardCount is available only create 1 poller per shard
             // TODO: consider aggregating both case by picking a predefined shardCount if not
             // available (like 4) for autosharding.
@@ -141,13 +157,14 @@ public class ShardHelper implements IShardHelper {
                 // We shuffle the tests for best results: avoid having the same module sub-tests
                 // contiguously in the list.
                 Collections.shuffle(shardableTests);
-                int maxShard = Math.min(shardCount, shardableTests.size());
-                CountDownLatch tracker = new CountDownLatch(maxShard);
+                // Rectify the expected number of poller to match
+                CountDownLatch tracker =
+                        new CountDownLatch(expectedShard - multiDevicesShards.size());
                 Collection<ITokenRequest> tokenPool = null;
                 if (config.getCommandOptions().shouldUseTokenSharding()) {
                     tokenPool = extractTokenTests(shardableTests);
                 }
-                for (int i = 0; i < maxShard; i++) {
+                for (int i = 0; i < expectedShard - multiDevicesShards.size(); i++) {
                     IConfiguration shardConfig = cloneConfigObject(config);
                     try {
                         shardConfig.setConfigurationObject(LAST_SHARD_DETECTOR, lastShard);
@@ -155,7 +172,8 @@ public class ShardHelper implements IShardHelper {
                         throw new RuntimeException(e);
                     }
                     TestsPoolPoller poller =
-                            new TestsPoolPoller(shardableTests, tokenPool, tracker);
+                            new TestsPoolPoller(
+                                    createTestsPool(shardableTests, tokenPool), tracker);
                     shardConfig.setTest(poller);
                     rescheduleConfig(
                             shardConfig, config, testInfo, rescheduler, resultCollector, i);
@@ -177,7 +195,8 @@ public class ShardHelper implements IShardHelper {
                     }
                     if (config.getCommandOptions().shouldUseDynamicSharding()) {
                         TestsPoolPoller poller =
-                                new TestsPoolPoller(shardableTests, tokenPool, tracker);
+                                new TestsPoolPoller(
+                                        createTestsPool(shardableTests, tokenPool), tracker);
                         shardConfig.setTest(poller);
                     } else {
                         shardConfig.setTest(testShard);
@@ -198,6 +217,11 @@ public class ShardHelper implements IShardHelper {
             }
         }
         return true;
+    }
+
+    private ITestsPool createTestsPool(
+            Collection<IRemoteTest> tests, Collection<ITokenRequest> tokenTests) {
+        return new LocalPool(tests, tokenTests);
     }
 
     private void rescheduleConfig(
@@ -383,5 +407,49 @@ public class ShardHelper implements IShardHelper {
             }
         }
         return tokenPool;
+    }
+
+    private Map<Integer, List<IRemoteTest>> buildMultiDevicesShard(
+            List<IRemoteTest> shardableTests) {
+        Map<Integer, List<IRemoteTest>> neededDevicePerTest =
+                new LinkedHashMap<Integer, List<IRemoteTest>>();
+        for (IRemoteTest test : new ArrayList<>(shardableTests)) {
+            if (test instanceof ITestSuite
+                    && ((ITestSuite) test).getDirectModule().neededDevices() > 1) {
+                shardableTests.remove(test);
+                int neededDevices = ((ITestSuite) test).getDirectModule().neededDevices();
+                if (!neededDevicePerTest.containsKey(neededDevices)) {
+                    neededDevicePerTest.put(neededDevices, new ArrayList<IRemoteTest>());
+                }
+                List<IRemoteTest> multiDevicesTests = neededDevicePerTest.get(neededDevices);
+                multiDevicesTests.add(test);
+            }
+        }
+        return neededDevicePerTest;
+    }
+
+    /**
+     * Schedule a replicated config for each device-needed count so it will self allocate the
+     * appropriate number of devices.
+     */
+    private void scheduledMultiDevicesShard(
+            Map<Integer, List<IRemoteTest>> multiDevicesShards,
+            IConfiguration config,
+            TestInformation testInfo,
+            IRescheduler rescheduler,
+            ShardMainResultForwarder resultCollector,
+            int expectedShard) {
+        if (multiDevicesShards.isEmpty()) {
+            return;
+        }
+        int index = expectedShard - multiDevicesShards.size();
+        for (Entry<Integer, List<IRemoteTest>> multiDevicesTest : multiDevicesShards.entrySet()) {
+            IConfiguration shardConfig = cloneConfigObject(config);
+            shardConfig.setTests(multiDevicesTest.getValue());
+            shardConfig.getCommandOptions().setMultiDeviceCount(multiDevicesTest.getKey());
+            shardConfig.getCommandOptions().setReplicateSetup(true);
+            rescheduleConfig(shardConfig, config, testInfo, rescheduler, resultCollector, index);
+            index++;
+        }
     }
 }

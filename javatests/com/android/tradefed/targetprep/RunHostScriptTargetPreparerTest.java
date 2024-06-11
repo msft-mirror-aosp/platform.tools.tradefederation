@@ -99,8 +99,8 @@ public final class RunHostScriptTargetPreparerTest {
         when(mTestInfo.executionFiles().get(any(FilesKey.class))).thenReturn(null);
 
         // Create temporary working directory and script file
-        mWorkDir = FileUtil.createTempDir(this.getClass().getSimpleName());
-        mScriptFile = File.createTempFile("script", ".sh", mWorkDir);
+        mWorkDir = FileUtil.createTempDir(this.getClass().getSimpleName() + "_" + DEVICE_SERIAL);
+        mScriptFile = File.createTempFile(DEVICE_SERIAL + ".script", ".sh", mWorkDir);
 
         // Default to default adb/fastboot paths
         when(mDeviceManager.getAdbPath()).thenReturn("adb");
@@ -118,13 +118,14 @@ public final class RunHostScriptTargetPreparerTest {
 
     @Test
     public void testSetUp() throws Exception {
-        mOptionSetter.setOptionValue("script-file", mScriptFile.getAbsolutePath());
+        mOptionSetter.setOptionValue(
+                "script-file", mScriptFile.getAbsolutePath().replace(DEVICE_SERIAL, "$SERIAL"));
         mOptionSetter.setOptionValue("script-timeout", "10");
         // Verify environment, timeout, and script path
         mPreparer.setUp(mTestInfo);
         verify(mRunUtil).setEnvVariable("ANDROID_SERIAL", DEVICE_SERIAL);
         verify(mRunUtil, never()).setEnvVariable(eq("PATH"), any()); // uses default PATH
-        verify(mRunUtil).runTimedCmd(10L, mScriptFile.getAbsolutePath());
+        verify(mRunUtil).runTimedCmd(eq(10L), eq(mScriptFile.getAbsolutePath()));
         // Verify that script is executable
         assertTrue(mScriptFile.canExecute());
         // No flashing permit taken/returned by default
@@ -134,7 +135,8 @@ public final class RunHostScriptTargetPreparerTest {
 
     @Test
     public void testSetUp_workingDir() throws Exception {
-        mOptionSetter.setOptionValue("work-dir", mWorkDir.getAbsolutePath());
+        mOptionSetter.setOptionValue(
+                "work-dir", mWorkDir.getAbsolutePath().replace(DEVICE_SERIAL, "$SERIAL"));
         mOptionSetter.setOptionValue("script-file", mScriptFile.getName()); // relative
         // Verify that the working directory is set and script's path is resolved
         mPreparer.setUp(mTestInfo);
