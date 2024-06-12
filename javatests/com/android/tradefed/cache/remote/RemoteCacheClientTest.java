@@ -16,15 +16,21 @@
 
 package com.android.tradefed.cache.remote;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheImplBase;
 import build.bazel.remote.execution.v2.ActionResult;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
+import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.StreamUtil;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.Status;
@@ -32,11 +38,16 @@ import io.grpc.stub.StreamObserver;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.util.MutableHandlerRegistry;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
+import java.util.Map;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.runner.RunWith;
@@ -51,6 +62,36 @@ public class RemoteCacheClientTest {
     private ManagedChannel mChannel;
     private Server mFakeServer;
     private File mInput;
+    private File mWorkFolder;
+
+    private static class FakeByteStreamDownloader extends ByteStreamDownloader {
+        private final Map<Digest, String> mData;
+
+        public FakeByteStreamDownloader(Map<Digest, String> data) {
+            mData = data;
+        }
+
+        @Override
+        public ListenableFuture<Void> downloadBlob(Digest digest, OutputStream out) {
+            try {
+                if (digest.getSizeBytes() == 0) {
+                    out.close();
+                    return Futures.immediateVoidFuture();
+                }
+                if (!mData.containsKey(digest)) {
+                    out.close();
+                    return Futures.immediateFailedFuture(new IOException("Blob not found!"));
+                }
+                InputStream data = new ByteArrayInputStream(mData.get(digest).getBytes(UTF_8));
+                StreamUtil.copyStreams(data, out);
+                out.close();
+                data.close();
+            } catch (IOException e) {
+                return Futures.immediateFailedFuture(e);
+            }
+            return Futures.immediateVoidFuture();
+        }
+    }
 
     @Before
     public final void setUp() throws Exception {
@@ -62,6 +103,7 @@ public class RemoteCacheClientTest {
                         .start();
         mChannel = InProcessChannelBuilder.forName(mFakeServerName).directExecutor().build();
         mInput = FileUtil.createTempDir("input-dir");
+        mWorkFolder = FileUtil.createTempDir("work-folder");
     }
 
     @After
@@ -69,6 +111,7 @@ public class RemoteCacheClientTest {
         mChannel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
         mFakeServer.shutdown().awaitTermination(5, TimeUnit.SECONDS);
         FileUtil.recursiveDelete(mInput);
+        FileUtil.recursiveDelete(mWorkFolder);
     }
 
     @Test
@@ -80,6 +123,8 @@ public class RemoteCacheClientTest {
                 ExecutableAction.create(
                         mInput, Arrays.asList("found", "command"), new HashMap<>(), 100L);
         int exitCode = 0;
+        String stdout = "STDOUT";
+        Digest stdOutDigest = DigestCalculator.compute(stdout.getBytes());
         mServiceRegistry.addService(
                 new ActionCacheImplBase() {
                     @Override
@@ -88,23 +133,31 @@ public class RemoteCacheClientTest {
                             StreamObserver<ActionResult> responseObserver) {
                         if (request.getActionDigest().equals(cachedAction.actionDigest())) {
                             responseObserver.onNext(
-                                    ActionResult.newBuilder().setExitCode(exitCode).build());
+                                    ActionResult.newBuilder()
+                                            .setStdoutDigest(stdOutDigest)
+                                            .setExitCode(exitCode)
+                                            .build());
                             responseObserver.onCompleted();
                             return;
                         }
                         responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
                     }
                 });
-        RemoteCacheClient client = newClient();
+        RemoteCacheClient client =
+                newClient(
+                        new FakeByteStreamDownloader(
+                                Collections.singletonMap(stdOutDigest, stdout)));
 
         ExecutableActionResult notFoundResult = client.lookupCache(notFoundAction);
         ExecutableActionResult cachedResult = client.lookupCache(cachedAction);
 
         assertNull(notFoundResult);
         assertEquals(0, cachedResult.exitCode());
+        assertEquals(stdout, FileUtil.readStringFromFile(cachedResult.stdOut()));
+        assertNull(cachedResult.stdErr());
     }
 
-    private RemoteCacheClient newClient() {
-        return new RemoteCacheClient("test instance", mChannel, null);
+    private RemoteCacheClient newClient(ByteStreamDownloader downloader) {
+        return new RemoteCacheClient(mWorkFolder, "test instance", mChannel, null, downloader);
     }
 }
