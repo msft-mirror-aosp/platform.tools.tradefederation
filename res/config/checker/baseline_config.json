@@ -60,5 +60,10 @@
     "class_name": "com.android.tradefed.suite.checker.baseline.CommandBaselineSetter",
     "command": "input keyevent KEYCODE_HOME",
     "min_api_level": "35"
+  },
+  "reset_hidden_api_policy": {
+    "class_name": "com.android.tradefed.suite.checker.baseline.CommandBaselineSetter",
+    "command": "settings delete global hidden_api_policy",
+    "min_api_level": "35"
   }
 }
