@@ -26,6 +26,7 @@ import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
+import com.android.tradefed.cache.MerkleTree;
 import com.android.tradefed.cache.UploadManifest;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.util.FileUtil;
@@ -45,6 +46,7 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 /** A RemoteActionCache implementation that uses gRPC calls to a remote API server. */
@@ -76,7 +78,19 @@ public class RemoteCacheClient implements ICacheClient {
     @Override
     public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult)
             throws IOException, InterruptedException {
-        UploadManifest.Builder manifestBuilder = UploadManifest.builder();
+        MerkleTree input = action.input();
+        UploadManifest.Builder manifestBuilder =
+                UploadManifest.builder()
+                        .addFiles(input.digestToFile())
+                        .addBlob(input.rootDigest(), input.root().toByteString())
+                        .addBlobs(
+                                input.digestToSubdir().entrySet().stream()
+                                        .collect(
+                                                Collectors.toMap(
+                                                        Entry::getKey,
+                                                        e -> e.getValue().toByteString())))
+                        .addBlob(action.commandDigest(), action.command().toByteString())
+                        .addBlob(action.actionDigest(), action.action().toByteString());
         ActionResult.Builder actionResultBuilder =
                 ActionResult.newBuilder().setExitCode(actionResult.exitCode());
 
@@ -97,6 +111,10 @@ public class RemoteCacheClient implements ICacheClient {
         uploads.addAll(
                 manifest.digestToFile().entrySet().stream()
                         .map(e -> mUploader.uploadFile(e.getKey(), e.getValue()))
+                        .collect(Collectors.toList()));
+        uploads.addAll(
+                manifest.digestToBlob().entrySet().stream()
+                        .map(e -> mUploader.uploadBlob(e.getKey(), e.getValue()))
                         .collect(Collectors.toList()));
         waitForBulkTransfers(uploads);
 
