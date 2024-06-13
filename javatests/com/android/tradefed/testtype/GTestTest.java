@@ -127,6 +127,27 @@ public class GTestTest {
         }
     }
 
+    /** Test run when no executable file is found should throw an exception. */
+    @Test
+    public void testRun_noExecutableFile() throws Exception {
+        OptionSetter setter = new OptionSetter(mGTest);
+        // turn on flag for throwing error
+        setter.setOptionValue("force-no-test-error", "true");
+        final String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
+        final String findCmd = String.format("find -L %s -type f -perm -u+r,u+x", nativeTestPath);
+        final String findCmdOut = "";
+
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
+
+        try {
+            mGTest.run(mTestInfo, mMockInvocationListener);
+            fail("an exception should have been thrown");
+        } catch (RuntimeException e) {
+            // expected
+        }
+    }
+
     /** Test the run method for a couple tests */
     @Test
     public void testRun() throws DeviceNotAvailableException {
