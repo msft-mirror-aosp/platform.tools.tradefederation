@@ -263,31 +263,32 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         // load all the configurations with include-filter injected.
         LinkedHashMap<String, IConfiguration> testConfigs = super.loadTests();
 
-        // Create and inject individual tests by calling super.loadTests() with each test info.
-        for (Map.Entry<String, IConfiguration> entry : testConfigs.entrySet()) {
-            List<IRemoteTest> allTests = new ArrayList<>();
-            IConfiguration moduleConfig = entry.getValue();
-            ConfigurationDescriptor configDescriptor =
-                    moduleConfig.getConfigurationDescription();
-            IAbi abi = configDescriptor.getAbi();
-            // Get the parameterized module name by striping the abi information out.
-            String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
-            Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
-            // Only keep the same matching abi runner
-            allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
-            if (!allTests.isEmpty()) {
-                // Set back to IConfiguration only if IRemoteTests are created.
-                moduleConfig.setTests(allTests);
-                // Set test sources to ConfigurationDescriptor.
-                List<String> testSources = getTestSources(testInfos);
-                configDescriptor.addMetadata(TestMapping.TEST_SOURCES, testSources);
-            }
-            if (mRemoteTestTimeOut != null) {
-                // Add the timeout to metadata so that it can be used in the ModuleDefinition.
-                configDescriptor.addMetadata(
-                        RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION,
-                        mRemoteTestTimeOut.toString()
-                );
+        try (CloseableTraceScope ignored = new CloseableTraceScope("testmapping:loadTests")) {
+            // Create and inject individual tests by calling super.loadTests() with each test info.
+            for (Map.Entry<String, IConfiguration> entry : testConfigs.entrySet()) {
+                List<IRemoteTest> allTests = new ArrayList<>();
+                IConfiguration moduleConfig = entry.getValue();
+                ConfigurationDescriptor configDescriptor =
+                        moduleConfig.getConfigurationDescription();
+                IAbi abi = configDescriptor.getAbi();
+                // Get the parameterized module name by striping the abi information out.
+                String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
+                Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
+                // Only keep the same matching abi runner
+                allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
+                if (!allTests.isEmpty()) {
+                    // Set back to IConfiguration only if IRemoteTests are created.
+                    moduleConfig.setTests(allTests);
+                    // Set test sources to ConfigurationDescriptor.
+                    List<String> testSources = getTestSources(testInfos);
+                    configDescriptor.addMetadata(TestMapping.TEST_SOURCES, testSources);
+                }
+                if (mRemoteTestTimeOut != null) {
+                    // Add the timeout to metadata so that it can be used in the ModuleDefinition.
+                    configDescriptor.addMetadata(
+                            RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION,
+                            mRemoteTestTimeOut.toString());
+                }
             }
         }
         return testConfigs;
