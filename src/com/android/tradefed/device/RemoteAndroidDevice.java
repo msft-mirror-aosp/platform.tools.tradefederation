@@ -105,7 +105,7 @@ public class RemoteAndroidDevice extends TestDevice {
             String initialIp = ((DefaultConnection) getConnection()).getInitialIp();
             Integer initialOffset =
                     ((DefaultConnection) getConnection()).getInitialDeviceNumOffset();
-            if (initialIp != null) {
+            if (initialIp != null || initialOffset != null) {
                 // Specify ip/offset.
                 descriptor = new DeviceDescriptor(descriptor, initialIp, initialOffset);
             }

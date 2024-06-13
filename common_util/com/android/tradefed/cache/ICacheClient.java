@@ -35,6 +35,9 @@ public interface ICacheClient {
     /**
      * Lookups the {@link ExecutableActionResult} for the {@code action}.
      *
+     * <p>Note, caller should delete the output files after usage to avoid running out of disk
+     * space.
+     *
      * @param action The {@link ExecutableAction} whose result should be returned.
      * @return the {@link ExecutableActionResult} of the {@code action} if the result exists,
      *     otherwise, null.

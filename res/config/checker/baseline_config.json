@@ -55,5 +55,10 @@
   "clear_lock_screen": {
     "class_name": "com.android.tradefed.suite.checker.baseline.LockSettingsBaselineSetter",
     "clear_pwds": ["0000", "1234", "12345", "private"]
+  },
+  "back_to_home_screen": {
+    "class_name": "com.android.tradefed.suite.checker.baseline.CommandBaselineSetter",
+    "command": "input keyevent KEYCODE_HOME",
+    "min_api_level": "35"
   }
 }

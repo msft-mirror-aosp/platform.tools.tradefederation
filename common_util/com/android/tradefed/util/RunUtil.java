@@ -1203,6 +1203,7 @@ public class RunUtil implements IRunUtil {
                 StreamUtil.copyStreams(stdoutStream, stdout);
             } finally {
                 stdoutStream.close();
+                FileUtil.deleteFile(result.stdOut());
             }
         }
         if (result.stdErr() != null && stderr != null) {
@@ -1211,6 +1212,7 @@ public class RunUtil implements IRunUtil {
                 StreamUtil.copyStreams(stderrStream, stderr);
             } finally {
                 stderrStream.close();
+                FileUtil.deleteFile(result.stdErr());
             }
         }
         return commandResult;
