@@ -24,6 +24,7 @@ import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheImplBase;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
+import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
@@ -43,6 +44,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
@@ -57,6 +59,7 @@ import org.junit.Test;
 /** Tests for {@link RemoteCacheClient}. */
 @RunWith(JUnit4.class)
 public class RemoteCacheClientTest {
+    private static final String INSTANCE = "test instance";
     private final String mFakeServerName = "fake server for " + getClass();
     private final MutableHandlerRegistry mServiceRegistry = new MutableHandlerRegistry();
     private ManagedChannel mChannel;
@@ -68,6 +71,7 @@ public class RemoteCacheClientTest {
         private final Map<Digest, String> mData;
 
         public FakeByteStreamDownloader(Map<Digest, String> data) {
+            super(INSTANCE, null, null, Duration.ofSeconds(5));
             mData = data;
         }
 
@@ -115,6 +119,45 @@ public class RemoteCacheClientTest {
     }
 
     @Test
+    public void uploadCache_works() throws IOException, InterruptedException {
+        class SpyActionCacheImpl extends ActionCacheImplBase {
+            public ActionResult actionResult = null;
+            public Digest actionDigest = null;
+
+            @Override
+            public void updateActionResult(
+                    UpdateActionResultRequest request,
+                    StreamObserver<ActionResult> responseObserver) {
+                actionResult = request.getActionResult();
+                actionDigest = request.getActionDigest();
+                responseObserver.onNext(actionResult);
+                responseObserver.onCompleted();
+            }
+        }
+        SpyActionCacheImpl actionCache = new SpyActionCacheImpl();
+        mServiceRegistry.addService(actionCache);
+        ExecutableAction action =
+                ExecutableAction.create(
+                        mInput, Arrays.asList("test", "command"), new HashMap<>(), 100L);
+        int exitCode = 0;
+        File stdoutFile = FileUtil.createTempFile("stdout-", ".txt", mWorkFolder);
+        String stdout = "test stdout";
+        FileUtil.writeToFile(stdout, stdoutFile);
+        ExecutableActionResult result = ExecutableActionResult.create(exitCode, stdoutFile, null);
+        RemoteCacheClient client = newClient(null);
+        ActionResult expectedResult =
+                ActionResult.newBuilder()
+                        .setExitCode(exitCode)
+                        .setStdoutDigest(DigestCalculator.compute(stdoutFile))
+                        .build();
+
+        client.uploadCache(action, result);
+
+        assertEquals(actionCache.actionResult, expectedResult);
+        assertEquals(actionCache.actionDigest, DigestCalculator.compute(action.action()));
+    }
+
+    @Test
     public void lookupCache_works() throws IOException, InterruptedException {
         ExecutableAction notFoundAction =
                 ExecutableAction.create(
@@ -158,6 +201,6 @@ public class RemoteCacheClientTest {
     }
 
     private RemoteCacheClient newClient(ByteStreamDownloader downloader) {
-        return new RemoteCacheClient(mWorkFolder, "test instance", mChannel, null, downloader);
+        return new RemoteCacheClient(mWorkFolder, INSTANCE, mChannel, null, downloader);
     }
 }

@@ -39,6 +39,8 @@ java_library_host {
         "grpc-java-api",
         "grpc-java-stub",
         "remote-execution-java-grpc",
+        "bytestream-java-proto",
+        "bytestream-java-grpc",
     ],
     libs: [
         "ddmlib-prebuilt",
