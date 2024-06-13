@@ -38,6 +38,7 @@ import io.grpc.StatusRuntimeException;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
@@ -132,7 +133,9 @@ public class RemoteCacheClient implements ICacheClient {
         }
 
         File stdout = null;
+        OutputStream stdoutStream = null;
         File stderr = null;
+        OutputStream stderrStream = null;
         try (CloseableTraceScope ignored = new CloseableTraceScope("download outputs")) {
             List<ListenableFuture<Void>> downloads = new ArrayList<>();
             Digest stdoutDigest = actionResult.getStdoutDigest();
@@ -142,7 +145,8 @@ public class RemoteCacheClient implements ICacheClient {
                                 String.format("cached-stdout-%s", stdoutDigest.getHash()),
                                 ".txt",
                                 mWorkFolder);
-                downloads.add(mDownloader.downloadBlob(stdoutDigest, new FileOutputStream(stdout)));
+                stdoutStream = new FileOutputStream(stdout);
+                downloads.add(mDownloader.downloadBlob(stdoutDigest, stdoutStream));
             }
             Digest stderrDigest = actionResult.getStderrDigest();
             if (!actionResult.getStderrDigest().equals(Digest.getDefaultInstance())) {
@@ -151,10 +155,18 @@ public class RemoteCacheClient implements ICacheClient {
                                 String.format("cached-stderr-%s", stderrDigest.getHash()),
                                 ".txt",
                                 mWorkFolder);
-                downloads.add(mDownloader.downloadBlob(stderrDigest, new FileOutputStream(stderr)));
+                stderrStream = new FileOutputStream(stderr);
+                downloads.add(mDownloader.downloadBlob(stderrDigest, stderrStream));
             }
             // TODO(b/346606200): Track download metrics.
             waitForDownloads(downloads);
+        } finally {
+            if (stdoutStream != null) {
+                stdoutStream.close();
+            }
+            if (stderrStream != null) {
+                stderrStream.close();
+            }
         }
         return ExecutableActionResult.create(actionResult.getExitCode(), stdout, stderr);
     }
