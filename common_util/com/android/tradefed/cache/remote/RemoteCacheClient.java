@@ -21,6 +21,7 @@ import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheFutureStub;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
+import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
@@ -67,8 +68,32 @@ public class RemoteCacheClient implements ICacheClient {
 
     /** {@inheritDoc} */
     @Override
-    public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult) {
-        throw new UnsupportedOperationException("Not implemented feature.");
+    public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult)
+            throws IOException, InterruptedException {
+        ActionResult.Builder actionResultBuilder =
+                ActionResult.newBuilder().setExitCode(actionResult.exitCode());
+
+        if (actionResult.stdOut() != null) {
+            actionResultBuilder.setStdoutDigest(DigestCalculator.compute(actionResult.stdOut()));
+        }
+
+        if (actionResult.stdErr() != null) {
+            actionResultBuilder.setStderrDigest(DigestCalculator.compute(actionResult.stdErr()));
+        }
+
+        getFromFuture(
+                Futures.catchingAsync(
+                        acFutureStub()
+                                .updateActionResult(
+                                        UpdateActionResultRequest.newBuilder()
+                                                .setInstanceName(mInstanceName)
+                                                .setDigestFunction(DigestCalculator.DIGEST_FUNCTION)
+                                                .setActionDigest(action.actionDigest())
+                                                .setActionResult(actionResultBuilder.build())
+                                                .build()),
+                        StatusRuntimeException.class,
+                        (sre) -> Futures.immediateFailedFuture(new IOException(sre)),
+                        MoreExecutors.directExecutor()));
     }
 
     /** {@inheritDoc} */

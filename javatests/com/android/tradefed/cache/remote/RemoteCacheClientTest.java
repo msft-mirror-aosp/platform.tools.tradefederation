@@ -24,6 +24,7 @@ import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheImplBase;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
+import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
@@ -112,6 +113,45 @@ public class RemoteCacheClientTest {
         mFakeServer.shutdown().awaitTermination(5, TimeUnit.SECONDS);
         FileUtil.recursiveDelete(mInput);
         FileUtil.recursiveDelete(mWorkFolder);
+    }
+
+    @Test
+    public void uploadCache_works() throws IOException, InterruptedException {
+        class SpyActionCacheImpl extends ActionCacheImplBase {
+            public ActionResult actionResult = null;
+            public Digest actionDigest = null;
+
+            @Override
+            public void updateActionResult(
+                    UpdateActionResultRequest request,
+                    StreamObserver<ActionResult> responseObserver) {
+                actionResult = request.getActionResult();
+                actionDigest = request.getActionDigest();
+                responseObserver.onNext(actionResult);
+                responseObserver.onCompleted();
+            }
+        }
+        SpyActionCacheImpl actionCache = new SpyActionCacheImpl();
+        mServiceRegistry.addService(actionCache);
+        ExecutableAction action =
+                ExecutableAction.create(
+                        mInput, Arrays.asList("test", "command"), new HashMap<>(), 100L);
+        int exitCode = 0;
+        File stdoutFile = FileUtil.createTempFile("stdout-", ".txt", mWorkFolder);
+        String stdout = "test stdout";
+        FileUtil.writeToFile(stdout, stdoutFile);
+        ExecutableActionResult result = ExecutableActionResult.create(exitCode, stdoutFile, null);
+        RemoteCacheClient client = newClient(null);
+        ActionResult expectedResult =
+                ActionResult.newBuilder()
+                        .setExitCode(exitCode)
+                        .setStdoutDigest(DigestCalculator.compute(stdoutFile))
+                        .build();
+
+        client.uploadCache(action, result);
+
+        assertEquals(actionCache.actionResult, expectedResult);
+        assertEquals(actionCache.actionDigest, DigestCalculator.compute(action.action()));
     }
 
     @Test

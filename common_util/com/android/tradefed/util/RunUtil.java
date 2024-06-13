@@ -274,20 +274,28 @@ public class RunUtil implements IRunUtil {
         CommandResult result = osRunnable.getResult();
         result.setStatus(status);
 
-        if (CommandStatus.SUCCESS.equals(status) && action != null && cacheClient != null) {
-            ForkedOutputStream stdoutForkedStream = (ForkedOutputStream) stdout;
-            ForkedOutputStream stderrForkedStream =
-                    stderr != null ? (ForkedOutputStream) stderr : null;
-            if (stdoutForkedStream.isSuccess()
-                    && (stderr == null || stderrForkedStream.isSuccess())) {
-                cacheClient.uploadCache(
-                        action,
-                        ExecutableActionResult.create(
-                                result.getExitCode(), stdoutBuffer, stderrBuffer));
+        try {
+            if (CommandStatus.SUCCESS.equals(status) && action != null && cacheClient != null) {
+                ForkedOutputStream stdoutForkedStream = (ForkedOutputStream) stdout;
+                ForkedOutputStream stderrForkedStream =
+                        stderr != null ? (ForkedOutputStream) stderr : null;
+                if (stdoutForkedStream.isSuccess()
+                        && (stderr == null || stderrForkedStream.isSuccess())) {
+                    cacheClient.uploadCache(
+                            action,
+                            ExecutableActionResult.create(
+                                    result.getExitCode(), stdoutBuffer, stderrBuffer));
+                }
             }
+        } catch (IOException e) {
+            CLog.e("Failed to upload cache!");
+            CLog.e(e);
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+        } finally {
+            FileUtil.deleteFile(stdoutBuffer);
+            FileUtil.deleteFile(stderrBuffer);
         }
-        FileUtil.deleteFile(stdoutBuffer);
-        FileUtil.deleteFile(stderrBuffer);
         return result;
     }
 
