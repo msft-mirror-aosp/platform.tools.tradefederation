@@ -1297,7 +1297,10 @@ public abstract class ITestSuite
 
         mIsSplitting = true;
         try {
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> runConfig = loadAndFilter();
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEST_SETUP_PAIR, start, System.currentTimeMillis());
             if (runConfig.isEmpty()) {
                 CLog.i("No config were loaded. Nothing to run.");
                 return null;
