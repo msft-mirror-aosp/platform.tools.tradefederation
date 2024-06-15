@@ -111,12 +111,6 @@ public class ManagedTestDeviceFactory implements IManagedTestDeviceFactory {
                             idevice,
                             new DeviceStateMonitor(mDeviceManager, idevice, mFastbootEnabled),
                             mAllocationMonitor);
-        } else if (idevice instanceof TcpDevice) {
-            // Special device for Tcp device for custom handling.
-            testDevice = new RemoteAndroidDevice(idevice,
-                    new DeviceStateMonitor(mDeviceManager, idevice, mFastbootEnabled),
-                    mAllocationMonitor);
-            testDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
         } else if (isTcpDeviceSerial(idevice.getSerialNumber())) {
             if (isRemoteEnvironment()) {
                 // If we are in a remote environment, treat the device as such

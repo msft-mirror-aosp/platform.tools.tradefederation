@@ -86,6 +86,10 @@ public class DeviceOwnerTargetPreparerTest {
 
     @Test
     public void testSetUp_headless_switchesToMainUser() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
@@ -116,6 +120,10 @@ public class DeviceOwnerTargetPreparerTest {
 
     @Test
     public void testSetUp_headless_removeSecondaryUsers() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
@@ -145,6 +153,10 @@ public class DeviceOwnerTargetPreparerTest {
 
     @Test
     public void testSetUp_headless_setsDeviceOwner() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
@@ -168,6 +180,10 @@ public class DeviceOwnerTargetPreparerTest {
 
     @Test
     public void testTearDown_headless_removesDeviceOwner() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
