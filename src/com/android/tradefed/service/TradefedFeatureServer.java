@@ -178,6 +178,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                         ((IRemoteScheduledListenersFeature) feature).setListeners(listeners);
                     }
                 }
+                TracingLogger.setLocalGroup(mRegisteredGroup.get(request.getReferenceId()));
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(
                                 TracingLogger.getActiveTraceForGroup(
@@ -200,6 +201,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                     if (feature instanceof IConfigurationReceiver) {
                         ((IConfigurationReceiver) feature).setConfiguration(null);
                     }
+                    TracingLogger.resetLocalGroup();
                     InvocationMetricLogger.resetLocalGroup();
                     CurrentInvocation.resetLocalGroup();
                 }
