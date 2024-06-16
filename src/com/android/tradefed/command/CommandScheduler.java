@@ -848,7 +848,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
             return Arrays.asList(listThreads).stream()
                     .filter(t -> !(t instanceof ForkJoinWorkerThread))
-                    .filter(t -> !t.getName().contains("-pool-task"))
+                    .filter(t -> t != null && !t.getName().contains("-pool-task"))
                     .collect(Collectors.toList());
         }
 
