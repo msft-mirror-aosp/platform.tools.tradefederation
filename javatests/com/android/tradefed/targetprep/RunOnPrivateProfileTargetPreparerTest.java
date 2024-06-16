@@ -63,6 +63,10 @@ public final class RunOnPrivateProfileTargetPreparerTest {
             "Owner name: Owner\n" + "  Boot user: -10000\n" + "Can add private profile: true\n"
                     + "\n" + "Number of listeners for\n" + "  restrictions: 10\n"
                     + "  user lifecycle events: 7\n" + "\n" + "User types version: 0\n";
+      private static final String SAMPLE_DUMPSYS_USER_CAN_NOT_ADD_PS =
+            "Owner name: Owner\n" + "  Boot user: -10000\n" + "Can add private profile: false\n"
+                    + "\n" + "Number of listeners for\n" + "  restrictions: 10\n"
+                    + "  user lifecycle events: 7\n" + "\n" + "User types version: 0\n";
     @Rule
     public final MockitoRule mockito = MockitoJUnit.rule();
 
@@ -100,7 +104,7 @@ public final class RunOnPrivateProfileTargetPreparerTest {
     public void setUp_doesNotSupportPrivateUser_doesNotChangeTestUser() throws Exception {
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
         when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
-                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
+                SAMPLE_DUMPSYS_USER_CAN_NOT_ADD_PS);
         mPreparer.setUp(mTestInfo);
 
         verify(mTestInfo.properties(), never()).put(eq(RUN_TESTS_AS_USER_KEY), any());
@@ -109,7 +113,7 @@ public final class RunOnPrivateProfileTargetPreparerTest {
     @Test
     public void setUp_doesNotSupportPrivateUser_doesNotCreateUser() throws Exception {
         when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
-                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
+                SAMPLE_DUMPSYS_USER_CAN_NOT_ADD_PS);
         mPreparer.setUp(mTestInfo);
         verify(mTestInfo.getDevice(), never()).executeShellCommand(
                 argThat(argument -> argument.contains("pm create-user")));
@@ -117,6 +121,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
 
     @Test
     public void setUp_privateUserType_createsPrivateProfileAndStartsUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         String expectedCreateUserCommand = CREATE_PRIVATE_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand)).thenReturn(
                 CREATED_USER_10_MESSAGE);
@@ -149,6 +155,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
 
     @Test
     public void setUp_nonZeroCurrentUser_createsProfileForCorrectUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         when(mTestInfo.getDevice().getCurrentUser()).thenReturn(1);
         String expectedCreateUserCommand =
                 "pm create-user --profileOf 1 "
@@ -163,6 +171,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
 
     @Test
     public void setUp_profileAlreadyExists_runsTestAsExistingUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         Map<Integer, UserInfo> userInfos = new HashMap<>();
         userInfos.put(
                 11,
@@ -180,6 +190,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
 
     @Test
     public void setUp_setsRunTestsAsUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         String expectedCreateUserCommand = CREATE_PRIVATE_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
@@ -192,6 +204,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
 
     @Test
     public void setUp_installsPackagesInProfileUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         String expectedCreateUserCommand = CREATE_PRIVATE_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand)).thenReturn(
                 CREATED_USER_10_MESSAGE);
@@ -236,6 +250,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
 
     @Test
     public void tearDown_removesProfileUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         String expectedCreateUserCommand = CREATE_PRIVATE_PROFILE_COMMAND;
         when(mTestInfo.getDevice().executeShellCommand(expectedCreateUserCommand))
                 .thenReturn(CREATED_USER_10_MESSAGE);
@@ -268,6 +284,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
     @Test
     public void setUp_doesNotSupportAdditionalUsers_alreadyHasProfile_runsTestAsExistingUser()
             throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
         Map<Integer, UserInfo> userInfos = new HashMap<>();
         userInfos.put(
@@ -302,6 +320,8 @@ public final class RunOnPrivateProfileTargetPreparerTest {
     @Test
     public void setUp_doesNotSupportAdditionalUsers_alreadyHasPrivateProfile_doesNotSkipTests()
             throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND)).thenReturn(
+                SAMPLE_DUMPSYS_USER_CAN_ADD_PS);
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(1);
         Map<Integer, UserInfo> userInfos = new HashMap<>();
         userInfos.put(
