@@ -514,6 +514,13 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
                 return false;
             }
             for (String filter : mIncludeFilters) {
+                // Also ensure the filter matches the fully.qualified.ClassName
+                String fullyQualifiedClassNameFilter = "(\\w*\\.)*" + filter;
+                if (mCurrentTestClass.matches(fullyQualifiedClassNameFilter)
+                        || (mCurrentTestClass + "#" + mCurrentTestName)
+                                .matches(fullyQualifiedClassNameFilter)) {
+                    return false;
+                }
                 if ((mCurrentTestClass + "#" + mCurrentTestName).matches(filter)) {
                     return false;
                 }
