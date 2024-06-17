@@ -21,6 +21,7 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.targetprep.DeviceFlashPreparer;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -81,7 +82,10 @@ public interface IHostOptions {
     public List<String> getLabels();
 
     /** Known tcp-device associated with a specific IP. */
-    Set<String> getKnownTcpDeviceIpPool();
+    @Deprecated
+    default Set<String> getKnownTcpDeviceIpPool() {
+      return new HashSet<>();
+    }
 
     /** Known gce-device associated with a specific IP. */
     Set<String> getKnownGceDeviceIpPool();

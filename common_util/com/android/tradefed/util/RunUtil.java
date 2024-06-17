@@ -25,6 +25,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -228,8 +229,16 @@ public class RunUtil implements IRunUtil {
             }
         }
 
-        ExecutableActionResult cachedResult =
-                action != null && cacheClient != null ? cacheClient.lookupCache(action) : null;
+        ExecutableActionResult cachedResult = null;
+        try {
+            cachedResult =
+                    action != null && cacheClient != null ? cacheClient.lookupCache(action) : null;
+        } catch (IOException e) {
+            CLog.e("Failed to lookup cache!");
+            CLog.e(e);
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+        }
         if (cachedResult != null) {
             try {
                 return handleCachedResult(cachedResult, stdout, stderr);
@@ -265,20 +274,28 @@ public class RunUtil implements IRunUtil {
         CommandResult result = osRunnable.getResult();
         result.setStatus(status);
 
-        if (CommandStatus.SUCCESS.equals(status) && action != null && cacheClient != null) {
-            ForkedOutputStream stdoutForkedStream = (ForkedOutputStream) stdout;
-            ForkedOutputStream stderrForkedStream =
-                    stderr != null ? (ForkedOutputStream) stderr : null;
-            if (stdoutForkedStream.isSuccess()
-                    && (stderr == null || stderrForkedStream.isSuccess())) {
-                cacheClient.uploadCache(
-                        action,
-                        ExecutableActionResult.create(
-                                result.getExitCode(), stdoutBuffer, stderrBuffer));
+        try {
+            if (CommandStatus.SUCCESS.equals(status) && action != null && cacheClient != null) {
+                ForkedOutputStream stdoutForkedStream = (ForkedOutputStream) stdout;
+                ForkedOutputStream stderrForkedStream =
+                        stderr != null ? (ForkedOutputStream) stderr : null;
+                if (stdoutForkedStream.isSuccess()
+                        && (stderr == null || stderrForkedStream.isSuccess())) {
+                    cacheClient.uploadCache(
+                            action,
+                            ExecutableActionResult.create(
+                                    result.getExitCode(), stdoutBuffer, stderrBuffer));
+                }
             }
+        } catch (IOException e) {
+            CLog.e("Failed to upload cache!");
+            CLog.e(e);
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+        } finally {
+            FileUtil.deleteFile(stdoutBuffer);
+            FileUtil.deleteFile(stderrBuffer);
         }
-        FileUtil.deleteFile(stdoutBuffer);
-        FileUtil.deleteFile(stderrBuffer);
         return result;
     }
 
@@ -1194,6 +1211,7 @@ public class RunUtil implements IRunUtil {
                 StreamUtil.copyStreams(stdoutStream, stdout);
             } finally {
                 stdoutStream.close();
+                FileUtil.deleteFile(result.stdOut());
             }
         }
         if (result.stdErr() != null && stderr != null) {
@@ -1202,6 +1220,7 @@ public class RunUtil implements IRunUtil {
                 StreamUtil.copyStreams(stderrStream, stderr);
             } finally {
                 stderrStream.close();
+                FileUtil.deleteFile(result.stdErr());
             }
         }
         return commandResult;

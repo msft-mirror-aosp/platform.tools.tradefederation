@@ -19,6 +19,7 @@ package com.android.tradefed.cache;
 import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.Command;
 import build.bazel.remote.execution.v2.Command.EnvironmentVariable;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Platform;
 import build.bazel.remote.execution.v2.Platform.Property;
 import com.google.auto.value.AutoValue;
@@ -62,18 +63,31 @@ public abstract class ExecutableAction {
                                         .collect(Collectors.toList()))
                         .build();
 
+        MerkleTree inputMerkleTree = MerkleTree.buildFromDir(input);
         Action.Builder actionBuilder =
                 Action.newBuilder()
-                        .setInputRootDigest(MerkleTree.buildFromDir(input).rootDigest())
+                        .setInputRootDigest(inputMerkleTree.rootDigest())
                         .setCommandDigest(DigestCalculator.compute(command));
         if (timeout > 0L) {
             actionBuilder.setTimeout(Duration.newBuilder().setSeconds(timeout).build());
         }
 
-        return new AutoValue_ExecutableAction(actionBuilder.build(), command);
+        Action action = actionBuilder.build();
+        return new AutoValue_ExecutableAction(
+                action,
+                DigestCalculator.compute(action),
+                command,
+                DigestCalculator.compute(command),
+                inputMerkleTree);
     }
 
     public abstract Action action();
 
+    public abstract Digest actionDigest();
+
     public abstract Command command();
+
+    public abstract Digest commandDigest();
+
+    public abstract MerkleTree input();
 }

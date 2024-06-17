@@ -18,6 +18,7 @@ package com.android.tradefed.cache;
 
 import com.google.auto.value.AutoValue;
 import java.io.File;
+import javax.annotation.Nullable;
 
 /** A value class representing a result of a {@link ExecutableAction}. */
 @AutoValue
@@ -28,7 +29,9 @@ public abstract class ExecutableActionResult {
 
     public abstract int exitCode();
 
+    @Nullable
     public abstract File stdOut();
 
+    @Nullable
     public abstract File stdErr();
 }
