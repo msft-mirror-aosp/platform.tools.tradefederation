@@ -121,6 +121,9 @@ public class DeviceSnapshotHandler {
                     InvocationMetricKey.DEVICE_SNAPSHOT_SUCCESS_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_SNAPSHOT_DURATIONS, matcher.group(1));
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_FAILURE_COUNT, 1);
         }
     }
 
@@ -197,6 +200,9 @@ public class DeviceSnapshotHandler {
                     InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_DURATIONS, matcher.group(1));
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
         }
     }
 }
