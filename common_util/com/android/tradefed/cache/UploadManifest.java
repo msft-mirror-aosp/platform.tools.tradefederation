@@ -19,13 +19,17 @@ package com.android.tradefed.cache;
 import build.bazel.remote.execution.v2.Digest;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
+import com.google.protobuf.ByteString;
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
 
 /** A manifest of the BLOBs and files to upload. */
 @AutoValue
 public abstract class UploadManifest {
     public abstract ImmutableMap<Digest, File> digestToFile();
+
+    public abstract ImmutableMap<Digest, ByteString> digestToBlob();
 
     public static Builder builder() {
         return new AutoValue_UploadManifest.Builder();
@@ -35,11 +39,30 @@ public abstract class UploadManifest {
     public abstract static class Builder {
         public abstract ImmutableMap.Builder<Digest, File> digestToFileBuilder();
 
+        public abstract ImmutableMap.Builder<Digest, ByteString> digestToBlobBuilder();
+
         public final Builder addFile(Digest digest, File file) throws IOException {
             if (!file.exists() || !file.isFile()) {
                 throw new IOException("File does not exist or is not a file!");
             }
             digestToFileBuilder().put(digest, file);
+            return this;
+        }
+
+        public final Builder addFiles(Map<Digest, File> digestToFile) throws IOException {
+            for (Map.Entry<Digest, File> entry : digestToFile.entrySet()) {
+                addFile(entry.getKey(), entry.getValue());
+            }
+            return this;
+        }
+
+        public final Builder addBlob(Digest digest, ByteString blob) {
+            digestToBlobBuilder().put(digest, blob);
+            return this;
+        }
+
+        public final Builder addBlobs(Map<Digest, ByteString> digestToBlob) {
+            digestToBlobBuilder().putAll(digestToBlob);
             return this;
         }
 
