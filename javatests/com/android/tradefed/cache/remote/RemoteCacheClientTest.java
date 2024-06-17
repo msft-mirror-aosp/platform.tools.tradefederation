@@ -70,6 +70,10 @@ public class RemoteCacheClientTest {
     private static class FakeByteStreamDownloader extends ByteStreamDownloader {
         private final Map<Digest, String> mData;
 
+        public FakeByteStreamDownloader() {
+            this(new HashMap<>());
+        }
+
         public FakeByteStreamDownloader(Map<Digest, String> data) {
             super(INSTANCE, null, null, Duration.ofSeconds(5));
             mData = data;
@@ -90,6 +94,20 @@ public class RemoteCacheClientTest {
                 StreamUtil.copyStreams(data, out);
                 out.close();
                 data.close();
+            } catch (IOException e) {
+                return Futures.immediateFailedFuture(e);
+            }
+            return Futures.immediateVoidFuture();
+        }
+    }
+
+    private static class FakeByteStreamUploader extends ByteStreamUploader {
+        public final Map<Digest, String> blobs = new HashMap<>();
+
+        @Override
+        public ListenableFuture<Void> uploadFile(Digest digest, File file) {
+            try {
+                blobs.put(digest, FileUtil.readStringFromFile(file));
             } catch (IOException e) {
                 return Futures.immediateFailedFuture(e);
             }
@@ -144,7 +162,8 @@ public class RemoteCacheClientTest {
         String stdout = "test stdout";
         FileUtil.writeToFile(stdout, stdoutFile);
         ExecutableActionResult result = ExecutableActionResult.create(exitCode, stdoutFile, null);
-        RemoteCacheClient client = newClient(null);
+        RemoteCacheClient client =
+                newClient(new FakeByteStreamDownloader(), new FakeByteStreamUploader());
         ActionResult expectedResult =
                 ActionResult.newBuilder()
                         .setExitCode(exitCode)
@@ -155,6 +174,38 @@ public class RemoteCacheClientTest {
 
         assertEquals(actionCache.actionResult, expectedResult);
         assertEquals(actionCache.actionDigest, DigestCalculator.compute(action.action()));
+    }
+
+    @Test
+    public void uploadCache_files_and_blobs_are_uploaded_successfully()
+            throws IOException, InterruptedException {
+        mServiceRegistry.addService(
+                new ActionCacheImplBase() {
+                    @Override
+                    public void updateActionResult(
+                            UpdateActionResultRequest request,
+                            StreamObserver<ActionResult> responseObserver) {
+                        responseObserver.onNext(request.getActionResult());
+                        responseObserver.onCompleted();
+                    }
+                });
+        ExecutableAction action =
+                ExecutableAction.create(
+                        mInput, Arrays.asList("test", "command"), new HashMap<>(), 100L);
+        File stdoutFile = FileUtil.createTempFile("stdout-", ".txt", mWorkFolder);
+        String stdout = "test stdout";
+        FileUtil.writeToFile(stdout, stdoutFile);
+        File stderrFile = FileUtil.createTempFile("stderr-", ".txt", mWorkFolder);
+        String stderr = "test stderr";
+        FileUtil.writeToFile(stderr, stderrFile);
+        ExecutableActionResult result = ExecutableActionResult.create(0, stdoutFile, stderrFile);
+        FakeByteStreamUploader uploader = new FakeByteStreamUploader();
+        RemoteCacheClient client = newClient(new FakeByteStreamDownloader(), uploader);
+
+        client.uploadCache(action, result);
+
+        assertEquals(uploader.blobs.get(DigestCalculator.compute(stdoutFile)), stdout);
+        assertEquals(uploader.blobs.get(DigestCalculator.compute(stderrFile)), stderr);
     }
 
     @Test
@@ -189,7 +240,8 @@ public class RemoteCacheClientTest {
         RemoteCacheClient client =
                 newClient(
                         new FakeByteStreamDownloader(
-                                Collections.singletonMap(stdOutDigest, stdout)));
+                                Collections.singletonMap(stdOutDigest, stdout)),
+                        new FakeByteStreamUploader());
 
         ExecutableActionResult notFoundResult = client.lookupCache(notFoundAction);
         ExecutableActionResult cachedResult = client.lookupCache(cachedAction);
@@ -200,7 +252,8 @@ public class RemoteCacheClientTest {
         assertNull(cachedResult.stdErr());
     }
 
-    private RemoteCacheClient newClient(ByteStreamDownloader downloader) {
-        return new RemoteCacheClient(mWorkFolder, INSTANCE, mChannel, null, downloader);
+    private RemoteCacheClient newClient(
+            ByteStreamDownloader downloader, ByteStreamUploader uploader) {
+        return new RemoteCacheClient(mWorkFolder, INSTANCE, mChannel, null, downloader, uploader);
     }
 }

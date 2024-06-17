@@ -26,6 +26,7 @@ import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
+import com.android.tradefed.cache.UploadManifest;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.util.FileUtil;
 import com.google.common.util.concurrent.Futures;
@@ -44,6 +45,7 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /** A RemoteActionCache implementation that uses gRPC calls to a remote API server. */
 public class RemoteCacheClient implements ICacheClient {
@@ -53,34 +55,50 @@ public class RemoteCacheClient implements ICacheClient {
     private final ManagedChannel mChannel;
     private final CallCredentials mCallCredentials;
     private final ByteStreamDownloader mDownloader;
+    private final ByteStreamUploader mUploader;
 
     public RemoteCacheClient(
             File workFolder,
             String instanceName,
             ManagedChannel channel,
             CallCredentials callCredentials,
-            ByteStreamDownloader downloader) {
+            ByteStreamDownloader downloader,
+            ByteStreamUploader uploader) {
         mWorkFolder = workFolder;
         mInstanceName = instanceName;
         mChannel = channel;
         mCallCredentials = callCredentials;
         mDownloader = downloader;
+        mUploader = uploader;
     }
 
     /** {@inheritDoc} */
     @Override
     public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult)
             throws IOException, InterruptedException {
+        UploadManifest.Builder manifestBuilder = UploadManifest.builder();
         ActionResult.Builder actionResultBuilder =
                 ActionResult.newBuilder().setExitCode(actionResult.exitCode());
 
         if (actionResult.stdOut() != null) {
-            actionResultBuilder.setStdoutDigest(DigestCalculator.compute(actionResult.stdOut()));
+            Digest stdOutDigest = DigestCalculator.compute(actionResult.stdOut());
+            actionResultBuilder.setStdoutDigest(stdOutDigest);
+            manifestBuilder.addFile(stdOutDigest, actionResult.stdOut());
         }
 
         if (actionResult.stdErr() != null) {
-            actionResultBuilder.setStderrDigest(DigestCalculator.compute(actionResult.stdErr()));
+            Digest stdErrDigest = DigestCalculator.compute(actionResult.stdErr());
+            actionResultBuilder.setStderrDigest(stdErrDigest);
+            manifestBuilder.addFile(stdErrDigest, actionResult.stdErr());
         }
+
+        UploadManifest manifest = manifestBuilder.build();
+        List<ListenableFuture<Void>> uploads = new ArrayList<>();
+        uploads.addAll(
+                manifest.digestToFile().entrySet().stream()
+                        .map(e -> mUploader.uploadFile(e.getKey(), e.getValue()))
+                        .collect(Collectors.toList()));
+        waitForBulkTransfers(uploads);
 
         getFromFuture(
                 Futures.catchingAsync(
@@ -159,7 +177,7 @@ public class RemoteCacheClient implements ICacheClient {
                 downloads.add(mDownloader.downloadBlob(stderrDigest, stderrStream));
             }
             // TODO(b/346606200): Track download metrics.
-            waitForDownloads(downloads);
+            waitForBulkTransfers(downloads);
         } finally {
             if (stdoutStream != null) {
                 stdoutStream.close();
@@ -198,13 +216,13 @@ public class RemoteCacheClient implements ICacheClient {
         }
     }
 
-    private static void waitForDownloads(Iterable<? extends ListenableFuture<?>> downloads)
+    private static void waitForBulkTransfers(Iterable<? extends ListenableFuture<?>> transfers)
             throws IOException, InterruptedException {
         boolean interrupted = Thread.currentThread().isInterrupted();
         InterruptedException interruptedException = null;
-        for (ListenableFuture<?> download : downloads) {
+        for (ListenableFuture<?> transfer : transfers) {
             try {
-                getFromFuture(download);
+                getFromFuture(transfer);
             } catch (InterruptedException e) {
                 interrupted = Thread.interrupted() || interrupted;
                 interruptedException = e;
