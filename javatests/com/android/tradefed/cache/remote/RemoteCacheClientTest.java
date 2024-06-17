@@ -23,15 +23,19 @@ import static org.junit.Assert.assertNull;
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheImplBase;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Digest;
+import build.bazel.remote.execution.v2.Directory;
+import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
 import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.MerkleTreeTest;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.ByteString;
 import io.grpc.ManagedChannel;
 import io.grpc.Server;
 import io.grpc.Status;
@@ -102,15 +106,21 @@ public class RemoteCacheClientTest {
     }
 
     private static class FakeByteStreamUploader extends ByteStreamUploader {
-        public final Map<Digest, String> blobs = new HashMap<>();
+        public final Map<Digest, ByteString> blobs = new HashMap<>();
 
         @Override
         public ListenableFuture<Void> uploadFile(Digest digest, File file) {
             try {
-                blobs.put(digest, FileUtil.readStringFromFile(file));
+                blobs.put(digest, ByteString.copyFromUtf8(FileUtil.readStringFromFile(file)));
             } catch (IOException e) {
                 return Futures.immediateFailedFuture(e);
             }
+            return Futures.immediateVoidFuture();
+        }
+
+        @Override
+        public ListenableFuture<Void> uploadBlob(Digest digest, ByteString blob) {
+            blobs.put(digest, blob);
             return Futures.immediateVoidFuture();
         }
     }
@@ -189,6 +199,30 @@ public class RemoteCacheClientTest {
                         responseObserver.onCompleted();
                     }
                 });
+        File configFile = new File(mInput, "hello_world_test.config");
+        String config = "test config";
+        MerkleTreeTest.addFile(configFile, config, false);
+        Digest configFileDigest = DigestCalculator.compute(configFile);
+        File x86 = new File(mInput, "x86");
+        File testFile = new File(x86, "hello_world_test");
+        String test = "test cases";
+        MerkleTreeTest.addFile(testFile, test, true);
+        Digest testFileDigest = DigestCalculator.compute(testFile);
+        Directory x86Dir =
+                Directory.newBuilder()
+                        .addFiles(
+                                MerkleTreeTest.newFileNode(
+                                        "hello_world_test", testFileDigest, true))
+                        .build();
+        Digest x86Digest = DigestCalculator.compute(x86Dir);
+        Directory inputRoot =
+                Directory.newBuilder()
+                        .addFiles(
+                                MerkleTreeTest.newFileNode(
+                                        "hello_world_test.config", configFileDigest, false))
+                        .addDirectories(
+                                DirectoryNode.newBuilder().setName("x86").setDigest(x86Digest))
+                        .build();
         ExecutableAction action =
                 ExecutableAction.create(
                         mInput, Arrays.asList("test", "command"), new HashMap<>(), 100L);
@@ -201,11 +235,28 @@ public class RemoteCacheClientTest {
         ExecutableActionResult result = ExecutableActionResult.create(0, stdoutFile, stderrFile);
         FakeByteStreamUploader uploader = new FakeByteStreamUploader();
         RemoteCacheClient client = newClient(new FakeByteStreamDownloader(), uploader);
+        Map<Digest, ByteString> digestToBlob =
+                Map.of(
+                        DigestCalculator.compute(stdoutFile),
+                        ByteString.copyFromUtf8(stdout),
+                        DigestCalculator.compute(stderrFile),
+                        ByteString.copyFromUtf8(stderr),
+                        action.actionDigest(),
+                        action.action().toByteString(),
+                        action.commandDigest(),
+                        action.command().toByteString(),
+                        configFileDigest,
+                        ByteString.copyFromUtf8(config),
+                        testFileDigest,
+                        ByteString.copyFromUtf8(test),
+                        x86Digest,
+                        x86Dir.toByteString(),
+                        DigestCalculator.compute(inputRoot),
+                        inputRoot.toByteString());
 
         client.uploadCache(action, result);
 
-        assertEquals(uploader.blobs.get(DigestCalculator.compute(stdoutFile)), stdout);
-        assertEquals(uploader.blobs.get(DigestCalculator.compute(stderrFile)), stderr);
+        assertEquals(digestToBlob, uploader.blobs);
     }
 
     @Test
