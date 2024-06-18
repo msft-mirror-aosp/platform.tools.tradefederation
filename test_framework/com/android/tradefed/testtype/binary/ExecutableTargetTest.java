@@ -54,13 +54,17 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
         return mDevice;
     }
 
+    protected boolean getSkipBinaryCheck() {
+        return mSkipBinaryCheck;
+    }
+
     @Override
     public String findBinary(String binary) throws DeviceNotAvailableException {
-        if (mSkipBinaryCheck) {
+        if (getSkipBinaryCheck()) {
             return binary;
         }
         for (String path : binary.split(" ")) {
-            if (mDevice.isExecutable(path)) {
+            if (getDevice().isExecutable(path)) {
                 return binary;
             }
         }

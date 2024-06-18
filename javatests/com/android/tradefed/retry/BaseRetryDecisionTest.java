@@ -39,6 +39,8 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.InstalledInstrumentationsTest;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 
+import com.google.common.truth.Truth;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -231,13 +233,53 @@ public class BaseRetryDecisionTest {
         Mockito.when(module1.getId()).thenReturn(moduleID1);
         OptionSetter setter = new OptionSetter(mRetryDecision);
         setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1);
-        boolean res = mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result));
+        boolean res =
+                mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result), null);
         assertFalse(res);
         // module2 is not in the skip-retrying-list, it should return true.
         ModuleDefinition module2 = Mockito.mock(ModuleDefinition.class);
         Mockito.when(module2.getId()).thenReturn(moduleID2);
-        boolean res2 = mRetryDecision.shouldRetry(mTestClass, module2, 0, Arrays.asList(result));
+        boolean res2 =
+                mRetryDecision.shouldRetry(mTestClass, module2, 0, Arrays.asList(result), null);
         assertTrue(res2);
+    }
+
+    @Test
+    public void testShouldRetry_skip_retrying_list_test() throws Exception {
+        final String SKIP_RETRYING_LIST = "skip-retrying-list";
+        final String moduleID1 = "x86 module1";
+        final String moduleID1_test = "x86 module1 class#method2";
+        TestRunResult result1 =
+                createResult(
+                        FailureDescription.create("failure1"),
+                        FailureDescription.create("failure2"));
+        ModuleDefinition module1 = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module1.getId()).thenReturn(moduleID1);
+        OptionSetter setter = new OptionSetter(mRetryDecision);
+        setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1_test);
+        boolean res =
+                mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1), null);
+        assertTrue(res);
+        Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
+    }
+
+    @Test
+    public void testShouldRetry_skip_retrying_list_test_no_abi() throws Exception {
+        final String SKIP_RETRYING_LIST = "skip-retrying-list";
+        final String moduleID1 = "x86 module1";
+        final String moduleID1_test = "module1 class#method2"; // no abi
+        TestRunResult result1 =
+                createResult(
+                        FailureDescription.create("failure1"),
+                        FailureDescription.create("failure2"));
+        ModuleDefinition module1 = Mockito.mock(ModuleDefinition.class);
+        Mockito.when(module1.getId()).thenReturn(moduleID1);
+        OptionSetter setter = new OptionSetter(mRetryDecision);
+        setter.setOptionValue(SKIP_RETRYING_LIST, moduleID1_test);
+        boolean res =
+                mRetryDecision.shouldRetry(mTestClass, module1, 0, Arrays.asList(result1), null);
+        assertTrue(res);
+        Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
     }
 
     @Test
@@ -256,6 +298,29 @@ public class BaseRetryDecisionTest {
         assertTrue(res);
         // Reboot on last retry.
         verify(mMockDevice).reboot();
+    }
+
+    @Test
+    public void testShouldRetry_skip_retrying_list_test_no_module() throws Exception {
+        final String SKIP_RETRYING_LIST = "skip-retrying-list";
+        final String noModuleTest1 = "class#method2";
+        TestRunResult result1 =
+                createResult(
+                        FailureDescription.create("failure1"),
+                        FailureDescription.create("failure2"));
+        OptionSetter setter = new OptionSetter(mRetryDecision);
+        setter.setOptionValue(SKIP_RETRYING_LIST, noModuleTest1);
+        boolean res = mRetryDecision.shouldRetry(mTestClass, null, 0, Arrays.asList(result1), null);
+        assertTrue(res);
+        Truth.assertThat(mTestClass.getExcludeFilters()).containsExactly("class#method2");
+    }
+
+    @Test
+    public void shouldRetryPreparation_NOT_ISOLATED() throws Exception {
+        ModuleDefinition module1 = Mockito.mock(ModuleDefinition.class);
+        RetryPreparationDecision res = mRetryDecision.shouldRetryPreparation(module1, 0, 3);
+        assertFalse(res.shouldRetry());
+        assertTrue(res.shouldFailRun());
     }
 
     private TestRunResult createResult(FailureDescription failure1, FailureDescription failure2) {

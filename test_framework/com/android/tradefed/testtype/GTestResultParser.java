@@ -17,6 +17,7 @@ package com.android.tradefed.testtype;
 
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.ddmlib.MultiLineReceiver;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -30,8 +31,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -100,6 +103,7 @@ public class GTestResultParser extends MultiLineReceiver {
     private int mNumTestsExpected = 0;
     private long mTotalRunTime = 0;
     private boolean mTestInProgress = false;
+    private CloseableTraceScope mMethodScope = null;
     private boolean mTestRunInProgress = false;
     private final String mTestRunName;
     private final Collection<ITestInvocationListener> mTestListeners;
@@ -121,6 +125,15 @@ public class GTestResultParser extends MultiLineReceiver {
 
     /** Whether or not to prepend filename to classname. */
     private boolean mPrependFileName = false;
+
+    /** Whether the test run was incomplete(test crashed or failed to parse test results). */
+    private boolean mTestRunIncomplete = false;
+
+    /** List of tests that failed in the current run */
+    private Set<String> mFailedTests = new LinkedHashSet<>();
+
+    /** Whether current test run contained unexpected tests. Used for unit testing. */
+    private boolean mUnexpectedTestFound = false;
 
     /** The final status of the test. */
     enum TestStatus {
@@ -236,6 +249,7 @@ public class GTestResultParser extends MultiLineReceiver {
     public GTestResultParser(String testRunName, Collection<ITestInvocationListener> listeners) {
         mTestRunName = testRunName;
         mTestListeners = new ArrayList<>(listeners);
+        setTrimLine(false);
     }
 
     /**
@@ -246,9 +260,7 @@ public class GTestResultParser extends MultiLineReceiver {
      * @param listener informed of test results as the tests are executing
      */
     public GTestResultParser(String testRunName, ITestInvocationListener listener) {
-        mTestRunName = testRunName;
-        mTestListeners = new ArrayList<>(1);
-        mTestListeners.add(listener);
+        this(testRunName, Arrays.asList(listener));
     }
 
     /**
@@ -413,12 +425,10 @@ public class GTestResultParser extends MultiLineReceiver {
         return mTestInProgress;
     }
 
-    /**
-     * Set state to indicate we've started running a test.
-     *
-     */
-    private void setTestStarted() {
+    /** Set state to indicate we've started running a test. */
+    private void setTestStarted(TestDescription testId) {
         mTestInProgress = true;
+        mMethodScope = new CloseableTraceScope(testId.toString());
     }
 
     /**
@@ -427,6 +437,10 @@ public class GTestResultParser extends MultiLineReceiver {
      */
     private void setTestEnded() {
         mTestInProgress = false;
+        if (mMethodScope != null) {
+            mMethodScope.close();
+            mMethodScope = null;
+        }
     }
 
     /**
@@ -442,6 +456,10 @@ public class GTestResultParser extends MultiLineReceiver {
             mTestRunStartReported = true;
             mSeenOneTestRunStart = true;
             mTrackLogsBeforeRunStart.clear();
+            // Reset test run completion flag for the new test run
+            mTestRunIncomplete = false;
+            // Clear failed tests list for new test run
+            mFailedTests = new LinkedHashSet<>();
         }
     }
 
@@ -453,6 +471,7 @@ public class GTestResultParser extends MultiLineReceiver {
             listener.testRunEnded(mTotalRunTime, getRunMetrics());
         }
         mTestRunStartReported = false;
+        mTestRunIncomplete = false;
     }
 
     /**
@@ -490,6 +509,13 @@ public class GTestResultParser extends MultiLineReceiver {
             String discardPortion = time.group(1);  // everything after the test class/name
             identifier = identifier.substring(0, identifier.lastIndexOf(discardPortion)).trim();
             returnInfo.mTestRunTime = timeString;
+        }
+
+        // filter out messages for parameterized tests: classname.testname, getParam() = (..)
+        Pattern parameterizedPattern = Pattern.compile("([a-zA-Z_0-9]+[\\S]*)(,\\s+.*)?$");
+        Matcher parameterizedMsg = parameterizedPattern.matcher(identifier);
+        if (parameterizedMsg.find()) {
+            identifier = parameterizedMsg.group(1);
         }
 
         String[] testId = identifier.split("\\.");
@@ -592,7 +618,7 @@ public class GTestResultParser extends MultiLineReceiver {
         for (ITestInvocationListener listener : mTestListeners) {
             listener.testStarted(testId, testResult.mStartTimeMs);
         }
-        setTestStarted();
+        setTestStarted(testId);
     }
 
     /**
@@ -660,10 +686,12 @@ public class GTestResultParser extends MultiLineReceiver {
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testFailed(testId, mCurrentTestResult.getTrace());
             }
+            mUnexpectedTestFound = true;
         } else if (TestStatus.FAILED.equals(testStatus)) { // test failed
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testFailed(testId, mCurrentTestResult.getTrace());
             }
+            mFailedTests.add(String.format("%s.%s", testId.getClassName(), testId.getTestName()));
         } else if (TestStatus.SKIPPED.equals(testStatus)) { // test was skipped
             for (ITestInvocationListener listener : mTestListeners) {
                 listener.testIgnored(testId);
@@ -759,6 +787,10 @@ public class GTestResultParser extends MultiLineReceiver {
                 listener.testFailed(testId, testFailure);
                 listener.testEnded(testId, emptyMap);
             }
+            if (mMethodScope != null) {
+                mMethodScope.close();
+                mMethodScope = null;
+            }
             clearCurrentTestResult();
         }
         // Report the test run failed
@@ -779,6 +811,10 @@ public class GTestResultParser extends MultiLineReceiver {
     @Override
     public void done() {
         super.done();
+        if (mMethodScope != null) {
+            mMethodScope.close();
+            mMethodScope = null;
+        }
         // To make sure the test fail run will only be reported for this run.
         if (mTestRunStartReported && (mNumTestsExpected > mNumTestsRun)) {
             handleTestRunFailed(
@@ -786,11 +822,16 @@ public class GTestResultParser extends MultiLineReceiver {
                             "Test run incomplete. Expected %d tests, received %d",
                             mNumTestsExpected, mNumTestsRun),
                     InfraErrorIdentifier.EXPECTED_TESTS_MISMATCH);
+            mTestRunIncomplete = true;
             // Reset TestRunStart flag to prevent report twice in the same run.
             mTestRunStartReported = false;
             mTestRunInProgress = false;
         } else if (mTestRunInProgress) {
-            handleTestRunFailed("No test results", InfraErrorIdentifier.UNDETERMINED);
+            // possible only when all tests were executed, but test run completed tag not reported
+            CLog.e(
+                    "All tests were executed, but test run completion not reported."
+                            + "Unable to determine the total run time.");
+            reportTestRunEnded();
             mTestRunInProgress = false;
         } else if (!mSeenOneTestRunStart && !mFailureReported) {
             for (ITestInvocationListener listener : mTestListeners) {
@@ -807,7 +848,26 @@ public class GTestResultParser extends MultiLineReceiver {
         }
     }
 
+    /**
+     * Whether the test run was incomplete or not.
+     *
+     * @return true, if the test run was incomplete due to parsing issues or crashes.
+     */
+    public boolean isTestRunIncomplete() {
+        return mTestRunIncomplete;
+    }
+
+    /** Returns a list of tests that failed during the current test run. */
+    public Set<String> getFailedTests() {
+        return mFailedTests;
+    }
+
     private FailureDescription createFailure(String message) {
         return FailureDescription.create(message, FailureStatus.TEST_FAILURE);
+    }
+
+    /** Exposed for unit testing. */
+    protected boolean isUnexpectedTestFound() {
+        return mUnexpectedTestFound;
     }
 }

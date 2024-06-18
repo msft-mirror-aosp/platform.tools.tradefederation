@@ -582,7 +582,7 @@ public final class PythonBinaryHostTestTest {
                     FailureDescription.create(
                             "Failed to parse the python logs: Parser finished in unexpected "
                                     + "state TEST_CASE. Please ensure that verbosity of output "
-                                    + "is high enough to be parsed.");
+                                    + "is high enough to be parsed. Stderr: Could not execute.");
             failure.setFailureStatus(FailureStatus.TEST_FAILURE);
 
             mTest.run(mTestInfo, mMockListener);

@@ -254,6 +254,9 @@ public class LabResourceDeviceMonitor extends LabResourceServiceGrpc.LabResource
                         if (mMetricizeExecutor.isShutdown()) {
                             break;
                         }
+                        if (ClusterHostUtil.isLocalhostIpPort(descriptor.getSerial())) {
+                            continue;
+                        }
                         builder.addDevice(buildMonitoredDevice(descriptor, mMetricCollectors));
                     }
                     setCachedLabResource(builder.build());

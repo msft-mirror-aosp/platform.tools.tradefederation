@@ -35,13 +35,13 @@ public class ScreenshotOnFailureCollector extends BaseDeviceMetricCollector {
 
     @Override
     public void onTestRunStart(DeviceMetricData runData) {
-        super.onTestRunStart(runData);
         mCurrentCount = 0;
         mFirstThrottle = true;
     }
 
     @Override
-    public void onTestFail(DeviceMetricData testData, TestDescription test) {
+    public void onTestFail(DeviceMetricData testData, TestDescription test)
+            throws DeviceNotAvailableException {
         if (mCurrentCount > THROTTLE_LIMIT_PER_RUN) {
             if (mFirstThrottle) {
                 CLog.w("Throttle capture of screenshot-on-failure due to too many failures.");
@@ -56,14 +56,11 @@ public class ScreenshotOnFailureCollector extends BaseDeviceMetricCollector {
             RecoveryMode mode = device.getRecoveryMode();
             device.setRecoveryMode(RecoveryMode.NONE);
             try (InputStreamSource screenSource = device.getScreenshot()) {
+                CLog.d("Captured screenshot-on-failure.");
                 super.testLog(
                         String.format(NAME_FORMAT, test.toString(), device.getSerialNumber()),
                         LogDataType.PNG,
                         screenSource);
-            } catch (DeviceNotAvailableException e) {
-                CLog.e(
-                        "Device %s became unavailable while capturing screenshot, %s",
-                        device.getSerialNumber(), e.toString());
             } finally {
                 device.setRecoveryMode(mode);
             }

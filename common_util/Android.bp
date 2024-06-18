@@ -27,16 +27,31 @@ java_library_host {
         "//tools/tradefederation/core/test_result_interfaces",
     ],
     defaults: ["tradefed_defaults"],
+    java_version: "11",
     srcs: [
         "com/**/*.java",
     ],
     static_libs: [
-        "commons-compress-prebuilt",
+        "apache-commons-compress",
+        // Trace protos to do invocation tracing
+        "perfetto_trace-full",
+        "remote-execution-java-proto",
+        "grpc-java-api",
+        "grpc-java-stub",
+        "remote-execution-java-grpc",
+        "bytestream-java-proto",
+        "bytestream-java-grpc",
     ],
     libs: [
         "ddmlib-prebuilt",
         "guava",
         "tradefed-protos",
         "devtools-annotations-prebuilt",
+        "auto_value_annotations",
+        "libprotobuf-java-full",
+    ],
+    plugins: [
+        "auto_value_plugin",
+        "auto_annotation_plugin",
     ],
 }

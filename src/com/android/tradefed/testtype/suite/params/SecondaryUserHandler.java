@@ -15,39 +15,86 @@
  */
 package com.android.tradefed.testtype.suite.params;
 
+import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
+import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.CreateUserPreparer;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.targetprep.RunCommandTargetPreparer;
+import com.android.tradefed.targetprep.VisibleBackgroundUserPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestAnnotationFilterReceiver;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import javax.annotation.Nullable;
+
 /** Handler for {@link ModuleParameters#SECONDARY_USER}. */
 public class SecondaryUserHandler implements IModuleParameterHandler {
+
+    private static final String TEST_USER_TOKEN = "%TEST_USER%";
+
+    @VisibleForTesting
+    static final String CMD_SET_LOCATION_ENABLED =
+            "cmd location set-location-enabled true --user " + TEST_USER_TOKEN;
+
+    private final boolean mStartUserVisibleOnBackground;
+    private final @Nullable Integer mDisplayId;
+
+    public SecondaryUserHandler() {
+        this(/*startUserVisibleOnBackground= */ false);
+    }
+
+    protected SecondaryUserHandler(boolean startUserVisibleOnBackground) {
+        this(startUserVisibleOnBackground, /* displayId= */ null);
+    }
+
+    protected SecondaryUserHandler(boolean startUserVisibleOnBackground, Integer displayId) {
+        mStartUserVisibleOnBackground = startUserVisibleOnBackground;
+        mDisplayId = displayId;
+    }
+
     @Override
     public String getParameterIdentifier() {
         return "secondary_user";
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void addParameterSpecificConfig(IConfiguration moduleConfiguration) {
+    public final void addParameterSpecificConfig(IConfiguration moduleConfiguration) {
         for (IDeviceConfiguration deviceConfig : moduleConfiguration.getDeviceConfig()) {
             List<ITargetPreparer> preparers = deviceConfig.getTargetPreparers();
             // The first things module will do is switch to a secondary user
-            preparers.add(0, new CreateUserPreparer());
+            ITargetPreparer userPreparer;
+            if (mStartUserVisibleOnBackground) {
+                userPreparer = new VisibleBackgroundUserPreparer();
+                if (mDisplayId != null) {
+                    ((VisibleBackgroundUserPreparer) userPreparer).setDisplayId(mDisplayId);
+                }
+            } else {
+                userPreparer = new CreateUserPreparer();
+            }
+            preparers.add(0, userPreparer);
             // Add a preparer to setup the location settings on the new user
-            preparers.add(1, createLocationPreparer());
+            RunCommandTargetPreparer locationPreparer = new RunCommandTargetPreparer();
+            try {
+                OptionSetter setter = new OptionSetter(locationPreparer);
+                setter.setOptionValue("test-user-token", TEST_USER_TOKEN);
+            } catch (ConfigurationException e) {
+                CLog.w(e);
+            }
+            locationPreparer.addRunCommand(CMD_SET_LOCATION_ENABLED);
+            preparers.add(1, locationPreparer);
         }
     }
 
     @Override
-    public void applySetup(IConfiguration moduleConfiguration) {
+    public final void applySetup(IConfiguration moduleConfiguration) {
         // Add filter to exclude @SystemUserOnly
         for (IRemoteTest test : moduleConfiguration.getTests()) {
             if (test instanceof ITestAnnotationFilterReceiver) {
@@ -62,12 +109,5 @@ public class SecondaryUserHandler implements IModuleParameterHandler {
                 filterTest.addAllExcludeAnnotation(excludeAnnotations);
             }
         }
-    }
-
-    private RunCommandTargetPreparer createLocationPreparer() {
-        RunCommandTargetPreparer location = new RunCommandTargetPreparer();
-        location.addRunCommand("settings put secure location_providers_allowed +gps");
-        location.addRunCommand("settings put secure location_providers_allowed +network");
-        return location;
     }
 }
