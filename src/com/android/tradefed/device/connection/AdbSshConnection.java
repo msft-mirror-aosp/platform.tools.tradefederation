@@ -668,8 +668,6 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public CommandResult snapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
-        long startTime = System.currentTimeMillis();
-
         CommandResult snapshotRes = null;
         if (mGceAvd == null) {
             String errorMsg = "Can not get GCE AVD Info. launch GCE first?";
@@ -725,17 +723,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                             snapshotCommand.split(" "));
         }
 
-        if (CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
-            // Time taken for snapshot this invocation
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_DURATIONS,
-                    Long.toString(System.currentTimeMillis() - startTime));
-
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_SUCCESS_COUNT, 1);
-        } else {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_FAILURE_COUNT, 1);
+        if (!CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
             CLog.e("%s", snapshotRes.getStderr());
             throw new TargetSetupError(
                     String.format("failed to snapshot device: %s", snapshotRes.getStderr()),
@@ -759,7 +747,6 @@ public class AdbSshConnection extends AdbTcpConnection {
     public CommandResult restoreSnapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
         stopGce(user, offset);
-        long startTime = System.currentTimeMillis();
         CommandResult restoreRes = null;
         if (useCvdCF()) {
             restoreRes = new HostOrchestratorUtil(getDevice(), mGceAvd).restoreSnapshotGce();
@@ -803,32 +790,20 @@ public class AdbSshConnection extends AdbTcpConnection {
                             restoreCommand.split(" "));
         }
 
-        if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
-            try {
-                waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
-                getDevice().waitForDeviceOnline(WAIT_FOR_DEVICE_ONLINE);
-            } catch (DeviceNotAvailableException e) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
-                CLog.e("%s", e.toString());
-                throw new TargetSetupError(
-                        String.format("failed to restore device: %s", e.toString()),
-                        getDevice().getDeviceDescriptor(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
-            }
-            // Time taken for restore this invocation
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_DURATIONS,
-                    Long.toString(System.currentTimeMillis() - startTime));
-
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT, 1);
-        } else {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
+        if (!CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             CLog.e("%s", restoreRes.getStderr());
             throw new TargetSetupError(
                     String.format("failed to restore device: %s", restoreRes.getStderr()),
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
+        }
+        try {
+            waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+            getDevice().waitForDeviceOnline(WAIT_FOR_DEVICE_ONLINE);
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("%s", e.toString());
+            throw new TargetSetupError(
+                    String.format("failed to restore device: %s", e.toString()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
         }

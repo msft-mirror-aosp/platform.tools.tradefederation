@@ -29,8 +29,11 @@ public interface ICacheClient {
      *
      * @param action The action that generated the results.
      * @param actionResult The action result to associate with the {@code action}.
+     * @throws IOException if the client fails to upload cache.
+     * @throws InterruptedException if the thread that uploads cache is interrupted.
      */
-    public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult);
+    public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult)
+            throws IOException, InterruptedException;
 
     /**
      * Lookups the {@link ExecutableActionResult} for the {@code action}.
