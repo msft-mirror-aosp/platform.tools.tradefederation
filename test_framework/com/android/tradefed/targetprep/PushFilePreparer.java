@@ -27,7 +27,10 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -59,7 +62,7 @@ import java.util.Set;
  */
 @OptionClass(alias = "push-file")
 public class PushFilePreparer extends BaseTargetPreparer
-        implements IAbiReceiver, IInvocationContextReceiver {
+        implements IAbiReceiver, IInvocationContextReceiver, IDiscoverDependencies {
     private static final String MEDIA_SCAN_INTENT =
             "am broadcast -a android.intent.action.MEDIA_MOUNTED -d file://%s "
                     + "--receiver-include-background";
@@ -120,10 +123,12 @@ public class PushFilePreparer extends BaseTargetPreparer
             "After pushing files, trigger a media scan of external storage on device.")
     private boolean mTriggerMediaScan = false;
 
-    @Option(name="cleanup", description = "Whether files pushed onto device should be cleaned up "
-            + "after test. Note that the preparer does not verify that files/directories have "
-            + "been deleted.")
-    private boolean mCleanup = false;
+    @Option(
+            name = "cleanup",
+            description =
+                    "Whether files pushed onto device should be cleaned up after test. Note that"
+                        + " the preparer does not verify that files/directories have been deleted.")
+    private boolean mCleanup = true;
 
     @Option(
             name = "remount-system",
@@ -158,15 +163,14 @@ public class PushFilePreparer extends BaseTargetPreparer
     }
 
     /** Create the list of files to be pushed. */
-    public final Map<String, File> getPushSpecs(DeviceDescriptor descriptor)
-            throws TargetSetupError {
+    public final Map<String, File> getPushSpecs(ITestDevice device) throws TargetSetupError {
         Map<String, File> remoteToLocalMapping = new LinkedHashMap<>();
         for (String pushspec : mPushSpecs) {
             String[] pair = pushspec.split("->");
             if (pair.length != 2) {
                 fail(
                         String.format("Invalid pushspec: '%s'", Arrays.asList(pair)),
-                        descriptor,
+                        device.getDeviceDescriptor(),
                         InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
                 continue;
             }
@@ -326,6 +330,8 @@ public class PushFilePreparer extends BaseTargetPreparer
                 // Try to stage the files from remote zip files.
                 src = buildInfo.stageRemoteFile(fileName, testDir);
                 if (src != null) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
                     try {
                         // Search again with filtering on ABI
                         File srcWithAbi = FileUtil.findFile(fileName, mAbi, testDir);
@@ -365,7 +371,7 @@ public class PushFilePreparer extends BaseTargetPreparer
                     "mv \"" + entry.getKey() + "\" \"" + entry.getValue() + "\"");
         }
 
-        Map<String, File> remoteToLocalMapping = getPushSpecs(device.getDeviceDescriptor());
+        Map<String, File> remoteToLocalMapping = getPushSpecs(device);
         for (String remotePath : remoteToLocalMapping.keySet()) {
             File local = remoteToLocalMapping.get(remotePath);
             CLog.d("Trying to push local '%s' to remote '%s'", local.getPath(), remotePath);
@@ -388,10 +394,10 @@ public class PushFilePreparer extends BaseTargetPreparer
         ITestDevice device = testInfo.getDevice();
         if (!(e instanceof DeviceNotAvailableException) && mCleanup && mFilesPushed != null) {
             if (mRemountSystem) {
-                device.remountSystemWritable();
+                device.remountSystemReadOnly();
             }
             if (mRemountVendor) {
-                device.remountVendorWritable();
+                device.remountVendorReadOnly();
             }
             for (String devicePath : mFilesPushed) {
                 device.deleteFile(devicePath);
@@ -464,5 +470,37 @@ public class PushFilePreparer extends BaseTargetPreparer
                 mFilesPushed.add(remotePath);
             }
         }
+    }
+
+    @Override
+    public Set<String> reportDependencies() {
+        Set<String> deps = new HashSet<>();
+        try {
+            for (File f : getPushSpecs(null).values()) {
+                // Match the resolving logic when actually pushing
+                if (!f.isAbsolute()) {
+                    deps.add(f.getName());
+                } else {
+                    CLog.d(
+                            "%s detected as existing. Not reported as dependency.",
+                            f.getAbsolutePath());
+                }
+            }
+        } catch (TargetSetupError e) {
+            CLog.e(e);
+        }
+        return deps;
+    }
+
+    public boolean shouldRemountSystem() {
+        return mRemountSystem;
+    }
+
+    public boolean shouldRemountVendor() {
+        return mRemountVendor;
+    }
+
+    public boolean isCleanUpEnabled() {
+        return mCleanup;
     }
 }

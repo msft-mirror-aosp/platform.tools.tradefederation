@@ -39,6 +39,8 @@ import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
+import com.google.common.truth.Truth;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -69,6 +71,7 @@ public class JarHostTestTest {
     private static final String QUALIFIED_PATH = "/com/android/tradefed/referencetests";
     private static final String TEST_JAR1 = "/MultipleClassesTest.jar";
     private static final String TEST_JAR2 = "/OnePassingOneFailingTest.jar";
+    private static final String MULTI_PKG_WITH_PARAM_TESTS_JAR = "/IncludeFilterTest.jar";
     private HostTest mTest;
     private DeviceBuildInfo mStubBuildInfo;
     private TestInformation mTestInfo;
@@ -206,6 +209,148 @@ public class JarHostTestTest {
         assertEquals(1, mTest.countTestCases());
     }
 
+    // Given these test cases, do some tests with filters
+    // com.android.tradefed.referencetests.SimpleFailingTest#test2Plus2
+    // com.android.tradefed.referencetests.SimplePassingTest#test2Plus2
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test1Passing
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test2Failing
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OnePass]
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OneFail]
+    // com.android.tradefed.otherpkg.SimplePassingTest#test2Plus2
+
+    private HostTest setupTestFilter(String... includeFilters) throws Exception {
+        File testJar = getJarResource(MULTI_PKG_WITH_PARAM_TESTS_JAR, mTestDir);
+        HostTest jarHostTest = new HostTestLoader(testJar);
+        jarHostTest.setBuild(mStubBuildInfo);
+        ITestDevice device = mock(ITestDevice.class);
+        jarHostTest.setDevice(device);
+        OptionSetter setter = new OptionSetter(jarHostTest);
+        setter.setOptionValue("enable-pretty-logs", "false");
+        setter.setOptionValue("jar", testJar.getName());
+
+        for (String filter : includeFilters) {
+            setter.setOptionValue("include-filter", filter);
+        }
+        jarHostTest.setTestInformation(mTestInfo);
+        return jarHostTest;
+    }
+
+    @Test
+    public void testFilter_countWithFilterShortClassNameShouldNotMatch() throws Exception {
+        mTest = setupTestFilter("OnePassingOneFailingTest");
+        assertEquals(0, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithFilterShortClassNameRegex() throws Exception {
+        // Regex must match whole method name, not just class name.
+        mTest = setupTestFilter("OnePassingOneFailingTest.*");
+        assertEquals(0, mTest.countTestCases());
+
+        mTest = setupTestFilter(".*OnePassingOneFailingTest.*");
+        assertEquals(2, mTest.countTestCases());
+
+        mTest = setupTestFilter(".*OnePass.*");
+        assertEquals(4, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithFilterShortClassNameAndShortMethod() throws Exception {
+        mTest = setupTestFilter(".*OnePassingOneFailingTest#test1.*");
+        assertEquals(1, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithFilterMethodRegex() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        assertEquals(4, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithClassFilter() throws Exception {
+        mTest = setupTestFilter("com.android.tradefed.referencetests.SimplePassingTest");
+        assertEquals(mTestInfo.toString(), 1, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithPackageFilter() throws Exception {
+        mTest = setupTestFilter("com.android.tradefed.referencetests");
+        assertEquals(mTestInfo.toString(), 6, mTest.countTestCases());
+
+        mTest = setupTestFilter("com.android.tradefed.otherpkg");
+        assertEquals(mTestInfo.toString(), 1, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithPartialPackageReturnsNone() throws Exception {
+        mTest = setupTestFilter("com.android.tradefed");
+        assertEquals(mTestInfo.toString(), 0, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countMultipleIncludes() throws Exception {
+        mTest = setupTestFilter(".*OnePassingOneFailingTest.*", ".*otherpkg.SimplePassingTest.*");
+        assertEquals(3, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_repeatedIncludesOnlyCountOnce() throws Exception {
+        String testRegex = ".*OnePassingOneFailingTest.*";
+        mTest = setupTestFilter(testRegex, testRegex);
+        assertEquals(2, mTest.countTestCases());
+    }
+
+    // com.android.tradefed.referencetests.SimpleFailingTest#test2Plus2
+    // com.android.tradefed.referencetests.SimplePassingTest#test2Plus2
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test1Passing
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test2Failing
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OnePass]
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OneFail]
+    // com.android.tradefed.otherpkg.SimplePassingTest#test2Plus2
+    @Test
+    public void testFilter_countMultipleOverlappingIncludes() throws Exception {
+        mTest =
+                setupTestFilter(
+                        ".*OnePassingOneFailingTest.*", // 2
+                        ".*test2.*"); // 4, but one should match above.
+        assertEquals(5, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithIncludeRegexAndExclude2() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue(
+                "exclude-filter",
+                "com.android.tradefed.referencetests.SimplePassingTest#test2Plus2");
+        assertEquals(3, mTest.countTestCases());
+    }
+
+    // Only use an exclude regex-filter
+    @Test
+    public void testFilter_countWithExcludeRegex() throws Exception {
+        mTest = setupTestFilter(new String[] {}); // no include-filters
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue("exclude-filter", ".*otherpkg.*");
+        assertEquals(6, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithIncludeRegexAndExcludeRegex() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue("exclude-filter", ".*referencetests.SimplePassingTest#test2.*");
+        assertEquals(3, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithNonMatchingExcludeRegex() throws Exception {
+        mTest = setupTestFilter(new String[] {}); // no include-filters
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue("exclude-filter", ".*RETURN_ALL_TESTS.*");
+        assertEquals(7, mTest.countTestCases());
+    }
+
     /**
      * Testable version of {@link HostTest} that allows adding jar to classpath for testing purpose.
      */
@@ -252,13 +397,11 @@ public class JarHostTestTest {
         verify(mListener).testRunStarted(HostTest.class.getName(), 0);
         verify(mListener).testRunFailed(captured.capture());
         verify(mListener).testRunEnded(0L, new HashMap<String, Metric>());
-        assertTrue(
-                captured.getValue()
-                        .getErrorMessage()
-                        .contains(
-                                "java.io.FileNotFoundException: "
-                                        + "Could not find an artifact file associated with "
-                                        + "thisjardoesnotexistatall.jar"));
+        Truth.assertThat(captured.getValue().getErrorMessage())
+                .contains(
+                        "java.io.FileNotFoundException: "
+                                + "Could not find an artifact file associated with "
+                                + "thisjardoesnotexistatall.jar");
     }
 
     /** Test that metrics from tests in JarHost are reported and accounted for. */

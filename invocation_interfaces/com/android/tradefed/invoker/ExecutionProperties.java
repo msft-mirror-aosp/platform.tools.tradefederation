@@ -117,4 +117,9 @@ public class ExecutionProperties {
     public void clear() {
         mProperties.clear();
     }
+
+    @Override
+    public String toString() {
+        return "ExecutionProperties: " + mProperties;
+    }
 }

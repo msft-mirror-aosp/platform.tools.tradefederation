@@ -17,6 +17,8 @@ package com.android.tradefed.result;
 
 import com.android.tradefed.invoker.IInvocationContext;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -29,6 +31,16 @@ import java.io.InputStream;
  * </p>
  */
 public interface ILogSaver {
+
+    /**
+     * Early notification of initialization, before any build information are available. This allows
+     * to setup any requirements to receive logs.
+     *
+     * @param context information about the invocation.
+     */
+    public default void init(IInvocationContext context) {
+        // Empty by default
+    }
 
     /**
      * Reports the start of the test invocation.
@@ -55,14 +67,13 @@ public interface ILogSaver {
 
     /**
      * Save the log data.
-     * <p>
-     * Will be automatically called by the TradeFederation framework whenever
-     * {@link ITestInvocationListener#testLog(String, LogDataType, InputStreamSource)} is called. It
-     * may also be used as a helper method to save additional log data.
-     * </p><p>
-     * Depending on the implementation and policy, the logs may be saved in a compressed form. Logs
-     * may also be stored in a location inaccessable to Tradefed.
-     * </p>
+     *
+     * <p>Will be automatically called by the TradeFederation framework whenever {@link
+     * ITestInvocationListener#testLog(String, LogDataType, InputStreamSource)} is called. It may
+     * also be used as a helper method to save additional log data.
+     *
+     * <p>Depending on the implementation and policy, the logs may be saved in a compressed form.
+     * Logs may also be stored in a location inaccessible to Tradefed.
      *
      * @param dataName a {@link String} descriptive name of the data. e.g. "device_logcat"
      * @param dataType the {@link LogDataType} of the file.
@@ -74,18 +85,45 @@ public interface ILogSaver {
             throws IOException;
 
     /**
+     * Save the log file.
+     *
+     * <p>Will be automatically called by the TradeFederation framework whenever {@link
+     * ITestInvocationListener#testLog(String, LogDataType, InputStreamSource)} is called and the
+     * stream references a file.
+     *
+     * <p>Depending on the implementation and policy, the logs may be saved in a compressed form.
+     * Logs may also be stored in a location inaccessible to Tradefed.
+     *
+     * @param dataName a {@link String} descriptive name of the data. e.g. "device_logcat"
+     * @param dataType the {@link LogDataType} of the file.
+     * @param fileToLog the {@link File} to save.
+     * @return the {@link LogFile} containing the path and URL of the saved file.
+     * @throws IOException if log file could not be generated
+     */
+    public default LogFile saveLogFile(String dataName, LogDataType dataType, File fileToLog)
+            throws IOException {
+        try (FileInputStream dataStream = new FileInputStream(fileToLog)) {
+            return saveLogData(dataName, dataType, dataStream);
+        }
+    }
+
+    /**
      * A helper method to save the log data unmodified.
      *
      * <p>Logs may be stored in a location inaccessible to Tradefed.
      *
      * @param dataName a {@link String} descriptive name of the data. e.g. "device_logcat".
-     * @param type a {@link LogDataType} containing the type and the extension of the file
+     * @param dataType a {@link LogDataType} containing the type and the extension of the file
      * @param dataStream the {@link InputStream} of the data.
      * @return the {@link LogFile} containing the path and URL of the saved file.
      * @throws IOException if log file could not be generated
+     * @deprecated Use {@link #saveLogData(String, LogDataType, InputStream)} instead
      */
-    public LogFile saveLogDataRaw(String dataName, LogDataType type, InputStream dataStream)
-            throws IOException;
+    @Deprecated
+    public default LogFile saveLogDataRaw(
+            String dataName, LogDataType dataType, InputStream dataStream) throws IOException {
+        return saveLogData(dataName, dataType, dataStream);
+    }
 
     /**
      * Get the {@link LogFile} containing the path and/or URL of the directory where logs are saved.

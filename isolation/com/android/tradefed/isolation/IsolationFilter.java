@@ -132,13 +132,14 @@ final class IsolationFilter extends Filter {
     }
 
     private String getPackageName(Description desc) {
-        Class<?> classObj = null;
-        try {
-            classObj = Class.forName(desc.getClassName());
-        } catch (ClassNotFoundException e) {
-            throw new IllegalArgumentException(
-                    String.format("Could not load Test class %s", classObj), e);
+        // Thankfully, the classname contained in a standard junit Description is derived from
+        // class.getName(), which separates inner static classes with a '$' symbol rather than a
+        // period '.'
+        int loc = desc.getClassName().lastIndexOf('.');
+        if (loc > 0) {
+            return desc.getClassName().substring(0, loc);
+        } else {
+            return "";
         }
-        return classObj.getPackage().getName();
     }
 }

@@ -21,6 +21,8 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -39,6 +41,7 @@ import com.android.tradefed.util.SubprocessEventHelper.InvocationEndedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationFailedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.InvocationStartedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.LogAssociationEventInfo;
+import com.android.tradefed.util.SubprocessEventHelper.SkippedTestEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestEndedEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestLogEventInfo;
 import com.android.tradefed.util.SubprocessEventHelper.TestModuleStartedEventInfo;
@@ -105,6 +108,7 @@ public class SubprocessTestResultsParser implements Closeable {
         public static final String TEST_ENDED = "TEST_ENDED";
         public static final String TEST_FAILED = "TEST_FAILED";
         public static final String TEST_IGNORED = "TEST_IGNORED";
+        public static final String TEST_SKIPPED = "TEST_SKIPPED";
         public static final String TEST_STARTED = "TEST_STARTED";
         public static final String TEST_RUN_ENDED = "TEST_RUN_ENDED";
         public static final String TEST_RUN_FAILED = "TEST_RUN_FAILED";
@@ -303,6 +307,7 @@ public class SubprocessTestResultsParser implements Closeable {
         mHandlerMap.put(StatusKeys.TEST_ENDED, new TestEndedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_FAILED, new TestFailedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_IGNORED, new TestIgnoredEventHandler());
+        mHandlerMap.put(StatusKeys.TEST_SKIPPED, new TestSkippedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_STARTED, new TestStartedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_RUN_ENDED, new TestRunEndedEventHandler());
         mHandlerMap.put(StatusKeys.TEST_RUN_FAILED, new TestRunFailedEventHandler());
@@ -414,7 +419,7 @@ public class SubprocessTestResultsParser implements Closeable {
                 TestRunEndedEventInfo rei = new TestRunEndedEventInfo(new JSONObject(eventJson));
                 // TODO: Parse directly as proto.
                 mListener.testRunEnded(
-                        rei.mTime, TfMetricProtoUtil.upgradeConvert(rei.mRunMetrics));
+                        rei.mTime, TfMetricProtoUtil.upgradeConvert(rei.mRunMetrics, true));
             } finally {
                 mCurrentRunName = null;
                 mCurrentTestCase = null;
@@ -488,6 +493,15 @@ public class SubprocessTestResultsParser implements Closeable {
         }
     }
 
+    private class TestSkippedEventHandler implements EventHandler {
+        @Override
+        public void handleEvent(String eventJson) throws JSONException {
+            SkippedTestEventInfo skipped = new SkippedTestEventInfo(new JSONObject(eventJson));
+            checkCurrentTestId(skipped.mClassName, skipped.mTestName);
+            mListener.testSkipped(mCurrentTestCase, skipped.skipReason);
+        }
+    }
+
     private class TestAssumptionFailureEventHandler implements EventHandler {
         @Override
         public void handleEvent(String eventJson) throws JSONException {
@@ -554,32 +568,16 @@ public class SubprocessTestResultsParser implements Closeable {
                             assosInfo.mDataName);
                     return;
                 }
-                LogDataType type = file.getType();
-                // File might have already been compressed
-                File toLog = path;
-                File extractedDir = null;
-                if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
-                    // If file type is compressed, then keep that type.
-                    if (!file.getType().isCompressed()) {
-                        try {
-                            extractedDir = ZipUtil2.extractZipToTemp(path, assosInfo.mDataName);
-                            File[] files = extractedDir.listFiles();
-                            if (files.length == 1) {
-                                toLog = files[0];
-                            } else {
-                                type = LogDataType.ZIP;
-                            }
-                        } catch (IOException e) {
-                            CLog.e(e);
-                        }
+                try (InputStreamSource source = new FileInputStreamSource(path)) {
+                    LogDataType type = file.getType();
+                    CLog.d("Logging %s from subprocess: %s ", assosInfo.mDataName, file.getPath());
+                    if (ActiveTrace.TRACE_KEY.equals(assosInfo.mDataName)
+                            && LogDataType.PERFETTO.equals(type)) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
                     }
-                }
-                try (InputStreamSource source = new FileInputStreamSource(toLog)) {
-                    CLog.d("Logging %s from subprocess: %s ", assosInfo.mDataName, toLog.getPath());
                     mListener.testLog(name, type, source);
                 }
-                FileUtil.recursiveDelete(extractedDir);
-                FileUtil.deleteFile(path);
             } else {
                 CLog.d(
                         "Logging %s from subprocess. url: %s, path: %s",

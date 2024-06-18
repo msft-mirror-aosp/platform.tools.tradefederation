@@ -34,6 +34,8 @@ java_library_host {
         include_dirs: ["external/protobuf/src"],
         type: "full",
     },
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -51,6 +53,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -73,6 +77,8 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -90,6 +96,77 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+java_library_host {
+    name: "tradefed-device-manager-grpc",
+    srcs: [
+        "proto/device/device_manager.proto",
+    ],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+java_library_host {
+    name: "tradefed-dynamic-sharding-grpc",
+    srcs: ["proto/dynamicsharding.proto"],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
+    libs: [
+        "tradefed-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+java_library_host {
+    name: "virtual-device-manager-grpc",
+    srcs: ["proto/virtual_device_manager.proto"],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        type: "full",
+    },
+    libs: [
+        "libprotobuf-java-full",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+    ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+// Avoid version number in apk file name
+genrule {
+    name: "test-services-normalized.apk",
+    srcs: [":test-services.apk"],
+    out: ["test-services-normalized.apk"],
+    cmd: "cp $(in) $(out)",
+}
+
+// Avoid version number in apk file name
+genrule {
+    name: "test-orchestrator-normalized.apk",
+    srcs: [":androidx.test.orchestrator"],
+    out: ["test-orchestrator-normalized.apk"],
+    cmd: "cp $(in) $(out)",
 }
 
 // Main Target to build tradefed jar
@@ -101,12 +178,18 @@ tradefed_java_library_host {
     ],
     java_resources: [
         ":TradefedContentProvider",
+        ":TelephonyUtility",
+        ":WifiUtil",
+        ":test-services-normalized.apk",
+        ":test-orchestrator-normalized.apk",
     ],
     static_libs: [
         "tradefed-lib-core",
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Tradefed build target without the test framework statically linked
@@ -123,6 +206,8 @@ java_library_host {
         "tradefed-test-framework",
     ],
     manifest: "MANIFEST.mf",
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 java_library_host {
@@ -134,6 +219,7 @@ java_library_host {
     srcs: [
         "src/**/*.java",
         "global_configuration/**/*.java",
+        "test_observatory/**/*.java",
     ],
     static_libs: [
         "tradefed-common-util",
@@ -144,21 +230,27 @@ java_library_host {
         "tradefed-external-dependencies",
         "tradefed-service-grpc-lib",
         "lab-resource-grpc",
+        "virtual-device-manager-grpc",
         "tradefed-invocation-grpc",
-        "protobuf-java-util-prebuilt-jar",
+        "tradefed-device-manager-grpc",
+        "tradefed-dynamic-sharding-grpc",
         "aoa-helper",
-        "error_prone_annotations-2.0.18",
+        "error_prone_annotations",
         "google-api-java-client-assembly",
         "auto_value_annotations",
         "google-api-services-compute",
         "google-api-services-storage",
-        "gson-prebuilt-jar",
-        "guice",
+        "google-auth-library-credentials-1.23.0",
+        "google-auth-library-oauth2-http-1.23.0",
+        "google-http-client-jackson2-1.28.0",
+        "gson",
+        "jackson-core",
         "jacoco-cli",
         "jline",
         "junit-params",
         "kxml2-2.3.0",
         "libprotobuf-java-full",
+        "libprotobuf-java-util-full",
         // TODO(b/1859290570: Delete platform-test-annotations dep
         "platform-test-annotations",
         "snakeyaml",
@@ -175,6 +267,8 @@ java_library_host {
     libs: [
         "loganalysis",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }
 
 // Turn off various doclava warnings when generating
@@ -185,9 +279,15 @@ java_library_host {
 // feed to metalava when generating the stubs.
 tradefed_docs_only_args = " -hide 101 -hide 111 -hide 113 -hide 125 -hide 126 -hide 127 -hide 128 "
 
-tradefed_doc_stubs_args = " -hide UnresolvedLink -hide HiddenSuperclass " +
-  "-hide DeprecationMismatch -hide RequiresPermission " +
-  "-hide BroadcastBehavior -hide SdkConstant -hide Todo "
+tradefed_doc_stubs_args = " --hide UnresolvedLink " +
+    "--hide HiddenSuperclass " +
+    "--hide DeprecationMismatch " +
+    "--hide RequiresPermission " +
+    "--hide BroadcastBehavior " +
+    "--hide SdkConstant " +
+    "--hide Todo " +
+    "--hide ReferencesHidden " +
+    "--hide HiddenTypeParameter "
 
 droidstubs_host {
     name: "tradefed-doc-stubs",
@@ -207,7 +307,7 @@ droidstubs_host {
         "loganalysis",
         "tradefed",
     ],
-    args: tradefed_doc_stubs_args + "--package",
+    args: tradefed_doc_stubs_args,
     create_doc_stubs: true,
 }
 
@@ -217,6 +317,7 @@ droiddoc_host {
         ":tradefed-doc-stubs",
     ],
     libs: [
+        "error_prone_annotations",
         "kotlin-annotations",
         "loganalysis",
         "tradefed",
@@ -231,11 +332,10 @@ droiddoc_host {
         "book.path /_book.yaml",
     ],
     args: tradefed_docs_only_args +
-          "-yaml _book.yaml " +
-          "-apidocsdir reference/tradefed/ " +
-          "-werror " +
-          "-package " +
-          "-devsite ",
+        "-yaml _book.yaml " +
+        "-apidocsdir reference/tradefed/ " +
+        "-werror " +
+        "-devsite ",
 }
 
 sh_binary_host {

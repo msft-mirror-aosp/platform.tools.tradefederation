@@ -37,7 +37,7 @@ public interface IResourceMetricCollector {
      */
     public default Collection<Resource> getHostResourceMetrics() {
         return List.of();
-    };
+    }
 
     /**
      * Collects device resource metrics. The function must return in {@link
@@ -52,7 +52,7 @@ public interface IResourceMetricCollector {
     public default Collection<Resource> getDeviceResourceMetrics(
             DeviceDescriptor descriptor, IDeviceManager deviceManager) {
         return List.of();
-    };
+    }
 
     /** Gets the host metricize timeout in ms. */
     public default long getHostMetricizeTimeoutMs() {

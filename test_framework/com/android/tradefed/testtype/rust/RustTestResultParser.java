@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
  * test LexError ... ok <0.001s>
  * test idents ... FAILED <0.000s>
  * test make_sure_no_proc_macro ... ignored
+ * test test_scalar_div_rem_zero ... ignored, Android sometimes uses panic_abort
  * ...
  * ---- tests::idents stdout ----
  * thread 'main' panicked at 'assertion failed: `(left == right)`
@@ -89,8 +90,9 @@ public class RustTestResultParser extends MultiLineReceiver {
 
     static final Pattern RUST_ONE_LINE_RESULT =
             Pattern.compile(
-                    "test (\\S*) (?:- should panic )?\\.\\.\\. (\\S*)(?: <(\\d+\\.\\d+)s>)?");
-
+                    "test (\\S*) (?:- should panic )? *\\.\\.\\. (\\S*)(?: <(\\d+\\.\\d+)s>)?");
+    static final Pattern RUST_IGNORE_RESULT =
+            Pattern.compile("test (\\S*) +(?:- should panic )?\\.\\.\\. (ignored).*");
     static final Pattern RUNNING_PATTERN = Pattern.compile("running (.*) test[s]?");
 
     static final Pattern TEST_FAIL_PATTERN = Pattern.compile("---- (\\S*) stdout ----");
@@ -131,7 +133,13 @@ public class RustTestResultParser extends MultiLineReceiver {
         }
 
         for (String line : lines) {
-            if (lineMatchesPattern(line, RUST_ONE_LINE_RESULT)) {
+            if (lineMatchesPattern(line, RUST_IGNORE_RESULT)) {
+                mCurrentTestName = mCurrentMatcher.group(1);
+                mCurrentTestStatus = mCurrentMatcher.group(2);
+                mCurrentTestTime = null;
+                mNumTestsEnded++;
+                reportTestResult();
+            } else if (lineMatchesPattern(line, RUST_ONE_LINE_RESULT)) {
                 mCurrentTestName = mCurrentMatcher.group(1);
                 mCurrentTestStatus = mCurrentMatcher.group(2);
                 mCurrentTestTime = mCurrentMatcher.group(3);
@@ -246,7 +254,7 @@ public class RustTestResultParser extends MultiLineReceiver {
         String status;
         if (mCurrentTestStatus.equals("ok")) {
             status = null;
-        } else if (mCurrentTestStatus.equals("ignored")) {
+        } else if (mCurrentTestStatus.startsWith("ignored")) {
             status = SKIPPED_ENTRY;
         } else if (mCurrentTestStatus.equals("FAILED")) {
             // Rust tests report "FAILED" without stack trace.

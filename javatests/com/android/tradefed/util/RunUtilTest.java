@@ -28,6 +28,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import build.bazel.remote.execution.v2.Digest;
+
+import com.android.tradefed.cache.DigestCalculator;
+import com.android.tradefed.cache.ExecutableAction;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.command.CommandInterrupter;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
@@ -49,6 +55,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.HashMap;
+import java.util.Map;
 
 /** Unit tests for {@link RunUtil} */
 @RunWith(JUnit4.class)
@@ -67,6 +75,7 @@ public class RunUtilTest {
     @Before
     public void setUp() throws Exception {
         mRunUtil = new RunUtil(new CommandInterrupter());
+        mRunUtil.setPollingInterval(SHORT_TIMEOUT_MS);
         mMockRunnableResult = null;
     }
 
@@ -86,8 +95,8 @@ public class RunUtilTest {
 
         @Override
         RunnableResult createRunnableResult(
-                OutputStream stdout, OutputStream stderr, String... command) {
-            RunnableResult real = super.createRunnableResult(stdout, stderr, command);
+                OutputStream stdout, OutputStream stderr, ProcessBuilder processBuilder) {
+            RunnableResult real = super.createRunnableResult(stdout, stderr, processBuilder);
             mMockRunnableResult = Mockito.spy(real);
             try {
                 if (mShouldThrow) {
@@ -97,7 +106,7 @@ public class RunUtilTest {
                                             String.format(
                                                     "Cannot run program \"%s\": error=2,"
                                                             + "No such file or directory",
-                                                    command[0])))
+                                                    processBuilder.command().get(0))))
                             .when(mMockRunnableResult)
                             .startProcess();
                 } else {
@@ -107,6 +116,43 @@ public class RunUtilTest {
                 throw new RuntimeException(e);
             }
             return mMockRunnableResult;
+        }
+    }
+
+    /** Test class implementing {@link ICacheClient} to mock the cache client. */
+    class FakeCacheClient implements ICacheClient {
+        private final Map<Digest, ExecutableActionResult> mCache = new HashMap<>();
+
+        FakeCacheClient() {}
+
+        @Override
+        public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult) {
+            try {
+                System.out.println("heidoudou");
+                System.out.println(FileUtil.readStringFromFile(actionResult.stdOut()));
+                File stdout = FileUtil.createTempFile("stdout_", ".txt");
+                FileUtil.copyFile(actionResult.stdOut(), stdout);
+                File stderr = null;
+                if (actionResult.stdErr() != null) {
+                    stderr = FileUtil.createTempFile("stderr_", ".txt");
+                    FileUtil.copyFile(actionResult.stdErr(), stderr);
+                }
+                mCache.putIfAbsent(
+                        DigestCalculator.compute(action.action()),
+                        ExecutableActionResult.create(actionResult.exitCode(), stdout, stderr));
+            } catch (IOException e) {
+                // Don't fail the invocation if failed to upload cache.
+                return;
+            }
+        }
+
+        @Override
+        public ExecutableActionResult lookupCache(ExecutableAction action) {
+            Digest digest = DigestCalculator.compute(action.action());
+            if (mCache.containsKey(digest)) {
+                return mCache.get(digest);
+            }
+            return null;
         }
     }
 
@@ -171,6 +217,159 @@ public class RunUtilTest {
         assertEquals(CommandStatus.EXCEPTION, result.getStatus());
         assertEquals("", result.getStdout());
         assertTrue(result.getStderr().contains("Cannot run program \"blahggggwarggg\""));
+    }
+
+    /**
+     * Test {@link runTimedCmdWithOutputMonitor(long, long, OutputStream, OutputStream,
+     * ICacheClient, String...)} caches command execution successfully.
+     */
+    @Test
+    public void runTimedCmdWithOutputMonitor_cache_same_run() {
+        File firstWorkingDir = null;
+        File firstStdout = null;
+        File firstStderr = null;
+        OutputStream firstStdoutStream = null;
+        OutputStream firstStderrStream = null;
+        File secondWorkingDir = null;
+        File secondStdout = null;
+        File secondStderr = null;
+        OutputStream secondStdoutStream = null;
+        OutputStream secondStderrStream = null;
+        try {
+            firstWorkingDir = FileUtil.createTempDir("first_run_");
+            firstStdout = FileUtil.createTempFile("stdout_subprocess_1_", ".txt");
+            firstStdoutStream = new FileOutputStream(firstStdout);
+            firstStderr = FileUtil.createTempFile("stderr_subprocess_1_", ".txt");
+            firstStderrStream = new FileOutputStream(firstStderr);
+            secondWorkingDir = FileUtil.createTempDir("second_run_");
+            secondStdout = FileUtil.createTempFile("stdout_subprocess_2_", ".txt");
+            secondStdoutStream = new FileOutputStream(secondStdout);
+            secondStderr = FileUtil.createTempFile("stderr_subprocess_2_", ".txt");
+            secondStderrStream = new FileOutputStream(secondStderr);
+        } catch (IOException e) {
+            fail("Failed to create output files: " + e.getMessage());
+        }
+        RunUtil firstRunUtil = new SpyRunUtil(false);
+        firstRunUtil.setWorkingDir(firstWorkingDir);
+        firstRunUtil.setEnvVariable("KEY", "VALUE");
+        RunUtil secondRunUtil = new SpyRunUtil(false);
+        secondRunUtil.setWorkingDir(secondWorkingDir);
+        secondRunUtil.setEnvVariable("KEY", "VALUE");
+        String[] command = {"unused", "cmd"};
+        ICacheClient cacheClient = new FakeCacheClient();
+
+        CommandResult firstResult =
+                firstRunUtil.runTimedCmdWithOutputMonitor(
+                        LONG_TIMEOUT_MS,
+                        0,
+                        firstStdoutStream,
+                        firstStderrStream,
+                        cacheClient,
+                        command);
+        CommandResult secondResult =
+                secondRunUtil.runTimedCmdWithOutputMonitor(
+                        LONG_TIMEOUT_MS,
+                        0,
+                        secondStdoutStream,
+                        secondStderrStream,
+                        cacheClient,
+                        command);
+
+        assertFalse(firstResult.isCached());
+        assertTrue(secondResult.isCached());
+        assertEquals(CommandStatus.SUCCESS, firstResult.getStatus());
+        assertEquals(CommandStatus.SUCCESS, secondResult.getStatus());
+        try {
+            assertFalse(FileUtil.readStringFromFile(firstStdout).isEmpty());
+            assertEquals(
+                    FileUtil.readStringFromFile(firstStdout),
+                    FileUtil.readStringFromFile(secondStdout));
+            assertFalse(FileUtil.readStringFromFile(firstStderr).isEmpty());
+            assertEquals(
+                    FileUtil.readStringFromFile(firstStderr),
+                    FileUtil.readStringFromFile(secondStderr));
+        } catch (IOException e) {
+            fail(e.getMessage());
+        } finally {
+            FileUtil.deleteFile(firstStdout);
+            FileUtil.deleteFile(firstStderr);
+            FileUtil.deleteFile(secondStdout);
+            FileUtil.deleteFile(secondStderr);
+            FileUtil.recursiveDelete(firstWorkingDir);
+            FileUtil.recursiveDelete(secondWorkingDir);
+        }
+    }
+
+    /**
+     * Test {@link RunUtil#runTimedCmd(long, String[])} exits with status SUCCESS since the output
+     * monitor observed output on streams through the command time until finished.
+     */
+    @Test
+    public void testRunTimed_output_monitor() {
+        // Long-running operation with changing output stream.
+        String[] command = {"/bin/bash", "-c", "for i in {1..5}; do echo hello; sleep 1; done"};
+
+        // Should succeed and return sooner regardless of timeout.
+        CommandResult result =
+                mRunUtil.runTimedCmdWithOutputMonitor(VERY_LONG_TIMEOUT_MS * 5, 1200, command);
+        assertEquals(CommandStatus.SUCCESS, result.getStatus());
+    }
+
+    /**
+     * Test {@link RunUtil#runTimedCmd(long, String[])} exits with status FAILED due to the output
+     * monitor not observing any output on the streams.
+     */
+    @Test
+    public void testRunTimed_output_monitor_failed() {
+        // Long-running operation with no output sent to stream.
+        String[] command = {"sleep", String.valueOf(VERY_LONG_TIMEOUT_MS * 5)};
+
+        // Should fail and return sooner regardless of timeout.
+        CommandResult result =
+                mRunUtil.runTimedCmdWithOutputMonitor(VERY_LONG_TIMEOUT_MS * 5, 1200, command);
+        assertEquals(CommandStatus.FAILED, result.getStatus());
+    }
+
+    /**
+     * Test {@link RunUtil#runTimedCmd(long, String[])} exits with status TIMED_OUT even if the
+     * output monitor is observing new output on the output streams since the timeout is short.
+     */
+    @Test
+    public void testRunTimed_output_monitor_timeout() {
+        // Long-running operation with no output.
+        String[] command = {"sleep", String.valueOf(VERY_LONG_TIMEOUT_MS * 5)};
+
+        // Should run out of time and timeout.
+        CommandResult result =
+                mRunUtil.runTimedCmdWithOutputMonitor(
+                        SHORT_TIMEOUT_MS, SHORT_TIMEOUT_MS * 2, command);
+        assertEquals(CommandStatus.TIMED_OUT, result.getStatus());
+    }
+
+    /**
+     * Test that {@link RunUtil#runTimedCmdWithInput(long, String, File, File, String...)} properly
+     * backfill errors.
+     */
+    @Test
+    public void testRunTimedCmdWithInput_failed() throws Exception {
+        RunUtil spyUtil = new SpyRunUtil(true);
+        File stdout = FileUtil.createTempFile("stdout-test", "txt");
+        File stderr = FileUtil.createTempFile("stderr-test", "txt");
+        try {
+            CommandResult result =
+                    spyUtil.runTimedCmdWithInput(
+                            VERY_LONG_TIMEOUT_MS, null, stdout, stderr, "blahggggwarggg");
+            assertEquals(CommandStatus.EXCEPTION, result.getStatus());
+            assertEquals("", result.getStdout());
+            assertTrue(result.getStderr().contains("Cannot run program \"blahggggwarggg\""));
+            // Error was backfilled in stderr file
+            assertTrue(
+                    FileUtil.readStringFromFile(stderr)
+                            .contains("Cannot run program \"blahggggwarggg\""));
+        } finally {
+            FileUtil.deleteFile(stdout);
+            FileUtil.deleteFile(stderr);
+        }
     }
 
     /**
@@ -370,12 +569,11 @@ public class RunUtilTest {
      */
     @Test
     public void testRuntimedCmd_regularOutput_fileNull() {
-        RunUtil spyUtil = new SpyRunUtil(false);
-        String[] command = {"unused", "cmd"};
-        CommandResult result = spyUtil.runTimedCmd(LONG_TIMEOUT_MS, null, null, command);
+        String[] command = {"echo", "TEST STDOUT"};
+        CommandResult result = mRunUtil.runTimedCmd(VERY_LONG_TIMEOUT_MS, null, null, command);
         assertEquals(CommandStatus.SUCCESS, result.getStatus());
-        assertEquals(result.getStdout(), "TEST STDOUT\n");
-        assertEquals(result.getStderr(), "TEST STDERR\n");
+        assertEquals("TEST STDOUT\n", result.getStdout());
+        assertEquals("", result.getStderr());
     }
 
     /**

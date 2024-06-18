@@ -53,7 +53,6 @@ public class RemoteTestTimeOutEnforcerTest {
 
     @Before
     public void setUp() {
-        mListener = new ModuleListener(mock(ITestInvocationListener.class));
         mIRemoteTest = new StubTest();
         mConfigurationDescriptor = new ConfigurationDescriptor();
         mModuleDefinition = Mockito.mock(ModuleDefinition.class);
@@ -64,6 +63,8 @@ public class RemoteTestTimeOutEnforcerTest {
         Mockito.when(mModuleDefinition.getId()).thenReturn(mModuleName);
         Mockito.when(mModuleDefinition.getModuleInvocationContext())
                 .thenReturn(mModuleInvocationContext);
+        mListener =
+                new ModuleListener(mock(ITestInvocationListener.class), mModuleInvocationContext);
         mEnforcer =
                 new RemoteTestTimeOutEnforcer(mListener, mModuleDefinition, mIRemoteTest, mTimeout);
     }
