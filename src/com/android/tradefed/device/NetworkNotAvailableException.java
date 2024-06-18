@@ -16,20 +16,15 @@
 package com.android.tradefed.device;
 
 import com.android.tradefed.build.BuildSerializedVersion;
+import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 /**
- * Thrown when a device is not able to connect to network for testing.
- * This usually gets thrown if a device fails to reconnect to wifi after reboot.
+ * Thrown when a device is not able to connect to network for testing. This usually gets thrown if a
+ * device fails to reconnect to wifi after reboot.
  */
-public class NetworkNotAvailableException extends RuntimeException {
+public class NetworkNotAvailableException extends HarnessRuntimeException {
     private static final long serialVersionUID = BuildSerializedVersion.VERSION;
-
-    /**
-     * Creates a {@link NetworkNotAvailableException}.
-     */
-    public NetworkNotAvailableException() {
-        super();
-    }
 
     /**
      * Creates a {@link NetworkNotAvailableException}.
@@ -37,7 +32,7 @@ public class NetworkNotAvailableException extends RuntimeException {
      * @param msg a descriptive message.
      */
     public NetworkNotAvailableException(String msg) {
-        super(msg);
+        super(msg, InfraErrorIdentifier.WIFI_FAILED_CONNECT);
     }
 
     /**
@@ -47,6 +42,6 @@ public class NetworkNotAvailableException extends RuntimeException {
      * @param cause the root {@link Throwable} that caused the connection failure.
      */
     public NetworkNotAvailableException(String msg, Throwable cause) {
-        super(msg, cause);
+        super(msg, cause, InfraErrorIdentifier.WIFI_FAILED_CONNECT);
     }
 }

@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo.BuildInfoProperties;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.FuseUtil;
 import com.android.tradefed.util.SerializationUtil;
 
 import org.junit.After;
@@ -30,6 +31,9 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.File;
 import java.util.Collection;
@@ -39,6 +43,7 @@ import java.util.Collection;
 public class DeviceFolderBuildInfoTest {
     private DeviceFolderBuildInfo mDeviceFolderBuildInfo;
     private File mFile;
+    private FuseUtil mMockFuseUtil;
 
     @Before
     public void setUp() throws Exception {
@@ -46,6 +51,19 @@ public class DeviceFolderBuildInfoTest {
         mDeviceFolderBuildInfo.setFolderBuild(new FolderBuildInfo("1", "target"));
         mDeviceFolderBuildInfo.setDeviceBuild(new DeviceBuildInfo());
         mFile = FileUtil.createTempFile("image", "tmp");
+        mMockFuseUtil = Mockito.mock(FuseUtil.class);
+        Mockito.when(mMockFuseUtil.canMountZip()).thenReturn(true);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock invocation) throws Throwable {
+                                File mountDir = (File) invocation.getArgument(0);
+                                FileUtil.recursiveDelete(mountDir);
+                                return null;
+                            }
+                        })
+                .when(mMockFuseUtil)
+                .unmountZip(Mockito.any(File.class));
     }
 
     @After
@@ -160,4 +178,50 @@ public class DeviceFolderBuildInfoTest {
         // deviceBuild gave its file to the main build
         assertNotNull(mDeviceFolderBuildInfo.getBootloaderImageFile());
     }
+
+    /**
+     * Test that when setting the device and folder build, the DeviceFolderBuildInfo gets all their
+     * file. Then test
+     */
+    @Test
+    public void testBuildWithZipMounts() {
+        IFolderBuildInfo folderBuild = new FolderBuildInfo("1234", "cts_target", true);
+
+        folderBuild.setRootDir(mFile);
+        assertNotNull(folderBuild.getRootDir());
+
+        DeviceFolderBuildInfo mDeviceFolderBuildInfoWithZipMount =
+                new DeviceFolderBuildInfo("1111", "target", folderBuild.shouldUseFuseZip());
+
+        // Set the build to use the mock fuse util for clean up.
+        mDeviceFolderBuildInfoWithZipMount.setFuseUtil(mMockFuseUtil);
+
+        // Original build doesn't have the root dir and zip mount files yet.
+        assertNull(mDeviceFolderBuildInfoWithZipMount.getRootDir());
+        assertTrue(mDeviceFolderBuildInfoWithZipMount.shouldUseFuseZip());
+
+        // Set the folderBuild
+        mDeviceFolderBuildInfoWithZipMount.setFolderBuild(folderBuild);
+        // folderBuild should pass its file, its flag and list zip mount files to the main build
+        assertNotNull(mDeviceFolderBuildInfoWithZipMount.getRootDir());
+        assertTrue(mDeviceFolderBuildInfoWithZipMount.shouldUseFuseZip());
+
+        // Clone the build which contains the zip mount info
+        IBuildInfo buildInfoClone = mDeviceFolderBuildInfoWithZipMount.clone();
+
+        // The clone should also have the zip mount info
+        assertTrue(buildInfoClone instanceof DeviceFolderBuildInfo);
+        assertNotNull(mDeviceFolderBuildInfoWithZipMount.getRootDir());
+        assertTrue(((DeviceFolderBuildInfo) buildInfoClone).shouldUseFuseZip());
+
+        // Set the cloned build to use the mock fuse util as the fuse util won't be copied.
+        ((DeviceFolderBuildInfo) buildInfoClone).setFuseUtil(mMockFuseUtil);
+
+        // Clean up the build
+        buildInfoClone.cleanUp();
+        assertNull(((DeviceFolderBuildInfo) buildInfoClone).getRootDir());
+        mDeviceFolderBuildInfoWithZipMount.cleanUp();
+        assertNull(mDeviceFolderBuildInfoWithZipMount.getRootDir());
+    }
 }
+

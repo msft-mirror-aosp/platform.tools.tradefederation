@@ -21,6 +21,7 @@ import static org.junit.Assert.assertNotEquals;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.TestDeviceOptions;
@@ -57,7 +58,13 @@ public class ManagedRemoteDeviceTest {
         mStateMonitor = Mockito.mock(IDeviceStateMonitor.class);
         mDeviceMonitor = Mockito.mock(IDeviceMonitor.class);
         mMockLogger = Mockito.mock(ITestLogger.class);
-        mDevice = new ManagedRemoteDevice(mIDevice, mStateMonitor, mDeviceMonitor);
+        mDevice =
+                new ManagedRemoteDevice(mIDevice, mStateMonitor, mDeviceMonitor) {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 29;
+                    }
+                };
         mDevice.setTestLogger(mMockLogger);
     }
 

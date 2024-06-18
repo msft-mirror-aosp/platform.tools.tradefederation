@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.util;
 
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
@@ -22,6 +23,7 @@ import com.android.tradefed.util.zip.LocalFileHeader;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -29,6 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedList;
@@ -71,7 +74,11 @@ public class ZipUtil {
      * @return {@code false} if the file appears to be corrupt; {@code true} otherwise
      */
     public static boolean isZipFileValid(File zipFile, boolean thorough) throws IOException {
-        if (zipFile != null && !zipFile.exists()) {
+        if (zipFile == null) {
+            CLog.d("isZipFileValid received a null file reference.");
+            return false;
+        }
+        if (!zipFile.exists()) {
             CLog.d("Zip file does not exist: %s", zipFile.getAbsolutePath());
             return false;
         }
@@ -106,12 +113,12 @@ public class ZipUtil {
     public static void extractZip(ZipFile zipFile, File destDir) throws IOException {
         Enumeration<? extends ZipEntry> entries = zipFile.entries();
         while (entries.hasMoreElements()) {
-
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
+            validateDestinationDir(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (entry.isDirectory()) {
-                continue;
+                childFile.mkdirs();
             } else {
                 FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
             }
@@ -132,6 +139,7 @@ public class ZipUtil {
         while (entries.hasMoreElements()) {
             ZipEntry entry = entries.nextElement();
             File childFile = new File(destDir, entry.getName());
+            validateDestinationDir(destDir, entry.getName());
             childFile.getParentFile().mkdirs();
             if (!entry.isDirectory() && shouldExtract.test(entry)) {
                 FileUtil.writeToFile(zipFile.getInputStream(entry), childFile);
@@ -402,7 +410,11 @@ public class ZipUtil {
             EndCentralDirectoryInfo endCentralDirInfo,
             boolean useZip64)
             throws IOException {
-        return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(
+                        "getZipCentralDirectoryInfos:" + partialZipFile.getName())) {
+            return getZipCentralDirectoryInfos(partialZipFile, endCentralDirInfo, 0, useZip64);
+        }
     }
 
     /**
@@ -512,18 +524,22 @@ public class ZipUtil {
     }
 
     /**
-     * Extract the requested file from a partial zip file.
+     * Extract a single requested file from a partial zip file.
      *
-     * <p>This method assumes all files are on the same disk when compressed. It doesn't support
-     * following features yet:
+     * <p>This method assumes all files are on the same disk when compressed.
+     *
+     * <p>If {@link targetFile} is a directory, an empty directory will be created without its
+     * contents.
+     *
+     * <p>If {@link targetFile} is a symlink, a symlink will be created but not resolved.
+     *
+     * <p>It doesn't support following features yet:
      *
      * <p>Zip file larger than 4GB
      *
      * <p>ZIP64(require ZipLocalFileHeader update on compressed size)
      *
      * <p>Encrypted zip file
-     *
-     * <p>Symlink
      *
      * @param partialZip a {@link File} that's a partial of the zip file.
      * @param targetFile the {@link File} to save the extracted file to.
@@ -546,15 +562,18 @@ public class ZipUtil {
                 // Create a folder.
                 targetFile.mkdir();
                 return;
-            } else if (zipEntry.getCompressedSize() == 0) {
+            }
+
+            if (zipEntry.getCompressedSize() == 0) {
                 // The file is empty, just create an empty file.
-                FileUtil.mkdirsRWX(targetFile.getParentFile());
+                targetFile.getParentFile().mkdirs();
                 targetFile.createNewFile();
                 return;
             }
 
             File zipFile = targetFile;
-            if (zipEntry.getCompressionMethod() != COMPRESSION_METHOD_STORED) {
+            if (zipEntry.getCompressionMethod() != COMPRESSION_METHOD_STORED
+                    || zipEntry.isSymLink()) {
                 // Create a temp file to store the compressed data, then unzip it.
                 zipFile = FileUtil.createTempFile(PARTIAL_ZIP_DATA, ZIP_EXTENSION);
             } else {
@@ -571,6 +590,15 @@ public class ZipUtil {
                         false,
                         startOffset + localFileHeader.getHeaderSize(),
                         zipEntry.getCompressedSize());
+            }
+
+            if (zipEntry.isSymLink()) {
+                try {
+                    unzipSymlink(zipFile, targetFile, zipEntry);
+                    return;
+                } finally {
+                    zipFile.delete();
+                }
             }
 
             if (zipEntry.getCompressionMethod() == COMPRESSION_METHOD_STORED) {
@@ -613,13 +641,27 @@ public class ZipUtil {
      */
     private static void unzipRawZip(File zipFile, File targetFile, CentralDirectoryInfo zipEntry)
             throws IOException, DataFormatException {
-        Inflater decompresser = new Inflater(true);
-
         targetFile.getParentFile().mkdirs();
         targetFile.createNewFile();
 
-        try (FileInputStream inputStream = new FileInputStream(zipFile);
-                FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+        try (FileOutputStream outputStream = new FileOutputStream(targetFile)) {
+            unzipToStream(zipFile, outputStream);
+        }
+
+        // Validate CRC
+        long targetFileCrc = FileUtil.calculateCrc32(targetFile);
+        if (targetFileCrc != zipEntry.getCrc()) {
+            throw new IOException(
+                    String.format(
+                            "Failed to match CRC for file %s [expected=%s, actual=%s]",
+                            targetFile, zipEntry.getCrc(), targetFileCrc));
+        }
+    }
+
+    private static void unzipToStream(File zipFile, OutputStream outputStream)
+            throws IOException, DataFormatException {
+        Inflater decompresser = new Inflater(true);
+        try (FileInputStream inputStream = new FileInputStream(zipFile)) {
             byte[] data = new byte[32768];
             byte[] buffer = new byte[65536];
             while (inputStream.read(data) > 0) {
@@ -632,10 +674,44 @@ public class ZipUtil {
         } finally {
             decompresser.end();
         }
+    }
 
-        // Validate CRC
-        if (FileUtil.calculateCrc32(targetFile) != zipEntry.getCrc()) {
-            throw new IOException(String.format("Failed to match CRC for file %s", targetFile));
+    private static void unzipSymlink(File zipFile, File targetFile, CentralDirectoryInfo zipEntry)
+            throws IOException {
+
+        String target = null;
+        if (zipEntry.getCompressionMethod() == COMPRESSION_METHOD_STORED) {
+            target = FileUtil.readStringFromFile(zipFile);
+        } else if (zipEntry.getCompressionMethod() == COMPRESSION_METHOD_DEFLATE) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                unzipToStream(zipFile, baos);
+                target = baos.toString();
+            } catch (DataFormatException e) {
+                throw new IOException(e);
+            } finally {
+                if (target == null) {
+                    CLog.e("Failed to unzip %s", zipEntry.getFileName());
+                    targetFile.delete();
+                }
+            }
+        } else {
+            throw new IOException(
+                    String.format(
+                            "Compression method %d is not supported.",
+                            zipEntry.getCompressionMethod()));
+        }
+
+        targetFile.getParentFile().mkdirs();
+        Files.createSymbolicLink(Paths.get(targetFile.getPath()), Paths.get(target));
+    }
+
+    protected static void validateDestinationDir(File destDir, String filename) throws IOException {
+        String canonicalDestinationDirPath = destDir.getCanonicalPath();
+        File destinationfile = new File(destDir, filename);
+        String canonicalDestinationFile = destinationfile.getCanonicalPath();
+        if (!canonicalDestinationFile.startsWith(canonicalDestinationDirPath + File.separator)) {
+            throw new RuntimeException("Entry is outside of the target dir: " + filename);
         }
     }
 }

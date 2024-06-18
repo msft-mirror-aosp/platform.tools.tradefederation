@@ -23,6 +23,8 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGrou
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.logger.TfObjectTracker;
 import com.android.tradefed.invoker.proto.InvocationContext.Context;
+import com.android.tradefed.invoker.tracing.ActiveTrace;
+import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ActionInProgress;
@@ -35,13 +37,16 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.LogFileProto.LogFileInfo;
 import com.android.tradefed.result.proto.TestRecordProto.ChildReference;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfo;
 import com.android.tradefed.result.proto.TestRecordProto.DebugInfoContext;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.proto.TestRecordProto.SkipReason;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SerializationUtil;
 import com.android.tradefed.util.proto.TestRecordProtoUtil;
@@ -94,6 +99,10 @@ public class ProtoResultParser {
     /** Track the name of the module in progress. */
     private String mModuleInProgress = null;
 
+    private IInvocationContext mModuleContext = null;
+
+    private boolean mMergeInvocationContext = true;
+
     /** Ctor. */
     public ProtoResultParser(
             ITestInvocationListener listener,
@@ -134,6 +143,25 @@ public class ProtoResultParser {
     /** Sets whether or not we should report the logs. */
     public void setReportLogs(boolean reportLogs) {
         mReportLogs = reportLogs;
+    }
+
+    /**
+     * Enable or disable merging the serialized invocation context with the main context that this
+     * object is initialized with.
+     *
+     * <p>Note that disabling invocation-level reporting via the {@code reportInvocation}
+     * constructor parameter still merges context information and requires explicitly using this
+     * method to disable the behavior.
+     *
+     * <p>TODO(b/288001953): Revisit the proper API for accomplishing this.
+     *
+     * @return the previous state
+     * @see #ProtoResultParser
+     */
+    public boolean setMergeInvocationContext(boolean enabled) {
+        boolean previousContext = mMergeInvocationContext;
+        mMergeInvocationContext = enabled;
+        return previousContext;
     }
 
     /**
@@ -224,35 +252,32 @@ public class ProtoResultParser {
         return mInvocationFailed;
     }
 
-    /** If needed to ensure consistent reporting, complete the events of the module. */
+    /**
+     * If needed to ensure consistent reporting, complete the events of the module, run and methods.
+     */
     public void completeModuleEvents() {
-        if (getModuleInProgress() == null) {
-            if (mCurrentRunName != null) {
-                if (mCurrentTestCase != null) {
-                    FailureDescription failure =
-                            FailureDescription.create(
-                                    "Run was interrupted after starting, results are incomplete.");
-                    mListener.testFailed(mCurrentTestCase, failure);
-                    mListener.testEnded(mCurrentTestCase, new HashMap<String, Metric>());
-                }
-                FailureDescription failure =
-                        FailureDescription.create(
-                                "Run was interrupted after starting, results are incomplete.",
-                                FailureStatus.INFRA_FAILURE);
-                mListener.testRunFailed(failure);
-                mListener.testRunEnded(0L, new HashMap<String, Metric>());
-                mCurrentRunName = null;
-            }
-            return;
+        if (mCurrentRunName == null && getModuleInProgress() != null) {
+            mListener.testRunStarted(getModuleInProgress(), 0);
         }
-        mListener.testRunStarted(getModuleInProgress(), 0);
-        FailureDescription failure =
-                FailureDescription.create(
-                        "Module was interrupted after starting, results are incomplete.",
-                        FailureStatus.INFRA_FAILURE);
-        mListener.testRunFailed(failure);
-        mListener.testRunEnded(0L, new HashMap<String, Metric>());
-        mListener.testModuleEnded();
+        if (mCurrentTestCase != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Run was interrupted after starting, results are incomplete.");
+            mListener.testFailed(mCurrentTestCase, failure);
+            mListener.testEnded(mCurrentTestCase, new HashMap<String, Metric>());
+        }
+        if (getModuleInProgress() != null || mCurrentRunName != null) {
+            FailureDescription failure =
+                    FailureDescription.create(
+                            "Module was interrupted after starting, results are incomplete.",
+                            FailureStatus.INFRA_FAILURE);
+            mListener.testRunFailed(failure);
+            mListener.testRunEnded(0L, new HashMap<String, Metric>());
+            mCurrentRunName = null;
+        }
+        if (getModuleInProgress() != null) {
+            mListener.testModuleEnded();
+        }
     }
 
     private void evalChildrenProto(List<ChildReference> children, boolean isInRun) {
@@ -326,6 +351,11 @@ public class ProtoResultParser {
         // Still report the logs even if not reporting the invocation level.
         handleLogs(endInvocationProto);
 
+        if (mInvocationEnded) {
+            CLog.d("Re-entry in invocationEnded, most likely for subprocess final logs.");
+            return;
+        }
+
         // Get final context in case it changed.
         Any anyDescription = endInvocationProto.getDescription();
         if (!anyDescription.is(Context.class)) {
@@ -357,6 +387,9 @@ public class ProtoResultParser {
                         Throwable invocationError =
                                 (Throwable) SerializationUtil.deserialize(errorType);
                         failure.setCause(invocationError);
+                        if (invocationError instanceof OutOfMemoryError) {
+                            failure.setErrorIdentifier(InfraErrorIdentifier.OUT_OF_MEMORY_ERROR);
+                        }
                     } catch (IOException e) {
                         CLog.e("Failed to deserialize the invocation exception:");
                         CLog.e(e);
@@ -364,8 +397,16 @@ public class ProtoResultParser {
                     }
                 }
             }
+            CLog.d("Invocation failed with: %s", failure);
             mListener.invocationFailed(failure);
             mInvocationFailed = true;
+        }
+        if (endInvocationProto.hasSkipReason()) {
+            SkipReason reason = endInvocationProto.getSkipReason();
+            CLog.d("Invocation skipped with: %s", reason);
+            mListener.invocationSkipped(
+                    new com.android.tradefed.result.skipped.SkipReason(
+                            reason.getReason(), reason.getTrigger()));
         }
 
         log("Invocation ended proto");
@@ -409,6 +450,7 @@ public class ProtoResultParser {
                 mModuleInProgress = moduleId;
             }
             log(message);
+            mModuleContext = moduleContext;
             mListener.testModuleStarted(moduleContext);
             if (mFirstModule) {
                 mFirstModule = false;
@@ -423,8 +465,18 @@ public class ProtoResultParser {
     private void handleModuleEnded(TestRecord moduleProto) {
         handleLogs(moduleProto);
         log("Test module ended proto");
+        try {
+            Any anyDescription = moduleProto.getDescription();
+            IInvocationContext moduleContext =
+                    InvocationContext.fromProto(anyDescription.unpack(Context.class));
+            // Merge attributes
+            mModuleContext.addInvocationAttributes(moduleContext.getAttributes());
+        } catch (InvalidProtocolBufferException e) {
+            throw new RuntimeException(e);
+        }
         mListener.testModuleEnded();
         mModuleInProgress = null;
+        mModuleContext = null;
     }
 
     /** Handles the test run level of the invocation. */
@@ -481,6 +533,13 @@ public class ProtoResultParser {
         String[] info = testcaseProto.getTestRecordId().split("#");
         TestDescription description = new TestDescription(info[0], info[1]);
         if (testcaseProto.hasEndTime()) {
+            // Allow end event that also report start in one go. When using
+            // StreamProtoResultReporter we can save some socket communication
+            // by reporting test cases start and end at the same time in some instances.
+            if (mCurrentTestCase == null) {
+                log("Test case started proto: %s", description.toString());
+                mListener.testStarted(description, timeStampToMillis(testcaseProto.getStartTime()));
+            }
             handleTestCaseEnd(description, testcaseProto);
             mCurrentTestCase = null;
         } else {
@@ -526,6 +585,16 @@ public class ProtoResultParser {
                 log("Test case ignored proto: %s", description.toString());
                 break;
             case PASS:
+                if (testcaseProto.hasSkipReason()) {
+                    log(
+                            "Test case skipped proto: %s",
+                            description.toString(), testcaseProto.getSkipReason());
+                    mListener.testSkipped(
+                            description,
+                            new com.android.tradefed.result.skipped.SkipReason(
+                                    testcaseProto.getSkipReason().getReason(),
+                                    testcaseProto.getSkipReason().getTrigger()));
+                }
                 break;
             default:
                 throw new RuntimeException(
@@ -544,9 +613,6 @@ public class ProtoResultParser {
 
     private void handleLogs(TestRecord proto) {
         if (!(mListener instanceof ILogSaverListener)) {
-            return;
-        }
-        if (!mReportLogs) {
             return;
         }
         ILogSaverListener logger = (ILogSaverListener) mListener;
@@ -568,24 +634,43 @@ public class ProtoResultParser {
                                 info.getSize());
                 if (Strings.isNullOrEmpty(file.getPath())) {
                     CLog.e("Log '%s' was registered but without a path.", entry.getKey());
-                    return;
+                    continue;
                 }
                 File path = new File(file.getPath());
                 if (Strings.isNullOrEmpty(file.getUrl()) && path.exists()) {
-                    try (InputStreamSource source = new FileInputStreamSource(path)) {
-                        LogDataType type = file.getType();
-                        // File might have already been compressed
-                        if (file.getPath().endsWith(LogDataType.ZIP.getFileExt())) {
-                            type = LogDataType.ZIP;
+                    LogDataType type = file.getType();
+                    if (mReportLogs) {
+                        try (InputStreamSource source = new FileInputStreamSource(path)) {
+                            log(
+                                    "Logging %s [type: %s]from subprocess: %s ",
+                                    entry.getKey(), type, file.getPath());
+                            logger.testLog(mFilePrefix + entry.getKey(), type, source);
                         }
-                        log("Logging %s from subprocess: %s ", entry.getKey(), file.getPath());
-                        logger.testLog(mFilePrefix + entry.getKey(), type, source);
+                    }
+                    if (entry.getKey().startsWith(ActiveTrace.TRACE_KEY)
+                            && LogDataType.PERFETTO.equals(type)) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                        FileUtil.deleteFile(path);
                     }
                 } else {
-                    log(
-                            "Logging %s from subprocess. url: %s, path: %s",
-                            entry.getKey(), file.getUrl(), file.getPath());
-                    logger.logAssociation(mFilePrefix + entry.getKey(), file);
+                    if (entry.getKey().startsWith(ActiveTrace.TRACE_KEY)
+                            && LogDataType.PERFETTO.equals(file.getType())
+                            && path.exists()) {
+                        CLog.d("Log the subprocess trace");
+                        TracingLogger.getActiveTrace().addSubprocessTrace(path);
+                    }
+                    if (mReportLogs) {
+                        log(
+                                "Logging %s [type: %s] from subprocess. url: %s, path: %s [exists:"
+                                        + " %s]",
+                                entry.getKey(),
+                                file.getType(),
+                                file.getUrl(),
+                                file.getPath(),
+                                path.exists());
+                        logger.logAssociation(mFilePrefix + entry.getKey(), file);
+                    }
                 }
             } catch (InvalidProtocolBufferException e) {
                 CLog.e("Couldn't unpack %s as a LogFileInfo", entry.getKey());
@@ -620,6 +705,10 @@ public class ProtoResultParser {
      */
     private void mergeInvocationContext(
             IInvocationContext receiverContext, IInvocationContext endInvocationContext) {
+        if (!mMergeInvocationContext) {
+            CLog.d("Skipping merging invocation context");
+            return;
+        }
         if (receiverContext == null) {
             return;
         }
@@ -645,6 +734,9 @@ public class ProtoResultParser {
             Set<String> attKeys = new HashSet<>(attributes.keySet());
             for (String attKey : attKeys) {
                 if (attKey.startsWith(groupKey.toString() + ":")) {
+                    if (attributes.get(attKey) == null) {
+                        continue;
+                    }
                     List<String> values = attributes.get(attKey);
                     attributes.remove(attKey);
                     if (mSkipParsingAccounting) {
@@ -679,6 +771,9 @@ public class ProtoResultParser {
             if (mSkipParsingAccounting) {
                 continue;
             }
+            if (values == null) {
+                continue;
+            }
             for (String val : values) {
                 if (key.shouldAdd()) {
                     try {
@@ -711,6 +806,7 @@ public class ProtoResultParser {
                 }
             }
         }
+        CLog.d("Adding following properties: %s", attributes.entries());
         receiverContext.addInvocationAttributes(attributes);
     }
 

@@ -18,8 +18,10 @@ package com.android.tradefed.util;
 
 import com.android.ddmlib.testrunner.XmlTestRunListener;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.xml.AbstractXmlParser;
 
 import com.google.common.base.Strings;
@@ -34,7 +36,9 @@ import java.util.HashMap;
 /**
  * Parser that extracts test result data from JUnit results stored in ant's XMLJUnitResultFormatter
  * and forwards it to a ITestInvocationListener.
- * <p/>
+ *
+ * <p>
+ *
  * @see XmlTestRunListener
  */
 public class JUnitXmlParser extends AbstractXmlParser {
@@ -44,10 +48,8 @@ public class JUnitXmlParser extends AbstractXmlParser {
     /**
      * Parses the xml format. Expected tags/attributes are
      *
-     * testsuite name="runname" tests="X"
-     *     testcase classname="FooTest" name="testMethodName"
-     *         failure type="blah" message="exception message"
-     *              stack
+     * <p>testsuite name="runname" tests="X" testcase classname="FooTest" name="testMethodName"
+     * failure type="blah" message="exception message" stack
      */
     private class JUnitXmlHandler extends DefaultHandler {
 
@@ -72,9 +74,7 @@ public class JUnitXmlParser extends AbstractXmlParser {
         private String mCurrentMessage = null;
         private long mRunTimeMillis = 0L;
 
-        /**
-        * {@inheritDoc}
-        */
+        /** {@inheritDoc} */
         @Override
         public void startElement(String uri, String localName, String name, Attributes attributes)
                 throws SAXException {
@@ -93,9 +93,10 @@ public class JUnitXmlParser extends AbstractXmlParser {
                 // start of description of an individual test method - extract out test name and
                 // store it
                 String testClassName = Strings.nullToEmpty(attributes.getValue("classname"));
-                testClassName = "".equals(testClassName)  // TODO(b/120500865): remove this kludge
-                        ? JUnitXmlParser.class.getSimpleName()
-                        : testClassName;
+                testClassName =
+                        "".equals(testClassName) // TODO(b/120500865): remove this kludge
+                                ? JUnitXmlParser.class.getSimpleName()
+                                : testClassName;
                 String methodName = getMandatoryAttribute(name, "name", attributes);
                 mCurrentTest = new TestDescription(testClassName, methodName);
                 mTestListener.testStarted(mCurrentTest);
@@ -115,9 +116,7 @@ public class JUnitXmlParser extends AbstractXmlParser {
             }
         }
 
-        /**
-        * Called when parsing CDATA content of a tag
-        */
+        /** Called when parsing CDATA content of a tag */
         @Override
         public void characters(char[] data, int offset, int len) {
             // if currently parsing a failure, add stack data to content
@@ -126,9 +125,7 @@ public class JUnitXmlParser extends AbstractXmlParser {
             }
         }
 
-        /**
-         * {@inheritDoc}
-         */
+        /** {@inheritDoc} */
         @Override
         public void endElement(String uri, String localName, String name) {
             if (mFailureContent != null && mFailureContent.length() == 0) {
@@ -144,8 +141,10 @@ public class JUnitXmlParser extends AbstractXmlParser {
                 mTestListener.testEnded(mCurrentTest, new HashMap<String, Metric>());
             }
             if (FAILURE_TAG.equalsIgnoreCase(name) || ERROR_TAG.equalsIgnoreCase(name)) {
-                mTestListener.testFailed(mCurrentTest,
-                        mFailureContent.toString());
+                FailureDescription failure =
+                        FailureDescription.create(
+                                mFailureContent.toString(), FailureStatus.TEST_FAILURE);
+                mTestListener.testFailed(mCurrentTest, failure);
             }
             mFailureContent = null;
             mCurrentMessage = null;
@@ -160,8 +159,10 @@ public class JUnitXmlParser extends AbstractXmlParser {
                 throws SAXException {
             String value = attributes.getValue(attrName);
             if (value == null) {
-                throw new SAXException(String.format(
-                        "Malformed XML, could not find '%s' attribute in '%s'", attrName, tagName));
+                throw new SAXException(
+                        String.format(
+                                "Malformed XML, could not find '%s' attribute in '%s'",
+                                attrName, tagName));
             }
             return value;
         }
@@ -197,17 +198,15 @@ public class JUnitXmlParser extends AbstractXmlParser {
     }
 
     /**
-     * Creates a {@code JUnitXmlParser} that notifies {@code listener}, passing {@code runName}
-     * to {@link ITestInvocationListener#testRunStarted}.
+     * Creates a {@code JUnitXmlParser} that notifies {@code listener}, passing {@code runName} to
+     * {@link ITestInvocationListener#testRunStarted}.
      */
     public JUnitXmlParser(String runName, ITestInvocationListener listener) {
         mRunName = runName;
         mTestListener = listener;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     protected DefaultHandler createXmlHandler() {
         return new JUnitXmlHandler();

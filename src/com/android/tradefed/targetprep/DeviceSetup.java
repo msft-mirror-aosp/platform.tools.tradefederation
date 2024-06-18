@@ -19,21 +19,33 @@ package com.android.tradefed.targetprep;
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.dependencies.ExternalDependency;
+import com.android.tradefed.dependencies.IExternalDependency;
+import com.android.tradefed.dependencies.connectivity.BluetoothDependency;
+import com.android.tradefed.dependencies.connectivity.EthernetDependency;
+import com.android.tradefed.dependencies.connectivity.NetworkDependency;
+import com.android.tradefed.dependencies.connectivity.TelephonyDependency;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.LocalAndroidVirtualDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.device.cloud.NestedRemoteDevice;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.BinaryState;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -43,9 +55,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A {@link ITargetPreparer} that configures a device for testing based on provided {@link Option}s.
@@ -53,9 +69,13 @@ import java.util.TimeZone;
  * <p>Requires a device where 'adb root' is possible, typically a userdebug build type.
  *
  * <p>Should be performed <strong>after</strong> a new build is flashed.
+ *
+ * <p><strong>Note:</strong> this preparer is meant for continuous testing labs and assumes that the
+ * device under test will be flashed and wiped before the next run. As such, it does minimal clean
+ * up during teardown and should not be used in a test module.
  */
 @OptionClass(alias = "device-setup")
-public class DeviceSetup extends BaseTargetPreparer {
+public class DeviceSetup extends BaseTargetPreparer implements IExternalDependency {
 
     // Networking
     @Option(name = "airplane-mode",
@@ -314,6 +334,14 @@ public class DeviceSetup extends BaseTargetPreparer {
             "system property options will be ignored")
     protected boolean mForceSkipSystemProps = false;
 
+    @Option(
+            name = "force-root-setup",
+            description =
+                    "Force switching to root before the setup.Root should only be need for system"
+                        + " props, but adding this flag while transitioning in case someone reports"
+                        + " issues.")
+    private boolean mForceRoot = false;
+
     @Option(name = "force-skip-settings",
             description = "Force setup to not modify any device settings. All other setting " +
             "options will be ignored.")
@@ -330,6 +358,11 @@ public class DeviceSetup extends BaseTargetPreparer {
     // setprop ro.monkey 1
     // setprop ro.test_harness 1
     // setprop persist.sys.test_harness 1
+
+    @Option(name = "hide-error-dialogs", description = "Turn on or off the error dialogs.")
+    protected BinaryState mHideErrorDialogs = BinaryState.ON;
+    // ON:  settings put global hide_error_dialogs 1
+    // OFF: settings put global hide_error_dialogs 0
 
     @Option(
             name = "disable-dalvik-verifier",
@@ -377,6 +410,26 @@ public class DeviceSetup extends BaseTargetPreparer {
     )
     protected boolean mRestoreSettings = false;
 
+    @Option(
+            name = "optimized-non-persistent-setup",
+            description = "Feature to evaluate a faster non-persistent props setup.")
+    private boolean mOptimizeNonPersistentSetup = true;
+
+    @Option(
+            name = "dismiss-setup-wizard",
+            description = "Attempt to dismiss the setup wizard if present.")
+    private boolean mDismissSetupWizard = true;
+
+    @Option(
+            name = "dismiss-setup-wizard-timeout",
+            description = "Set the timeout for dismissing setup wizard in milli seconds.")
+    private Long mDismissSetupWizardTimeout = 60 * 1000L;
+
+    @Option(
+            name = "dismiss-setup-wizard-retry-count",
+            description = "Number of times to retry to dismiss setup wizard.")
+    private int mDismissSetupWizardRetry = 2;
+
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
     private Map<String, String> mPreviousGlobalSettings = new HashMap<>();
@@ -411,7 +464,7 @@ public class DeviceSetup extends BaseTargetPreparer {
             name = "optimized-property-setting",
             description =
                     "If a property is already set to the desired value, don't reboot the device")
-    protected boolean mOptimizedPropertySetting = false;
+    protected boolean mOptimizedPropertySetting = true;
 
     // Deprecated options follow
     /**
@@ -445,7 +498,34 @@ public class DeviceSetup extends BaseTargetPreparer {
             description = "Whether or not to skip the teardown if it's a virtual device.")
     private boolean mSkipVirtualDeviceTeardown = true;
 
+    @Option(
+            name = "disable-device-config-sync",
+            description = "Disable syncing device config with remote configuration server.")
+    private boolean mDisableDeviceConfigSync = false;
+    // device_config set_sync_disabled_for_tests persistent
+
+    @Option(
+            name = "disable-ramdump",
+            description = "Will set the flag to disable ramdump on the device.")
+    private boolean mDisableRamdump = false;
+
+    @Option(name = "parallelize-core-setup")
+    private boolean mParallelCoreSetup = false;
+
+    @Option(name = "dismiss-keyguard-via-wm", description = "Flag to dismiss keyguard via wm")
+    private boolean mDismissViaWm = false;
+
     private static final String PERSIST_PREFIX = "persist.";
+    private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
+
+    private static final List<String> PROPERTIES_NEEDING_REBOOT =
+            List.of(
+                    // MEMTAG_BOOTCTL stores a value in the misc partition that gets applied on
+                    // reboot.
+                    MEMTAG_BOOTCTL,
+                    // Zygote caches the value of this property because it's expected to reboot the
+                    // system whenever this property changes.
+                    "persist.debug.dalvik.vm.jdwp.enabled");
 
     public ITestDevice getDevice(TestInformation testInfo) {
         return testInfo.getDevice();
@@ -458,34 +538,99 @@ public class DeviceSetup extends BaseTargetPreparer {
         ITestDevice device = getDevice(testInfo);
         CLog.i("Performing setup on %s", device.getSerialNumber());
 
-        if (device.getOptions().isEnableAdbRoot() && !device.enableAdbRoot()) {
-            throw new TargetSetupError(
-                    String.format("Failed to enable adb root on %s", device.getSerialNumber()),
-                    device.getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        if (mForceRoot && device.getOptions().isEnableAdbRoot()) {
+            if (!device.enableAdbRoot()) {
+                throw new TargetSetupError(
+                        String.format("Failed to enable adb root on %s", device.getSerialNumber()),
+                        device.getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            }
         }
 
         // Convert deprecated options into current options
         processDeprecatedOptions(device);
         // Convert options into settings and run commands
         processOptions(device);
-
         // Change system props (will reboot device)
         changeSystemProps(device);
-        // Handle screen always on setting
-        handleScreenAlwaysOnSetting(device);
         // Run commands designated to be run before changing settings
         runCommands(device, mRunCommandBeforeSettings);
-        // Change settings
-        changeSettings(device);
-        // Connect wifi after settings since this may take a while
-        connectWifi(device);
-        // Sync data after settings since this may take a while
-        syncTestData(device);
+        List<Callable<Boolean>> callableTasks = new ArrayList<>();
+
+        callableTasks.add(
+                () -> {
+                    // Handle screen always on setting
+                    handleScreenAlwaysOnSetting(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Change settings
+                    changeSettings(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Connect wifi after settings since this may take a while
+                    connectWifi(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Sync data after settings since this may take a while
+                    syncTestData(device);
+                    return true;
+                });
+        callableTasks.add(
+                () -> {
+                    // Throw an error if there is not enough storage space
+                    checkExternalStoreSpace(device);
+                    return true;
+                });
+        if (mDismissSetupWizard) {
+            callableTasks.add(
+                    () -> {
+                        dismissSetupWizard(device);
+                        return true;
+                    });
+        }
+        if (mParallelCoreSetup) {
+            ParallelDeviceExecutor<Boolean> executor =
+                    new ParallelDeviceExecutor<Boolean>(callableTasks.size());
+            executor.invokeAll(callableTasks, 5, TimeUnit.MINUTES);
+            if (executor.hasErrors()) {
+                List<Throwable> errors = executor.getErrors();
+                // TODO: Handle throwing multi-exceptions, right now throw the first one.
+                for (Throwable error : errors) {
+                    if (error instanceof TargetSetupError) {
+                        throw (TargetSetupError) error;
+                    }
+                    if (error instanceof BuildError) {
+                        throw (BuildError) error;
+                    }
+                    if (error instanceof DeviceNotAvailableException) {
+                        throw (DeviceNotAvailableException) error;
+                    }
+                    throw new RuntimeException(error);
+                }
+            }
+        } else {
+            // Handle screen always on setting
+            handleScreenAlwaysOnSetting(device);
+            // Change settings
+            changeSettings(device);
+            // Connect wifi after settings since this may take a while
+            connectWifi(device);
+            // Sync data after settings since this may take a while
+            syncTestData(device);
+            // Throw an error if there is not enough storage space
+            checkExternalStoreSpace(device);
+            if (mDismissSetupWizard) {
+                dismissSetupWizard(device);
+            }
+        }
         // Run commands designated to be run after changing settings
         runCommands(device, mRunCommandAfterSettings);
-        // Throw an error if there is not enough storage space
-        checkExternalStoreSpace(device);
 
         device.clearErrorDialogs();
     }
@@ -626,8 +771,11 @@ public class DeviceSetup extends BaseTargetPreparer {
         setCommandForBinaryState(mEthernet, mRunCommandAfterSettings,
                 "ifconfig eth0 up", "ifconfig eth0 down");
 
-        setCommandForBinaryState(mBluetooth, mRunCommandAfterSettings,
-                "svc bluetooth enable", "svc bluetooth disable");
+        setCommandForBinaryState(
+                mBluetooth,
+                mRunCommandAfterSettings,
+                "cmd bluetooth_manager enable && cmd bluetooth_manager wait-for-state:STATE_ON",
+                "cmd bluetooth_manager disable && cmd bluetooth_manager wait-for-state:STATE_OFF");
 
         setCommandForBinaryState(mNfc, mRunCommandAfterSettings,
                 "svc nfc enable", "svc nfc disable");
@@ -709,6 +857,10 @@ public class DeviceSetup extends BaseTargetPreparer {
                 mTimezone = TimeZone.getDefault().getID();
             }
         }
+
+        setSettingForBinaryState(
+                mHideErrorDialogs, mGlobalSettings, "hide_error_dialogs", "1", "0");
+
         if (mTimezone != null) {
             CLog.i("The actual timezone we set here is  %s", mTimezone);
             mSetProps.put("persist.sys.timezone", mTimezone);
@@ -745,6 +897,10 @@ public class DeviceSetup extends BaseTargetPreparer {
         if (mDisableDalvikVerifier) {
             mSetProps.put("dalvik.vm.dexopt-flags", "v=n");
         }
+
+        if (mDisableDeviceConfigSync) {
+            mRunCommandBeforeSettings.add("device_config set_sync_disabled_for_tests persistent");
+        }
     }
 
     /**
@@ -761,7 +917,7 @@ public class DeviceSetup extends BaseTargetPreparer {
             return;
         }
 
-        if (mSetProps.size() > 0 && !device.getOptions().isEnableAdbRoot()) {
+        if (mSetProps.size() > 0 && !device.enableAdbRoot()) {
             throw new TargetSetupError(
                     String.format(
                             "Cannot set system props %s on %s without adb root. Setting "
@@ -771,21 +927,36 @@ public class DeviceSetup extends BaseTargetPreparer {
                     InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
         }
 
+        boolean needsReboot = false;
         // Set persistent props and build a map of all the nonpersistent ones
         Map<String, String> nonpersistentProps = new HashMap<String, String>();
         for (Map.Entry<String, String> prop : mSetProps.entrySet()) {
-            if (prop.getKey().startsWith(PERSIST_PREFIX)) {
-                // TODO: Check that set was successful
+            // MEMTAG_BOOTCTL is essentially a persist property. It triggers an action that
+            // stores the value in the misc partition, and gets applied and restored on
+            // reboot.
+            boolean isPersistProperty =
+                    prop.getKey().startsWith(PERSIST_PREFIX)
+                            || prop.getKey().equals(MEMTAG_BOOTCTL);
+
+            if (isPersistProperty || mOptimizeNonPersistentSetup) {
                 device.setProperty(prop.getKey(), prop.getValue());
-            } else {
+            }
+
+            if (!isPersistProperty) {
                 nonpersistentProps.put(prop.getKey(), prop.getValue());
+            }
+
+            if (PROPERTIES_NEEDING_REBOOT.contains(prop.getKey())) {
+                needsReboot = true;
             }
         }
 
         // If the reboot optimization is enabled, only set nonpersistent props if
         // there are changed values from what the device is running.
         boolean shouldSetProps = true;
-        if (mOptimizedPropertySetting && !nonpersistentProps.isEmpty()) {
+        if (!mOptimizeNonPersistentSetup
+                && mOptimizedPropertySetting
+                && !nonpersistentProps.isEmpty()) {
             boolean allPropsAlreadySet = true;
             for (Map.Entry<String, String> prop : nonpersistentProps.entrySet()) {
                 if (!prop.getValue().equals(device.getProperty(prop.getKey()))) {
@@ -822,6 +993,28 @@ public class DeviceSetup extends BaseTargetPreparer {
             }
             // Set reasonable permissions for /data/local.prop
             device.executeShellCommand("chmod 644 /data/local.prop");
+
+            if (mDisableRamdump) {
+                device.rebootIntoBootloader();
+                CLog.i("Disabling ramdump.");
+                CommandResult resultRampdump =
+                        device.executeFastbootCommand("oem", "ramdump", "disable");
+                if (!CommandStatus.SUCCESS.equals(resultRampdump.getStatus())) {
+                    CLog.w(
+                            "Failed to run ramdump disable: status: %s\nstdout: %s\nstderr: %s",
+                            resultRampdump.getStatus(),
+                            resultRampdump.getStdout(),
+                            resultRampdump.getStderr());
+                }
+            }
+            if (!mOptimizeNonPersistentSetup) {
+                // non-persistent properties do not trigger a reboot in this
+                // new setup, if not explicitly set.
+                needsReboot = true;
+            }
+        }
+
+        if (needsReboot) {
             CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
             device.reboot();
         }
@@ -857,18 +1050,34 @@ public class DeviceSetup extends BaseTargetPreparer {
         String cmd = "svc power stayon %s";
         switch (mScreenAlwaysOn) {
             case ON:
-                CLog.d("Setting screen always on to true");
-                device.executeShellCommand(String.format(cmd, "true"));
-                // send MENU press in case keygaurd needs to be dismissed again
-                device.executeShellCommand("input keyevent 82");
-                // send HOME press in case keyguard was already dismissed, so we bring device back
-                // to home screen
-                // No need for this on Wear OS, since that causes the launcher to show
-                // instead of the home screen
-                if (!device.hasFeature("android.hardware.type.watch")) {
-                    device.executeShellCommand("input keyevent 3");
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(InvocationMetricKey.screen_on_setup.toString())) {
+                    CLog.d("Setting screen always on to true");
+                    String cmdStayOn = String.format(cmd, "true");
+                    CommandResult stayOn = device.executeShellV2Command(cmdStayOn);
+                    CLog.d("%s output: %s", cmdStayOn, stayOn);
+                    if (mDismissViaWm) {
+                        CommandResult res =
+                                device.executeShellV2Command(
+                                        "wm dismiss-keyguard", 30000L, TimeUnit.MILLISECONDS, 0);
+                        CLog.d("Output of dismiss-keyguard: %s", res);
+                    } else {
+                        // send MENU press in case keyguard needs to be dismissed again
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 82");
+                        CLog.d("Output of input keyevent 82: %s", inputKey);
+                    }
+                    // send HOME press in case keyguard was already dismissed, so we bring device
+                    // back
+                    // to home screen
+                    // No need for this on Wear OS, since that causes the launcher to show
+                    // instead of the home screen
+                    if ((device instanceof TestDevice)
+                            && !device.hasFeature("android.hardware.type.watch")) {
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 3");
+                        CLog.d("Output of input keyevent 3: %s", inputKey);
+                    }
+                    break;
                 }
-                break;
             case OFF:
                 CLog.d("Setting screen always on to false");
                 device.executeShellCommand(String.format(cmd, "false"));
@@ -1003,19 +1212,11 @@ public class DeviceSetup extends BaseTargetPreparer {
             return;
         }
 
-        String wifiPsk = Strings.emptyToNull(mWifiPsk);
-        if (mWifiSsid != null && device.connectToWifiNetwork(mWifiSsid, wifiPsk)) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.WIFI_AP_NAME, mWifiSsid);
-            return;
+        if (mWifiSsid != null) {
+            mWifiSsidToPsk.put(mWifiSsid, mWifiPsk);
         }
-        for (Map.Entry<String, String> ssidToPsk : mWifiSsidToPsk.entrySet()) {
-            String psk = Strings.emptyToNull(ssidToPsk.getValue());
-            if (device.connectToWifiNetwork(ssidToPsk.getKey(), psk)) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.WIFI_AP_NAME, ssidToPsk.getKey());
-                return;
-            }
+        if (device.connectToWifiNetwork(mWifiSsidToPsk)) {
+            return;
         }
 
         if (mWifiSsid != null || !mWifiSsidToPsk.isEmpty()) {
@@ -1084,6 +1285,10 @@ public class DeviceSetup extends BaseTargetPreparer {
         if (mMinExternalStorageKb <= 0) {
             return;
         }
+        if (!(device instanceof TestDevice)) {
+            // TODO: instead check that sdcard exists
+            return;
+        }
         // Wait for device available to ensure the mounting of sdcard
         device.waitForDeviceAvailable();
         long freeSpace = device.getExternalStoreFreeSpace();
@@ -1094,6 +1299,44 @@ public class DeviceSetup extends BaseTargetPreparer {
                             freeSpace, mMinExternalStorageKb, device.getSerialNumber()),
                     device.getSerialNumber(),
                     DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+    }
+
+    private void dismissSetupWizard(ITestDevice device) throws DeviceNotAvailableException {
+        for (int i = 0; i < mDismissSetupWizardRetry; i++) {
+            CommandResult cmd1 =
+                    device.executeShellV2Command(
+                            "am start -a com.android.setupwizard.FOUR_CORNER_EXIT"); // Android
+            // UDC+
+            CommandResult cmd2 =
+                    device.executeShellV2Command(
+                            "am start -a com.android.setupwizard.EXIT"); // Android L - T
+            // if either of the command is successful, count it as success. Otherwise, retry.
+            if (CommandStatus.SUCCESS.equals(cmd1.getStatus())
+                    || CommandStatus.SUCCESS.equals(cmd2.getStatus())) {
+                break;
+            }
+        }
+        // verify setup wizard is dismissed
+        CLog.d("Waiting %d ms for setup wizard to be dismissed.", mDismissSetupWizardTimeout);
+        boolean dismissed = false;
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() - startTime < mDismissSetupWizardTimeout) {
+            CommandResult cmdOut =
+                    device.executeShellV2Command("dumpsys window displays | grep mCurrentFocus");
+            if (CommandStatus.SUCCESS.equals(cmdOut.getStatus())
+                    && !cmdOut.getStdout().contains("setupwizard")) {
+                CLog.d("Setup wizard is dismissed.");
+                dismissed = true;
+                break;
+            } else {
+                RunUtil.getDefault().sleep(2 * 1000);
+            }
+        }
+        if (!dismissed) {
+            CLog.w(
+                    "Setup wizard was not dismissed within the timeout limit: %d ms.",
+                    mDismissSetupWizardTimeout);
         }
     }
 
@@ -1151,6 +1394,10 @@ public class DeviceSetup extends BaseTargetPreparer {
     /** Exposed for unit testing */
     protected void setForceSkipSystemProps(boolean force) {
         mForceSkipSystemProps = force;
+    }
+
+    protected void setForceRootSetup(boolean force) {
+        mForceRoot = force;
     }
 
     public boolean isForceSkipSystemProps() {
@@ -1509,5 +1756,31 @@ public class DeviceSetup extends BaseTargetPreparer {
     @Deprecated
     protected void setDeprecatedSetProp(String prop) {
         mDeprecatedSetProps.add(prop);
+    }
+
+    @Override
+    public Set<ExternalDependency> getDependencies() {
+        Set<ExternalDependency> externalDependencies = new LinkedHashSet<>();
+        // check if we need mobile data
+        if (BinaryState.ON.equals(mData)) {
+            externalDependencies.add(new TelephonyDependency());
+        }
+        // check if we need wifi
+        if (!mSkipWifi && !(Strings.isNullOrEmpty(mWifiSsid) && mWifiSsidToPsk.isEmpty())) {
+            externalDependencies.add(new NetworkDependency());
+        }
+        // check if we need ethernet
+        if (BinaryState.ON.equals(mEthernet)) {
+            externalDependencies.add(new EthernetDependency());
+        }
+        // check if we need bluetooth
+        if (BinaryState.ON.equals(mBluetooth)) {
+            externalDependencies.add(new BluetoothDependency());
+        }
+        // check if we need location-network
+        if (BinaryState.ON.equals(mLocationNetwork)) {
+            externalDependencies.add(new NetworkDependency());
+        }
+        return externalDependencies;
     }
 }

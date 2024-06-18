@@ -20,14 +20,15 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import org.junit.After;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import com.android.tradefed.util.zip.CentralDirectoryInfo;
 import com.android.tradefed.util.zip.EndCentralDirectoryInfo;
 import com.android.tradefed.util.zip.LocalFileHeader;
+
+import org.junit.After;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -35,6 +36,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -83,6 +85,11 @@ public class ZipUtilTest {
                 ZipUtil.isZipFileValid(getTestDataFile("truncated"), false));
         assertTrue("Unexpectedly detected 'normal.zip' test file as corrupt!  Hope?",
                 ZipUtil.isZipFileValid(getTestDataFile("corrupt"), false));
+    }
+
+    @Test
+    public void testIsValid_null() throws Exception {
+        assertFalse(ZipUtil.isZipFileValid(null, true));
     }
 
     /** Test that our _thorough_ corrupt zip detection heuristics work properly. */
@@ -228,8 +235,8 @@ public class ZipUtilTest {
                             partialZipFile,
                             endCentralDirInfo,
                             endCentralDirInfo.getCentralDirOffset());
-            // The zip file has 4 folders, 4 files.
-            assertEquals(8, zipEntries.size());
+            // The zip file has 7 folders, 6 files.
+            assertEquals(13, zipEntries.size());
 
             CentralDirectoryInfo zipEntry;
             LocalFileHeader localFileHeader;
@@ -363,6 +370,69 @@ public class ZipUtilTest {
                     zipEntry.getLocalHeaderOffset());
             permissions = Files.getPosixFilePermissions(targetFile.toPath());
             assertEquals(PosixFilePermissions.fromString("rwxr-xr-x"), permissions);
+
+            // Verify a symlink.
+            zipEntry =
+                    zipEntries.stream()
+                            .filter(
+                                    e ->
+                                            e.getFileName()
+                                                    .equals("symlinks/large_text_derived/file.txt"))
+                            .findFirst()
+                            .get();
+
+            Path targetFilePath = Paths.get(tmpDir.toString(), zipEntry.getFileName());
+            targetFile = new File(targetFilePath.toString());
+            localFileHeader =
+                    new LocalFileHeader(partialZipFile, (int) zipEntry.getLocalHeaderOffset());
+            ZipUtil.unzipPartialZipFile(
+                    partialZipFile,
+                    targetFile,
+                    zipEntry,
+                    localFileHeader,
+                    zipEntry.getLocalHeaderOffset());
+
+            try {
+                assertEquals(
+                        "../../large_text/file.txt",
+                        Files.readSymbolicLink(targetFilePath).toString());
+            } catch (IOException e) {
+                // fail if the file is corrupt in any way
+                throw new RuntimeException(
+                        String.format("failed reading text file, msg: %s", e.getMessage()));
+            }
+
+            // Verify symlink to symlink.
+            zipEntry =
+                    zipEntries.stream()
+                            .filter(
+                                    e ->
+                                            e.getFileName()
+                                                    .equals(
+                                                            "symlinks/large_text_derived2/file_derived_2.txt"))
+                            .findFirst()
+                            .get();
+
+            targetFilePath = Paths.get(tmpDir.toString(), zipEntry.getFileName());
+            targetFile = new File(targetFilePath.toString());
+            localFileHeader =
+                    new LocalFileHeader(partialZipFile, (int) zipEntry.getLocalHeaderOffset());
+            ZipUtil.unzipPartialZipFile(
+                    partialZipFile,
+                    targetFile,
+                    zipEntry,
+                    localFileHeader,
+                    zipEntry.getLocalHeaderOffset());
+
+            try {
+                assertEquals(
+                        "../large_text_derived/file.txt",
+                        Files.readSymbolicLink(targetFilePath).toString());
+            } catch (IOException e) {
+                // fail if the file is corrupt in any way
+                throw new RuntimeException(
+                        String.format("failed reading text file, msg: %s", e.getMessage()));
+            }
         } finally {
             FileUtil.deleteFile(partialZipFile);
             FileUtil.recursiveDelete(tmpDir);
@@ -391,8 +461,8 @@ public class ZipUtilTest {
                             endCentralDirInfo,
                             endCentralDirInfo.getCentralDirOffset(),
                             true);
-            // The zip file has 4 folders, 4 files.
-            assertEquals(8, zipEntries.size());
+            // The zip file has 7 folders, 6 files.
+            assertEquals(13, zipEntries.size());
 
             CentralDirectoryInfo zipEntry;
             LocalFileHeader localFileHeader;

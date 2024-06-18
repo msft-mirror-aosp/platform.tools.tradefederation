@@ -85,14 +85,18 @@ public class DeviceOwnerTargetPreparerTest {
     }
 
     @Test
-    public void testSetUp_headless_switchesToPrimaryUser() throws Exception {
+    public void testSetUp_headless_switchesToMainUser() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
                                 eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
                                 anyBoolean()))
                 .thenReturn(true);
-        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
+        when(mTestInfo.getDevice().getMainUserId()).thenReturn(10);
 
         mPreparer.setUp(mTestInfo);
 
@@ -116,13 +120,17 @@ public class DeviceOwnerTargetPreparerTest {
 
     @Test
     public void testSetUp_headless_removeSecondaryUsers() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
                                 eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
                                 anyBoolean()))
                 .thenReturn(true);
-        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
+        when(mTestInfo.getDevice().getMainUserId()).thenReturn(10);
         ArrayList<Integer> userIds = new ArrayList<>();
         userIds.add(0);
         userIds.add(10);
@@ -145,13 +153,17 @@ public class DeviceOwnerTargetPreparerTest {
 
     @Test
     public void testSetUp_headless_setsDeviceOwner() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
                                 eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
                                 anyBoolean()))
                 .thenReturn(true);
-        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
+        when(mTestInfo.getDevice().getMainUserId()).thenReturn(10);
 
         mPreparer.setUp(mTestInfo);
 
@@ -168,13 +180,17 @@ public class DeviceOwnerTargetPreparerTest {
 
     @Test
     public void testTearDown_headless_removesDeviceOwner() throws Exception {
+        if (mTestInfo.getDevice().getApiLevel() < 33) {
+            return;
+        }
+
         when(mTestInfo
                         .getDevice()
                         .getBooleanProperty(
                                 eq(DeviceOwnerTargetPreparer.HEADLESS_SYSTEM_USER_PROPERTY),
                                 anyBoolean()))
                 .thenReturn(true);
-        when(mTestInfo.getDevice().getPrimaryUserId()).thenReturn(10);
+        when(mTestInfo.getDevice().getMainUserId()).thenReturn(10);
 
         mPreparer.setUp(mTestInfo);
         mPreparer.tearDown(mTestInfo, /* throwable= */ null);

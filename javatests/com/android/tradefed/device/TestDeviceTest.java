@@ -15,12 +15,21 @@
  */
 package com.android.tradefed.device;
 
+import static com.android.tradefed.device.DeviceProperties.BUILD_CODENAME;
+import static com.android.tradefed.device.DeviceProperties.SDK_VERSION;
+
+import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -51,22 +60,33 @@ import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.host.HostOptions;
 import com.android.tradefed.host.IHostOptions;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.util.AaptParser;
 import com.android.tradefed.util.ArrayUtil;
+import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.KeyguardControllerState;
+import com.android.tradefed.util.Pair;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.ZipUtil2;
 
+import com.google.common.truth.Expect;
+
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -89,6 +109,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -105,6 +126,9 @@ public class TestDeviceTest {
     private static final int MIN_API_LEVEL_GET_CURRENT_USER = 23;
     private static final int MIN_API_LEVEL_STOP_USER = 22;
     private static final String RAWIMAGE_RESOURCE = "/testdata/rawImage.zip";
+
+    @Rule public final Expect expect = Expect.create();
+
     @Mock IDevice mMockIDevice;
     @Mock IShellOutputReceiver mMockReceiver;
     private TestDevice mTestDevice;
@@ -153,6 +177,121 @@ public class TestDeviceTest {
         public boolean isAdbTcp() {
             return false;
         }
+
+        @Override
+        protected AaptParser createParser(File appFile) {
+            return null;
+        }
+    }
+
+    // TODO: merge TestableTestDeviceV2 with TestableTestDevice, as it's easier to use:
+    // - replace tests that uses TestableTestDevice with TestableTestDevice2
+    //   - might need to override more methods
+    // - remove TestableTestDevice
+    // - rename TestableTestDeviceV2 to TestableTestDevice
+    // - optionally, improve mShellV2Commands to use a custom object (instead of a Pair)
+
+    /** A {@link TestDevice} that makes it easier to inject {@code executeShellV2Command}. */
+    private class TestableTestDeviceV2 extends TestDevice {
+
+        private final Map<String, Pair<String, Object>> mShellV2Commands = new HashMap<>();
+
+        public TestableTestDeviceV2() {
+            super(mMockIDevice, mMockStateMonitor, mMockDvcMonitor);
+        }
+
+        public TestableTestDeviceV2 injectShellV2Command(String command, String result) {
+            if (mShellV2Commands.containsKey(command)) {
+                CLog.d("Replacing command '%s' with valid result '%s'", command, result);
+            }
+            mShellV2Commands.put(command, new Pair<>(command, result));
+            return this;
+        }
+
+        public TestableTestDeviceV2 injectShellV2CommandError(String command, CommandStatus error) {
+            if (mShellV2Commands.containsKey(command)) {
+                CLog.d("Replacing command '%s' with valid error '%s'", command, error);
+            }
+            mShellV2Commands.put(command, new Pair<>(command, error));
+            return this;
+        }
+
+        public TestableTestDeviceV2 injectSystemProperty(String property, String value) {
+            injectShellV2Command("getprop " + property, value);
+            return this;
+        }
+
+        @Override
+        public CommandResult executeShellV2Command(
+                String command, long maxTimeoutForCommand, TimeUnit timeUnit, int retryAttempts)
+                throws DeviceNotAvailableException {
+            Pair<String, Object> injectedCommand = mShellV2Commands.get(command);
+            if (injectedCommand == null) {
+                CLog.i("Command '%s' not injected; returning error");
+                return new CommandResult(CommandStatus.FAILED);
+            }
+            Object injectedResult = injectedCommand.second;
+            if (injectedResult instanceof CommandStatus) {
+                return new CommandResult((CommandStatus) injectedResult);
+            }
+            if (injectedResult instanceof String) {
+                CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                res.setStdout((String) injectedResult);
+                return res;
+            }
+            // Shouldn't happen
+            throw new IllegalStateException(
+                    "Object of invalid class inject as response of "
+                            + "command '"
+                            + command
+                            + "': "
+                            + injectedCommand);
+        }
+
+        @Override
+        public CommandResult executeShellV2Command(String command)
+                throws DeviceNotAvailableException {
+            Pair<String, Object> injectedCommand = mShellV2Commands.get(command);
+            if (injectedCommand == null) {
+                CLog.i("Command '%s' not injected; returning error");
+                return new CommandResult(CommandStatus.FAILED);
+            }
+            Object injectedResult = injectedCommand.second;
+            if (injectedResult instanceof CommandStatus) {
+                return new CommandResult((CommandStatus) injectedResult);
+            }
+            if (injectedResult instanceof String) {
+                CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                res.setStdout((String) injectedResult);
+                return res;
+            }
+            // Shouldn't happen
+            throw new IllegalStateException(
+                    "Object of invalid class inject as response of "
+                            + "command '"
+                            + command
+                            + "': "
+                            + injectedCommand);
+        }
+
+        private TestableTestDeviceV2 setApiLevel(Integer apiLevel, @Nullable String buildCodename) {
+            Objects.requireNonNull(apiLevel);
+            CLog.i("Setting API level to %d", apiLevel);
+            injectSystemProperty(SDK_VERSION, String.valueOf(apiLevel));
+            if (buildCodename != null) {
+                CLog.i("Setting build codename to %s", buildCodename);
+                injectSystemProperty(BUILD_CODENAME, buildCodename);
+            }
+            return this;
+        }
+    }
+
+    private TestableTestDeviceV2 newTestDeviceForDevelopmentApiLevel(int apiLevel) {
+        return new TestableTestDeviceV2().setApiLevel(apiLevel, "I AM GROOT!");
+    }
+
+    private TestableTestDeviceV2 newTestDeviceForReleaseApiLevel(int apiLevel) {
+        return new TestableTestDeviceV2().setApiLevel(apiLevel, "REL");
     }
 
     @Before
@@ -160,13 +299,15 @@ public class TestDeviceTest {
         MockitoAnnotations.initMocks(this);
 
         when(mMockIDevice.getSerialNumber()).thenReturn(MOCK_DEVICE_SERIAL);
+        when(mMockIDevice.supportsFeature(IDevice.Feature.SHELL_V2)).thenReturn(true);
 
         // A TestDevice with a no-op recoverDevice() implementation
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override
@@ -265,11 +406,6 @@ public class TestDeviceTest {
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
     }
 
-    /** Verify Mockito expectations for a successful adb root call */
-    private void verifyEnableAdbRootExpectations() throws Exception {
-        verifyShellResponse("id", 2);
-    }
-
     /**
      * Configure Mockito expectations for a successful adb command call
      *
@@ -342,7 +478,8 @@ public class TestDeviceTest {
         // output of this cmd goes to stderr
         fastbootResult.setStdout("");
         fastbootResult.setStderr("product: nexusone\n" + "finished. total time: 0.001s");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         (String) Mockito.any(),
                         (String) Mockito.any(),
@@ -367,7 +504,8 @@ public class TestDeviceTest {
         // output of this cmd goes to stderr
         fastbootResult.setStdout("");
         fastbootResult.setStderr("product: foo-bar\n" + "finished. total time: 0.001s");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         (String) Mockito.any(),
                         (String) Mockito.any(),
@@ -392,7 +530,8 @@ public class TestDeviceTest {
         // output of this cmd goes to stderr
         fastbootResult.setStdout("");
         fastbootResult.setStderr("product: \n" + "finished. total time: 0.001s");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         (String) Mockito.any(),
                         (String) Mockito.any(),
@@ -471,15 +610,20 @@ public class TestDeviceTest {
                         + " notResponding=false null bad=falseblah \n";
         // construct a string with 2 error dialogs of each type to ensure proper detection
         final String fourErrors = anrOutput + anrOutput + crashOutput + crashOutput;
+        mTestDevice =
+                newTestDeviceForDevelopmentApiLevel(32)
+                        .injectShellV2Command(TestDevice.DISMISS_DIALOG_BROADCAST, "completed=0");
         mMockShellResponse = mock(IShellResponse.class);
-        when(mMockShellResponse.getResponse()).thenReturn(fourErrors, "");
+        when(mMockShellResponse.getResponse())
+                .thenReturn("")
+                .thenReturn(fourErrors, "");
         injectShellResponse(null, mMockShellResponse);
 
         mTestDevice.clearErrorDialogs();
-
+        // expect 1 dismisses
         // expect 4 key events to be sent - one for each dialog
         // and expect another dialog query - but return nothing
-        verify(mMockIDevice, times(1 + 4 + 1))
+        verify(mMockIDevice, times(1 + 1 + 4 + 1))
                 .executeShellCommand(
                         (String) Mockito.any(),
                         (IShellOutputReceiver) Mockito.any(),
@@ -700,7 +844,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
-        injectSystemProperty("ro.build.version.sdk", "23");
+        injectSystemProperty(SDK_VERSION, "23");
 
         mTestDevice.executeShellCommand(testCommand, mMockReceiver);
 
@@ -733,6 +877,12 @@ public class TestDeviceTest {
                         (IShellOutputReceiver) Mockito.any(),
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
+        verify(mMockIDevice, times(times))
+                .executeShellCommand(
+                        Mockito.eq(TestDevice.KEYGUARD_CONTROLLER_CMD),
+                        Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.eq(TimeUnit.MILLISECONDS));
     }
 
     private void assertRecoverySuccess()
@@ -794,7 +944,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
-        injectSystemProperty("ro.build.version.sdk", "23");
+        injectSystemProperty(SDK_VERSION, "23");
 
         mTestDevice.executeShellCommand(testCommand, mMockReceiver);
 
@@ -805,7 +955,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         assertRecoverySuccess();
-        verifySystemProperty("ro.build.version.sdk", "23", 1);
+        verifySystemProperty(SDK_VERSION, "23", 1);
     }
 
     /**
@@ -852,7 +1002,7 @@ public class TestDeviceTest {
                         Mockito.anyLong(),
                         (TimeUnit) Mockito.any());
         when(mMockStateMonitor.waitForDeviceOnline()).thenReturn(mMockIDevice);
-        injectSystemProperty("ro.build.version.sdk", "23");
+        injectSystemProperty(SDK_VERSION, "23");
 
         try {
             mTestDevice.executeShellCommand(testCommand, mMockReceiver);
@@ -862,7 +1012,7 @@ public class TestDeviceTest {
         }
 
         assertRecoverySuccess(TestDevice.MAX_RETRY_ATTEMPTS + 1);
-        verifySystemProperty("ro.build.version.sdk", "23", 3);
+        verifySystemProperty(SDK_VERSION, "23", 1);
         verify(mMockStateMonitor, times(3)).waitForDeviceOnline();
         verify(mMockIDevice, times(TestDevice.MAX_RETRY_ATTEMPTS + 1))
                 .executeShellCommand(
@@ -1078,24 +1228,16 @@ public class TestDeviceTest {
      */
     @Test
     public void testExecuteFastbootCommand_state() throws Exception {
-        final long waitTimeMs = 150;
-        // build a fastboot response that will block
+        // build a fastboot response that will change state
         Answer<CommandResult> blockResult =
                 invocation -> {
-                    synchronized (this) {
-                        // first inform this test that fastboot cmd is executing
-                        notifyAll();
-                        // now wait for test to unblock us when its done testing logic
-                        long now = System.currentTimeMillis();
-                        long deadline = now + waitTimeMs;
-                        while (now < deadline) {
-                            wait(deadline - now);
-                            now = System.currentTimeMillis();
-                        }
-                    }
+                    // Expect this to be ignored
+                    mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
+                    assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
                     return new CommandResult(CommandStatus.SUCCESS);
                 };
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         Mockito.eq("fastboot"),
                         Mockito.eq("-s"),
@@ -1105,34 +1247,13 @@ public class TestDeviceTest {
 
         mTestDevice.setDeviceState(TestDeviceState.FASTBOOT);
         assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
-
-        // start fastboot command in background thread
-        Thread fastbootThread =
-                new Thread() {
-                    @Override
-                    public void run() {
-                        try {
-                            mTestDevice.executeFastbootCommand("foo");
-                        } catch (DeviceNotAvailableException e) {
-                            CLog.e(e);
-                        }
-                    }
-                };
-        fastbootThread.setName(getClass().getCanonicalName() + "#testExecuteFastbootCommand_state");
-        fastbootThread.start();
         try {
-            synchronized (blockResult) {
-                blockResult.wait(waitTimeMs);
-            }
-            // expect to ignore this
-            mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
-            assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
-        } finally {
-            synchronized (blockResult) {
-                blockResult.notifyAll();
-            }
+            mTestDevice.executeFastbootCommand("foo");
+            fail("Should have thrown an exception");
+        } catch (DeviceNotAvailableException expected) {
+            // Expected
         }
-        fastbootThread.join();
+        assertEquals(TestDeviceState.FASTBOOT, mTestDevice.getDeviceState());
         mTestDevice.setDeviceState(TestDeviceState.NOT_AVAILABLE);
         assertEquals(TestDeviceState.NOT_AVAILABLE, mTestDevice.getDeviceState());
         verify(mMockRecovery, times(2))
@@ -1140,7 +1261,8 @@ public class TestDeviceTest {
         verify(mMockStateMonitor).setState(TestDeviceState.FASTBOOT);
         verify(mMockStateMonitor).setState(TestDeviceState.NOT_AVAILABLE);
         verify(mMockRunUtil, times(2))
-                .runTimedCmd(
+                .runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         Mockito.eq("fastboot"),
                         Mockito.eq("-s"),
@@ -1156,7 +1278,8 @@ public class TestDeviceTest {
         CommandResult successResult = new CommandResult(CommandStatus.SUCCESS);
         successResult.setStderr("");
         successResult.setStdout("");
-        when(mMockRunUtil.runTimedCmd(
+        when(mMockRunUtil.runTimedCmdWithOutputMonitor(
+                        Mockito.anyLong(),
                         Mockito.anyLong(),
                         Mockito.eq("fastboot"),
                         Mockito.eq("-s"),
@@ -1306,8 +1429,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testRuntimePermissionSupportedLmpRelease() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "21");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "21");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectSystemProperty(DeviceProperties.BUILD_ID, "1642709");
 
         assertFalse(mTestDevice.isRuntimePermissionSupported());
@@ -1321,8 +1444,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testRuntimePermissionSupportedLmpMr1Dev() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "22");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "22");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectSystemProperty(DeviceProperties.BUILD_ID, "1844090");
 
         assertFalse(mTestDevice.isRuntimePermissionSupported());
@@ -1336,8 +1459,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testRuntimePermissionSupportedNonMncLocal() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "21");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "LMP");
+        injectSystemProperty(SDK_VERSION, "21");
+        injectSystemProperty(BUILD_CODENAME, "LMP");
         injectSystemProperty(DeviceProperties.BUILD_ID, "eng.foo.20150414.190304");
 
         assertFalse(mTestDevice.isRuntimePermissionSupported());
@@ -1371,24 +1494,20 @@ public class TestDeviceTest {
 
     /** Convenience method for setting up mMockIDevice to not support runtime permission */
     private void setMockIDeviceRuntimePermissionNotSupported() {
-        setGetPropertyExpectation("ro.build.version.sdk", "22");
+        setGetPropertyExpectation(SDK_VERSION, "22");
     }
 
     private void verifyMockIDeviceRuntimePermissionNotSupported() {
-        verifyGetPropertyExpectation("ro.build.version.sdk", "22", 1);
+        verifyGetPropertyExpectation(SDK_VERSION, "22", 1);
     }
 
     /** Convenience method for setting up mMockIDevice to support runtime permission */
     private void setMockIDeviceRuntimePermissionSupported() {
-        setGetPropertyExpectation("ro.build.version.sdk", "23");
-    }
-
-    private void verifyMockIDeviceRuntimePermissionSupported() {
-        verifyGetPropertyExpectation("ro.build.version.sdk", "23", 1);
+        setGetPropertyExpectation(SDK_VERSION, "23");
     }
 
     private void verifyMockIDeviceRuntimePermissionSupported(int times) {
-        verifyGetPropertyExpectation("ro.build.version.sdk", "23", times);
+        verifyGetPropertyExpectation(SDK_VERSION, "23", times);
     }
 
     /**
@@ -1421,6 +1540,48 @@ public class TestDeviceTest {
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_MINUTES),
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_TO_OUTPUT_MINUTES),
                         Mockito.eq(TimeUnit.MINUTES));
+    }
+
+    /**
+     * Test that isBypassLowTargetSdkBlockSupported returns correct result for device reporting SDK
+     * version 33 or lower
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testBypassLowTargetSdkNotSupported() throws Exception {
+        setGetPropertyExpectation("ro.build.version.sdk", "33");
+        setGetPropertyExpectation("ro.build.version.codename", "REL");
+
+        assertFalse(mTestDevice.isBypassLowTargetSdkBlockSupported());
+    }
+
+    /**
+     * Test that isBypassLowTargetSdkBlockSupported returns correct result for device reporting SDK
+     * version 34 or higher
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testBypassLowTargetSdkSupported() throws Exception {
+        setGetPropertyExpectation("ro.build.version.sdk", "34");
+        setGetPropertyExpectation("ro.build.version.codename", "REL");
+
+        assertTrue(mTestDevice.isBypassLowTargetSdkBlockSupported());
+    }
+
+    /**
+     * Test that isBypassLowTargetSdkBlockSupported returns correct result for device reporting SDK
+     * version of UpsideDownCake prior to SDK finalization.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testBypassLowTargetSdkSupportedUDC() throws Exception {
+        setGetPropertyExpectation("ro.build.version.sdk", "33");
+        setGetPropertyExpectation("ro.build.version.codename", "UpsideDownCake");
+
+        assertTrue(mTestDevice.isBypassLowTargetSdkBlockSupported());
     }
 
     /** Test when a timeout during installation is thrown. */
@@ -1890,7 +2051,7 @@ public class TestDeviceTest {
 
         assertNull(mTestDevice.installPackages(mLocalApks, true));
 
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         verifyMockIDeviceAppOpsToPersist();
         ArgumentCaptor<List<File>> filesCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<String>> optionsCapture = ArgumentCaptor.forClass(List.class);
@@ -1972,7 +2133,7 @@ public class TestDeviceTest {
             assertTrue(optionsCapture.getValue().contains("--user"));
             assertTrue(optionsCapture.getValue().contains("1"));
             assertTrue(optionsCapture.getValue().contains("-g"));
-            verifyMockIDeviceRuntimePermissionSupported(2);
+            verifyMockIDeviceRuntimePermissionSupported(1);
             verifyMockIDeviceAppOpsToPersist();
         } finally {
             for (File apkFile : mLocalApks) {
@@ -2017,7 +2178,7 @@ public class TestDeviceTest {
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_MINUTES),
                         Mockito.eq(TimeUnit.MINUTES));
         assertTrue(optionsCapture.getValue().contains("-g"));
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         verifyMockIDeviceAppOpsToPersist();
         for (File apkFile : mLocalApks) {
             assertTrue(filesCapture.getValue().contains(apkFile));
@@ -2069,7 +2230,7 @@ public class TestDeviceTest {
 
         assertNull(mTestDevice.installRemotePackages(mRemoteApkPaths, true));
 
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         ArgumentCaptor<List<String>> filePathsCapture = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<String>> optionsCapture = ArgumentCaptor.forClass(List.class);
         verify(mMockIDevice, times(1))
@@ -2121,7 +2282,7 @@ public class TestDeviceTest {
                         Mockito.eq(TestDevice.INSTALL_TIMEOUT_MINUTES),
                         Mockito.eq(TimeUnit.MINUTES));
         assertTrue(optionsCapture.getValue().contains("-g"));
-        verifyMockIDeviceRuntimePermissionSupported(2);
+        verifyMockIDeviceRuntimePermissionSupported(1);
         for (String apkPath : mRemoteApkPaths) {
             assertTrue(filePathsCapture.getValue().contains(apkPath));
         }
@@ -2278,6 +2439,13 @@ public class TestDeviceTest {
 
     private void verifyRebootExpectations() throws Exception {
         verify(mMockStateMonitor, times(3)).waitForDeviceOnline();
+        verifyShellResponse("id", 4);
+        verifyGetPropertyExpectation("ro.crypto.state", "unsupported", 1);
+        verify(mMockStateMonitor).waitForDeviceAvailable(Mockito.anyLong());
+    }
+
+    private void verifyRebootAndRootExpectations() throws Exception {
+        verify(mMockStateMonitor, times(4)).waitForDeviceOnline();
         verifyShellResponse("id", 4);
         verifyGetPropertyExpectation("ro.crypto.state", "unsupported", 1);
         verify(mMockStateMonitor).waitForDeviceAvailable(Mockito.anyLong());
@@ -2453,8 +2621,8 @@ public class TestDeviceTest {
         final String output =
                 "ModuleInfo{foo123456 Module NameFoo} packageName: com.android.foo\n"
                         + "ModuleInfo{bar123456 Module NameBar} packageName: com.android.bar";
-        injectSystemProperty("ro.build.version.sdk", "29");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "29");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectShellResponse(TestDevice.GET_MODULEINFOS_CMD, output);
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -2472,8 +2640,8 @@ public class TestDeviceTest {
     @Test
     public void testGetMainlineModuleInfoForBadOutput() throws Exception {
         final String output = "junk output";
-        injectSystemProperty("ro.build.version.sdk", "29");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "29");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         injectShellResponse(TestDevice.GET_MODULEINFOS_CMD, output);
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -2693,11 +2861,12 @@ public class TestDeviceTest {
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_oneUser() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand, ArrayUtil.join("\r\n", "Users:", "UserInfo{0:Foo:13} running"));
 
-        ArrayList<Integer> actual = mTestDevice.listUsers();
+        ArrayList<Integer> actual = testDevice.listUsers();
         assertNotNull(actual);
         assertEquals(1, actual.size());
         assertEquals(0, actual.get(0).intValue());
@@ -2706,12 +2875,13 @@ public class TestDeviceTest {
     /** Test that invalid output is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_invalidOutput() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         final String output = "not really what we are looking for";
         injectShellResponse(listUsersCommand, output);
 
         try {
-            mTestDevice.listUsers();
+            testDevice.listUsers();
             fail("Failed to throw DeviceRuntimeException.");
         } catch (DeviceRuntimeException expected) {
             // expected
@@ -2724,12 +2894,13 @@ public class TestDeviceTest {
     /** Test that invalid format of users is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_unparsableOutput() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         final String output = "Users:\n" + "\tUserInfo{0:Ownertooshort}";
         injectShellResponse(listUsersCommand, output);
 
         try {
-            mTestDevice.listUsers();
+            testDevice.listUsers();
             fail("Failed to throw DeviceRuntimeException.");
         } catch (DeviceRuntimeException expected) {
             // expected
@@ -2746,13 +2917,14 @@ public class TestDeviceTest {
     /** Test that multiple user is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsers_multiUsers() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand,
                 ArrayUtil.join(
                         "\r\n", "Users:", "UserInfo{0:Foo:13} running", "UserInfo{3:FooBar:14}"));
 
-        ArrayList<Integer> actual = mTestDevice.listUsers();
+        ArrayList<Integer> actual = testDevice.listUsers();
         assertNotNull(actual);
         assertEquals(2, actual.size());
         assertEquals(0, actual.get(0).intValue());
@@ -2761,12 +2933,13 @@ public class TestDeviceTest {
 
     /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
     @Test
-    public void testListUsersInfo_oneUser() throws Exception {
+    public void testListUsersInfo_oneUser_preT() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(32);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand, ArrayUtil.join("\r\n", "Users:", "UserInfo{0:Foo:13} running"));
 
-        Map<Integer, UserInfo> actual = mTestDevice.getUserInfos();
+        Map<Integer, UserInfo> actual = testDevice.getUserInfos();
         assertNotNull(actual);
         assertEquals(1, actual.size());
         UserInfo user0 = actual.get(0);
@@ -2776,16 +2949,42 @@ public class TestDeviceTest {
         assertEquals(true, user0.isRunning());
     }
 
+    /** Test that a single user is handled by {@link TestDevice#listUsers()}. */
+    @Test
+    public void testListUsersInfo_oneUser_postT() throws Exception {
+
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+        final String listUsersCommand = "cmd user list -v";
+        injectShellResponse(
+                listUsersCommand,
+                ArrayUtil.join(
+                        "\r\n",
+                        "1 users:",
+                        "0: id=0, name=Owner, type=full.SYSTEM, "
+                                + "flags=ADMIN|FULL|INITIALIZED|MAIN|PRIMARY|SYSTEM "
+                                + "(running) (current) (visible)"));
+
+        Map<Integer, UserInfo> actual = testDevice.getUserInfos();
+        assertNotNull(actual);
+        assertEquals(1, actual.size());
+        UserInfo user0 = actual.get(0);
+        assertEquals(0, user0.userId());
+        assertEquals("Owner", user0.userName());
+        assertEquals(Integer.parseInt("4c13", 16), user0.flag());
+        assertEquals(true, user0.isRunning());
+    }
+
     /** Test that multiple user is handled by {@link TestDevice#listUsers()}. */
     @Test
     public void testListUsersInfo_multiUsers() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
         final String listUsersCommand = "pm list users";
         injectShellResponse(
                 listUsersCommand,
                 ArrayUtil.join(
                         "\r\n", "Users:", "UserInfo{0:Foo:13} running", "UserInfo{10:FooBar:14}"));
 
-        Map<Integer, UserInfo> actual = mTestDevice.getUserInfos();
+        Map<Integer, UserInfo> actual = testDevice.getUserInfos();
         assertNotNull(actual);
         assertEquals(2, actual.size());
         UserInfo user0 = actual.get(0);
@@ -2826,8 +3025,8 @@ public class TestDeviceTest {
      */
     @Test
     public void testMaxNumberOfRunningUsersSupported() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxRunningUsersCommand = "pm get-max-running-users";
         injectShellResponse(getMaxRunningUsersCommand, "Maximum supported running users: 4");
 
@@ -2837,8 +3036,8 @@ public class TestDeviceTest {
     /** Test that invalid output is handled by {@link TestDevice#getMaxNumberOfUsersSupported()}. */
     @Test
     public void testMaxNumberOfRunningUsersSupported_invalid() throws Exception {
-        injectSystemProperty("ro.build.version.sdk", "28");
-        injectSystemProperty(DeviceProperties.BUILD_CODENAME, "REL");
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxRunningUsersCommand = "pm get-max-running-users";
         injectShellResponse(getMaxRunningUsersCommand, "not the output we expect");
 
@@ -2846,32 +3045,175 @@ public class TestDeviceTest {
     }
 
     /**
-     * Test that single user output is handled by {@link TestDevice#getMaxNumberOfUsersSupported()}.
+     * API 34+ Test that single user output is handled by {@link TestDevice#isMultiUserSupported()}.
      */
     @Test
-    public void testIsMultiUserSupported_singleUser() throws Exception {
+    public void testIsMultiUserSupported_singleUser_api34() throws Exception {
+        injectSystemProperty(SDK_VERSION, "34");
+        injectSystemProperty(BUILD_CODENAME, "U");
+        final String getSupportsMultiUserCommand = "pm supports-multiple-users";
+        injectShellResponse(
+                getSupportsMultiUserCommand, "Is multiuser supported: " + Boolean.FALSE);
+
+        assertFalse(mTestDevice.isMultiUserSupported());
+    }
+
+    /**
+     * API 28 and below. Test that single user output is handled by {@link
+     * TestDevice#isMultiUserSupported()}.
+     */
+    @Test
+    public void testIsMultiUserSupported_singleUser_api28() throws Exception {
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "Maximum supported users: 1");
 
         assertFalse(mTestDevice.isMultiUserSupported());
     }
 
-    /** Test that {@link TestDevice#isMultiUserSupported()} works. */
+    /** API 34+ Test that {@link TestDevice#isMultiUserSupported()} works. */
     @Test
-    public void testIsMultiUserSupported() throws Exception {
+    public void testIsMultiUserSupported_api34() throws Exception {
+        injectSystemProperty(SDK_VERSION, "34");
+        injectSystemProperty(BUILD_CODENAME, "U");
+        final String getSupportsMultiUserCommand = "pm supports-multiple-users";
+        injectShellResponse(getSupportsMultiUserCommand, "Is multiuser supported: " + Boolean.TRUE);
+
+        assertTrue(mTestDevice.isMultiUserSupported());
+    }
+
+    /** API 28 and below. Test that {@link TestDevice#isMultiUserSupported()} works. */
+    @Test
+    public void testIsMultiUserSupported_api28() throws Exception {
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "Maximum supported users: 4");
 
         assertTrue(mTestDevice.isMultiUserSupported());
     }
 
-    /** Test that invalid output is handled by {@link TestDevice#isMultiUserSupported()}. */
+    /** API 34+ Test that invalid output is handled by {@link TestDevice#isMultiUserSupported()}. */
     @Test
-    public void testIsMultiUserSupported_invalidOutput() throws Exception {
+    public void testIsMultiUserSupported_invalidOutput_api34() throws Exception {
+        injectSystemProperty(SDK_VERSION, "34");
+        injectSystemProperty(BUILD_CODENAME, "U");
+        final String getSupportsMultiUserCommand = "pm supports-multiple-users";
+        injectShellResponse(getSupportsMultiUserCommand, "not the output we expect");
+
+        assertFalse(mTestDevice.isMultiUserSupported());
+    }
+
+    /**
+     * API 28 and below. Test that invalid output is handled by {@link
+     * TestDevice#isMultiUserSupported()}.
+     */
+    @Test
+    public void testIsMultiUserSupported_invalidOutput_api24() throws Exception {
+        injectSystemProperty(SDK_VERSION, "28");
+        injectSystemProperty(BUILD_CODENAME, "REL");
         final String getMaxUsersCommand = "pm get-max-users";
         injectShellResponse(getMaxUsersCommand, "not the output we expect");
 
         assertFalse(mTestDevice.isMultiUserSupported());
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(28);
+
+        assertThrows(HarnessRuntimeException.class, () -> testDevice.isHeadlessSystemUserMode());
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_true_preApi34() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForReleaseApiLevel(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "true")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_false_preApi34() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForReleaseApiLevel(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testIsHeadlessSystemUserMode_cmdError_api34() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForReleaseApiLevel(34)
+                        .injectShellV2CommandError(
+                                "cmd user is-headless-system-user-mode", CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isHeadlessSystemUserMode());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testIsHeadlessSystemUserMode_invalidOutput_api34() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForReleaseApiLevel(34)
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isHeadlessSystemUserMode());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_true_api34() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForReleaseApiLevel(34)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_false_api34() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForReleaseApiLevel(34)
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_true_api34_dev() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "false")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "true");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isTrue();
+    }
+
+    @Test
+    public void testIsHeadlessSystemUserMode_false_api34_dev() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectSystemProperty("ro.fw.mu.headless_system_user", "true")
+                        .injectShellV2Command("cmd user is-headless-system-user-mode", "false");
+
+        assertThat(testDevice.isHeadlessSystemUserMode()).isFalse();
     }
 
     /** Test that successful user creation is handled by {@link TestDevice#createUser(String)}. */
@@ -3027,7 +3369,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3056,7 +3402,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3076,6 +3426,69 @@ public class TestDeviceTest {
         }
     }
 
+    @Test
+    public void testStartVisibleBackgroundUser_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.startVisibleBackgroundUser(42, 108, true));
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "am start-user -w --display 108 42", CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.startVisibleBackgroundUser(42, 108, true));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_failedWithWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("am start-user -w --display 108 42", "D'OH!");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, true)).isFalse();
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_failedNoWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("am start-user --display 108 42", "D'OH!");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, false)).isFalse();
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_successWithWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "am start-user -w --display 108 42", "Success: blah-blah-blah");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, true)).isTrue();
+    }
+
+    @Test
+    public void testStartVisibleBackgroundUser_successNoWait() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "am start-user --display 108 42", "Success:blah-blah-blah");
+
+        assertThat(testDevice.startVisibleBackgroundUser(42, 108, false)).isTrue();
+    }
+
     /**
      * Test that remount works as expected on a device not supporting dm verity
      *
@@ -3084,6 +3497,7 @@ public class TestDeviceTest {
     @Test
     public void testRemount_verityUnsupported() throws Exception {
         injectSystemProperty("partition.system.verified", "");
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -3098,6 +3512,7 @@ public class TestDeviceTest {
     @Test
     public void testRemountVendor_verityUnsupported() throws Exception {
         injectSystemProperty("partition.vendor.verified", "");
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
@@ -3115,12 +3530,14 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountSystemWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
+
     /**
      * Test that remount vendor works as expected on a device supporting dm verity v1
      *
@@ -3132,11 +3549,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountVendorWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3150,11 +3568,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountSystemWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3168,11 +3587,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountVendorWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3186,11 +3606,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountSystemWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3205,11 +3626,12 @@ public class TestDeviceTest {
         setExecuteAdbCommandExpectations(
                 new CommandResult(CommandStatus.SUCCESS), "disable-verity");
         setRebootExpectations();
+        setEnableAdbRootExpectations();
         setExecuteAdbCommandExpectations(new CommandResult(CommandStatus.SUCCESS), "remount");
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
 
         mTestDevice.remountVendorWritable();
-        verifyRebootExpectations();
+        verifyRebootAndRootExpectations();
     }
 
     /**
@@ -3265,7 +3687,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3297,7 +3723,11 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String cmd,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("not found.");
@@ -3333,7 +3763,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("REL");
@@ -3347,6 +3781,88 @@ public class TestDeviceTest {
             return;
         }
         fail("getCurrentUser should have thrown an exception.");
+    }
+
+    @Test
+    public void testIsUserVisible_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(IllegalArgumentException.class, () -> testDevice.isUserVisible(42));
+    }
+
+    @Test
+    public void testIsUserVisible_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "adb shell cmd user is-user-visible 42", CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(DeviceRuntimeException.class, () -> testDevice.isUserVisible(42));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsUserVisible_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible 42", "true");
+
+        assertThat(testDevice.isUserVisible(42)).isTrue();
+    }
+
+    @Test
+    public void testIsUserVisible_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible 42", "false");
+
+        assertThat(testDevice.isUserVisible(42)).isFalse();
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class, () -> testDevice.isUserVisibleOnDisplay(42, 108));
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "adb shell cmd user is-user-visible --display 108 42",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isUserVisibleOnDisplay(42, 108));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible --display 108 42", "true");
+
+        assertThat(testDevice.isUserVisibleOnDisplay(42, 108)).isTrue();
+    }
+
+    @Test
+    public void testIsUserVisibleOnDisplay_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command("cmd user is-user-visible --display 108 42", "false");
+
+        assertThat(testDevice.isUserVisibleOnDisplay(42, 108)).isFalse();
     }
 
     /** Unit test for {@link TestDevice#getUserFlags(int)}. */
@@ -3566,7 +4082,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3601,7 +4121,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3645,7 +4169,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3695,7 +4223,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3746,7 +4278,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3785,7 +4321,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String command,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("codename");
@@ -3823,7 +4363,11 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public CommandResult executeShellV2Command(String command)
+                    public CommandResult executeShellV2Command(
+                            String cmd,
+                            long maxTimeoutForCommand,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
                             throws DeviceNotAvailableException {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("Error:");
@@ -4043,6 +4587,235 @@ public class TestDeviceTest {
         assertFalse(mTestDevice.stopUser(0));
     }
 
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.isVisibleBackgroundUsersSupported());
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "cmd user is-visible-background-users-supported",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersSupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_invalidOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-supported", "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersSupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-supported", "false");
+
+        assertThat(testDevice.isVisibleBackgroundUsersSupported()).isFalse();
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersSupported_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-supported", "true");
+
+        assertThat(testDevice.isVisibleBackgroundUsersSupported()).isTrue();
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_unsupportedApiLevel()
+            throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported());
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_invalidOutput()
+            throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_false() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                "false");
+
+        assertThat(testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported()).isFalse();
+    }
+
+    @Test
+    public void testIsVisibleBackgroundUsersOnDefaultDisplaySupported_true() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd user is-visible-background-users-on-default-display-supported",
+                                "true");
+
+        assertThat(testDevice.isVisibleBackgroundUsersOnDefaultDisplaySupported()).isTrue();
+    }
+
+    @Test
+    public void testCanSwitchToHeadlessSystemUser_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                HarnessRuntimeException.class, () -> testDevice.canSwitchToHeadlessSystemUser());
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testCanSwitchToHeadlessSystemUser_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2CommandError(
+                                "cmd user can-switch-to-headless-system-user",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.canSwitchToHeadlessSystemUser());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testCanSwitchToHeadlessSystemUser_invalidOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command(
+                                "cmd user can-switch-to-headless-system-user", "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.canSwitchToHeadlessSystemUser());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testCanSwitchToHeadlessSystemUser_validOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command(
+                                "cmd user can-switch-to-headless-system-user", "false");
+
+        assertThat(testDevice.canSwitchToHeadlessSystemUser()).isFalse();
+    }
+
+    @Test
+    public void testIsMainUserPermanentAdmin_unsupportedApiLevel() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(HarnessRuntimeException.class, () -> testDevice.isMainUserPermanentAdmin());
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testIsMainUserPermanentAdmin_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2CommandError(
+                                "cmd user is-main-user-permanent-admin", CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isMainUserPermanentAdmin());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    @Ignore // TODO Retest after b/274941025 is fixed.
+    public void testIsMainUserPermanentAdmin_invalidOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command("cmd user is-main-user-permanent-admin", "D'OH!");
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class, () -> testDevice.isMainUserPermanentAdmin());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testIsMainUserPermanentAdmin_validOutput() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(34)
+                        .injectShellV2Command("cmd user is-main-user-permanent-admin", "true");
+
+        assertThat(testDevice.isMainUserPermanentAdmin()).isTrue();
+    }
+
     /** Unit test for {@link TestDevice#isUserRunning(int)}. */
     @Test
     public void testIsUserIdRunning_true() throws Exception {
@@ -4106,11 +4879,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("feature:com.google.android.feature.EXCHANGE_6_2"));
@@ -4121,11 +4897,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertTrue(mTestDevice.hasFeature("com.google.android.feature.EXCHANGE_6_2"));
@@ -4137,11 +4916,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:test"));
@@ -4153,11 +4935,14 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD\n"
-                                + "feature:com.google.android.feature.GOOGLE_EXPERIENCE";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                        + "feature:com.google.android.feature.GOOGLE_BUILD\n"
+                                        + "feature:com.google.android.feature.GOOGLE_EXPERIENCE");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
@@ -4175,12 +4960,15 @@ public class TestDeviceTest {
                     }
 
                     @Override
-                    public String executeShellCommand(String command)
+                    public CommandResult executeShellV2Command(String cmd)
                             throws DeviceNotAvailableException {
-                        return "feature:com.google.android.feature.EXCHANGE_6_2\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
-                                + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
-                                + "feature:com.google.android.feature.GOOGLE_BUILD_EXT";
+                        CommandResult res = new CommandResult(CommandStatus.SUCCESS);
+                        res.setStdout(
+                                "feature:com.google.android.feature.EXCHANGE_6_2\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_VERSIONED=2\n"
+                                    + "feature:org.com.google.android.feature.GOOGLE_BUILD_ORG=1\n"
+                                    + "feature:com.google.android.feature.GOOGLE_BUILD_EXT");
+                        return res;
                     }
                 };
         assertFalse(mTestDevice.hasFeature("feature:com.google.android.feature"));
@@ -4400,7 +5188,7 @@ public class TestDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "Error: unable to open database"
-                                + "\"/data/0/com.google.android.gsf/databases/gservices.db\": "
+                                + "\"/data/0/*/databases/gservices.db\": "
                                 + "unable to open database file";
                     }
 
@@ -4708,13 +5496,14 @@ public class TestDeviceTest {
                             throws DeviceNotAvailableException {
                         return "KeyguardController:\n"
                                 + "  mKeyguardShowing=true\n"
-                                + "  mKeyguardGoingAway=false\n"
+                                + "  mKeyguardGoingAway=true\n"
                                 + "  mOccluded=false\n";
                     }
                 };
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertTrue(state.isKeyguardGoingAway());
     }
 
     /** New output of dumpsys is not as clean and has stuff in front. */
@@ -4734,6 +5523,7 @@ public class TestDeviceTest {
         KeyguardControllerState state = mTestDevice.getKeyguardState();
         Assert.assertTrue(state.isKeyguardShowing());
         Assert.assertFalse(state.isKeyguardOccluded());
+        Assert.assertFalse(state.isKeyguardGoingAway());
     }
 
     /** Test for {@link TestDevice#getKeyguardState()} when the device does not support it. */
@@ -5002,8 +5792,9 @@ public class TestDeviceTest {
         mTestDevice =
                 new TestableTestDevice() {
                     @Override
-                    public void recoverDevice() throws DeviceNotAvailableException {
+                    public boolean recoverDevice() throws DeviceNotAvailableException {
                         // ignore
+                        return true;
                     }
 
                     @Override
@@ -5016,19 +5807,31 @@ public class TestDeviceTest {
 
                     @Override
                     IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
-                        super.createWifiHelper(true);
+                        super.createWifiHelper(false, true);
                         return mMockWifi;
                     }
 
                     @Override
-                    IWifiHelper createWifiHelper(boolean doSetup)
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2, boolean doSetup)
                             throws DeviceNotAvailableException {
                         return mMockWifi;
                     }
 
                     @Override
-                    ContentProviderHandler getContentProvider() throws DeviceNotAvailableException {
+                    public ContentProviderHandler getContentProvider(int userId)
+                            throws DeviceNotAvailableException {
                         return null;
+                    }
+
+                    @Override
+                    public boolean isBypassLowTargetSdkBlockSupported()
+                            throws DeviceNotAvailableException {
+                        return true;
                     }
                 };
         when(mMockStateMonitor.waitForDeviceAvailable()).thenReturn(mMockIDevice);
@@ -5075,6 +5878,123 @@ public class TestDeviceTest {
         assertEquals(2, displays.size());
         assertTrue(displays.contains(0L));
         assertTrue(displays.contains(5L));
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_unsupportedApiLevel()
+            throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(33);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> testDevice.listDisplayIdsForStartingVisibleBackgroundUsers());
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_cmdError() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2CommandError(
+                                "cmd activity list-displays-for-starting-users",
+                                CommandStatus.FAILED);
+
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.listDisplayIdsForStartingVisibleBackgroundUsers());
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_invalidOutput()
+            throws Exception {
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("D'OH");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[none]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[none");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("none]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("42");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[42");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("42]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[42,108");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("42,108]");
+        expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput("[42,0x108]");
+    }
+
+    private void expectListDisplayIdsForStartingVisibleBackgroundUsersInvalidOutput(String output)
+            throws DeviceNotAvailableException {
+        String cmd = "cmd activity list-displays-for-starting-users";
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33).injectShellV2Command(cmd, output);
+        try {
+            testDevice.listDisplayIdsForStartingVisibleBackgroundUsers();
+            expect.withMessage("'%s' failed with output '%s'", cmd, output).that(false).isTrue();
+        } catch (DeviceRuntimeException e) {
+            expect.withMessage("error on %s when cmd returns %s", e, output)
+                    .that(e.getErrorId())
+                    .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_empty() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd activity list-displays-for-starting-users", "none");
+
+        assertThat(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers()).isEmpty();
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_notEmpty() throws Exception {
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[42]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[ 42 ]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[ 42]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput("[42 ]", 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+                "[4,8,15,16,23,42]", 4, 8, 15, 16, 23, 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+                "[4, 8, 15, 16, 23, 42]", 4, 8, 15, 16, 23, 42);
+        expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+                "[ 4,8 , 15 ,16,  23,42  ]", 4, 8, 15, 16, 23, 42);
+    }
+
+    private void expectListDisplayIdsForStartingVisibleBackgroundUsersValidOutput(
+            String output, Integer... expectedIds) throws DeviceNotAvailableException {
+        String cmd = "cmd activity list-displays-for-starting-users";
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33).injectShellV2Command(cmd, output);
+
+        expect.withMessage("when '%s' returned " + "'%s'", cmd, output)
+                .that(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers())
+                .containsExactlyElementsIn(expectedIds);
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_many() throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd activity list-displays-for-starting-users",
+                                "[4, 8, 15, 16, 23, 42]");
+
+        assertThat(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers())
+                .containsExactly(4, 8, 15, 16, 23, 42);
+    }
+
+    @Test
+    public void testListDisplayIdsForStartingVisibleBackgroundUsers_many_noSpaces()
+            throws Exception {
+        TestDevice testDevice =
+                newTestDeviceForDevelopmentApiLevel(33)
+                        .injectShellV2Command(
+                                "cmd activity list-displays-for-starting-users",
+                                "[4,8,15,16,23,42]");
+
+        assertThat(testDevice.listDisplayIdsForStartingVisibleBackgroundUsers())
+                .containsExactly(4, 8, 15, 16, 23, 42);
     }
 
     /** Test for {@link TestDevice#getScreenshot(long)}. */
@@ -5147,7 +6067,7 @@ public class TestDeviceTest {
 
         TestableTestDevice spy = (TestableTestDevice) Mockito.spy(mTestDevice);
         ContentProviderHandler cp = Mockito.mock(ContentProviderHandler.class);
-        doReturn(cp).when(spy).getContentProvider();
+        doReturn(cp).when(spy).getContentProvider(mTestDevice.getCurrentUser());
 
         final String fakeFile = "/sdcard/file";
         final String targetFilePath = "/storage/emulated/10/file";
@@ -5156,7 +6076,7 @@ public class TestDeviceTest {
 
         spy.doesFileExist(fakeFile);
 
-        verify(spy, times(1)).getContentProvider();
+        verify(spy, times(1)).getContentProvider(anyInt());
         verify(cp, times(1)).doesFileExist(targetFilePath);
     }
 
@@ -5182,7 +6102,7 @@ public class TestDeviceTest {
             assertTrue(res);
             verify(spy, times(1))
                     .installPackage(Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean());
-            ContentProviderHandler cp = spy.getContentProvider();
+            ContentProviderHandler cp = spy.getContentProvider(mTestDevice.getCurrentUser());
             assertFalse(cp.contentProviderNotFound());
             // Since it didn't fail, we did not re-install the content provider
             verify(spy, times(1))
@@ -5221,7 +6141,7 @@ public class TestDeviceTest {
             verify(spy, times(2))
                     .installPackage(Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean());
             // Since it fails, requesting the content provider again will re-do setup.
-            ContentProviderHandler cp = spy.getContentProvider();
+            ContentProviderHandler cp = spy.getContentProvider(mTestDevice.getCurrentUser());
             assertFalse(cp.contentProviderNotFound());
             verify(spy, times(3))
                     .installPackage(Mockito.any(), Mockito.anyBoolean(), Mockito.anyBoolean());
@@ -5254,6 +6174,62 @@ public class TestDeviceTest {
     }
 
     @Test
+    public void testGetFoldableStatesVersionT() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Supported states: [\n"
+                                        + " DeviceState{identifier=0, name='CLOSED',"
+                                        + " app_accessible=false},\n"
+                                        + " DeviceState{identifier=1, name='HALF_OPENED',"
+                                        + " app_accessible=true},\n"
+                                        + " DeviceState{identifier=2, name='OPENED',"
+                                        + " app_accessible=true},\n"
+                                        + "]\n");
+                        return result;
+                    }
+                };
+
+        Set<DeviceFoldableState> states = mTestDevice.getFoldableStates();
+        assertEquals(2, states.size());
+    }
+
+    @Test
+    public void testGetFoldableStatesVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Supported states: [\n"
+                                        + " DeviceState{identifier=0, name='CLOSED',"
+                                        + " app_accessible=false,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=1, name='HALF_OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=2, name='OPENED',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false},\n"
+                                        + " DeviceState{identifier=3, name='CANCEL_WHEN_NOT_TOP',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=true},\n"
+                                        + "]\n");
+                        return result;
+                    }
+                };
+
+        Set<DeviceFoldableState> states = mTestDevice.getFoldableStates();
+        assertEquals(2, states.size());
+    }
+
+    @Test
     public void testGetCurrentFoldableState() throws Exception {
         mTestDevice =
                 new TestableTestDevice() {
@@ -5269,6 +6245,468 @@ public class TestDeviceTest {
 
         DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
         assertEquals(2, state.getIdentifier());
+    }
+
+    @Test
+    public void testGetCurrentFoldableStateVersionT() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Committed state: DeviceState{identifier=2, name='DEFAULT',"
+                                        + " app_accessible=true}\n");
+                        return result;
+                    }
+                };
+
+        DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
+        assertEquals(2, state.getIdentifier());
+    }
+
+    @Test
+    public void testGetCurrentFoldableStateVersionU() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public CommandResult executeShellV2Command(String cmd)
+                            throws DeviceNotAvailableException {
+                        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+                        result.setStdout(
+                                "Committed state: DeviceState{identifier=2, name='DEFAULT',"
+                                        + " app_accessible=true,"
+                                        + " cancel_when_requester_not_on_top=false}\n");
+                        return result;
+                    }
+                };
+
+        DeviceFoldableState state = mTestDevice.getCurrentFoldableState();
+        assertEquals(2, state.getIdentifier());
+    }
+
+    // TODO: tests for getApiLevel() and checkApiLevelAgainstNextRelease() should belong to
+    // NativeDeviceTest, but TestableTestDeviceV2 is defined here
+
+    @Test
+    public void testGetApiLevel_propertyNotSet() throws Exception {
+        TestDevice testDevice = new TestableTestDeviceV2().injectSystemProperty(SDK_VERSION, "");
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(INativeDevice.UNKNOWN_API_LEVEL);
+    }
+
+    @Test
+    public void testGetApiLevel_invalidProperty() throws Exception {
+        TestDevice testDevice =
+                new TestableTestDeviceV2().injectSystemProperty(SDK_VERSION, "forty two");
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(INativeDevice.UNKNOWN_API_LEVEL);
+    }
+
+    @Test
+    public void testGetApiLevel_release() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(42);
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(42);
+    }
+
+    @Test
+    public void testGetApiLevel_development() throws Exception {
+        TestDevice testDevice = newTestDeviceForDevelopmentApiLevel(42);
+
+        assertThat(testDevice.getApiLevel()).isEqualTo(42);
+    }
+
+    @Test
+    public void testCheckApiLevelAgainstNextRelease_propertyNotSet() throws Exception {
+        TestDevice testDevice =
+                new TestableTestDeviceV2()
+                        .injectSystemProperty(BUILD_CODENAME, "")
+                        .setApiLevel(40, null);
+        DeviceRuntimeException e =
+                assertThrows(
+                        DeviceRuntimeException.class,
+                        () -> testDevice.checkApiLevelAgainstNextRelease(42));
+        assertWithMessage("error code on %s", e)
+                .that(e.getErrorId())
+                .isEqualTo(DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+    }
+
+    @Test
+    public void testCheckApiLevelAgainstNextRelease_release() throws Exception {
+        TestDevice testDevice = newTestDeviceForReleaseApiLevel(42);
+
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isFalse();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(10000)).isFalse();
+    }
+
+    @Test
+    public void testCheckApiLevelAgainstNextRelease_dev() throws Exception {
+        TestDevice testDevice = newTestDeviceForDevelopmentApiLevel(42);
+
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(41)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(42)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(43)).isTrue();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(44)).isFalse();
+        assertThat(testDevice.checkApiLevelAgainstNextRelease(10000)).isTrue();
+    }
+
+    /** Unit test for {@link TestDevice#getBugreportz()}. */
+    @Test
+    public void testGetBugreportz_fails() {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    protected File getBugreportzInternal() {
+                        return null;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return null;
+                    }
+                };
+        FileInputStreamSource f = null;
+        try {
+            f = (FileInputStreamSource) mTestDevice.getBugreportz();
+            assertNull(f);
+        } finally {
+            StreamUtil.cancel(f);
+            if (f != null) {
+                f.cleanFile();
+            }
+        }
+    }
+
+    @Test
+    public void testGetBugreportz_fallBack_validation() throws Exception {
+        IFileEntry entryMock = mock(IFileEntry.class);
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    protected File getBugreportzInternal() {
+                        return null;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return entryMock;
+                    }
+
+                    @Override
+                    public File pullFile(String remoteFilePath, int userId)
+                            throws DeviceNotAvailableException {
+                        try {
+                            // Return an empty zip file for the partial bugreportz
+                            return FileUtil.createTempFile("bugreportz-test", ".zip");
+                        } catch (IOException e) {
+                            throw new RuntimeException();
+                        }
+                    }
+                };
+        IFileEntry childNode = mock(IFileEntry.class);
+        when(entryMock.getChildren(false)).thenReturn(Arrays.asList(childNode));
+        when(childNode.getName()).thenReturn("bugreport-test-partial.zip");
+        FileInputStreamSource f = null;
+
+        try {
+            f = (FileInputStreamSource) mTestDevice.getBugreportz();
+            assertNull(f);
+        } finally {
+            StreamUtil.cancel(f);
+            if (f != null) {
+                f.cleanFile();
+            }
+        }
+    }
+
+    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
+    @Test
+    public void testTestLogBugreport() {
+        final String dataName = "test";
+        final InputStreamSource stream = new ByteArrayInputStreamSource("bugreportz".getBytes());
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public InputStreamSource getBugreportz() {
+                        return stream;
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+                };
+        ITestLogger listener = mock(ITestLogger.class);
+
+        assertTrue(mTestDevice.logBugreport(dataName, listener));
+
+        verify(listener).testLog(dataName, LogDataType.BUGREPORTZ, stream);
+    }
+
+    /** Unit test for {@link NativeDevice#logBugreport(String, ITestLogger)}. */
+    @Test
+    public void testTestLogBugreport_fail() {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public InputStreamSource getBugreportz() {
+                        return null;
+                    }
+
+                    @Override
+                    protected InputStreamSource getBugreportInternal() {
+                        return null;
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 23;
+                    }
+                };
+        ITestLogger listener = mock(ITestLogger.class);
+
+        assertFalse(mTestDevice.logBugreport("test", listener));
+    }
+
+    /** Unit test for {@link NativeDevice#takeBugreport()}. */
+    @Test
+    public void testTakeBugreport_apiLevelFail() {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException("test", "serial");
+                    }
+                };
+        // If we can't check API level it should return null.
+        assertNull(mTestDevice.takeBugreport());
+    }
+
+    /** Unit test for {@link NativeDevice#takeBugreport()}. */
+    @Test
+    public void testTakeBugreport_oldDevice() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 19;
+                    }
+                };
+        Bugreport report = mTestDevice.takeBugreport();
+        try {
+            assertNotNull(report);
+            // older device report a non zipped bugreport
+            assertFalse(report.isZipped());
+        } finally {
+            report.close();
+        }
+    }
+
+    /** Unit test for {@link NativeDevice#takeBugreport()}. */
+    @Test
+    public void testTakeBugreport() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    protected File getBugreportzInternal() {
+                        try {
+                            return FileUtil.createTempFile("bugreportz", ".zip");
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    }
+                };
+        Bugreport report = mTestDevice.takeBugreport();
+        try {
+            assertNotNull(report);
+            assertTrue(report.isZipped());
+        } finally {
+            report.close();
+        }
+    }
+
+    @Test
+    public void testGetBugreport_deviceUnavail() throws Exception {
+        final String expectedOutput = "this is the output\r\n in two lines\r\n";
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        String fakeRep = expectedOutput;
+                        receiver.addOutput(fakeRep.getBytes(), 0, fakeRep.getBytes().length);
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 22;
+                    }
+                };
+
+        // FIXME: this isn't actually causing a DeviceNotAvailableException to be thrown
+        doThrow(new DeviceNotAvailableException("test", "serial"))
+                .when(mMockRecovery)
+                .recoverDevice(Mockito.eq(mMockStateMonitor), Mockito.eq(false));
+
+        assertEquals(
+                expectedOutput,
+                StreamUtil.getStringFromStream(mTestDevice.getBugreport().createInputStream()));
+    }
+
+    @Test
+    public void testGetBugreport_compatibility_deviceUnavail() throws Exception {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException("test", "serial");
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return null;
+                    }
+                };
+
+        assertEquals(0, mTestDevice.getBugreport().size());
+    }
+
+    @Test
+    public void testGetBugreport_deviceUnavail_fallback() throws Exception {
+        final IFileEntry fakeEntry = mock(IFileEntry.class);
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        throw new DeviceNotAvailableException("test", "serial");
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+
+                    @Override
+                    public IFileEntry getFileEntry(String path) throws DeviceNotAvailableException {
+                        return fakeEntry;
+                    }
+
+                    @Override
+                    public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
+                        try {
+                            return FileUtil.createTempFile("bugreport", ".txt");
+                        } catch (IOException e) {
+                            return null;
+                        }
+                    }
+                };
+        List<IFileEntry> list = new ArrayList<>();
+        list.add(fakeEntry);
+        when(fakeEntry.getChildren(false)).thenReturn(list);
+        when(fakeEntry.getName()).thenReturn("bugreport-NYC-2016-08-17-10-17-00.tmp");
+
+        InputStreamSource res = null;
+        try {
+            res = mTestDevice.getBugreport();
+            assertNotNull(res);
+        } finally {
+            StreamUtil.cancel(res);
+        }
+    }
+
+    /** Unit test for {@link NativeDevice#getBugreportz()}. */
+    @Test
+    public void testGetBugreportz() throws IOException {
+        mTestDevice =
+                new TestableTestDevice() {
+                    @Override
+                    public void executeShellCommand(
+                            String command,
+                            IShellOutputReceiver receiver,
+                            long maxTimeToOutputShellResponse,
+                            TimeUnit timeUnit,
+                            int retryAttempts)
+                            throws DeviceNotAvailableException {
+                        String fakeRep =
+                                "OK:/data/0/com.android.shell/bugreports/bugreport1970-10-27.zip";
+                        receiver.addOutput(fakeRep.getBytes(), 0, fakeRep.getBytes().length);
+                    }
+
+                    @Override
+                    public boolean doesFileExist(String destPath)
+                            throws DeviceNotAvailableException {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean pullFile(String remoteFilePath, File localFile)
+                            throws DeviceNotAvailableException {
+                        return true;
+                    }
+
+                    @Override
+                    public void deleteFile(String deviceFilePath)
+                            throws DeviceNotAvailableException {
+                        assertEquals("/data/0/com.android.shell/bugreports/*", deviceFilePath);
+                    }
+
+                    @Override
+                    public int getApiLevel() throws DeviceNotAvailableException {
+                        return 24;
+                    }
+                };
+        FileInputStreamSource f = null;
+        try {
+            f = (FileInputStreamSource) mTestDevice.getBugreportz();
+            assertNotNull(f);
+            assertTrue(f.createInputStream().available() == 0);
+        } finally {
+            StreamUtil.cancel(f);
+            if (f != null) {
+                f.cleanFile();
+            }
+        }
     }
 
     private void setGetPropertyExpectation(String property, String value) {
@@ -5288,7 +6726,8 @@ public class TestDeviceTest {
     }
 
     private void verifyGetPropertyExpectation(String property, String value, int times) {
-        verify(mMockRunUtil, times(times))
+        // Use atLeast due to property caching
+        verify(mMockRunUtil, atLeast(times))
                 .runTimedCmd(
                         Mockito.anyLong(),
                         (OutputStream) Mockito.isNull(),

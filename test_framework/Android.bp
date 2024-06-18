@@ -27,14 +27,15 @@ tradefed_java_library_host {
     ],
     static_libs: [
         "diffutils-prebuilt-jar",
-        "longevity-host-lib",
         "perfetto_metrics-full",
         "test-composers",
-        "truth-prebuilt",
+        "truth",
         "platformprotos",
     ],
     libs: [
         "tradefed-lib-core",
         "loganalysis",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
 }

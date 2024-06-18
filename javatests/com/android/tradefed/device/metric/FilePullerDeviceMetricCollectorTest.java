@@ -3,6 +3,7 @@ package com.android.tradefed.device.metric;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
@@ -38,7 +39,7 @@ public class FilePullerDeviceMetricCollectorTest {
     private IInvocationContext mContext;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         doReturn(TestDeviceState.ONLINE).when(mMockDevice).getDeviceState();
         mContext = new InvocationContext();
@@ -70,6 +71,7 @@ public class FilePullerDeviceMetricCollectorTest {
                     }
                 };
         mFilePuller.init(mContext, mMockListener);
+        when(mMockDevice.getCurrentUser()).thenReturn(0);
     }
 
     /** Test when no keys have been requested, nothing should be queried anywhere. */
@@ -90,7 +92,7 @@ public class FilePullerDeviceMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("coverageFile", TfMetricProtoUtil.stringToMetric("/data/coverage"));
 
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage"), Mockito.eq(0)))
                 .thenReturn(new File("fake"));
 
         mFilePuller.testRunStarted("fakeRun", 5);
@@ -114,9 +116,9 @@ public class FilePullerDeviceMetricCollectorTest {
         currentMetrics.put("coverageFileAnother",
                 TfMetricProtoUtil.stringToMetric("/data/coverage2"));
 
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage1")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage1"), Mockito.eq(0)))
                 .thenReturn(new File("fake1"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage2")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage2"), Mockito.eq(0)))
                 .thenReturn(new File("fake2"));
 
         mFilePuller.testRunStarted("fakeRun", 5);
@@ -141,7 +143,7 @@ public class FilePullerDeviceMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("coverageFile", TfMetricProtoUtil.stringToMetric("/data/coverage"));
 
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage"), Mockito.eq(0)))
                 .thenReturn(new File("fake"));
 
         mFilePuller.testRunStarted("fakeRun", 5);
@@ -163,7 +165,7 @@ public class FilePullerDeviceMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("coverageFile", TfMetricProtoUtil.stringToMetric("/data/coverage"));
 
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/coverage"), Mockito.eq(0)))
                 .thenReturn(new File("fake"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");

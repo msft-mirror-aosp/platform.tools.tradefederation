@@ -71,7 +71,7 @@ public class SystemUpdaterDeviceFlasherTest {
         yieldDifferentBuilds(true);
         File fakeImage = new File("fakeImageFile");
         when(mMockDeviceBuild.getOtaPackageFile()).thenReturn(fakeImage);
-        when(mMockDevice.pushFile(fakeImage, "/cache/update.zip")).thenReturn(true);
+        when(mMockDevice.pushFile(fakeImage, "/cache/update.zip", true)).thenReturn(true);
         String commandsRegex =
                 "echo +--update_package +> +/cache/recovery/command +&& *"
                         + "echo +/cache/update.zip +>> +/cache/recovery/command";
@@ -81,7 +81,7 @@ public class SystemUpdaterDeviceFlasherTest {
 
         mInOrder.verify(mMockDeviceBuild).getOtaPackageFile();
         mInOrder.verify(mMockDevice)
-                .pushFile(Mockito.eq(fakeImage), Mockito.eq("/cache/update.zip"));
+                .pushFile(Mockito.eq(fakeImage), Mockito.eq("/cache/update.zip"), Mockito.eq(true));
         mInOrder.verify(mMockDevice).executeShellCommand(Mockito.matches(commandsRegex));
         mInOrder.verify(mMockDevice).rebootIntoRecovery();
         mInOrder.verify(mMockDevice).waitForDeviceAvailable();

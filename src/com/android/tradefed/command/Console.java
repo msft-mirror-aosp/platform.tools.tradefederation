@@ -38,6 +38,9 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.proto.FileProtoResultReporter;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.DeviceManagementGrpcServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
+import com.android.tradefed.testtype.suite.TestSuiteInfo;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
@@ -49,17 +52,14 @@ import com.android.tradefed.util.VersionParser;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.keystore.IKeyStoreFactory;
 import com.android.tradefed.util.keystore.KeyStoreException;
-import com.android.tradefed.testtype.suite.TestSuiteInfo;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.TerminalBuilder;
-
-import sun.misc.Signal;
-import sun.misc.SignalHandler;
 
 import java.io.File;
 import java.io.IOException;
@@ -76,6 +76,9 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
+
+import sun.misc.Signal;
+import sun.misc.SignalHandler;
 
 /**
  * Main TradeFederation console providing user with the interface to interact
@@ -147,12 +150,6 @@ public class Console extends Thread {
      * shut down via the RegexTrie input handling mechanism.
      */
     private class QuitRunnable extends ArgRunnable<CaptureList> {
-        @Option(
-                name = "handover-port",
-                description =
-                        "Used to indicate that currently managed devices should be 'handed over'"
-                                + " to new tradefed process, which is listening on specified port")
-        private Integer mHandoverPort = null;
 
         @Option(
                 name = "wait-for-commands",
@@ -172,18 +169,11 @@ public class Console extends Thread {
                     parser.parse(optionArgs);
                 }
                 String exitMode = "invocations";
-                if (mHandoverPort == null) {
-                    if (mExitOnEmpty) {
-                        exitMode = "commands";
-                        mScheduler.shutdownOnEmpty();
-                    } else {
-                        mScheduler.shutdown();
-                    }
+                if (mExitOnEmpty) {
+                    exitMode = "commands";
+                    mScheduler.shutdownOnEmpty();
                 } else {
-                    if (!mScheduler.handoverShutdown(mHandoverPort)) {
-                        // failure message should already be logged
-                        return;
-                    }
+                    mScheduler.shutdown(true);
                 }
                 printLine("Signalling command scheduler for shutdown.");
                 printLine(
@@ -895,7 +885,7 @@ public class Console extends Thread {
                             flatArgs[i - 2] = args.get(i).get(0);
                         }
                         try {
-                            if (mScheduler.addCommand(flatArgs)) {
+                            if (mScheduler.addCommand(flatArgs).first) {
                                 mScheduler.shutdownOnEmpty();
                             }
                         } catch (ConfigurationException e) {
@@ -1046,7 +1036,11 @@ public class Console extends Thread {
     @VisibleForTesting
     String getConsoleInput() throws IOException {
         if (mConsoleReader != null) {
-            return mConsoleReader.readLine(getConsolePrompt());
+            try {
+                return mConsoleReader.readLine(getConsolePrompt());
+            } catch (EndOfFileException e) {
+                return null;
+            }
         } else {
             return null;
         }
@@ -1102,8 +1096,17 @@ public class Console extends Thread {
      *
      * <p>Exposed for unit testing.
      */
+    @SuppressWarnings("SystemConsoleNull") // https://errorprone.info/bugpattern/SystemConsoleNull
     boolean isConsoleFunctional() {
-        return System.console() != null;
+        java.io.Console systemConsole = System.console();
+        if (Runtime.version().feature() < 22) {
+            return systemConsole != null;
+        }
+        try {
+            return (Boolean) java.io.Console.class.getMethod("isTerminal").invoke(systemConsole);
+        } catch (ReflectiveOperationException e) {
+            throw new LinkageError(e.getMessage(), e);
+        }
     }
 
     /**
@@ -1293,19 +1296,42 @@ public class Console extends Thread {
         mMainArgs = mainArgs;
     }
 
-    private static class TerminateFeatureServer extends Thread {
-        private final TradefedFeatureServer mClient;
+    private static class TerminateGRPCServers extends Thread {
+        private final TradefedFeatureServer mFeatureServer;
+        private final TestInvocationManagementServer mInvocationServer;
+        private final DeviceManagementGrpcServer mDeviceServer;
 
-        public TerminateFeatureServer(TradefedFeatureServer client) {
-            mClient = client;
+        public TerminateGRPCServers(
+                TradefedFeatureServer featureServer,
+                TestInvocationManagementServer invocationServer,
+                DeviceManagementGrpcServer deviceServer) {
+            mFeatureServer = featureServer;
+            mInvocationServer = invocationServer;
+            mDeviceServer = deviceServer;
         }
 
         @Override
         public void run() {
-            try {
-                mClient.shutdown();
-            } catch (InterruptedException e) {
-                CLog.e(e);
+            if (mFeatureServer != null) {
+                try {
+                    mFeatureServer.shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            if (mInvocationServer != null) {
+                try {
+                    mInvocationServer.shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
+            }
+            if (mDeviceServer != null) {
+                try {
+                    mDeviceServer.shutdown();
+                } catch (InterruptedException e) {
+                    CLog.e(e);
+                }
             }
         }
     }
@@ -1343,30 +1369,74 @@ public class Console extends Thread {
         try {
             server = new TradefedFeatureServer();
             server.start();
-            Runtime.getRuntime().addShutdownHook(new TerminateFeatureServer(server));
         } catch (RuntimeException e) {
             System.out.println(String.format("Error starting feature server: %s", e));
+            // Abort the start if we fail to start the server, it is a critical component.
+            throw e;
         }
+        TestInvocationManagementServer invocationManagementServer = null;
+        DeviceManagementGrpcServer deviceManagementServer = null;
+        try {
+            List<String> nonGlobalArgs = GlobalConfiguration.createGlobalConfiguration(args);
+            GlobalConfiguration.getInstance().setup();
+            if (server != null) {
+                GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
+            }
+            console.setArgs(nonGlobalArgs);
+            console.setCommandScheduler(GlobalConfiguration.getInstance().getCommandScheduler());
+            console.setKeyStoreFactory(GlobalConfiguration.getInstance().getKeyStoreFactory());
+            console.setDaemon(true);
 
-        List<String> nonGlobalArgs = GlobalConfiguration.createGlobalConfiguration(args);
-        GlobalConfiguration.getInstance().setup();
-        if (server != null) {
-            GlobalConfiguration.getInstance().setTradefedFeatureServer(server);
+            GlobalConfiguration.getInstance().getCommandScheduler().setClearcutClient(client);
+            // Initialize the locks for the TF session
+            GlobalConfiguration.getInstance().getHostOptions().initConcurrentLocks();
+
+            console.start();
+
+            // Wait for the CommandScheduler to get started before we exit the main thread.  See
+            // full
+            // explanation near the top of #run()
+            console.awaitScheduler();
+            console.registerShutdownSignals();
+
+            // Gate the server starting to a port being explicitly defined
+            Integer deviceManagementPort = DeviceManagementGrpcServer.getPort();
+            if (deviceManagementPort != null) {
+                try {
+                    deviceManagementServer =
+                            new DeviceManagementGrpcServer(
+                                    deviceManagementPort,
+                                    GlobalConfiguration.getDeviceManagerInstance(),
+                                    GlobalConfiguration.getInstance().getCommandScheduler());
+                    GlobalConfiguration.getInstance()
+                            .setDeviceManagementServer(deviceManagementServer);
+                    deviceManagementServer.start();
+                } catch (RuntimeException e) {
+                    System.out.println(
+                            String.format("Error starting device management server: %s", e));
+                }
+            }
+            Integer port = TestInvocationManagementServer.getPort();
+            if (port != null) {
+                try {
+                    invocationManagementServer =
+                            new TestInvocationManagementServer(
+                                    port,
+                                    GlobalConfiguration.getInstance().getCommandScheduler(),
+                                    deviceManagementServer);
+                    GlobalConfiguration.getInstance()
+                            .setInvocationServer(invocationManagementServer);
+                    // Start the server last to ensure that command scheduler is started
+                    invocationManagementServer.start();
+                } catch (RuntimeException e) {
+                    System.out.println(String.format("Error starting invocation server: %s", e));
+                }
+            }
+        } finally {
+            Runtime.getRuntime()
+                    .addShutdownHook(
+                            new TerminateGRPCServers(
+                                    server, invocationManagementServer, deviceManagementServer));
         }
-        console.setArgs(nonGlobalArgs);
-        console.setCommandScheduler(GlobalConfiguration.getInstance().getCommandScheduler());
-        console.setKeyStoreFactory(GlobalConfiguration.getInstance().getKeyStoreFactory());
-        console.setDaemon(true);
-
-        GlobalConfiguration.getInstance().getCommandScheduler().setClearcutClient(client);
-        // Initialize the locks for the TF session
-        GlobalConfiguration.getInstance().getHostOptions().initConcurrentLocks();
-
-        console.start();
-
-        // Wait for the CommandScheduler to get started before we exit the main thread.  See full
-        // explanation near the top of #run()
-        console.awaitScheduler();
-        console.registerShutdownSignals();
     }
 }

@@ -20,6 +20,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
@@ -62,13 +63,14 @@ public class PerfettoPullerMetricCollectorTest {
     private IInvocationContext mContext;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
         doReturn(TestDeviceState.ONLINE).when(mMockDevice).getDeviceState();
         mContext = new InvocationContext();
         mContext.addAllocatedDevice("default", mMockDevice);
         mPerfettoMetricCollector = Mockito.spy(new PerfettoPullerMetricCollector());
         mPerfettoMetricCollector.init(mContext, mMockListener);
+        when(mMockDevice.getCurrentUser()).thenReturn(0);
     }
 
     @Test
@@ -78,7 +80,7 @@ public class PerfettoPullerMetricCollectorTest {
         setter.setOptionValue("pull-pattern-keys", "perfettofile");
         HashMap<String, Metric> currentMetrics = new HashMap<>();
 
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -97,7 +99,7 @@ public class PerfettoPullerMetricCollectorTest {
         setter.setOptionValue("convert-metric-file", "false");
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -137,7 +139,7 @@ public class PerfettoPullerMetricCollectorTest {
         setter.setOptionValue("collect-perfetto-file-size", "true");
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -177,7 +179,7 @@ public class PerfettoPullerMetricCollectorTest {
         setter.setOptionValue("convert-metric-file", "false");
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(null);
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -215,7 +217,7 @@ public class PerfettoPullerMetricCollectorTest {
         setter.setOptionValue("convert-metric-file", "false");
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -254,7 +256,7 @@ public class PerfettoPullerMetricCollectorTest {
         setter.setOptionValue("convert-metric-file", "false");
         HashMap<String, Metric> currentMetrics = new HashMap<>();
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -290,7 +292,7 @@ public class PerfettoPullerMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
 
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -342,7 +344,7 @@ public class PerfettoPullerMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
 
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -379,7 +381,7 @@ public class PerfettoPullerMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
 
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -429,7 +431,7 @@ public class PerfettoPullerMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
 
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");
@@ -482,7 +484,7 @@ public class PerfettoPullerMetricCollectorTest {
         HashMap<String, Metric> currentMetrics = new HashMap<>();
 
         currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
-        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb")))
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
                 .thenReturn(new File("trace"));
 
         TestDescription testDesc = new TestDescription("xyz", "abc");

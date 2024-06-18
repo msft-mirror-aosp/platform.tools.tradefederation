@@ -271,7 +271,7 @@ public class GcovCodeCoverageCollectorTest {
         doReturn(tar).when(mMockDevice).pullFile(anyString());
 
         // Manually call logCoverageMeasurements().
-        mCodeCoverageListener.logCoverageMeasurements("manual");
+        mCodeCoverageListener.logCoverageMeasurements(mMockDevice, "manual");
 
         // Verify testLog(..) was called with the coverage file in a zip.
         List<ByteString> logs = mFakeListener.getLogs();
@@ -304,7 +304,7 @@ public class GcovCodeCoverageCollectorTest {
         inOrder.verify(mMockDevice).isAdbRoot();
         inOrder.verify(mMockDevice).enableAdbRoot();
         inOrder.verify(mMockDevice).executeShellCommand("kill -37 123");
-        inOrder.verify(mMockDevice, times(2)).executeShellCommand(anyString());
+        inOrder.verify(mMockDevice, times(4)).executeShellCommand(anyString());
         inOrder.verify(mMockDevice).disableAdbRoot();
     }
 

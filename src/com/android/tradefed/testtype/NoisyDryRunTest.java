@@ -29,9 +29,11 @@ import com.android.tradefed.config.SandboxConfigurationFactory;
 import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.sandbox.ISandbox;
 import com.android.tradefed.sandbox.TradefedSandbox;
@@ -40,12 +42,18 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 import com.android.tradefed.util.keystore.DryRunKeyStore;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Run noisy dry run on a command file.
@@ -77,7 +85,7 @@ public class NoisyDryRunTest implements IRemoteTest {
                 new TestDescription(NoisyDryRunTest.class.getCanonicalName(), "parseFile");
         listener.testStarted(parseFileTest);
         CommandFileParser parser = new CommandFileParser();
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("parseCommandFile")) {
             checkFileWithTimeout(file);
             return parser.parseFile(file);
         } catch (IOException | ConfigurationException e) {
@@ -140,19 +148,42 @@ public class NoisyDryRunTest implements IRemoteTest {
     private void testCommandLines(ITestInvocationListener listener, List<CommandLine> commands) {
         listener.testRunStarted(NoisyDryRunTest.class.getCanonicalName() + "_parseCommands",
                 commands.size());
+        StoreAndForwardTestCases forwarder = new StoreAndForwardTestCases(listener);
+        ParallelDeviceExecutor<Boolean> executor =
+                new ParallelDeviceExecutor<Boolean>(Math.min(20, commands.size()));
+        List<Callable<Boolean>> callableTasks = new ArrayList<>();
         for (int i = 0; i < commands.size(); ++i) {
-            TestDescription parseCmdTest =
-                    new TestDescription(
-                            NoisyDryRunTest.class.getCanonicalName(), "parseCommand" + i);
+            final int j = i;
+            Callable<Boolean> callableTask =
+                    () -> {
+                        String[] args = commands.get(j).asArray();
+                        parseOneConfig(forwarder, args, j);
+                        return true;
+                    };
+            callableTasks.add(callableTask);
+        }
+        // No timeout
+        executor.invokeAll(callableTasks, 0, TimeUnit.HOURS);
+        listener.testRunEnded(0, new HashMap<String, Metric>());
+    }
+
+    private void parseOneConfig(ITestLifeCycleReceiver listener, String[] args, int i) {
+        TestDescription parseCmdTest =
+                new TestDescription(NoisyDryRunTest.class.getCanonicalName(), "parseCommand" + i);
+        try (CloseableTraceScope ignored = new CloseableTraceScope(parseCmdTest.toString())) {
             listener.testStarted(parseCmdTest);
 
-            String[] args = commands.get(i).asArray();
             String cmdLine = QuotationAwareTokenizer.combineTokens(args);
             try {
                 TradefedDelegator delegator = CommandScheduler.checkDelegation(args);
                 if (delegator.shouldUseDelegation()) {
+                    if (delegator.getTfRootDir().getPath().isEmpty()) {
+                        listener.testFailed(
+                                parseCmdTest,
+                                "Delegation option was set, but path was empty string");
+                    }
                     // TODO: Add some validation of delegated config.
-                    continue;
+                    return;
                 }
 
                 if (cmdLine.contains("--" + CommandOptions.USE_SANDBOX)) {
@@ -179,7 +210,6 @@ public class NoisyDryRunTest implements IRemoteTest {
                 listener.testEnded(parseCmdTest, new HashMap<String, Metric>());
             }
         }
-        listener.testRunEnded(0, new HashMap<String, Metric>());
     }
 
     /** Test loading a sandboxed command. */
@@ -187,12 +217,26 @@ public class NoisyDryRunTest implements IRemoteTest {
         // This only partially check the sandbox setup. It only checks that the NON_VERSIONED part
         // of the configuration is fine.
         // TODO(b/75033502, b/110545254): also run the noisy dry run in the sandbox.
-        IConfiguration config =
-                SandboxConfigurationFactory.getInstance()
-                        .createConfigurationFromArgs(
-                                args, new DryRunKeyStore(), createSandbox(), createRunUtil(), null);
-        // Do not resolve dynamic files
-        config.validateOptions();
+        File globalConfig = null;
+        try {
+            globalConfig = FileUtil.createTempFile("noisy_dry_run_global_config", ".xml");
+            FileUtil.writeToFile("<configuration></configuration>", globalConfig);
+            IConfiguration config =
+                    SandboxConfigurationFactory.getInstance()
+                            .createConfigurationFromArgs(
+                                    args,
+                                    new DryRunKeyStore(),
+                                    createSandbox(),
+                                    createRunUtil(),
+                                    globalConfig,
+                                    true /*skip java check */);
+            // Do not resolve dynamic files
+            config.validateOptions();
+        } catch (IOException e) {
+            throw new ConfigurationException(e.getMessage(), e);
+        } finally {
+            FileUtil.deleteFile(globalConfig);
+        }
     }
 
     /** Returns a {@link IRunUtil} implementation. */
@@ -205,5 +249,38 @@ public class NoisyDryRunTest implements IRemoteTest {
     @VisibleForTesting
     ISandbox createSandbox() {
         return new TradefedSandbox();
+    }
+
+    private class StoreAndForwardTestCases implements ITestLifeCycleReceiver {
+
+        private final ITestInvocationListener mForwarder;
+        private Map<TestDescription, String> mTestTracker =
+                Collections.synchronizedMap(new HashMap<>());
+
+        public StoreAndForwardTestCases(ITestInvocationListener forwarder) {
+            mForwarder = forwarder;
+        }
+
+        @Override
+        public void testStarted(TestDescription test) {
+            mTestTracker.put(test, null);
+        }
+
+        @Override
+        public void testFailed(TestDescription test, String trace) {
+            mTestTracker.put(test, trace);
+        }
+
+        @Override
+        public void testEnded(TestDescription test, HashMap<String, Metric> metrics) {
+            synchronized (mForwarder) {
+                mForwarder.testStarted(test);
+                if (mTestTracker.get(test) != null) {
+                    mForwarder.testFailed(test, mTestTracker.get(test));
+                }
+                mForwarder.testEnded(test, metrics);
+            }
+            mTestTracker.remove(test);
+        }
     }
 }

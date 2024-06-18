@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Android Open Source Project
+ * Copyright (C) 201040 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,14 +48,14 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         NULL_DEVICE(NullDevice.class),
         /** Allocate an emulator running locally for the test. */
         LOCAL_EMULATOR(StubDevice.class),
-        /** Use a placeholder for a remote device that will be connected later. */
-        TCP_DEVICE(TcpDevice.class),
         /** Use a placeholder for a remote device nested in a virtualized environment. */
         GCE_DEVICE(RemoteAvdIDevice.class),
         /** Use a placeholder for a remote device in virtualized environment. */
         REMOTE_DEVICE(VmRemoteDevice.class),
         /** Allocate a virtual device running on localhost. */
-        LOCAL_VIRTUAL_DEVICE(StubLocalAndroidVirtualDevice.class);
+        LOCAL_VIRTUAL_DEVICE(StubLocalAndroidVirtualDevice.class),
+        /** A real physical or virtual device already started, not a placeholder type. */
+        EXISTING_DEVICE(IDevice.class);
 
         private Class<?> mRequiredIDeviceClass;
 
@@ -102,10 +102,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         "do not allocate a device for this test.")
     private boolean mNullDeviceRequested = false;
 
-    @Option(name = "tcp-device", description =
-            "start a placeholder for a tcp device that will be connected later.")
-    private boolean mTcpDeviceRequested = false;
-
     @Option(
             name = "gce-device",
             description = "start a placeholder for a gce device that will be connected later.")
@@ -113,6 +109,12 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     @Option(name = "device-type", description = "The type of the device requested to be allocated.")
     private DeviceRequestedType mRequestedType = null;
+
+    @Option(
+            name = "base-device-type-request",
+            description =
+                    "Explicitly request a device type which will use device-type for connection.")
+    private BaseDeviceType mBaseDeviceType = null;
     // ============================ END DEVICE TYPE Related Options ============================
 
     @Option(
@@ -171,6 +173,8 @@ public class DeviceSelectionOptions implements IDeviceSelection {
     private boolean mFetchedEnvVariable = false;
     // Store the reason for which the device was not matched.
     private Map<String, String> mNoMatchReason = new LinkedHashMap<>();
+    // If we fail all allocation due to serial report a special message
+    private boolean mSerialMatch = false;
 
     private static final String VARIANT_SEPARATOR = ":";
 
@@ -209,14 +213,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
                 mSerials.add(env_serial);
             }
             mFetchedEnvVariable = true;
-        }
-        if (device != null && !mSerials.isEmpty()) {
-            String hardwareProperty = device.getProperty("ro.hardware");
-            if (hardwareProperty != null
-                    && hardwareProperty.equals("microdroid")
-                    && !mSerials.contains(device.getSerialNumber())) {
-                mSerials.add(device.getSerialNumber());
-            }
         }
         return copyCollection(mSerials);
     }
@@ -305,15 +301,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     /** {@inheritDoc} */
     @Override
-    public boolean tcpDeviceRequested() {
-        if (mRequestedType != null) {
-            return mRequestedType.equals(DeviceRequestedType.TCP_DEVICE);
-        }
-        return mTcpDeviceRequested;
-    }
-
-    /** {@inheritDoc} */
-    @Override
     public boolean gceDeviceRequested() {
         if (mRequestedType != null) {
             return mRequestedType.equals(DeviceRequestedType.GCE_DEVICE);
@@ -361,19 +348,22 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         mNullDeviceRequested = nullDeviceRequested;
     }
 
-    /**
-     * Sets the tcp device requested flag
-     */
-    public void setTcpDeviceRequested(boolean tcpDeviceRequested) {
-        mTcpDeviceRequested = tcpDeviceRequested;
-    }
-
     public void setDeviceTypeRequested(DeviceRequestedType requestedType) {
         mRequestedType = requestedType;
     }
 
     public DeviceRequestedType getDeviceTypeRequested() {
         return mRequestedType;
+    }
+
+    @Override
+    public BaseDeviceType getBaseDeviceTypeRequested() {
+        return mBaseDeviceType;
+    }
+
+    @Override
+    public void setBaseDeviceTypeRequested(BaseDeviceType type) {
+        mBaseDeviceType = type;
     }
 
     /**
@@ -414,9 +404,8 @@ public class DeviceSelectionOptions implements IDeviceSelection {
         return mMaxBatteryTemperature;
     }
 
-    /**
-     * Sets whether battery check is required for devices with unknown battery level
-     */
+    /** Sets whether battery check is required for devices with unknown battery level */
+    @Override
     public void setRequireBatteryCheck(boolean requireCheck) {
         mRequireBatteryCheck = requireCheck;
     }
@@ -482,6 +471,7 @@ public class DeviceSelectionOptions implements IDeviceSelection {
             // Don't add a reason here, if the serial doesn't even match it's just verbose
             return false;
         }
+        mSerialMatch = true;
         if (excludeSerials.contains(device.getSerialNumber())) {
             addNoMatchReason(
                     deviceSerial,
@@ -643,13 +633,16 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
         if (mRequestedType != null) {
             Class<?> classNeeded = mRequestedType.getRequiredClass();
-            if (!device.getClass().equals(classNeeded)) {
-                addNoMatchReason(
-                        deviceSerial,
-                        String.format(
-                                "device is type (%s) while requested type was (%s)",
-                                device.getClass(), classNeeded));
-                return false;
+            // Don't match IDevice for real device
+            if (!DeviceRequestedType.EXISTING_DEVICE.equals(mRequestedType)) {
+                if (!device.getClass().equals(classNeeded)) {
+                    addNoMatchReason(
+                            deviceSerial,
+                            String.format(
+                                    "device is type (%s) while requested type was (%s)",
+                                    device.getClass(), classNeeded));
+                    return false;
+                }
             }
         } else {
             if (device.isEmulator() && (device instanceof StubDevice) && !stubEmulatorRequested()) {
@@ -660,11 +653,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
             if (nullDeviceRequested() != (device instanceof NullDevice)) {
                 addNoMatchReason(
                         deviceSerial, "device is null-device while requested type was not");
-                return false;
-            }
-            if (tcpDeviceRequested() != TcpDevice.class.equals(device.getClass())) {
-                // We only match an exact TcpDevice here, no child class.
-                addNoMatchReason(deviceSerial, "device is tcp-device while requested type was not");
                 return false;
             }
             if (gceDeviceRequested() != RemoteAvdIDevice.class.equals(device.getClass())) {
@@ -800,6 +788,12 @@ public class DeviceSelectionOptions implements IDeviceSelection {
 
     @Override
     public Map<String, String> getNoMatchReason() {
+        if (!mSerialMatch) {
+            mNoMatchReason.put(
+                    "no_match",
+                    String.format("Need serial (%s) but couldn't match it.", getSerials()));
+        }
+        mSerialMatch = false;
         return mNoMatchReason;
     }
 

@@ -29,7 +29,6 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.IDeviceSelection;
 import com.android.tradefed.invoker.IInvocationContext;
-import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.log.FileLogger;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -65,7 +64,6 @@ public class RetryReschedulerTest {
     @Mock IDeviceSelection mMockRequirements;
 
     @Mock ITestSuiteResultLoader mMockLoader;
-    @Mock IRescheduler mMockRescheduler;
     @Mock IConfigurationFactory mMockFactory;
     private BaseTestSuite mSuite;
 
@@ -86,7 +84,6 @@ public class RetryReschedulerTest {
         mTopConfiguration.setConfigurationObject(
                 RetryRescheduler.PREVIOUS_LOADER_NAME, mMockLoader);
         mTest.setConfiguration(mTopConfiguration);
-        mTest.setRescheduler(mMockRescheduler);
         mTest.setConfigurationFactory(mMockFactory);
 
         mSuite = Mockito.mock(BaseTestSuite.class);
@@ -112,8 +109,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -141,8 +136,6 @@ public class RetryReschedulerTest {
         // Shard count is carried from retry attempt
         Mockito.reset(mMockCommandOptions);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -166,8 +159,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -194,8 +185,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -220,8 +209,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -253,8 +240,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -279,8 +264,6 @@ public class RetryReschedulerTest {
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -311,8 +294,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -340,8 +321,6 @@ public class RetryReschedulerTest {
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
 
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
-
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
         verify(mMockLoader).init();
@@ -359,14 +338,15 @@ public class RetryReschedulerTest {
     /** Test rescheduling a configuration when no parameterized tests previously failed. */
     @Test
     public void testReschedule_parameterized_nofail() throws Exception {
+        OptionSetter setter = new OptionSetter(mTest);
+        // We specify to exclude "run1"
+        setter.setOptionValue("new-parameterized-handling", "false");
         populateFakeResults(2, 4, 1, 0, 2, false);
 
         when(mMockLoader.getCommandLine()).thenReturn("previous_command");
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -395,14 +375,15 @@ public class RetryReschedulerTest {
     /** Test rescheduling a configuration when some parameterized tests previously failed. */
     @Test
     public void testReschedule_parameterized_failed() throws Exception {
+        OptionSetter setter = new OptionSetter(mTest);
+        // We specify to exclude "run1"
+        setter.setOptionValue("new-parameterized-handling", "false");
         populateFakeResults(2, 4, 1, 0, 2, true);
 
         when(mMockLoader.getCommandLine()).thenReturn("previous_command");
         when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
                 .thenReturn(mRescheduledConfiguration);
         when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
-
-        when(mMockRescheduler.scheduleConfig(mRescheduledConfiguration)).thenReturn(true);
 
         mTest.run(null, null);
         verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
@@ -427,6 +408,44 @@ public class RetryReschedulerTest {
         Set<String> excludeRun1_1 = new LinkedHashSet<>();
         excludeRun1_1.add("run1 test.class#parameterized1[1]");
         verify(mSuite, times(0)).setExcludeFilter(excludeRun1_1);
+    }
+
+    /** Test rescheduling a configuration when some parameterized tests previously failed. */
+    @Test
+    public void testReschedule_new_parameterized_failed() throws Exception {
+        OptionSetter setter = new OptionSetter(mTest);
+        // We specify to exclude "run1"
+        setter.setOptionValue("new-parameterized-handling", "true");
+        populateFakeResults(2, 4, 1, 0, 2, true);
+
+        when(mMockLoader.getCommandLine()).thenReturn("previous_command");
+        when(mMockFactory.createConfigurationFromArgs(Mockito.any()))
+                .thenReturn(mRescheduledConfiguration);
+        when(mMockLoader.loadPreviousResults()).thenReturn(mFakeRecord);
+
+        mTest.run(null, null);
+        verify(mRescheduledConfiguration, times(1)).setTests(Mockito.any());
+        verify(mMockLoader).init();
+        // Only the passing tests are excluded since we don't want to re-run them
+        Set<String> excludeRun0_pass = new LinkedHashSet<>();
+        excludeRun0_pass.add("run0 test.class#testPass0");
+        verify(mSuite).setExcludeFilter(excludeRun0_pass);
+        Set<String> excludeRun0_0 = new LinkedHashSet<>();
+
+        excludeRun0_0.add("run0 test.class#parameterized0[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun0_0);
+        Set<String> excludeRun0_1 = new LinkedHashSet<>();
+        excludeRun0_1.add("run0 test.class#parameterized1[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun0_1);
+        Set<String> excludeRun1_pass = new LinkedHashSet<>();
+        excludeRun1_pass.add("run1 test.class#testPass0");
+        verify(mSuite).setExcludeFilter(excludeRun1_pass);
+        Set<String> excludeRun1_0 = new LinkedHashSet<>();
+        excludeRun1_0.add("run1 test.class#parameterized0[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun1_0);
+        Set<String> excludeRun1_1 = new LinkedHashSet<>();
+        excludeRun1_1.add("run1 test.class#parameterized1[1]");
+        verify(mSuite, times(1)).setExcludeFilter(excludeRun1_1);
     }
 
     private void populateFakeResults(

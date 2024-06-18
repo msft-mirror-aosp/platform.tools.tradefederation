@@ -153,6 +153,7 @@ public class InstallAllTestZipAppsSetupTest {
 
     @Test
     public void testForceQueryableSuccess() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(eq(34))).thenReturn(false);
         when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
         mPrep.setTestZipName("zip");
 
@@ -165,6 +166,23 @@ public class InstallAllTestZipAppsSetupTest {
 
         verify(mMockTestDevice, times(3))
                 .installPackage(any(), anyBoolean(), eq("--force-queryable"));
+        verify(mMockTestDevice, times(3)).uninstallPackage((String) any());
+    }
+
+    @Test
+    public void testDeviceApi34ForceQueryableIsFalse() throws Exception {
+        when(mMockTestDevice.checkApiLevelAgainstNextRelease(eq(34))).thenReturn(true);
+        when(mMockTestDevice.isAppEnumerationSupported()).thenReturn(true);
+        mPrep.setTestZipName("zip");
+
+        when(mMockBuildInfo.getFile((String) any())).thenReturn(new File("zip"));
+
+        setMockUnzipDir();
+
+        mPrep.setUp(mMockTestDevice, mMockBuildInfo);
+        mPrep.tearDown(mMockTestDevice, mMockBuildInfo, null);
+
+        verify(mMockTestDevice, times(3)).installPackage(any(), anyBoolean());
         verify(mMockTestDevice, times(3)).uninstallPackage((String) any());
     }
 

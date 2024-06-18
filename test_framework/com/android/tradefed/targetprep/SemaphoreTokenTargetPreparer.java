@@ -33,6 +33,7 @@ import java.util.concurrent.Semaphore;
 public class SemaphoreTokenTargetPreparer extends BaseTargetPreparer {
     private boolean mTokenAcquired = true;
     static final Semaphore mRunToken = new Semaphore(1);
+    private boolean mInvokedTeardown = true;
 
     public SemaphoreTokenTargetPreparer() {
         // This preparer is disabled by default.
@@ -43,21 +44,27 @@ public class SemaphoreTokenTargetPreparer extends BaseTargetPreparer {
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
-        try {
-            CLog.v("Waiting to acquire run token");
-            mRunToken.acquire();
-            mTokenAcquired = true;
-            CLog.v("Token acquired");
-        } catch (InterruptedException e) {
-            mTokenAcquired = false;
-            CLog.e(e);
-            CLog.e("Interrupted error during token acquire");
+        // Avoid re-entry if teardown wasn't called. This can happen during
+        // device reset since target preparers rerun
+        if (mInvokedTeardown) {
+            try {
+                CLog.v("Waiting to acquire run token");
+                mRunToken.acquire();
+                mTokenAcquired = true;
+                CLog.v("Token acquired");
+            } catch (InterruptedException e) {
+                mTokenAcquired = false;
+                CLog.e(e);
+                CLog.e("Interrupted error during token acquire");
+            }
         }
+        mInvokedTeardown = false;
     }
 
     /** {@inheritDoc} */
     @Override
     public void tearDown(TestInformation testInfo, Throwable e) throws DeviceNotAvailableException {
+        mInvokedTeardown = true;
         if (mTokenAcquired) {
             CLog.v("Releasing run token");
             mRunToken.drainPermits();

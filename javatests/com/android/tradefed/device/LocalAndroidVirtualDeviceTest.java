@@ -19,12 +19,13 @@ package com.android.tradefed.device;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.targetprep.TargetSetupError;
@@ -90,12 +91,13 @@ public class LocalAndroidVirtualDeviceTest {
         }
 
         @Override
-        public void waitForDeviceAvailable() {
+        public boolean waitForDeviceAvailable() {
             Assert.assertTrue("Unexpected method call to waitForDeviceAvailable.", expectToConnect);
+            return true;
         }
 
         @Override
-        IRunUtil createRunUtil() {
+        protected IRunUtil createRunUtil() {
             Assert.assertNotNull("Unexpected method call to createRunUtil.", currentRunUtil);
             IRunUtil returnValue = currentRunUtil;
             currentRunUtil = null;
@@ -104,43 +106,54 @@ public class LocalAndroidVirtualDeviceTest {
     }
 
     private static final String STUB_SERIAL_NUMBER = "local-virtual-device-0";
+    private static final Integer DEVICE_NUM_OFFSET = 5;
     private static final String IP_ADDRESS = "127.0.0.1";
     private static final String PORT = "6520";
     private static final String ONLINE_SERIAL_NUMBER = IP_ADDRESS + ":" + PORT;
     private static final String INSTANCE_NAME = "local-instance-1";
     private static final long ACLOUD_TIMEOUT = 12345;
-    private static final String SUCCESS_REPORT_STRING =
-            String.format(
-                    "{"
-                            + " \"command\": \"create\","
-                            + " \"data\": {"
-                            + "  \"devices\": ["
-                            + "   {"
-                            + "    \"ip\": \"%s\","
-                            + "    \"instance_name\": \"%s\""
-                            + "   }"
-                            + "  ]"
-                            + " },"
-                            + " \"errors\": [],"
-                            + " \"status\": \"SUCCESS\""
-                            + "}",
-                    ONLINE_SERIAL_NUMBER, INSTANCE_NAME);
-    private static final String FAILURE_REPORT_STRING =
-            String.format(
-                    "{"
-                            + " \"command\": \"create\","
-                            + " \"data\": {"
-                            + "  \"devices_failing_boot\": ["
-                            + "   {"
-                            + "    \"ip\": \"%s\","
-                            + "    \"instance_name\": \"%s\""
-                            + "   }"
-                            + "  ]"
-                            + " },"
-                            + " \"errors\": [],"
-                            + " \"status\": \"BOOT_FAIL\""
-                            + "}",
-                    ONLINE_SERIAL_NUMBER, INSTANCE_NAME);
+    private static final String SUCCESS_REPORT_FORMAT =
+            "{"
+                    + " \"command\": \"create\","
+                    + " \"data\": {"
+                    + "  \"devices\": ["
+                    + "   {"
+                    + "    \"ip\": \"%s\","
+                    + "    \"instance_name\": \"%s\","
+                    + "    \"logs\": ["
+                    + "     {"
+                    + "      \"path\": \"%s\","
+                    + "      \"type\": \"KERNEL_LOG\","
+                    + "      \"name\": \"kernel.1.log\""
+                    + "     }"
+                    + "    ]"
+                    + "   }"
+                    + "  ]"
+                    + " },"
+                    + " \"errors\": [],"
+                    + " \"status\": \"SUCCESS\""
+                    + "}";
+    private static final String FAILURE_REPORT_FORMAT =
+            "{"
+                    + " \"command\": \"create\","
+                    + " \"data\": {"
+                    + "  \"devices_failing_boot\": ["
+                    + "   {"
+                    + "    \"ip\": \"%s\","
+                    + "    \"instance_name\": \"%s\","
+                    + "    \"logs\": ["
+                    + "     {"
+                    + "      \"path\": \"%s\","
+                    + "      \"type\": \"KERNEL_LOG\","
+                    + "      \"name\": \"kernel.1.log\""
+                    + "     }"
+                    + "    ]"
+                    + "   }"
+                    + "  ]"
+                    + " },"
+                    + " \"errors\": [],"
+                    + " \"status\": \"BOOT_FAIL\""
+                    + "}";
 
     // Temporary files.
     private File mAcloud;
@@ -168,11 +181,12 @@ public class LocalAndroidVirtualDeviceTest {
         mSystemImageZip = null;
         mOtaToolsZip = null;
 
-        when(mMockBuildInfo.getFile(eq(BuildInfoFileKey.DEVICE_IMAGE))).thenReturn(mImageZip);
         when(mMockBuildInfo.getFile((String) any()))
                 .thenAnswer(
                         invocation -> {
                             switch ((String) invocation.getArguments()[0]) {
+                                case "device":
+                                    return mImageZip;
                                 case "cvd-host_package.tar.gz":
                                     return mHostPackageTarGzip;
                                 case "boot-img.zip":
@@ -192,7 +206,7 @@ public class LocalAndroidVirtualDeviceTest {
 
         mLocalAvd =
                 new TestableLocalAndroidVirtualDevice(
-                        new StubLocalAndroidVirtualDevice(STUB_SERIAL_NUMBER),
+                        new StubLocalAndroidVirtualDevice(STUB_SERIAL_NUMBER, DEVICE_NUM_OFFSET),
                         mockDeviceStateMonitor,
                         mockDeviceMonitor);
         TestDeviceOptions options = mLocalAvd.getOptions();
@@ -247,16 +261,33 @@ public class LocalAndroidVirtualDeviceTest {
         }
     }
 
-    private Answer<CommandResult> writeToReportFile(CommandStatus status, String reportString) {
+    private Answer<CommandResult> writeToReportFile(CommandStatus status, String reportFormat) {
         return invocation -> {
             Object[] args = invocation.getArguments();
+            String instanceDir = null;
+            String reportFile = null;
             for (int index = 0; index < args.length; index++) {
                 if ("--report_file".equals(args[index])) {
                     index++;
-                    File file = new File((String) args[index]);
-                    FileUtil.writeToFile(reportString, file);
+                    reportFile = (String) args[index];
+                } else if ("--local-instance-dir".equals(args[index])) {
+                    index++;
+                    instanceDir = (String) args[index];
                 }
             }
+            Assert.assertNotNull(
+                    "Acloud command does not contain --local-instance-dir.", instanceDir);
+            Assert.assertNotNull("Acloud command does not contain --report_file.", reportFile);
+
+            File logFile = new File(instanceDir, "kernel.log");
+            Assert.assertTrue(logFile.createNewFile());
+            FileUtil.writeToFile(
+                    String.format(
+                            reportFormat,
+                            ONLINE_SERIAL_NUMBER,
+                            INSTANCE_NAME,
+                            logFile.getAbsolutePath()),
+                    new File(reportFile));
 
             CommandResult result = new CommandResult(status);
             result.setStderr("acloud create");
@@ -272,25 +303,24 @@ public class LocalAndroidVirtualDeviceTest {
             ArgumentCaptor<String> imageDir,
             ArgumentCaptor<String> instanceDir) {
         IRunUtil runUtil = mock(IRunUtil.class);
-        runUtil.setEnvVariable(eq("TMPDIR"), any());
-
         when(runUtil.runTimedCmd(
                         eq(ACLOUD_TIMEOUT),
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
-                        eq("--local-image"),
-                        imageDir.capture(),
+                        eq(Integer.toString(DEVICE_NUM_OFFSET + 1)),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
-                        eq("--local-tool"),
-                        hostPackageDir.capture(),
                         eq("--report_file"),
                         reportFile.capture(),
                         eq("--no-autoconnect"),
                         eq("--yes"),
                         eq("--skip-pre-run-check"),
                         eq("-vv"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
                         eq("-test")))
                 .thenAnswer(answer);
 
@@ -306,32 +336,34 @@ public class LocalAndroidVirtualDeviceTest {
             ArgumentCaptor<String> bootImageDir,
             ArgumentCaptor<String> systemImageDir,
             ArgumentCaptor<String> otaToolsDir) {
+        mLocalAvd.getOptions().getGceDriverFileParams().put("test-file", new File("/test/file"));
         IRunUtil runUtil = mock(IRunUtil.class);
-        runUtil.setEnvVariable(eq("TMPDIR"), any());
-
         when(runUtil.runTimedCmd(
                         eq(ACLOUD_TIMEOUT),
                         eq(mAcloud.getAbsolutePath()),
                         eq("create"),
                         eq("--local-instance"),
-                        eq("--local-image"),
-                        imageDir.capture(),
+                        eq(Integer.toString(DEVICE_NUM_OFFSET + 1)),
                         eq("--local-instance-dir"),
                         instanceDir.capture(),
-                        eq("--local-tool"),
-                        hostPackageDir.capture(),
                         eq("--report_file"),
                         reportFile.capture(),
                         eq("--no-autoconnect"),
                         eq("--yes"),
                         eq("--skip-pre-run-check"),
+                        eq("-vv"),
+                        eq("--local-image"),
+                        imageDir.capture(),
+                        eq("--local-tool"),
+                        hostPackageDir.capture(),
                         eq("--local-boot-image"),
                         bootImageDir.capture(),
                         eq("--local-system-image"),
                         systemImageDir.capture(),
                         eq("--local-tool"),
                         otaToolsDir.capture(),
-                        eq("-vv"),
+                        eq("--test-file"),
+                        eq("/test/file"),
                         eq("-test")))
                 .thenAnswer(answer);
 
@@ -340,8 +372,6 @@ public class LocalAndroidVirtualDeviceTest {
 
     private IRunUtil mockAcloudDelete(CommandStatus status) {
         IRunUtil runUtil = mock(IRunUtil.class);
-        runUtil.setEnvVariable(eq("TMPDIR"), any());
-
         CommandResult result = new CommandResult(status);
         result.setStderr("acloud delete");
         result.setStdout("acloud delete");
@@ -358,26 +388,17 @@ public class LocalAndroidVirtualDeviceTest {
         return runUtil;
     }
 
-    private ITestLogger mockReportInstanceLogs() {
-        ITestLogger testLogger = mock(ITestLogger.class);
-        testLogger.testLog(eq("cuttlefish_config.json"), eq(LogDataType.TEXT), any());
-        testLogger.testLog(eq("kernel.log"), eq(LogDataType.KERNEL_LOG), any());
-        testLogger.testLog(eq("logcat"), eq(LogDataType.LOGCAT), any());
-        testLogger.testLog(eq("launcher.log"), eq(LogDataType.TEXT), any());
-        return testLogger;
-    }
-
-    private void createEmptyFiles(File parent, String... names) throws IOException {
-        parent.mkdirs();
-        for (String name : names) {
-            Assert.assertTrue(new File(parent, name).createNewFile());
-        }
+    private void assertDeviceDescriptor() {
+        DeviceDescriptor descriptor = mLocalAvd.getDeviceDescriptor(true);
+        Assert.assertNull(descriptor.getPreconfiguredIp());
+        Assert.assertEquals(DEVICE_NUM_OFFSET, descriptor.getPreconfiguredDeviceNumOffset());
     }
 
     private void assertFinalDeviceState(IDevice device) {
         Assert.assertTrue(StubLocalAndroidVirtualDevice.class.equals(device.getClass()));
         StubLocalAndroidVirtualDevice stubDevice = (StubLocalAndroidVirtualDevice) device;
         Assert.assertEquals(STUB_SERIAL_NUMBER, stubDevice.getSerialNumber());
+        Assert.assertEquals(DEVICE_NUM_OFFSET, stubDevice.getDeviceNumOffset());
     }
 
     /**
@@ -399,7 +420,7 @@ public class LocalAndroidVirtualDeviceTest {
         ArgumentCaptor<String> otaToolsDir = ArgumentCaptor.forClass(String.class);
         IRunUtil acloudCreateRunUtil =
                 mockAcloudCreateWithExtraDirs(
-                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_STRING),
+                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_FORMAT),
                         reportFile,
                         hostPackageDir,
                         imageDir,
@@ -418,33 +439,33 @@ public class LocalAndroidVirtualDeviceTest {
 
         IRunUtil acloudDeleteRunUtil = mockAcloudDelete(CommandStatus.SUCCESS);
 
-        ITestLogger testLogger = mockReportInstanceLogs();
+        ITestLogger testLogger = mock(ITestLogger.class);
 
         // Test setUp.
+        assertDeviceDescriptor();
         mLocalAvd.setTestLogger(testLogger);
         mLocalAvd.currentRunUtil = acloudCreateRunUtil;
         mLocalAvd.expectToConnect = true;
         mLocalAvd.preInvocationSetup(mMockBuildInfo, null);
 
         Assert.assertEquals(ONLINE_SERIAL_NUMBER, mLocalAvd.getIDevice().getSerialNumber());
+        assertDeviceDescriptor();
+        verify(acloudCreateRunUtil).setEnvVariable(eq("TMPDIR"), any());
 
         for (Map.Entry<String, ArgumentCaptor<String>> entry : captureDirs.entrySet()) {
             File capturedDir = new File(entry.getValue().getValue());
             Assert.assertTrue(entry.getKey() + " is not a directory.", capturedDir.isDirectory());
         }
 
-        // Create the logs and configuration that the local AVD object expects.
-        File runtimeDir = new File(instanceDir.getValue(), "cuttlefish_runtime");
-        Assert.assertTrue(runtimeDir.mkdirs());
-        createEmptyFiles(
-                runtimeDir, "kernel.log", "logcat", "launcher.log", "cuttlefish_config.json");
-
         // Test tearDown.
         mLocalAvd.currentRunUtil = acloudDeleteRunUtil;
         mLocalAvd.expectToConnect = false;
         mLocalAvd.postInvocationTearDown(null);
 
+        assertDeviceDescriptor();
         assertFinalDeviceState(mLocalAvd.getIDevice());
+        verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         for (Map.Entry<String, ArgumentCaptor<String>> entry : captureDirs.entrySet()) {
@@ -462,7 +483,7 @@ public class LocalAndroidVirtualDeviceTest {
         ArgumentCaptor<String> instanceDir = ArgumentCaptor.forClass(String.class);
         IRunUtil acloudCreateRunUtil =
                 mockAcloudCreate(
-                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_STRING),
+                        writeToReportFile(CommandStatus.SUCCESS, SUCCESS_REPORT_FORMAT),
                         reportFile,
                         hostPackageDir,
                         imageDir,
@@ -479,6 +500,7 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.preInvocationSetup(mMockBuildInfo, null);
 
         Assert.assertEquals(ONLINE_SERIAL_NUMBER, mLocalAvd.getIDevice().getSerialNumber());
+        verify(acloudCreateRunUtil).setEnvVariable(eq("TMPDIR"), any());
 
         File capturedHostPackageDir = new File(hostPackageDir.getValue());
         File capturedImageDir = new File(imageDir.getValue());
@@ -498,6 +520,8 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.postInvocationTearDown(null);
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
+        verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());
@@ -514,7 +538,7 @@ public class LocalAndroidVirtualDeviceTest {
         ArgumentCaptor<String> instanceDir = ArgumentCaptor.forClass(String.class);
         IRunUtil acloudCreateRunUtil =
                 mockAcloudCreate(
-                        writeToReportFile(CommandStatus.SUCCESS, FAILURE_REPORT_STRING),
+                        writeToReportFile(CommandStatus.SUCCESS, FAILURE_REPORT_FORMAT),
                         reportFile,
                         hostPackageDir,
                         imageDir,
@@ -549,6 +573,7 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.postInvocationTearDown(expectedException);
 
         assertFinalDeviceState(mLocalAvd.getIDevice());
+        verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());
 
         Assert.assertFalse(new File(reportFile.getValue()).exists());
         Assert.assertFalse(capturedHostPackageDir.exists());

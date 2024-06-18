@@ -39,6 +39,8 @@ import com.android.tradefed.monitoring.collector.IResourceMetricCollector;
 import com.android.tradefed.sandbox.ISandboxFactory;
 import com.android.tradefed.sandbox.TradefedSandboxFactory;
 import com.android.tradefed.service.TradefedFeatureServer;
+import com.android.tradefed.service.management.DeviceManagementGrpcServer;
+import com.android.tradefed.service.management.TestInvocationManagementServer;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
@@ -85,6 +87,8 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     public static final String RESOURCE_METRIC_COLLECTOR_TYPE_NAME = "resource_metric_collector";
     public static final String CREDENTIAL_FACTORY_TYPE_NAME = "credential_factory";
     public static final String TF_FEATURE_SERVER_NAME = "tf_feature_server";
+    public static final String TF_INVOCATION_SERVER_NAME = "tf_invocation_server";
+    public static final String TF_DEVICE_MANAGEMENT_SERVER_NAME = "tf_device_management_server";
 
     public static final String GLOBAL_CONFIG_VARIABLE = "TF_GLOBAL_CONFIG";
     public static final String GLOBAL_CONFIG_SERVER_CONFIG_VARIABLE =
@@ -640,6 +644,16 @@ public class GlobalConfiguration implements IGlobalConfiguration {
         setConfigurationObjectNoThrow(TF_FEATURE_SERVER_NAME, server);
     }
 
+    @Override
+    public void setInvocationServer(TestInvocationManagementServer server) {
+        setConfigurationObjectNoThrow(TF_INVOCATION_SERVER_NAME, server);
+    }
+
+    @Override
+    public void setDeviceManagementServer(DeviceManagementGrpcServer server) {
+        setConfigurationObjectNoThrow(TF_DEVICE_MANAGEMENT_SERVER_NAME, server);
+    }
+
     /** {@inheritDoc} */
     @Override
     public TradefedFeatureServer getFeatureServer() {
@@ -651,6 +665,30 @@ public class GlobalConfiguration implements IGlobalConfiguration {
             return null;
         }
         return (TradefedFeatureServer) configObjects.get(0);
+    }
+
+    @Override
+    public TestInvocationManagementServer getTestInvocationManagementSever() {
+        List<?> configObjects = getConfigurationObjectList(TF_INVOCATION_SERVER_NAME);
+        if (configObjects == null) {
+            return null;
+        }
+        if (configObjects.size() != 1) {
+            return null;
+        }
+        return (TestInvocationManagementServer) configObjects.get(0);
+    }
+
+    @Override
+    public DeviceManagementGrpcServer getDeviceManagementServer() {
+        List<?> configObjects = getConfigurationObjectList(TF_DEVICE_MANAGEMENT_SERVER_NAME);
+        if (configObjects == null) {
+            return null;
+        }
+        if (configObjects.size() != 1) {
+            return null;
+        }
+        return (DeviceManagementGrpcServer) configObjects.get(0);
     }
 
     /** {@inheritDoc} */
@@ -835,7 +873,7 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     public File cloneConfigWithFilter(Set<String> exclusionPatterns, String... allowlistConfigs)
             throws IOException {
         return cloneConfigWithFilter(
-                exclusionPatterns, new NoOpConfigOptionValueTransformer(), allowlistConfigs);
+                exclusionPatterns, new NoOpConfigOptionValueTransformer(), true, allowlistConfigs);
     }
 
     /** {@inheritDoc} */
@@ -843,17 +881,22 @@ public class GlobalConfiguration implements IGlobalConfiguration {
     public File cloneConfigWithFilter(
             Set<String> exclusionPatterns,
             IConfigOptionValueTransformer transformer,
+            boolean deepCopy,
             String... allowlistConfigs)
             throws IOException {
         IConfigurationFactory configFactory = getConfigurationFactory();
         IGlobalConfiguration copy = null;
-        try {
-            // Use a copy with default original options
-            copy =
-                    configFactory.createGlobalConfigurationFromArgs(
-                            mOriginalArgs, new ArrayList<>());
-        } catch (ConfigurationException e) {
-            throw new IOException(e);
+        if (deepCopy) {
+            try {
+                // Use a copy with default original options
+                copy =
+                        configFactory.createGlobalConfigurationFromArgs(
+                                mOriginalArgs, new ArrayList<>());
+            } catch (ConfigurationException e) {
+                throw new IOException(e);
+            }
+        } else {
+            copy = this;
         }
 
         File filteredGlobalConfig = FileUtil.createTempFile("filtered_global_config", ".config");

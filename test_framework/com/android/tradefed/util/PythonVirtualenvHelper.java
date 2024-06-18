@@ -107,7 +107,7 @@ public class PythonVirtualenvHelper {
      * @return a string representing the absolute path to the location where Python packages are
      *     installed.
      */
-    private static String getPackageInstallLocation(IRunUtil runUtil, String virtualenvPath) {
+    public static String getPackageInstallLocation(IRunUtil runUtil, String virtualenvPath) {
         CommandResult result =
                 runUtil.runTimedCmd(60000, getPipPath(virtualenvPath), "show", "pip");
         if (result.getStatus() != CommandStatus.SUCCESS) {

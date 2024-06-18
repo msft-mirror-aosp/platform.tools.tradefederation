@@ -19,6 +19,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.sandbox.TradefedSandboxRunner;
 
@@ -32,6 +33,8 @@ import java.util.regex.Pattern;
 
 /** Helper to handle the exception output from standard Tradefed command runners. */
 public class SubprocessExceptionParser {
+
+    public static final String EVENT_THREAD_JOIN = "Event receiver thread did not complete.";
 
     /** Extract the file path of the serialized exception. */
     public static String getPathFromStderr(String stderr) {
@@ -60,7 +63,7 @@ public class SubprocessExceptionParser {
             throws DeviceNotAvailableException {
         String stderr = result.getStderr();
         String filePath = getPathFromStderr(stderr);
-        int exitCode = result.getExitCode();
+        Integer exitCode = result.getExitCode();
         String message =
                 String.format(
                         "Subprocess finished with error exit code: %s.\nStderr: %s",
@@ -83,6 +86,14 @@ public class SubprocessExceptionParser {
                                 + "Using HarnessRuntimeException instead.");
             }
         }
-        throw new HarnessRuntimeException(message, InfraErrorIdentifier.UNDETERMINED);
+        ErrorIdentifier id = InfraErrorIdentifier.UNDETERMINED;
+        if (CommandStatus.TIMED_OUT.equals(result.getStatus())) {
+            id = InfraErrorIdentifier.INVOCATION_TIMEOUT;
+        }
+        // If we reach here and it's an event issue, set the id
+        if (stderr.startsWith(EVENT_THREAD_JOIN)) {
+            id = InfraErrorIdentifier.EVENT_PROCESSING_TIMEOUT;
+        }
+        throw new HarnessRuntimeException(message, id);
     }
 }

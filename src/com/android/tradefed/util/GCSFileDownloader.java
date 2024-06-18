@@ -18,6 +18,7 @@ package com.android.tradefed.util;
 
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IFileDownloader;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 
@@ -26,6 +27,9 @@ import com.google.api.services.storage.Storage;
 import com.google.api.services.storage.model.Objects;
 import com.google.api.services.storage.model.StorageObject;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -36,6 +40,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,6 +49,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,11 +64,39 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
             Collections.singleton("https://www.googleapis.com/auth/devstorage.read_only");
     private static final long LIST_BATCH_SIZE = 100;
 
+    // Allow downloader to create empty files instead of throwing exception.
+    private Boolean mCreateEmptyFile = false;
+
+    // Cache the freshness
+    private final LoadingCache<String, Boolean> mFreshnessCache;
+
     public GCSFileDownloader(File jsonKeyFile) {
-        super(jsonKeyFile);
+        this(false);
+        setJsonKeyFile(jsonKeyFile);
     }
 
-    public GCSFileDownloader() {}
+    public GCSFileDownloader(Boolean createEmptyFile) {
+        mCreateEmptyFile = createEmptyFile;
+        mFreshnessCache =
+                CacheBuilder.newBuilder()
+                        .maximumSize(50)
+                        .expireAfterAccess(60, TimeUnit.MINUTES)
+                        .build(
+                                new CacheLoader<String, Boolean>() {
+                                    @Override
+                                    public Boolean load(String key) throws BuildRetrievalError {
+                                        return true;
+                                    }
+                                });
+    }
+
+    public GCSFileDownloader() {
+        this(false);
+    }
+
+    protected void clearCache() {
+        mFreshnessCache.invalidateAll();
+    }
 
     private Storage getStorage() throws IOException {
         return getStorage(SCOPES);
@@ -71,14 +105,23 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
     @VisibleForTesting
     StorageObject getRemoteFileMetaData(String bucketName, String remoteFilename)
             throws IOException {
-        try {
-            return getStorage().objects().get(bucketName, remoteFilename).execute();
-        } catch (GoogleJsonResponseException e) {
-            if (e.getStatusCode() == 404) {
-                return null;
+        int i = 0;
+        do {
+            i++;
+            try {
+                return getStorage().objects().get(bucketName, remoteFilename).execute();
+            } catch (GoogleJsonResponseException e) {
+                if (e.getStatusCode() == 404) {
+                    return null;
+                }
+                throw e;
+            } catch (SocketTimeoutException e) {
+                // Allow one retry in case of flaky connection.
+                if (i >= 2) {
+                    throw e;
+                }
             }
-            throw e;
-        }
+        } while (true);
     }
 
     /**
@@ -166,7 +209,7 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         }
     }
 
-    private boolean isFileFresh(File localFile, StorageObject remoteFile) throws IOException {
+    private boolean isFileFresh(File localFile, StorageObject remoteFile) {
         if (localFile == null && remoteFile == null) {
             return true;
         }
@@ -184,7 +227,15 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         String[] pathParts = parseGcsPath(remotePath);
         String bucketName = pathParts[0];
         String remoteFilename = pathParts[1];
-        try {
+
+        if (localFile != null && localFile.exists()) {
+            Boolean cache = mFreshnessCache.getIfPresent(remotePath);
+            if (cache != null && Boolean.TRUE.equals(cache)) {
+                return true;
+            }
+        }
+
+        try (CloseableTraceScope ignored = new CloseableTraceScope("gcs_is_fresh " + remotePath)) {
             StorageObject remoteFileMeta = getRemoteFileMetaData(bucketName, remoteFilename);
             if (localFile == null || !localFile.exists()) {
                 if (!isRemoteFolder(bucketName, remoteFilename) && remoteFileMeta == null) {
@@ -197,9 +248,12 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
                 return isFileFresh(localFile, remoteFileMeta);
             }
             remoteFilename = sanitizeDirectoryName(remoteFilename);
-            return recursiveCheckFolderFreshness(bucketName, remoteFilename, localFile);
+            boolean fresh = recursiveCheckFolderFreshness(bucketName, remoteFilename, localFile);
+            mFreshnessCache.put(remotePath, fresh);
+            return fresh;
         } catch (IOException e) {
-            throw new BuildRetrievalError(e.getMessage(), e);
+            mFreshnessCache.invalidate(remotePath);
+            throw new BuildRetrievalError(e.getMessage(), e, InfraErrorIdentifier.GCS_ERROR);
         }
     }
 
@@ -229,8 +283,10 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         for (String subRemoteFolder : subRemoteFolders) {
             String subFolderName = Paths.get(subRemoteFolder).getFileName().toString();
             File subFolder = new File(localFolder, subFolderName);
-            if (new File(localFolder, subFolderName).exists()
-                    && !new File(localFolder, subFolderName).isDirectory()) {
+            if (!subFolder.exists()) {
+                return false;
+            }
+            if (!subFolder.isDirectory()) {
                 CLog.w("%s exists as a non-directory.", subFolder);
                 subFolder = new File(localFolder, subFolderName + "_folder");
             }
@@ -345,11 +401,18 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         CLog.d("Fetching gs://%s/%s to %s.", bucketName, remoteFilename, localFile.toString());
         StorageObject meta = getRemoteFileMetaData(bucketName, remoteFilename);
         if (meta == null || meta.getSize().equals(BigInteger.ZERO)) {
-            throw new BuildRetrievalError(
-                    String.format(
-                            "File (not folder) gs://%s/%s doesn't exist or is size 0.",
-                            bucketName, remoteFilename),
-                    InfraErrorIdentifier.GCS_ERROR);
+            if (!mCreateEmptyFile) {
+                throw new BuildRetrievalError(
+                        String.format(
+                                "File (not folder) gs://%s/%s doesn't exist or is size 0.",
+                                bucketName, remoteFilename),
+                        InfraErrorIdentifier.GCS_ERROR);
+            } else {
+                // Create the empty file.
+                CLog.d("GCS file is empty: gs://%s/%s", bucketName, remoteFilename);
+                localFile.createNewFile();
+                return;
+            }
         }
         try (OutputStream writeStream = new FileOutputStream(localFile)) {
             getStorage()
@@ -409,6 +472,11 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
         }
     }
 
+    @VisibleForTesting
+    File createTempFile(String remoteFilePath, File rootDir) throws BuildRetrievalError {
+        return createTempFileForRemote(remoteFilePath, rootDir);
+    }
+
     /**
      * Creates a unique file on temporary disk to house downloaded file with given path.
      *
@@ -416,8 +484,8 @@ public class GCSFileDownloader extends GCSCommon implements IFileDownloader {
      *
      * @param remoteFilePath the remote path to construct the name from
      */
-    @VisibleForTesting
-    File createTempFile(String remoteFilePath, File rootDir) throws BuildRetrievalError {
+    public static File createTempFileForRemote(String remoteFilePath, File rootDir)
+            throws BuildRetrievalError {
         try {
             // create a unique file.
             File tmpFile = FileUtil.createTempFileForRemote(remoteFilePath, rootDir);

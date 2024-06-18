@@ -29,12 +29,12 @@ import static org.mockito.Mockito.mock;
 
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.TestAppConstants;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.util.CommandResult;
@@ -850,7 +850,9 @@ public class TestDeviceFuncTest implements IDeviceTest {
     public void testLogcatCmd() throws DeviceNotAvailableException {
         CLog.i("testLogcatCmd");
         // Adding -d flag to dump the log and exit, to make this a non-blocking call
-        CommandResult result = mTestDevice.executeShellV2Command(LogcatReceiver.LOGCAT_CMD + " -d");
+        CommandResult result =
+                mTestDevice.executeShellV2Command(
+                        LogcatReceiver.getDefaultLogcatCmd(mTestDevice) + " -d");
         assertThat(result.getStatus()).isEqualTo(CommandStatus.SUCCESS);
     }
 

@@ -93,11 +93,11 @@ public class DeviceOwnerTargetPreparer extends BaseTargetPreparer
     }
 
     private int getDeviceOwnerUserId() throws DeviceNotAvailableException {
-        if (isHeadlessSystemUserMode()) {
-            return mDevice.getPrimaryUserId();
-        } else {
-            return USER_SYSTEM;
+        Integer mainUserId = mDevice.getMainUserId();
+        if (mainUserId != null) {
+            return mainUserId;
         }
+        return USER_SYSTEM;
     }
 
     private void removeSecondaryUsers() throws DeviceNotAvailableException {
@@ -116,3 +116,4 @@ public class DeviceOwnerTargetPreparer extends BaseTargetPreparer
         mDevice.removeAdmin(mDeviceOwnerComponentName, mDeviceOwnerUserId);
     }
 }
+

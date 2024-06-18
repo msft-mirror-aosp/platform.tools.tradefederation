@@ -200,6 +200,7 @@ public class ClusterCommandConfigBuilder {
         envVars.putAll(systemEnvMap);
 
         envVars.put("TF_WORK_DIR", mWorkDir.getAbsolutePath());
+        envVars.put("TF_ATTEMPT_ID", mCommand.getAttemptId());
         envVars.putAll(mTestEnvironment.getEnvVars());
         envVars.putAll(mTestContext.getEnvVars());
 
@@ -279,7 +280,8 @@ public class ClusterCommandConfigBuilder {
             final String url =
                     String.format(
                             "%s%s/%s/", baseUrl, mCommand.getCommandId(), mCommand.getAttemptId());
-            config.injectOptionValue("cluster:output-file-upload-url", url);
+            config.injectOptionValue(
+                    "cluster:output-file-upload-url", StringUtil.expand(url, envVars));
         }
         for (final String pattern : mTestEnvironment.getOutputFilePatterns()) {
             config.injectOptionValue("cluster:output-file-pattern", pattern);
@@ -297,6 +299,9 @@ public class ClusterCommandConfigBuilder {
         }
         if (mTestEnvironment.getLogLevel() != null) {
             config.injectOptionValue("log-level", mTestEnvironment.getLogLevel());
+        }
+        for (String excludedFile : mTestEnvironment.getExcludedFilesInJavaClasspath()) {
+            config.injectOptionValue("cluster:exclude-file-in-java-classpath", excludedFile);
         }
 
         List<TestResource> testResources = new ArrayList<>();

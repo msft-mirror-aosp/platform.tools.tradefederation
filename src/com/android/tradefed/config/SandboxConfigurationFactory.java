@@ -110,7 +110,7 @@ public class SandboxConfigurationFactory extends ConfigurationFactory {
     public IConfiguration createConfigurationFromArgs(
             String[] args, IKeyStoreClient keyStoreClient, ISandbox sandbox, IRunUtil runUtil)
             throws ConfigurationException {
-        return createConfigurationFromArgs(args, keyStoreClient, sandbox, runUtil, null);
+        return createConfigurationFromArgs(args, keyStoreClient, sandbox, runUtil, null, false);
     }
 
     /**
@@ -128,7 +128,8 @@ public class SandboxConfigurationFactory extends ConfigurationFactory {
             IKeyStoreClient keyStoreClient,
             ISandbox sandbox,
             IRunUtil runUtil,
-            File globalConfig)
+            File globalConfig,
+            boolean skipJavaCheck)
             throws ConfigurationException {
         IConfiguration config = null;
         File xmlConfig = null;
@@ -145,7 +146,8 @@ public class SandboxConfigurationFactory extends ConfigurationFactory {
                             runUtil,
                             args,
                             DumpCmd.NON_VERSIONED_CONFIG,
-                            globalConfig);
+                            globalConfig,
+                            skipJavaCheck);
             // Get the non version part of the configuration in order to do proper allocation
             // of devices and such.
             config =
@@ -155,6 +157,7 @@ public class SandboxConfigurationFactory extends ConfigurationFactory {
             config.setCommandLine(args);
             config.setConfigurationObject(Configuration.SANDBOX_TYPE_NAME, sandbox);
         } catch (SandboxConfigurationException e) {
+            CLog.w("Using thin launcher as fallback");
             // Handle the thin launcher mode: Configuration does not exists in parent version yet.
             config = sandbox.createThinLauncherConfig(args, keyStoreClient, runUtil, globalConfig);
             if (config == null) {

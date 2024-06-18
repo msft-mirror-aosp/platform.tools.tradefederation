@@ -17,13 +17,18 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.MultiLineReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -34,6 +39,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -60,6 +66,9 @@ public class WifiHelper implements IWifiHelper {
     static final int PACKAGE_VERSION_CODE = 21;
 
     private static final String WIFIUTIL_APK_NAME = "WifiUtil.apk";
+    private static final String WIFIUTIL_APK_RES = "/" + WIFIUTIL_APK_NAME;
+    private static final String WIFIUTIL_APK_RES_FALLBACK =
+            "/com/android/tradefed/utils/wifi/" + WIFIUTIL_APK_NAME;
     /** the default WifiUtil command timeout in minutes */
     private static final long WIFIUTIL_CMD_TIMEOUT_MINUTES = 5;
 
@@ -68,6 +77,9 @@ public class WifiHelper implements IWifiHelper {
 
     private final ITestDevice mDevice;
     private File mWifiUtilApkFile;
+
+    /** Tracks whether wifi helper needs to execute v2 operations. */
+    private boolean mUseV2;
 
     public WifiHelper(ITestDevice device) throws DeviceNotAvailableException {
         this(device, null, true);
@@ -81,7 +93,17 @@ public class WifiHelper implements IWifiHelper {
     /** Alternative constructor that can skip the setup of the wifi apk. */
     public WifiHelper(ITestDevice device, String wifiUtilApkPath, boolean doSetup)
             throws DeviceNotAvailableException {
+        this(device, wifiUtilApkPath, doSetup, false);
+    }
+
+    /**
+     * Constructor to specify whether to use new wifi helper v2. v2 operations do not need to
+     * install the wifi util apk.
+     */
+    public WifiHelper(ITestDevice device, String wifiUtilApkPath, boolean doSetup, boolean useV2)
+            throws DeviceNotAvailableException {
         mDevice = device;
+        mUseV2 = useV2;
         if (doSetup) {
             ensureDeviceSetup(wifiUtilApkPath);
         }
@@ -114,12 +136,24 @@ public class WifiHelper implements IWifiHelper {
         // Attempt to install utility
         try {
             setupWifiUtilApkFile(wifiUtilApkPath);
+            String[] extraArgs = new String[] {};
+            if (mDevice.isBypassLowTargetSdkBlockSupported()) {
+                extraArgs = new String[] {"--bypass-low-target-sdk-block"};
+            }
 
-            final String error = mDevice.installPackage(mWifiUtilApkFile, true);
+            final String error = mDevice.installPackage(mWifiUtilApkFile, true, extraArgs);
             if (error == null) {
                 // Installed successfully; good to go.
                 return;
             } else {
+                if (error.contains("cmd: Failure calling service package")
+                    || error.contains("Can't find service: package")) {
+                    String message =
+                        String.format(
+                                "Failed to install WifiUtil utility. Device might have"
+                                        + " crashed, it returned: %s", error);
+                    throw new DeviceRuntimeException(message, DeviceErrorIdentifier.DEVICE_CRASHED);
+                }
                 throw new HarnessRuntimeException(
                         String.format(
                                 "Unable to install WifiUtil utility: %s on %s",
@@ -159,11 +193,15 @@ public class WifiHelper implements IWifiHelper {
      * Helper method to extract the wifi util apk from the classpath
      */
     public static File extractWifiUtilApk() throws IOException {
-        File apkTempFile;
-        apkTempFile = FileUtil.createTempFile(WIFIUTIL_APK_NAME, ".apk");
-        InputStream apkStream = WifiHelper.class.getResourceAsStream(
-            String.format("/apks/wifiutil/%s", WIFIUTIL_APK_NAME));
-        FileUtil.writeToFile(apkStream, apkTempFile);
+        File apkTempFile = FileUtil.createTempFile(WIFIUTIL_APK_NAME, ".apk");
+        try {
+            InputStream apkStream = WifiHelper.class.getResourceAsStream(WIFIUTIL_APK_RES);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        } catch (IOException e) {
+            // Fallback to new path
+            InputStream apkStream = WifiHelper.class.getResourceAsStream(WIFIUTIL_APK_RES_FALLBACK);
+            FileUtil.writeToFile(apkStream, apkTempFile);
+        }
         return apkTempFile;
     }
 
@@ -172,9 +210,31 @@ public class WifiHelper implements IWifiHelper {
      */
     @Override
     public boolean enableWifi() throws DeviceNotAvailableException {
-        mDevice.executeShellCommand(ENABLE_WIFI_CMD);
+        if (mUseV2) {
+            return enableWifiV2();
+        }
+        CommandResult result = mDevice.executeShellV2Command(ENABLE_WIFI_CMD);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            CLog.e(
+                    "Failed to enable wifi. status: %s\nstdout: %s\nstderr: %s",
+                    result.getStatus(), result.getStdout(), result.getStderr());
+        }
         // shell command does not produce any message to indicate success/failure, wait for state
         // change to complete.
+        return waitForWifiEnabled(120000L);
+    }
+
+    /** Uses the wifi cmd to enable wifi. */
+    private boolean enableWifiV2() throws DeviceNotAvailableException {
+        CommandResult enableOutput =
+                mDevice.executeShellV2Command(
+                        String.format("cmd -w wifi set-wifi-enabled enabled"));
+        if (!CommandStatus.SUCCESS.equals(enableOutput.getStatus())) {
+            CLog.w(
+                    "Failed to enable wifi. stdout: %s\nstderr:%s",
+                    enableOutput.getStdout(), enableOutput.getStderr());
+            return false;
+        }
         return waitForWifiEnabled(120000L);
     }
 
@@ -368,11 +428,26 @@ public class WifiHelper implements IWifiHelper {
      */
     @Override
     public boolean isWifiEnabled() throws DeviceNotAvailableException {
-        return asBool(
-                runWifiUtil(
-                        "isWifiEnabled", 2
-                        /** 2 minutes timeout */
-                        ));
+        if (mUseV2) {
+            return isWifiEnabledV2();
+        } else {
+            return asBool(
+                    runWifiUtil(
+                            "isWifiEnabled", 2
+                            /** 2 minutes timeout */
+                            ));
+        }
+    }
+
+    private boolean isWifiEnabledV2() throws DeviceNotAvailableException {
+        CommandResult statusOutput =
+                mDevice.executeShellV2Command(String.format("cmd -w wifi status"));
+        if (CommandStatus.SUCCESS.equals(statusOutput.getStatus())
+                && !statusOutput.getStdout().contains("Wifi is disabled")) {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -422,6 +497,10 @@ public class WifiHelper implements IWifiHelper {
      */
     @Override
     public Map<String, String> getWifiInfo() throws DeviceNotAvailableException {
+        if (mUseV2) {
+            return getWifiInfoV2();
+        }
+
         Map<String, String> info = new HashMap<>();
 
         final String result = runWifiUtil("getWifiInfo");
@@ -441,12 +520,40 @@ public class WifiHelper implements IWifiHelper {
         return info;
     }
 
+    private Map<String, String> getWifiInfoV2() throws DeviceNotAvailableException {
+        CommandResult statusOutput =
+                mDevice.executeShellV2Command(String.format("cmd -w wifi status"));
+        if (CommandStatus.SUCCESS.equals(statusOutput.getStatus())) {
+            return WifiCommandUtil.parseWifiInfo(statusOutput.getStdout());
+        } else {
+            return new LinkedHashMap<>();
+        }
+    }
+
     /**
      * {@inheritDoc}
      */
     @Override
     public boolean checkConnectivity(String urlToCheck) throws DeviceNotAvailableException {
+        if (mUseV2) {
+            return checkConnectivityV2(120000L);
+        }
         return asBool(runWifiUtil("checkConnectivity", "urlToCheck", urlToCheck));
+    }
+
+    private boolean checkConnectivityV2(long timeout) throws DeviceNotAvailableException {
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() < (startTime + timeout)) {
+            CommandResult statusOutput =
+                    mDevice.executeShellV2Command(String.format("cmd -w wifi status"));
+            if (CommandStatus.SUCCESS.equals(statusOutput.getStatus())
+                    && statusOutput.getStdout().contains("Wifi is connected")) {
+                return true;
+            }
+            getRunUtil().sleep(getPollTime());
+        }
+        CLog.w("Wifi is not connected after timeout: %d ms.", timeout);
+        return false;
     }
 
     /**
@@ -455,24 +562,128 @@ public class WifiHelper implements IWifiHelper {
     @Override
     public boolean connectToNetwork(String ssid, String psk, String urlToCheck)
             throws DeviceNotAvailableException {
-        return connectToNetwork(ssid, psk, urlToCheck, false);
+        return WifiConnectionResult.SUCCESS == connectToNetwork(ssid, psk, urlToCheck, false);
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
-    public boolean connectToNetwork(String ssid, String psk, String urlToCheck,
-            boolean scanSsid) throws DeviceNotAvailableException {
+    public WifiConnectionResult connectToNetwork(
+            String ssid, String psk, String urlToCheck, boolean scanSsid)
+            throws DeviceNotAvailableException {
+        return connectToNetwork(ssid, psk, urlToCheck, scanSsid, null);
+    }
+    /** {@inheritDoc} */
+    @Override
+    public WifiConnectionResult connectToNetwork(
+            String ssid, String psk, String urlToCheck, boolean scanSsid, String defaultType)
+            throws DeviceNotAvailableException {
+        if (mUseV2) {
+            return connectToNetworkV2(ssid, psk, scanSsid, defaultType);
+        }
+
         if (!enableWifi()) {
             CLog.e("Failed to enable wifi");
-            return false;
+            return WifiConnectionResult.FAILED_TO_ENABLE;
         }
         if (!asBool(runWifiUtil("connectToNetwork", "ssid", ssid, "psk", psk, "urlToCheck",
                 urlToCheck, "scan_ssid", Boolean.toString(scanSsid)))) {
-            return false;
+            return WifiConnectionResult.FAILED_TO_CONNECT;
         }
-        return true;
+        return WifiConnectionResult.SUCCESS;
+    }
+
+    /** Uses the wifi connect-network cmd to connect to wifi network instead of using the apk. */
+    private WifiConnectionResult connectToNetworkV2(
+            String ssid, String psk, boolean scanSsid, String defaultType)
+            throws DeviceNotAvailableException {
+        if (Strings.isNullOrEmpty(ssid)) {
+            CLog.d("SSID of the wifi network can not be null or empty.");
+            return WifiConnectionResult.FAILED_TO_CONNECT;
+        }
+        if (psk == null) {
+            // psk can be empty for open networks.
+            psk = "";
+        }
+        if (!enableWifiV2()) {
+            return WifiConnectionResult.FAILED_TO_ENABLE;
+        }
+        // after enabling wifi, wait for scan results to appear
+        List<WifiCommandUtil.ScanResult> scanResults = getScanResults(120000L);
+        if (scanResults == null) {
+            return WifiConnectionResult.FAILED_TO_CONNECT;
+        }
+        String networkType = findNetworkType(ssid, scanResults);
+        if (networkType == null) {
+            if (defaultType != null) {
+                // Use the default network type if we fail to find it.
+                CLog.d(
+                        "Defaulting to a `%s` network type. Network connection may fail.",
+                        defaultType);
+                networkType = defaultType;
+            } else {
+                return WifiConnectionResult.FAILED_TO_CONNECT;
+            }
+        }
+        String connectCmd =
+                String.format(
+                        "cmd -w wifi connect-network %s %s %s",
+                        quote(ssid), networkType, quote(psk));
+        if (scanSsid) {
+            connectCmd += " -h";
+        }
+        CommandResult connectOutput = mDevice.executeShellV2Command(connectCmd);
+        if (CommandStatus.SUCCESS.equals(connectOutput.getStatus())
+                && checkConnectivityV2(120000L)) {
+            CLog.i("Successfully connected to wifi network %s", ssid);
+            InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.WIFI_AP_NAME, ssid);
+            return WifiConnectionResult.SUCCESS;
+        } else {
+            CLog.w(
+                    "Failed to connect to wifi. stdout: %s\nstderr:%s",
+                    connectOutput.getStdout(), connectOutput.getStderr());
+            return WifiConnectionResult.FAILED_TO_CONNECT;
+        }
+    }
+
+    /** Returns a list of scan result using the `wifi list-scan-results` command. */
+    private List<WifiCommandUtil.ScanResult> getScanResults(long timeout)
+            throws DeviceNotAvailableException {
+        // start a new scan
+        mDevice.executeShellV2Command("cmd -w wifi start-scan");
+        // we might need to wait for scan results to be available.
+        long startTime = System.currentTimeMillis();
+        while (System.currentTimeMillis() < (startTime + timeout)) {
+            CommandResult listOutput =
+                    mDevice.executeShellV2Command(String.format("cmd -w wifi list-scan-results"));
+            if (!CommandStatus.SUCCESS.equals(listOutput.getStatus())) {
+                CLog.w(
+                        "Failed to list wifi scan results. stdout: %s\nstderr:%s",
+                        listOutput.getStdout(), listOutput.getStderr());
+                return null;
+            }
+
+            List<WifiCommandUtil.ScanResult> scanResults =
+                    WifiCommandUtil.parseScanResults(listOutput.getStdout());
+            if (!scanResults.isEmpty()) {
+                return scanResults;
+            }
+            CLog.d("Scan results is not available yet. Scan Results:\n%s", listOutput.getStdout());
+            getRunUtil().sleep(getPollTime());
+        }
+        CLog.d("Failed to find scan results after timeout: %d ms", timeout);
+        return null;
+    }
+
+    /** Returns the network type for a given Ssid. */
+    private String findNetworkType(String ssid, List<WifiCommandUtil.ScanResult> scanResults) {
+        // Find the scan result for the ssid
+        for (WifiCommandUtil.ScanResult scanResult : scanResults) {
+            if (scanResult.getInfo("SSID").equals(ssid)) {
+                return WifiCommandUtil.resolveNetworkType(scanResult.getInfo("Flags"));
+            }
+        }
+        CLog.w("Failed to find scan result for ssid %s from scanResults: \n%s", ssid, scanResults);
+        return null;
     }
 
     /**
@@ -617,10 +828,10 @@ public class WifiHelper implements IWifiHelper {
     }
 
     /**
-     * Helper function to wrap the specified String in double-quotes to prevent shell interpretation
+     * Helper function to wrap the specified String in single-quotes to prevent shell interpretation
      */
     private static String quote(String str) {
-        return String.format("\"%s\"", str);
+        return "'" + str.replace("'", "'\\''") + "'";
     }
 
     /**

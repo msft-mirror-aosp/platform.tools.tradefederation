@@ -18,7 +18,6 @@ package com.android.tradefed.device.metric;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -76,8 +75,8 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
     public Map<String, String> mTestCaseMetrics = new HashMap<String, String>();
 
     @Override
-    public void onTestEnd(DeviceMetricData testData,
-            Map<String, Metric> currentTestCaseMetrics) {
+    public void onTestEnd(DeviceMetricData testData, Map<String, Metric> currentTestCaseMetrics)
+            throws DeviceNotAvailableException {
         if (mCollectOnRunEndedOnly) {
             // Track test cases metrics in case we don't process here.
             mTestCaseMetrics.putAll(TfMetricProtoUtil.compatibleConvert(currentTestCaseMetrics));
@@ -87,8 +86,8 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
     }
 
     @Override
-    public void onTestRunEnd(
-            DeviceMetricData runData, final Map<String, Metric> currentRunMetrics) {
+    public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> currentRunMetrics)
+            throws DeviceNotAvailableException {
         processMetricRequest(runData, currentRunMetrics);
         mTestCaseMetrics = new HashMap<>();
     }
@@ -120,22 +119,34 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
             String key, File metricDirectory, DeviceMetricData data);
 
     /**
-     * Process the file associated with the matching key or directory name and update
-     * the data with any additional metrics.
+     * Process the file associated with the matching key or directory name and update the data with
+     * any additional metrics.
      *
      * @param data where the final metrics will be stored.
      * @param metrics where the key or directory name will be matched to the keys.
      */
-    private void processMetricRequest(DeviceMetricData data,
-            Map<String, Metric> metrics) {
+    private void processMetricRequest(DeviceMetricData data, Map<String, Metric> metrics)
+            throws DeviceNotAvailableException {
         Map<String, String> currentMetrics = TfMetricProtoUtil
                 .compatibleConvert(metrics);
         currentMetrics.putAll(mTestCaseMetrics);
         if (mKeys.isEmpty() && mDirectoryKeys.isEmpty()) {
             return;
         }
+        Map<ITestDevice, Integer> deviceUsers = new HashMap<>();
+        if (!mKeys.isEmpty()) {
+            for (ITestDevice device : getRealDevices()) {
+                if (!TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                    CLog.d(
+                            "Device '%s' is in state '%s' skipping file puller",
+                            device.getSerialNumber(), device.getDeviceState());
+                    return;
+                }
+                deviceUsers.put(device, device.getCurrentUser());
+            }
+        }
         for (String key : mKeys) {
-            Map<String, File> pulledMetrics = pullMetricFile(key, currentMetrics);
+            Map<String, File> pulledMetrics = pullMetricFile(key, currentMetrics, deviceUsers);
 
             // Process all the metric files that matched the key pattern.
             for (Map.Entry<String, File> entry : pulledMetrics.entrySet()) {
@@ -174,21 +185,22 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
     }
 
     private Map<String, File> pullMetricFile(
-            String pattern, final Map<String, String> currentMetrics) {
+            String pattern,
+            final Map<String, String> currentMetrics,
+            Map<ITestDevice, Integer> deviceUsers)
+            throws DeviceNotAvailableException {
         Map<String, File> matchedFiles = new HashMap<>();
         Pattern p = Pattern.compile(pattern);
+
         for (Entry<String, String> entry : currentMetrics.entrySet()) {
             if (p.matcher(entry.getKey()).find()) {
-                for (ITestDevice device : getDevices()) {
-                    // Skip StubDevices
-                    if (device.getIDevice() instanceof StubDevice) {
-                        continue;
-                    }
+                for (ITestDevice device : getRealDevices()) {
                     if (!shouldCollect(device)) {
                         continue;
                     }
                     try {
-                        File attemptPull = retrieveFile(device, entry.getValue());
+                        File attemptPull =
+                                retrieveFile(device, entry.getValue(), deviceUsers.get(device));
                         if (attemptPull != null) {
                             if (mCleanUp) {
                                 device.deleteFile(entry.getValue());
@@ -197,7 +209,7 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
                             // files pulled from the device.
                             matchedFiles.put(entry.getKey(), attemptPull);
                         }
-                    } catch (DeviceNotAvailableException e) {
+                    } catch (RuntimeException e) {
                         CLog.e(
                                 "Exception when pulling metric file '%s' from %s",
                                 entry.getValue(), device.getSerialNumber());
@@ -220,12 +232,13 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
      *
      * @param device which has the file.
      * @param remoteFilePath location in the device.
+     * @param userId the user id to pull from
      * @return File retrieved from the given path in the device.
      * @throws DeviceNotAvailableException
      */
-    protected File retrieveFile(ITestDevice device, String remoteFilePath)
+    protected File retrieveFile(ITestDevice device, String remoteFilePath, int userId)
             throws DeviceNotAvailableException {
-        return device.pullFile(remoteFilePath);
+        return device.pullFile(remoteFilePath, userId);
     }
 
     /**
@@ -235,15 +248,12 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
      * @param keyDirectory path to the source directory in the device.
      * @return Key,value pair of the directory name and path to the directory in the local host.
      */
-    private Entry<String, File> pullMetricDirectory(String keyDirectory) {
+    private Entry<String, File> pullMetricDirectory(String keyDirectory)
+            throws DeviceNotAvailableException {
         try {
             File tmpDestDir =
                     FileUtil.createTempDir("metric_tmp", CurrentInvocation.getWorkFolder());
-            for (ITestDevice device : getDevices()) {
-                // Skip StubDevices
-                if (device.getIDevice() instanceof StubDevice) {
-                    continue;
-                }
+            for (ITestDevice device : getRealDevices()) {
                 if (!shouldCollect(device)) {
                     continue;
                 }
@@ -254,7 +264,7 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
                         }
                         return new SimpleEntry<String, File>(keyDirectory, tmpDestDir);
                     }
-                } catch (DeviceNotAvailableException e) {
+                } catch (RuntimeException e) {
                     CLog.e(
                             "Exception when pulling directory '%s' from %s",
                             keyDirectory, device.getSerialNumber());

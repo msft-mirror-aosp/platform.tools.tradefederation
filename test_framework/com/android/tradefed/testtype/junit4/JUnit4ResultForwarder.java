@@ -16,11 +16,13 @@
 package com.android.tradefed.testtype.junit4;
 
 import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.LogAnnotation;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner.MetricAnnotation;
@@ -38,6 +40,8 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Result forwarder from JUnit4 Runner.
@@ -48,6 +52,9 @@ public class JUnit4ResultForwarder extends RunListener {
     private List<Throwable> mTestCaseFailures;
     private Description mRunDescription;
     private boolean mBeforeClass = true;
+    private CloseableTraceScope mMethodTrace = null;
+
+    private LogUploaderThread mLogUploaderThread;
 
     public JUnit4ResultForwarder(ITestInvocationListener listener) {
         mListener = listener;
@@ -56,12 +63,20 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testFailure(Failure failure) throws Exception {
+        if (mLogUploaderThread != null) {
+            mLogUploaderThread.cancel();
+        }
+
         Description description = failure.getDescription();
         if (description.getMethodName() == null) {
             Throwable error = failure.getException();
             String message = error.getMessage();
             if (message == null) {
-                message = "Exception with no error message";
+                if (error instanceof CarryInterruptedException) {
+                    message = "Test Phase Timeout Reached.";
+                } else {
+                    message = "Exception with no error message";
+                }
             }
             FailureDescription failureDesc =
                     FailureDescription.create(message).setFailureStatus(FailureStatus.TEST_FAILURE);
@@ -76,6 +91,8 @@ public class JUnit4ResultForwarder extends RunListener {
                 }
                 failureDesc.setErrorIdentifier(((IHarnessException) error).getErrorId());
                 failureDesc.setOrigin(((IHarnessException) error).getOrigin());
+            } else if (error instanceof CarryInterruptedException) {
+                failureDesc.setErrorIdentifier(TestErrorIdentifier.TEST_PHASE_TIMED_OUT);
             }
             mListener.testRunFailed(failureDesc);
             // If the exception is ours thrown from before, rethrow it
@@ -122,6 +139,7 @@ public class JUnit4ResultForwarder extends RunListener {
 
     @Override
     public void testStarted(Description description) throws Exception {
+        mMethodTrace = new CloseableTraceScope(description.getMethodName());
         mBeforeClass = false;
         mTestCaseFailures.clear();
         TestDescription testid =
@@ -130,10 +148,16 @@ public class JUnit4ResultForwarder extends RunListener {
                         description.getMethodName(),
                         description.getAnnotations());
         mListener.testStarted(testid);
+
+        mLogUploaderThread = new LogUploaderThread(description);
+        mLogUploaderThread.setDaemon(true);
+        mLogUploaderThread.start();
     }
 
     @Override
     public void testFinished(Description description) throws Exception {
+        mLogUploaderThread.cancel();
+
         TestDescription testid =
                 new TestDescription(
                         description.getClassName(),
@@ -142,6 +166,10 @@ public class JUnit4ResultForwarder extends RunListener {
         try {
             handleFailures(testid);
         } finally {
+            mLogUploaderThread.join();
+            // run last time to make sure all logs uploaded
+            pollLogsAndUpload(description);
+
             // Explore the Description to see if we find any Annotation metrics carrier
             HashMap<String, Metric> metrics = new HashMap<>();
             for (Description child : description.getChildren()) {
@@ -149,18 +177,14 @@ public class JUnit4ResultForwarder extends RunListener {
                     if (a instanceof MetricAnnotation) {
                         metrics.putAll(((MetricAnnotation) a).mMetrics);
                     }
-                    if (a instanceof LogAnnotation) {
-                        // Log all the logs found.
-                        for (LogHolder log : ((LogAnnotation) a).mLogs) {
-                            mListener.testLog(log.mDataName, log.mDataType, log.mDataStream);
-                            StreamUtil.cancel(log.mDataStream);
-                        }
-                        ((LogAnnotation) a).mLogs.clear();
-                    }
                 }
             }
             mListener.testEnded(testid, metrics);
             mTestCaseFailures.clear();
+            if (mMethodTrace != null) {
+                mMethodTrace.close();
+                mMethodTrace = null;
+            }
         }
     }
 
@@ -198,6 +222,46 @@ public class JUnit4ResultForwarder extends RunListener {
             MultipleFailureException multiException =
                     new MultipleFailureException(mTestCaseFailures);
             mListener.testFailed(testid, getMultiFailureStack(multiException));
+        }
+    }
+
+    /**
+     * Thread used to upload logs in between of testStarted and testFinished, in parallel to the
+     * test actual run
+     */
+    private class LogUploaderThread extends Thread {
+        private Description mDescription;
+        private AtomicBoolean mIsCancelled = new AtomicBoolean(false);
+
+        public LogUploaderThread(Description description) {
+            mDescription = description;
+        }
+
+        @Override
+        public void run() {
+            while (!mIsCancelled.get()) {
+                pollLogsAndUpload(mDescription);
+            }
+        }
+
+        public void cancel() {
+            mIsCancelled.set(true);
+        }
+    }
+
+    private void pollLogsAndUpload(Description description) {
+        for (Description child : description.getChildren()) {
+            for (Annotation a : child.getAnnotations()) {
+                if (a instanceof LogAnnotation) {
+                    LinkedBlockingQueue<LogHolder> list = ((LogAnnotation) a).mLogs;
+                    while (!list.isEmpty()) {
+                        LogHolder log = list.poll();
+                        // upload log
+                        mListener.testLog(log.mDataName, log.mDataType, log.mDataStream);
+                        StreamUtil.cancel(log.mDataStream);
+                    }
+                }
+            }
         }
     }
 

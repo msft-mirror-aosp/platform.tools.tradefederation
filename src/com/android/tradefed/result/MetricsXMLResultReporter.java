@@ -16,7 +16,6 @@
 
 package com.android.tradefed.result;
 
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -146,7 +145,7 @@ public class MetricsXMLResultReporter extends CollectingTestListener {
 
         printTestMetrics(serializer, testResult.getMetrics());
 
-        if (!TestStatus.PASSED.equals(testResult.getStatus())) {
+        if (!TestStatus.PASSED.equals(testResult.getResultStatus())) {
             String result = testResult.getStatus().name();
             serializer.startTag(NS, result);
             String stackText = sanitize(testResult.getStackTrace());
@@ -188,7 +187,7 @@ public class MetricsXMLResultReporter extends CollectingTestListener {
 
     /** Returns the text in a format that is safe for use in an XML document. */
     private String sanitize(String text) {
-        return text.replace("\0", "<\\0>");
+        return text == null ? "" : text.replace("\0", "<\\0>");
     }
 
     /** Return the current timestamp as a {@link String}. */

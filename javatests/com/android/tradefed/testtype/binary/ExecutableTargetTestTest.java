@@ -39,9 +39,11 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
+import java.util.List;
 import java.util.HashMap;
 import java.util.Collection;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Unit tests for {@link com.android.tradefed.testtype.binary.ExecutableTargetTest}. */
 @RunWith(JUnit4.class)
@@ -93,9 +95,9 @@ public class ExecutableTargetTestTest {
         setter.setOptionValue("test-command-line", testName1, testCmd1);
         setter.setOptionValue("test-command-line", testName2, testCmd2);
         mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
         TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
@@ -103,13 +105,12 @@ public class ExecutableTargetTestTest {
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName2), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
-        Mockito.verify(mListener, Mockito.times(2))
+        Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
@@ -137,23 +138,28 @@ public class ExecutableTargetTestTest {
         setter.setOptionValue("test-command-line", testName1, testCmd1);
         setter.setOptionValue("test-command-line", testName2, testCmd2);
         mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
-        Mockito.verify(mListener, Mockito.times(0)).testRunStarted(eq(testName1), eq(1));
         FailureDescription failure1 =
                 FailureDescription.create(
                                 String.format(ExecutableBaseTest.NO_BINARY_ERROR, testCmd1),
                                 FailureStatus.TEST_FAILURE)
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-        Mockito.verify(mListener, Mockito.times(1)).testRunFailed(failure1);
+        Mockito.verify(mListener, Mockito.times(1))
+                .testFailed(
+                        Mockito.eq(new TestDescription(testName1, testName1)),
+                        Mockito.eq(failure1));
         // run cmd2 test
-        Mockito.verify(mListener, Mockito.times(0)).testRunStarted(eq(testName2), eq(1));
         FailureDescription failure2 =
                 FailureDescription.create(
                                 String.format(ExecutableBaseTest.NO_BINARY_ERROR, testCmd2),
                                 FailureStatus.TEST_FAILURE)
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
-        Mockito.verify(mListener, Mockito.times(1)).testRunFailed(failure2);
-        Mockito.verify(mListener, Mockito.times(2))
+        Mockito.verify(mListener, Mockito.times(1))
+                .testFailed(
+                        Mockito.eq(new TestDescription(testName2, testName2)),
+                        Mockito.eq(failure2));
+        Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
@@ -183,9 +189,9 @@ public class ExecutableTargetTestTest {
         setter.setOptionValue("test-command-line", testName1, testCmd1);
         setter.setOptionValue("test-command-line", testName2, testCmd2);
         mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
         TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1)).testFailed(testDescription, ERROR_MESSAGE);
         Mockito.verify(mListener, Mockito.times(1))
@@ -194,14 +200,13 @@ public class ExecutableTargetTestTest {
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName2), eq(1));
         Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1)).testFailed(testDescription2, ERROR_MESSAGE);
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
-        Mockito.verify(mListener, Mockito.times(2))
+        Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
@@ -373,9 +378,9 @@ public class ExecutableTargetTestTest {
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
     }
 
-    /** Test split() for sharding */
+    /** Test split() for sharding with PER_SHARD type */
     @Test
-    public void testShard_Split() throws ConfigurationException {
+    public void testShard_SplitPerTestCommand() throws ConfigurationException {
         mExecutableTargetTest = new ExecutableTargetTest();
         // Set test commands
         OptionSetter setter = new OptionSetter(mExecutableTargetTest);
@@ -398,5 +403,84 @@ public class ExecutableTargetTestTest {
             // The test command should equals to one of them.
             assertEquals(true, cmd1 != null || cmd2 != null || cmd3 != null);
         }
+    }
+
+    /** Test split() for sharding with PER_SHARD type */
+    @Test
+    public void testShard_SplitPerShard() throws ConfigurationException {
+        int numBinaryTests = 7;
+        int numCmdLineTests = 15;
+        HashMap<String, String> tests = new HashMap<String, String>();
+
+        mExecutableTargetTest = new ExecutableTargetTest();
+        OptionSetter setter = new OptionSetter(mExecutableTargetTest);
+        setter.setOptionValue("shard-split", "PER_SHARD");
+
+        // Set binary commands
+        for (int i = 0; i < numBinaryTests; ++i) {
+            String testCmd = "binary_" + i;
+            setter.setOptionValue("binary", testCmd);
+            tests.put(testCmd, testCmd);
+        }
+
+        // Set test commands
+        for (int i = 0; i < numCmdLineTests; ++i) {
+            String testName = "testName_" + i;
+            String testCmd = "testCmd_" + i;
+            setter.setOptionValue("test-command-line", testName, testCmd);
+            tests.put(testName, testCmd);
+        }
+
+        // Split the shard.
+        Collection<IRemoteTest> testShards = mExecutableTargetTest.split(5);
+        assertEquals(5, testShards.size());
+
+        // The number of tests across the shards should equal the original count
+        assertEquals(
+                numBinaryTests + numCmdLineTests,
+                testShards.stream()
+                        .mapToInt(x -> ((ExecutableTargetTest) x).getAllTestCommands().size())
+                        .sum());
+
+        // Check for the presence of all the tests
+        for (Map.Entry<String, String> entry : tests.entrySet()) {
+            String testName = entry.getKey();
+            String testCmd = entry.getValue();
+            List<String> listOfOne =
+                    testShards.stream()
+                            .map(x -> ((ExecutableTargetTest) x).getAllTestCommands().get(testName))
+                            .filter(x -> x != null)
+                            .collect(Collectors.toList());
+            assertEquals(1, listOfOne.size());
+            assertEquals(testCmd, listOfOne.get(0));
+        }
+    }
+
+    /** Test skipping findBinary(). */
+    @Test
+    public void testRun_skipBinaryCheck()
+            throws DeviceNotAvailableException, ConfigurationException {
+        mExecutableTargetTest =
+                new ExecutableTargetTest() {
+                    @Override
+                    protected void checkCommandResult(
+                            CommandResult result,
+                            ITestInvocationListener listener,
+                            TestDescription description) {}
+                };
+        mExecutableTargetTest.setDevice(mMockITestDevice);
+        // Set test commands
+        OptionSetter setter = new OptionSetter(mExecutableTargetTest);
+        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("skip-binary-check", "true");
+        mExecutableTargetTest.run(mTestInfo, mListener);
+        // run cmd1 test
+        TestDescription testDescription = new TestDescription(testName1, testName1);
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
+        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testEnded(
+                        Mockito.eq(testDescription),
+                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
     }
 }

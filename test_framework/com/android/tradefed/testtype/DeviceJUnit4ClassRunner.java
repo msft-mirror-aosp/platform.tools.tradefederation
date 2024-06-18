@@ -21,6 +21,7 @@ import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -51,7 +52,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * JUnit4 test runner that also accommodates {@link IDeviceTest}. Should be specified above JUnit4
@@ -178,7 +181,7 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
     }
 
     private Set<File> resolveRemoteFileForObject(Object obj) {
-        try {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("junit4:resolveRemoteFiles")) {
             OptionSetter setter = new OptionSetter(obj);
             return setter.validateRemoteFilePath(createResolver());
         } catch (BuildRetrievalError | ConfigurationException e) {
@@ -272,6 +275,23 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
         public Class<? extends Annotation> annotationType() {
             return null;
         }
+
+        @Override
+        public boolean equals(Object other) {
+            if (other == this) {
+                return true;
+            }
+            if (!(other instanceof MetricAnnotation)) {
+                return false;
+            }
+            MetricAnnotation o = (MetricAnnotation) other;
+            return Objects.equals(mMetrics, o.mMetrics);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mMetrics);
+        }
     }
 
     /**
@@ -296,50 +316,58 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
      */
     public static class TestLogData extends ExternalResource {
         private Description mDescription;
-        private List<LogHolder> mLogs = new ArrayList<>();
+        /**
+         * Using synchronous Queue here to mitigate possible concurrency issues in {@link
+         * com.android.tradefed.testtype.junit4.JUnit4ResultForwarder} that consumes the logs
+         */
+        private LinkedBlockingQueue<LogHolder> mLogs = new LinkedBlockingQueue<>();
 
         @Override
         public Statement apply(Statement base, Description description) {
             mDescription = description;
+            // we inject a Description with an annotation carrying logs.
+            // We have to go around, since Description cannot be extended and RunNotifier
+            // does not give us a lot of flexibility to find our logs back.
+            mDescription.addChild(
+                    Description.createTestDescription("LOGS", "LOGS", new LogAnnotation(mLogs)));
             return super.apply(base, description);
-        }
-
-        @Override
-        protected void before() throws Throwable {
-            super.before();
-            mLogs = new ArrayList<>();
         }
 
         public final void addTestLog(
                 String dataName, LogDataType dataType, InputStreamSource dataStream) {
             mLogs.add(new LogHolder(dataName, dataType, dataStream));
         }
-
-        @Override
-        protected void after() {
-            // we inject a Description with an annotation carrying metrics.
-            // We have to go around, since Description cannot be extended and RunNotifier
-            // does not give us a lot of flexibility to find our metrics back.
-            if (!mLogs.isEmpty()) {
-                mDescription.addChild(
-                        Description.createTestDescription(
-                                "LOGS", "LOGS", new LogAnnotation(mLogs)));
-            }
-        }
     }
 
     /** Fake annotation meant to carry logs to the reporters. */
     public static class LogAnnotation implements Annotation {
 
-        public List<LogHolder> mLogs = new ArrayList<>();
+        public LinkedBlockingQueue<LogHolder> mLogs;
 
-        public LogAnnotation(List<LogHolder> logs) {
-            mLogs.addAll(logs);
+        public LogAnnotation(LinkedBlockingQueue<LogHolder> logs) {
+            mLogs = logs;
         }
 
         @Override
         public Class<? extends Annotation> annotationType() {
             return null;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (other == this) {
+                return true;
+            }
+            if (!(other instanceof LogAnnotation)) {
+                return false;
+            }
+            TestLogData o = (TestLogData) other;
+            return Objects.equals(mLogs, o.mLogs);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mLogs);
         }
     }
 }

@@ -18,16 +18,17 @@ package com.android.tradefed.testtype.host;
 import static com.google.common.io.Files.getNameWithoutExtension;
 import static com.google.common.truth.Truth.assertThat;
 
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -42,6 +43,7 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
 
@@ -160,12 +162,9 @@ public final class CoverageMeasurementForwarderTest {
     @Test
     public void testNoSuchJavaArtifact() {
         mForwarder.setCoverageMeasurements(ImmutableList.of(NONEXISTANT_ARTIFACT1));
-        try {
-            mForwarder.run(mTestInfo, mMockListener);
-            fail("Should have thrown an exception.");
-        } catch (RuntimeException e) {
-            // Expected
-        }
+        mForwarder.run(mTestInfo, mMockListener);
+
+        verify(mMockListener).testRunFailed((FailureDescription) Mockito.any());
         assertThat(mCapturedJavaLogs).isEmpty();
         assertThat(mCapturedNativeLogs).isEmpty();
     }
@@ -200,12 +199,9 @@ public final class CoverageMeasurementForwarderTest {
     public void testNoSuchNativeArtifact() {
         mForwarder.setCoverageMeasurements(ImmutableList.of(NONEXISTANT_ARTIFACT2));
         mForwarder.setCoverageLogDataType(LogDataType.NATIVE_COVERAGE);
-        try {
-            mForwarder.run(mTestInfo, mMockListener);
-            fail("Should have thrown an exception.");
-        } catch (RuntimeException e) {
-            // Expected
-        }
+        mForwarder.run(mTestInfo, mMockListener);
+
+        verify(mMockListener).testRunFailed((FailureDescription) Mockito.any());
         assertThat(mCapturedJavaLogs).isEmpty();
         assertThat(mCapturedNativeLogs).isEmpty();
     }

@@ -21,7 +21,6 @@ import static org.junit.Assert.assertTrue;
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -33,6 +32,7 @@ import com.android.tradefed.result.ITestLifeCycleReceiver;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
 import com.android.tradefed.targetprep.BuildError;
 import com.android.tradefed.targetprep.TargetSetupError;
@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
 public abstract class BaseHostJUnit4Test implements IAbiReceiver, ITestInformationReceiver {
 
     static final long DEFAULT_TEST_TIMEOUT_MS = 10 * 60 * 1000L;
-    private static final long DEFAULT_MAX_TIMEOUT_TO_OUTPUT_MS = 10 * 60 * 1000L; // 10min
+    static final long DEFAULT_MAX_TIMEOUT_TO_OUTPUT_MS = 10 * 60 * 1000L; // 10 min
     private static final Map<String, String> DEFAULT_INSTRUMENTATION_ARGS = new HashMap<>();
 
     private IAbi mAbi;
@@ -740,7 +740,7 @@ public abstract class BaseHostJUnit4Test implements IAbiReceiver, ITestInformati
                 StringBuilder errorBuilder = new StringBuilder("on-device tests failed:\n");
                 for (Map.Entry<TestDescription, TestResult> resultEntry :
                         runResult.getTestResults().entrySet()) {
-                    if (!TestStatus.PASSED.equals(resultEntry.getValue().getStatus())) {
+                    if (!TestStatus.PASSED.equals(resultEntry.getValue().getResultStatus())) {
                         errorBuilder.append(resultEntry.getKey().toString());
                         errorBuilder.append(":\n");
                         errorBuilder.append(resultEntry.getValue().getStackTrace());
@@ -829,12 +829,22 @@ public abstract class BaseHostJUnit4Test implements IAbiReceiver, ITestInformati
         } else if (testClassName != null) {
             testRunner.setClassName(testClassName);
         }
-
         if (testTimeoutMs != null) {
             testRunner.addInstrumentationArg("timeout_msec", Long.toString(testTimeoutMs));
         } else {
+            testTimeoutMs = DEFAULT_TEST_TIMEOUT_MS;
             testRunner.addInstrumentationArg(
                     "timeout_msec", Long.toString(DEFAULT_TEST_TIMEOUT_MS));
+        }
+        if (maxTimeToOutputMs != null && maxTimeToOutputMs < testTimeoutMs) {
+            // Similar logic as InstrumentationTest
+            maxTimeToOutputMs = testTimeoutMs + testTimeoutMs / 10;
+            CLog.w(
+                    String.format(
+                            "maxTimeToOutputMs should be larger than testtimeout %d; NOTE:"
+                                    + " extending maxTimeToOutputMs to %d, please consider fixing"
+                                    + " this!",
+                            testTimeoutMs, maxTimeToOutputMs));
         }
         if (maxTimeToOutputMs != null) {
             testRunner.setMaxTimeToOutputResponse(maxTimeToOutputMs, TimeUnit.MILLISECONDS);
@@ -854,6 +864,8 @@ public abstract class BaseHostJUnit4Test implements IAbiReceiver, ITestInformati
         if (userId == null) {
             assertTrue(device.runInstrumentationTests(testRunner, allReceiver));
         } else {
+            // Ensure userId is correct before starting instrumentation
+            assertTrue(userId >= 0);
             assertTrue(device.runInstrumentationTestsAsUser(testRunner, userId, allReceiver));
         }
         return listener.getCurrentRunResults();
@@ -893,7 +905,7 @@ public abstract class BaseHostJUnit4Test implements IAbiReceiver, ITestInformati
         for (Map.Entry<TestDescription, TestResult> testEntry :
                 runResult.getTestResults().entrySet()) {
             TestResult testResult = testEntry.getValue();
-            TestStatus testStatus = testResult.getStatus();
+            TestStatus testStatus = testResult.getResultStatus();
             CLog.logAndDisplay(LogLevel.INFO, "Test " + testEntry.getKey() + ": " + testStatus);
             if (!TestStatus.PASSED.equals(testStatus)
                     && !TestStatus.ASSUMPTION_FAILURE.equals(testStatus)) {

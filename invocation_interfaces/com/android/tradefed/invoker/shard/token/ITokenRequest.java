@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.invoker.shard.token;
 
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.testtype.IRemoteTest;
 
 import java.util.Set;
@@ -26,5 +27,12 @@ import java.util.Set;
 public interface ITokenRequest extends IRemoteTest {
 
     /** Returns the list of required tokens by the test. Returns null if no token support. */
-    public Set<TokenProperty> getRequiredTokens();
+    public default Set<TokenProperty> getRequiredTokens() {
+        return null;
+    }
+
+    /** Returns the list of required tokens by the test. Returns null if no token support. */
+    public default Set<TokenProperty> getRequiredTokens(TestInformation testInfo) {
+        return getRequiredTokens();
+    }
 }

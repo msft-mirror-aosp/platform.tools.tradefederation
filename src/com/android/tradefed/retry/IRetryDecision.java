@@ -44,6 +44,10 @@ public interface IRetryDecision {
     /** Returns true if we should use the updated reporting. */
     public boolean useUpdatedReporting();
 
+    /** Decide whether or not the module preparation should be retried. */
+    public RetryPreparationDecision shouldRetryPreparation(
+            ModuleDefinition module, int attempt, int maxAttempt);
+
     /** Set the current invocation context. */
     public void setInvocationContext(IInvocationContext context);
 
@@ -69,6 +73,7 @@ public interface IRetryDecision {
      * @param module The {@link ModuleDefinition} object for the test module.
      * @param attemptJustExecuted The number of the attempt that we just ran.
      * @param previousResults The list of {@link TestRunResult} of the test that just ran.
+     * @param dnae The {@link DeviceNotAvailableException} of device not available exception.
      * @return True if we should retry, False otherwise.
      * @throws DeviceNotAvailableException Can be thrown during device recovery
      */
@@ -76,7 +81,8 @@ public interface IRetryDecision {
             IRemoteTest test,
             ModuleDefinition module,
             int attemptJustExecuted,
-            List<TestRunResult> previousResults)
+            List<TestRunResult> previousResults,
+            DeviceNotAvailableException dnae)
             throws DeviceNotAvailableException;
 
     /**
@@ -90,4 +96,9 @@ public interface IRetryDecision {
 
     /** Returns the {@link RetryStatistics} representing the retry. */
     public RetryStatistics getRetryStatistics();
+
+    /** Add an entry to skip retrying it. */
+    public default void addToSkipRetryList(String filterEntry) {
+        // Empty by default on purpose
+    }
 }

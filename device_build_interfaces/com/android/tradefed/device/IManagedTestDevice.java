@@ -90,8 +90,9 @@ public interface IManagedTestDevice extends ITestDevice {
      * Invoke recovery on the device.
      *
      * @throws DeviceNotAvailableException if recovery was not successful
+     * @return True if recovery attempted and successful, returns False if recovery was skipped
      */
-    public void recoverDevice() throws DeviceNotAvailableException;
+    public boolean recoverDevice() throws DeviceNotAvailableException;
 
     /**
      * Sets the {@link Process}, when this device is an emulator.

@@ -59,7 +59,7 @@ public class CarModuleControllerTest {
 
     /** Test that a StubDevice is ignored by the check. */
     @Test
-    public void testStubDevice() {
+    public void testStubDevice() throws Exception {
         when(mMockDevice.getIDevice()).thenReturn(new StubDevice("serial"));
 
         assertEquals(RunStrategy.FULL_MODULE_BYPASS, mController.shouldRunModule(mContext));

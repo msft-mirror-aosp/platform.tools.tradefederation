@@ -67,7 +67,7 @@ public class LogcatTimingMetricCollectorTest {
     private TestDescription mTest;
 
     @Before
-    public void setup() throws ConfigurationException {
+    public void setup() throws Exception {
         initMocks(this);
 
         mTest = new TestDescription("HelloTest", "testDrive");

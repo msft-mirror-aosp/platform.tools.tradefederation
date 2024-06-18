@@ -45,8 +45,6 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.zip.GZIPInputStream;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 /** Unit tests for {@link LogFileSaver}. */
 @RunWith(JUnit4.class)
@@ -192,34 +190,6 @@ public class LogFileSaverTest {
             assertTrue(actualLogString.equals(testData));
         } finally {
             StreamUtil.close(gzipStream);
-            FileUtil.deleteFile(logFile);
-        }
-    }
-
-    /** Simple normal case test for {@link LogFileSaver#saveAndZipLogData}. */
-    @Test
-    public void testSaveAndZipLogData() throws IOException {
-        File logFile = null;
-        ZipFile zipFile = null;
-        try {
-            // TODO: would be nice to create a mock file output to make this test not use disk I/O
-            LogFileSaver saver = new LogFileSaver(new BuildInfo(), mRootDir);
-            final String testData = "Here's some test data, blah";
-            ByteArrayInputStream mockInput = new ByteArrayInputStream(testData.getBytes());
-            logFile = saver.saveAndZipLogData("testSaveLogData", LogDataType.TEXT, mockInput);
-
-            assertTrue(logFile.getName().endsWith(LogDataType.ZIP.getFileExt()));
-            // Verify test data was written to file
-            zipFile = new ZipFile(logFile);
-
-            String actualLogString =
-                    StreamUtil.getStringFromStream(
-                            zipFile.getInputStream(new ZipEntry("testSaveLogData.txt")));
-            assertTrue(actualLogString.equals(testData));
-        } finally {
-            if (zipFile != null) {
-                zipFile.close();
-            }
             FileUtil.deleteFile(logFile);
         }
     }
