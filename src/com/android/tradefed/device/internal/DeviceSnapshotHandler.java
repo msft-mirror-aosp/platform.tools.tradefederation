@@ -112,8 +112,6 @@ public class DeviceSnapshotHandler {
                     InfraErrorIdentifier.UNDETERMINED);
         }
 
-        // TODO: parse snapshot ID from response, and save it to mContext.
-
         // Save snapshot performance data
         Pattern durationPattern = Pattern.compile("Snapshot\\sfinished\\sin (\\d+)\\sms");
         Matcher matcher;
