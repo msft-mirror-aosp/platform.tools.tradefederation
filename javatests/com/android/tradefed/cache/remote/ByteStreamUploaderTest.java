@@ -53,11 +53,13 @@ public class ByteStreamUploaderTest {
     private final MutableHandlerRegistry mServiceRegistry = new MutableHandlerRegistry();
     private ManagedChannel mChannel;
     private Server mFakeServer;
+    private int mChunkSize = 10;
 
     private static class FakeByteStreamService extends ByteStreamImplBase {
         private long mNextOffset = 0;
         public byte[] receivedData;
         public String receivedResourceName = null;
+        public int requestCount = 0;
 
         private FakeByteStreamService(int bufferSize) {
             this.receivedData = new byte[bufferSize];
@@ -75,6 +77,7 @@ public class ByteStreamUploaderTest {
                     System.arraycopy(
                             data.toByteArray(), 0, receivedData, (int) mNextOffset, data.size());
                     mNextOffset += data.size();
+                    requestCount++;
                 }
 
                 @Override
@@ -118,6 +121,7 @@ public class ByteStreamUploaderTest {
         Digest digest = DigestCalculator.compute(blob);
         FakeByteStreamService service = new FakeByteStreamService(bufferSize);
         mServiceRegistry.addService(service);
+        mChunkSize = 11;
 
         newUploader().uploadBlob(digest, ByteString.copyFrom(blob)).get();
 
@@ -126,6 +130,21 @@ public class ByteStreamUploaderTest {
         assertTrue(
                 service.receivedResourceName.endsWith(
                         digest.getHash() + "/" + String.valueOf(bufferSize)));
+    }
+
+    @Test
+    public void uploadBlob_multiple_blobs_works() throws InterruptedException, ExecutionException {
+        int bufferSize = 10;
+        byte[] blob = new byte[bufferSize];
+        new Random().nextBytes(blob);
+        FakeByteStreamService service = new FakeByteStreamService(bufferSize);
+        mServiceRegistry.addService(service);
+        mChunkSize = 3;
+
+        newUploader().uploadBlob(DigestCalculator.compute(blob), ByteString.copyFrom(blob)).get();
+
+        assertArrayEquals(service.receivedData, blob);
+        assertEquals(service.requestCount, 4);
     }
 
     @Test
@@ -203,6 +222,6 @@ public class ByteStreamUploaderTest {
     }
 
     private ByteStreamUploader newUploader() {
-        return new ByteStreamUploader(INSTANCE, mChannel, null, Duration.ofSeconds(5));
+        return new ByteStreamUploader(INSTANCE, mChannel, null, Duration.ofSeconds(5), mChunkSize);
     }
 }
