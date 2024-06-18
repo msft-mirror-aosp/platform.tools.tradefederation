@@ -19,7 +19,11 @@ package com.android.tradefed.cache.remote;
 import build.bazel.remote.execution.v2.ActionCacheGrpc;
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheFutureStub;
 import build.bazel.remote.execution.v2.ActionResult;
+import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc;
+import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc.ContentAddressableStorageFutureStub;
 import build.bazel.remote.execution.v2.Digest;
+import build.bazel.remote.execution.v2.FindMissingBlobsRequest;
+import build.bazel.remote.execution.v2.FindMissingBlobsResponse;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
 import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import com.android.tradefed.cache.DigestCalculator;
@@ -30,6 +34,8 @@ import com.android.tradefed.cache.MerkleTree;
 import com.android.tradefed.cache.UploadManifest;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.util.FileUtil;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -58,6 +64,7 @@ public class RemoteCacheClient implements ICacheClient {
     private final CallCredentials mCallCredentials;
     private final ByteStreamDownloader mDownloader;
     private final ByteStreamUploader mUploader;
+    private final int mMaxMissingBlobsDigestsPerMessage;
 
     public RemoteCacheClient(
             File workFolder,
@@ -72,6 +79,7 @@ public class RemoteCacheClient implements ICacheClient {
         mCallCredentials = callCredentials;
         mDownloader = downloader;
         mUploader = uploader;
+        mMaxMissingBlobsDigestsPerMessage = computeMaxMissingBlobsDigestsPerMessage();
     }
 
     /** {@inheritDoc} */
@@ -107,13 +115,21 @@ public class RemoteCacheClient implements ICacheClient {
         }
 
         UploadManifest manifest = manifestBuilder.build();
+
+        List<Digest> digests = new ArrayList<>();
+        digests.addAll(manifest.digestToFile().keySet());
+        digests.addAll(manifest.digestToBlob().keySet());
+        ImmutableSet<Digest> missingDigests = getFromFuture(findMissingDigests(digests));
+
         List<ListenableFuture<Void>> uploads = new ArrayList<>();
         uploads.addAll(
                 manifest.digestToFile().entrySet().stream()
+                        .filter(e -> missingDigests.contains(e.getKey()))
                         .map(e -> mUploader.uploadFile(e.getKey(), e.getValue()))
                         .collect(Collectors.toList()));
         uploads.addAll(
                 manifest.digestToBlob().entrySet().stream()
+                        .filter(e -> missingDigests.contains(e.getKey()))
                         .map(e -> mUploader.uploadBlob(e.getKey(), e.getValue()))
                         .collect(Collectors.toList()));
         waitForBulkTransfers(uploads);
@@ -205,6 +221,85 @@ public class RemoteCacheClient implements ICacheClient {
             }
         }
         return ExecutableActionResult.create(actionResult.getExitCode(), stdout, stderr);
+    }
+
+    private ListenableFuture<ImmutableSet<Digest>> findMissingDigests(Iterable<Digest> digests) {
+        if (Iterables.isEmpty(digests)) {
+            return Futures.immediateFuture(ImmutableSet.of());
+        }
+        // Need to potentially split the digests into multiple requests.
+        FindMissingBlobsRequest.Builder requestBuilder =
+                FindMissingBlobsRequest.newBuilder()
+                        .setInstanceName(mInstanceName)
+                        .setDigestFunction(DigestCalculator.DIGEST_FUNCTION);
+        List<ListenableFuture<FindMissingBlobsResponse>> getMissingDigestCalls = new ArrayList<>();
+        for (Digest digest : digests) {
+            requestBuilder.addBlobDigests(digest);
+            if (requestBuilder.getBlobDigestsCount() == mMaxMissingBlobsDigestsPerMessage) {
+                getMissingDigestCalls.add(getMissingDigests(requestBuilder.build()));
+                requestBuilder.clearBlobDigests();
+            }
+        }
+
+        if (requestBuilder.getBlobDigestsCount() > 0) {
+            getMissingDigestCalls.add(getMissingDigests(requestBuilder.build()));
+        }
+
+        ListenableFuture<ImmutableSet<Digest>> success =
+                Futures.whenAllSucceed(getMissingDigestCalls)
+                        .call(
+                                () -> {
+                                    ImmutableSet.Builder<Digest> result = ImmutableSet.builder();
+                                    for (ListenableFuture<FindMissingBlobsResponse> callFuture :
+                                            getMissingDigestCalls) {
+                                        result.addAll(callFuture.get().getMissingBlobDigestsList());
+                                    }
+                                    return result.build();
+                                },
+                                MoreExecutors.directExecutor());
+
+        return Futures.catchingAsync(
+                success,
+                RuntimeException.class,
+                (e) ->
+                        Futures.immediateFailedFuture(
+                                new IOException(
+                                        String.format(
+                                                "Failed to find missing blobs: %s", e.getMessage()),
+                                        e)),
+                MoreExecutors.directExecutor());
+    }
+
+    private ListenableFuture<FindMissingBlobsResponse> getMissingDigests(
+            FindMissingBlobsRequest request) {
+        return casFutureStub().findMissingBlobs(request);
+    }
+
+    private ContentAddressableStorageFutureStub casFutureStub() {
+        return ContentAddressableStorageGrpc.newFutureStub(mChannel)
+                .withCallCredentials(mCallCredentials)
+                .withDeadlineAfter(REMOTE_TIMEOUT.getSeconds(), TimeUnit.SECONDS);
+    }
+
+    private int computeMaxMissingBlobsDigestsPerMessage() {
+        final int overhead =
+                FindMissingBlobsRequest.newBuilder()
+                        .setInstanceName(mInstanceName)
+                        .setDigestFunction(DigestCalculator.DIGEST_FUNCTION)
+                        .build()
+                        .getSerializedSize();
+        final int tagSize =
+                FindMissingBlobsRequest.newBuilder()
+                                .addBlobDigests(Digest.getDefaultInstance())
+                                .build()
+                                .getSerializedSize()
+                        - FindMissingBlobsRequest.getDefaultInstance().getSerializedSize();
+        // All non-empty digests of SHA256 have the same size.
+        final int digestSize =
+                DigestCalculator.compute(new byte[] {1}).getSerializedSize() + tagSize;
+        // Set the max message size to 1MB that is used by Bazel (The default max message size is
+        // 4MB).
+        return (1024 * 1024 - overhead) / digestSize;
     }
 
     private ActionCacheFutureStub acFutureStub() {
