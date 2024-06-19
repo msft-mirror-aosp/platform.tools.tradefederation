@@ -26,8 +26,6 @@ import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
-import com.android.tradefed.cache.MerkleTree;
-import com.android.tradefed.cache.UploadManifest;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.util.FileUtil;
 import com.google.common.util.concurrent.Futures;
@@ -46,8 +44,6 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.List;
-import java.util.Map.Entry;
-import java.util.stream.Collectors;
 
 /** A RemoteActionCache implementation that uses gRPC calls to a remote API server. */
 public class RemoteCacheClient implements ICacheClient {
@@ -57,66 +53,34 @@ public class RemoteCacheClient implements ICacheClient {
     private final ManagedChannel mChannel;
     private final CallCredentials mCallCredentials;
     private final ByteStreamDownloader mDownloader;
-    private final ByteStreamUploader mUploader;
 
     public RemoteCacheClient(
             File workFolder,
             String instanceName,
             ManagedChannel channel,
             CallCredentials callCredentials,
-            ByteStreamDownloader downloader,
-            ByteStreamUploader uploader) {
+            ByteStreamDownloader downloader) {
         mWorkFolder = workFolder;
         mInstanceName = instanceName;
         mChannel = channel;
         mCallCredentials = callCredentials;
         mDownloader = downloader;
-        mUploader = uploader;
     }
 
     /** {@inheritDoc} */
     @Override
     public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult)
             throws IOException, InterruptedException {
-        MerkleTree input = action.input();
-        UploadManifest.Builder manifestBuilder =
-                UploadManifest.builder()
-                        .addFiles(input.digestToFile())
-                        .addBlob(input.rootDigest(), input.root().toByteString())
-                        .addBlobs(
-                                input.digestToSubdir().entrySet().stream()
-                                        .collect(
-                                                Collectors.toMap(
-                                                        Entry::getKey,
-                                                        e -> e.getValue().toByteString())))
-                        .addBlob(action.commandDigest(), action.command().toByteString())
-                        .addBlob(action.actionDigest(), action.action().toByteString());
         ActionResult.Builder actionResultBuilder =
                 ActionResult.newBuilder().setExitCode(actionResult.exitCode());
 
         if (actionResult.stdOut() != null) {
-            Digest stdOutDigest = DigestCalculator.compute(actionResult.stdOut());
-            actionResultBuilder.setStdoutDigest(stdOutDigest);
-            manifestBuilder.addFile(stdOutDigest, actionResult.stdOut());
+            actionResultBuilder.setStdoutDigest(DigestCalculator.compute(actionResult.stdOut()));
         }
 
         if (actionResult.stdErr() != null) {
-            Digest stdErrDigest = DigestCalculator.compute(actionResult.stdErr());
-            actionResultBuilder.setStderrDigest(stdErrDigest);
-            manifestBuilder.addFile(stdErrDigest, actionResult.stdErr());
+            actionResultBuilder.setStderrDigest(DigestCalculator.compute(actionResult.stdErr()));
         }
-
-        UploadManifest manifest = manifestBuilder.build();
-        List<ListenableFuture<Void>> uploads = new ArrayList<>();
-        uploads.addAll(
-                manifest.digestToFile().entrySet().stream()
-                        .map(e -> mUploader.uploadFile(e.getKey(), e.getValue()))
-                        .collect(Collectors.toList()));
-        uploads.addAll(
-                manifest.digestToBlob().entrySet().stream()
-                        .map(e -> mUploader.uploadBlob(e.getKey(), e.getValue()))
-                        .collect(Collectors.toList()));
-        waitForBulkTransfers(uploads);
 
         getFromFuture(
                 Futures.catchingAsync(
@@ -195,7 +159,7 @@ public class RemoteCacheClient implements ICacheClient {
                 downloads.add(mDownloader.downloadBlob(stderrDigest, stderrStream));
             }
             // TODO(b/346606200): Track download metrics.
-            waitForBulkTransfers(downloads);
+            waitForDownloads(downloads);
         } finally {
             if (stdoutStream != null) {
                 stdoutStream.close();
@@ -234,13 +198,13 @@ public class RemoteCacheClient implements ICacheClient {
         }
     }
 
-    private static void waitForBulkTransfers(Iterable<? extends ListenableFuture<?>> transfers)
+    private static void waitForDownloads(Iterable<? extends ListenableFuture<?>> downloads)
             throws IOException, InterruptedException {
         boolean interrupted = Thread.currentThread().isInterrupted();
         InterruptedException interruptedException = null;
-        for (ListenableFuture<?> transfer : transfers) {
+        for (ListenableFuture<?> download : downloads) {
             try {
-                getFromFuture(transfer);
+                getFromFuture(download);
             } catch (InterruptedException e) {
                 interrupted = Thread.interrupted() || interrupted;
                 interruptedException = e;

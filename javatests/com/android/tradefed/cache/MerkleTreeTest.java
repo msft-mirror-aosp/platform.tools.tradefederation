@@ -26,7 +26,6 @@ import build.bazel.remote.execution.v2.FileNode;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.Map;
 import org.junit.Rule;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
@@ -44,56 +43,54 @@ public class MerkleTreeTest {
         File root = workingDir.getRoot();
         // Not sort the files in purpose to test the digests of two equivalent directories will
         // match.
-        File bar = new File(root, "srcs/bar.cc");
-        addFile(bar, "bar", false);
-        Digest barDigest = DigestCalculator.compute(bar);
-        File foo = new File(root, "srcs/foo.cc");
-        addFile(foo, "foo", false);
-        Digest fooDigest = DigestCalculator.compute(foo);
-        File fizzbuzz = new File(root, "srcs/fizz/fizzbuzz");
-        addFile(fizzbuzz, "fizzbuzz", true);
-        Digest fizzbuzzDigest = DigestCalculator.compute(fizzbuzz);
-        File buzz = new File(root, "srcs/fizz/buzz.cc");
-        addFile(buzz, "buzz", false);
-        Digest buzzDigest = DigestCalculator.compute(buzz);
-        Map<Digest, File> digestToFile =
-                Map.of(
-                        barDigest, bar,
-                        fooDigest, foo,
-                        fizzbuzzDigest, fizzbuzz,
-                        buzzDigest, buzz);
+        addFile(new File(root, "srcs/bar.cc"), "bar", false);
+        addFile(new File(root, "srcs/foo.cc"), "foo", false);
+        addFile(new File(root, "srcs/fizz/fizzbuzz"), "fizzbuzz", true);
+        addFile(new File(root, "srcs/fizz/buzz.cc"), "buzz", false);
         Directory fizzDir =
                 Directory.newBuilder()
-                        .addFiles(newFileNode("buzz.cc", buzzDigest, false))
-                        .addFiles(newFileNode("fizzbuzz", fizzbuzzDigest, true))
+                        .addFiles(
+                                newFileNode(
+                                        "buzz.cc",
+                                        DigestCalculator.compute("buzz".getBytes(UTF_8)),
+                                        false))
+                        .addFiles(
+                                newFileNode(
+                                        "fizzbuzz",
+                                        DigestCalculator.compute("fizzbuzz".getBytes(UTF_8)),
+                                        true))
                         .build();
-        Digest fizzDirDigest = DigestCalculator.compute(fizzDir);
         Directory srcsDir =
                 Directory.newBuilder()
-                        .addFiles(newFileNode("bar.cc", barDigest, false))
-                        .addFiles(newFileNode("foo.cc", fooDigest, false))
+                        .addFiles(
+                                newFileNode(
+                                        "bar.cc",
+                                        DigestCalculator.compute("bar".getBytes(UTF_8)),
+                                        false))
+                        .addFiles(
+                                newFileNode(
+                                        "foo.cc",
+                                        DigestCalculator.compute("foo".getBytes(UTF_8)),
+                                        false))
                         .addDirectories(
-                                DirectoryNode.newBuilder().setName("fizz").setDigest(fizzDirDigest))
+                                DirectoryNode.newBuilder()
+                                        .setName("fizz")
+                                        .setDigest(DigestCalculator.compute(fizzDir)))
                         .build();
-        Digest srcsDirDigest = DigestCalculator.compute(srcsDir);
-        Map<Digest, Directory> digestToSubdir =
-                Map.of(
-                        fizzDirDigest, fizzDir,
-                        srcsDirDigest, srcsDir);
         Directory rootDir =
                 Directory.newBuilder()
                         .addDirectories(
-                                DirectoryNode.newBuilder().setName("srcs").setDigest(srcsDirDigest))
+                                DirectoryNode.newBuilder()
+                                        .setName("srcs")
+                                        .setDigest(DigestCalculator.compute(srcsDir)))
                         .build();
 
         MerkleTree tree = MerkleTree.buildFromDir(root);
 
         assertEquals(tree.rootDigest(), DigestCalculator.compute(rootDir));
-        assertEquals(tree.digestToFile(), digestToFile);
-        assertEquals(tree.digestToSubdir(), digestToSubdir);
     }
 
-    public static void addFile(File file, String content, boolean isExecutable) throws IOException {
+    private void addFile(File file, String content, boolean isExecutable) throws IOException {
         File parent = file.getParentFile();
         if (!parent.exists()) {
             parent.mkdirs();
@@ -103,7 +100,7 @@ public class MerkleTreeTest {
         file.setExecutable(isExecutable);
     }
 
-    public static FileNode newFileNode(String name, Digest digest, boolean isExecutable) {
+    private static FileNode newFileNode(String name, Digest digest, boolean isExecutable) {
         return FileNode.newBuilder()
                 .setName(name)
                 .setDigest(digest)

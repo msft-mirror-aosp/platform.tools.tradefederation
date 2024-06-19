@@ -136,23 +136,6 @@ java_library_host {
     java_version: "11",
 }
 
-java_library_host {
-    name: "virtual-device-manager-grpc",
-    srcs: ["proto/virtual_device_manager.proto"],
-    proto: {
-        include_dirs: ["external/protobuf/src"],
-        type: "full",
-    },
-    libs: [
-        "libprotobuf-java-full",
-        "grpc-java",
-        "guava",
-        "javax-annotation-api-prebuilt-host-jar",
-    ],
-    // b/267831518: Pin tradefed and dependencies to Java 11.
-    java_version: "11",
-}
-
 // Avoid version number in apk file name
 genrule {
     name: "test-services-normalized.apk",
@@ -230,7 +213,6 @@ java_library_host {
         "tradefed-external-dependencies",
         "tradefed-service-grpc-lib",
         "lab-resource-grpc",
-        "virtual-device-manager-grpc",
         "tradefed-invocation-grpc",
         "tradefed-device-manager-grpc",
         "tradefed-dynamic-sharding-grpc",

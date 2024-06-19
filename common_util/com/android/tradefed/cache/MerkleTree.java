@@ -24,7 +24,6 @@ import com.google.auto.value.AutoValue;
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.TreeSet;
 
 /** A merkle tree representation as defined by the remote execution api. */
@@ -37,19 +36,15 @@ public abstract class MerkleTree {
             throw new IllegalArgumentException("Directory does not exist or is not a Directory!");
         }
 
-        LinkedHashMap<Digest, File> digestToFile = new LinkedHashMap<>();
-        LinkedHashMap<Digest, Directory> digestToSubdir = new LinkedHashMap<>();
         Directory.Builder rootBuilder = Directory.newBuilder();
 
         // Sort the files, so that two equivalent directory messages have matching digests.
         TreeSet<File> files = new TreeSet(Arrays.asList(directory.listFiles()));
         for (File f : files) {
             if (f.isFile()) {
-                Digest digest = DigestCalculator.compute(f);
-                digestToFile.putIfAbsent(digest, f);
                 rootBuilder.addFiles(
                         FileNode.newBuilder()
-                                .setDigest(digest)
+                                .setDigest(DigestCalculator.compute(f))
                                 .setName(f.getName())
                                 .setIsExecutable(f.canExecute()));
             }
@@ -59,36 +54,19 @@ public abstract class MerkleTree {
                         DirectoryNode.newBuilder()
                                 .setDigest(childTree.rootDigest())
                                 .setName(childTree.rootName()));
-                digestToSubdir.putIfAbsent(childTree.rootDigest(), childTree.root());
-                childTree.digestToSubdir().forEach(digestToSubdir::putIfAbsent);
-                childTree.digestToFile().forEach(digestToFile::putIfAbsent);
             }
         }
 
-        Directory root = rootBuilder.build();
         return new AutoValue_MerkleTree(
-                directory.getName(),
-                root,
-                DigestCalculator.compute(root),
-                digestToFile,
-                digestToSubdir);
+                directory.getName(), DigestCalculator.compute(rootBuilder.build()));
     }
 
     /** The name of the root {@link Directory} of this Merkle tree. */
     public abstract String rootName();
-
-    /** The root {@link Directory} of this Merkle tree. */
-    public abstract Directory root();
 
     /**
      * The {@link Digest} of the root {@link Directory} of this Merkle tree. Note, this is only
      * consumed by the cache client.
      */
     public abstract Digest rootDigest();
-
-    /** The map of digests to files within this merkle tree. */
-    public abstract LinkedHashMap<Digest, File> digestToFile();
-
-    /** The map of digests to Sub-directories within this merkle tree. */
-    public abstract LinkedHashMap<Digest, Directory> digestToSubdir();
 }
