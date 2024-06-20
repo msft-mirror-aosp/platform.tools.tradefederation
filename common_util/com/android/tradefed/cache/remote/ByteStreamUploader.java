@@ -16,14 +16,52 @@
 
 package com.android.tradefed.cache.remote;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import build.bazel.remote.execution.v2.Digest;
+import com.android.tradefed.util.FileUtil;
+import com.google.bytestream.ByteStreamGrpc;
+import com.google.bytestream.ByteStreamGrpc.ByteStreamStub;
+import com.google.bytestream.ByteStreamProto.WriteRequest;
+import com.google.bytestream.ByteStreamProto.WriteResponse;
+import com.google.common.base.Strings;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
+import io.grpc.CallCredentials;
+import io.grpc.Channel;
+import io.grpc.Status.Code;
+import io.grpc.StatusRuntimeException;
+import io.grpc.stub.ClientCallStreamObserver;
+import io.grpc.stub.ClientResponseObserver;
 import java.io.File;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 /** A client implementing the {@code Write} method of the {@code ByteStream} gRPC service. */
 public class ByteStreamUploader {
-    public ByteStreamUploader() {}
+
+    private final String mInstanceName;
+    private final Channel mChannel;
+    private final CallCredentials mCallCredentials;
+    private final Duration mCallTimeout;
+
+    public ByteStreamUploader(
+            String instanceName,
+            Channel channel,
+            CallCredentials callCredentials,
+            Duration callTimeout) {
+        checkArgument(callTimeout.getSeconds() > 0, "callTimeout must be greater than 0.");
+        checkArgument(!Strings.isNullOrEmpty(instanceName), "instanceName must be specified.");
+        mInstanceName = instanceName;
+        mChannel = channel;
+        mCallCredentials = callCredentials;
+        mCallTimeout = callTimeout;
+    }
 
     /**
      * Uploads a BLOB by the remote {@code ByteStream} service.
@@ -32,7 +70,35 @@ public class ByteStreamUploader {
      * @param blob the BLOB to upload.
      */
     public ListenableFuture<Void> uploadBlob(Digest digest, ByteString blob) {
-        throw new UnsupportedOperationException("Not implemented feature.");
+        String resourceName = getResourceName(digest);
+        return Futures.catchingAsync(
+                Futures.transformAsync(
+                        write(resourceName, blob),
+                        committedSize ->
+                                committedSize == digest.getSizeBytes()
+                                        ? Futures.immediateVoidFuture()
+                                        : Futures.immediateFailedFuture(
+                                                new IOException(
+                                                        String.format(
+                                                                "write incomplete:"
+                                                                        + " committed_size %d"
+                                                                        + " for %d total - %s",
+                                                                committedSize,
+                                                                digest.getSizeBytes(),
+                                                                resourceName))),
+                        MoreExecutors.directExecutor()),
+                StatusRuntimeException.class,
+                (sre) ->
+                        sre.getStatus().getCode() == Code.ALREADY_EXISTS
+                                ? Futures.immediateVoidFuture()
+                                : Futures.immediateFailedFuture(
+                                        new IOException(
+                                                String.format(
+                                                        "Error while uploading artifact with digest"
+                                                                + " '%s/%s'",
+                                                        digest.getHash(), digest.getSizeBytes()),
+                                                sre)),
+                MoreExecutors.directExecutor());
     }
 
     /**
@@ -42,6 +108,93 @@ public class ByteStreamUploader {
      * @param file the file to upload.
      */
     public ListenableFuture<Void> uploadFile(Digest digest, File file) {
-        throw new UnsupportedOperationException("Not implemented feature.");
+        try {
+            return uploadBlob(digest, ByteString.copyFromUtf8(FileUtil.readStringFromFile(file)));
+        } catch (IOException e) {
+            return Futures.immediateFailedFuture(e);
+        }
+    }
+
+    private ListenableFuture<Long> write(String resourceName, ByteString blob) {
+        SettableFuture<Long> uploadResult = SettableFuture.create();
+        bsAsyncStub().write(new Writer(resourceName, uploadResult, blob));
+        return uploadResult;
+    }
+
+    /** A writer used to stream the BLOB to the remote service and handle the response. */
+    private static final class Writer
+            implements ClientResponseObserver<WriteRequest, WriteResponse>, Runnable {
+        private final String mResourceName;
+        private final SettableFuture<Long> mUploadResult;
+        private final ByteString mBlob;
+        private ClientCallStreamObserver<WriteRequest> mRequestObserver;
+        private long mCommittedSize = -1;
+        private boolean mFinishedWriting;
+
+        private Writer(String resourceName, SettableFuture<Long> uploadResult, ByteString blob) {
+            mResourceName = resourceName;
+            mUploadResult = uploadResult;
+            mBlob = blob;
+        }
+
+        @Override
+        public void beforeStart(ClientCallStreamObserver<WriteRequest> requestObserver) {
+            mRequestObserver = requestObserver;
+            mUploadResult.addListener(
+                    () -> {
+                        if (mUploadResult.isCancelled()) {
+                            mRequestObserver.cancel("cancelled by user", null);
+                        }
+                    },
+                    MoreExecutors.directExecutor());
+            mRequestObserver.setOnReadyHandler(this);
+        }
+
+        @Override
+        public void run() {
+            if (mRequestObserver.isReady()) {
+                mRequestObserver.onNext(
+                        WriteRequest.newBuilder()
+                                .setResourceName(mResourceName)
+                                .setData(mBlob)
+                                .setWriteOffset(0)
+                                .setFinishWrite(true)
+                                .build());
+                mRequestObserver.onCompleted();
+                mFinishedWriting = true;
+            }
+        }
+
+        @Override
+        public void onNext(WriteResponse response) {
+            mCommittedSize = response.getCommittedSize();
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            mUploadResult.setException(t);
+        }
+
+        @Override
+        public void onCompleted() {
+            // Server completed successfully before we finished writing all the data, meaning the
+            // blob already exists.
+            if (mFinishedWriting) {
+                mRequestObserver.cancel("server has returned early", null);
+            }
+            mUploadResult.set(mCommittedSize);
+        }
+    }
+
+    private ByteStreamStub bsAsyncStub() {
+        return ByteStreamGrpc.newStub(mChannel)
+                .withCallCredentials(mCallCredentials)
+                .withDeadlineAfter(mCallTimeout.getSeconds(), TimeUnit.SECONDS);
+    }
+
+    private String getResourceName(Digest digest) {
+        return String.format(
+                "%s/uploads/%s/blobs/%s/%d",
+                mInstanceName, UUID.randomUUID(), digest.getHash(), digest.getSizeBytes());
     }
 }
