@@ -33,6 +33,7 @@ import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
 import com.android.tradefed.cache.remote.ByteStreamDownloaderTest;
 import com.android.tradefed.cache.remote.ByteStreamUploaderTest;
+import com.android.tradefed.cache.remote.ChunkerTest;
 import com.android.tradefed.cache.remote.RemoteCacheClientTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -534,6 +535,7 @@ import org.junit.runners.Suite.SuiteClasses;
     MerkleTreeTest.class,
     ByteStreamDownloaderTest.class,
     ByteStreamUploaderTest.class,
+    ChunkerTest.class,
     RemoteCacheClientTest.class,
 
     // clearcut
