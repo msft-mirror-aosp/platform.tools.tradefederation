@@ -52,7 +52,7 @@ public class ByteStreamDownloader {
             Channel channel,
             CallCredentials callCredentials,
             Duration callTimeout) {
-        checkArgument(callTimeout.getSeconds() > 0, "callTimeout must be gt 0.");
+        checkArgument(callTimeout.getSeconds() > 0, "callTimeout must be greater than 0.");
         checkArgument(!Strings.isNullOrEmpty(instanceName), "instanceName must be specified.");
         mInstanceName = instanceName;
         mChannel = channel;
