@@ -27,6 +27,7 @@ java_library_host {
         "//tools/tradefederation/core/test_result_interfaces",
     ],
     srcs: ["proto/**/*.proto"],
+    exclude_srcs: ["proto/virtual_device_manager.proto"],
     libs: [
         "libprotobuf-java-full",
     ],
@@ -137,14 +138,28 @@ java_library_host {
 }
 
 java_library_host {
-    name: "virtual-device-manager-grpc",
+    name: "virtual-device-manager-proto",
     srcs: ["proto/virtual_device_manager.proto"],
+    libs: [
+        "libprotobuf-java-full",
+    ],
     proto: {
         include_dirs: ["external/protobuf/src"],
         type: "full",
     },
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+java_library_host {
+    name: "virtual-device-manager-grpc",
+    srcs: ["proto/virtual_device_manager.proto"],
+    proto: {
+        include_dirs: ["external/protobuf/src"],
+        plugin: "grpc-java-plugin",
+    },
     libs: [
-        "libprotobuf-java-full",
+        "virtual-device-manager-proto",
         "grpc-java",
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
