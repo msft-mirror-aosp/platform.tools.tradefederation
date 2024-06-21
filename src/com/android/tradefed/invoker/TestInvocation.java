@@ -1731,14 +1731,32 @@ public class TestInvocation implements ITestInvocation {
                 String output = device.executeAdbCommand("root");
                 CLog.d("adb recovery root output: %s", output);
                 File recovery_log = device.pullFile(RECOVERY_LOG_DEVICE_PATH);
-                if (recovery_log == null) {
-                    return;
+                if (recovery_log != null) {
+                    try (FileInputStreamSource fis = new FileInputStreamSource(recovery_log)) {
+                        listener.testLog(
+                                String.format("recovery_log_%s.txt", device.getSerialNumber()),
+                                LogDataType.RECOVERY_MODE_LOG,
+                                fis);
+                    }
                 }
-                try (FileInputStreamSource fis = new FileInputStreamSource(recovery_log)) {
-                    listener.testLog(
-                            String.format("recovery_log_%s.txt", device.getSerialNumber()),
-                            LogDataType.RECOVERY_MODE_LOG,
-                            fis);
+                File trustyLog = device.pullFile("/dev/trusty-log0");
+                if (trustyLog != null) {
+                    try (FileInputStreamSource fis = new FileInputStreamSource(trustyLog)) {
+                        listener.testLog(
+                                String.format("trusty-log0_%s.txt", device.getSerialNumber()),
+                                LogDataType.RECOVERY_MODE_LOG,
+                                fis);
+                    }
+                }
+                File lastKmsg = device.pullFile("/sys/fs/pstore/console-ramoops-0");
+                if (lastKmsg != null) {
+                    try (FileInputStreamSource fis = new FileInputStreamSource(lastKmsg)) {
+                        listener.testLog(
+                                String.format("recovery_mode_last_kmsg_%s.txt",
+                                device.getSerialNumber()),
+                                LogDataType.RECOVERY_MODE_LOG,
+                                fis);
+                    }
                 }
             } catch (DeviceNotAvailableException e) {
                 CLog.i("Device unavailable, can't pull recovery.log");
