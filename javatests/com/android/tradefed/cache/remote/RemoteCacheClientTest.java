@@ -108,6 +108,10 @@ public class RemoteCacheClientTest {
     private static class FakeByteStreamUploader extends ByteStreamUploader {
         public final Map<Digest, ByteString> blobs = new HashMap<>();
 
+        public FakeByteStreamUploader() {
+            super(INSTANCE, null, null, Duration.ofSeconds(5));
+        }
+
         @Override
         public ListenableFuture<Void> uploadFile(Digest digest, File file) {
             try {
