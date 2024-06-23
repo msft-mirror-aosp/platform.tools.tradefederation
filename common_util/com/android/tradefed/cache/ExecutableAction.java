@@ -63,16 +63,22 @@ public abstract class ExecutableAction {
                                         .collect(Collectors.toList()))
                         .build();
 
+        MerkleTree inputMerkleTree = MerkleTree.buildFromDir(input);
         Action.Builder actionBuilder =
                 Action.newBuilder()
-                        .setInputRootDigest(MerkleTree.buildFromDir(input).rootDigest())
+                        .setInputRootDigest(inputMerkleTree.rootDigest())
                         .setCommandDigest(DigestCalculator.compute(command));
         if (timeout > 0L) {
             actionBuilder.setTimeout(Duration.newBuilder().setSeconds(timeout).build());
         }
 
         Action action = actionBuilder.build();
-        return new AutoValue_ExecutableAction(action, DigestCalculator.compute(action), command);
+        return new AutoValue_ExecutableAction(
+                action,
+                DigestCalculator.compute(action),
+                command,
+                DigestCalculator.compute(command),
+                inputMerkleTree);
     }
 
     public abstract Action action();
@@ -80,4 +86,8 @@ public abstract class ExecutableAction {
     public abstract Digest actionDigest();
 
     public abstract Command command();
+
+    public abstract Digest commandDigest();
+
+    public abstract MerkleTree input();
 }
