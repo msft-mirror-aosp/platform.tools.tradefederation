@@ -36,6 +36,7 @@ import java.util.AbstractMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
@@ -63,10 +64,29 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
         File destFile = GCSFileDownloader.createTempFileForRemote(path, null);
         try {
             if (canUseParallelDownload(args.getQueryArgs())) {
+                ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
+                ThreadFactory factory =
+                        new ThreadFactory() {
+                            @Override
+                            public Thread newThread(Runnable r) {
+                                Thread t =
+                                        new Thread(
+                                                currentGroup,
+                                                r,
+                                                "gcs-pool-task-" + poolNumber.getAndIncrement());
+                                t.setDaemon(true);
+                                return t;
+                            }
+                        };
+                ExecutorService service =
+                        TracePropagatingExecutorService.create(
+                                Executors.newFixedThreadPool(1, factory));
                 Entry<File, Future<BuildRetrievalError>> parallelDownload =
-                        fetchResourceWithRetryParallel(path, args.getQueryArgs(), destFile);
+                        fetchResourceWithRetryParallel(
+                                service, path, args.getQueryArgs(), destFile);
+
                 ExtendedFile eFile = new ExtendedFile(parallelDownload.getKey(), "gcs", "gcs");
-                eFile.setDownloadFuture(parallelDownload.getValue());
+                eFile.setDownloadFuture(service, parallelDownload.getValue());
                 // Return the file with metadata
                 return new ResolvedFile(eFile);
             } else {
@@ -129,7 +149,8 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
     }
 
     private Entry<File, Future<BuildRetrievalError>> fetchResourceWithRetryParallel(
-            String path, Map<String, String> queryArgs, File destFile) throws IOException {
+            ExecutorService service, String path, Map<String, String> queryArgs, File destFile)
+            throws IOException {
         String unzipValue = queryArgs.get(DynamicRemoteFileResolver.UNZIP_KEY);
         boolean useDirectory = unzipValue != null && "true".equals(unzipValue.toLowerCase());
         File possibleDir = null;
@@ -139,20 +160,6 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
                             FileUtil.getBaseName(destFile.getName()),
                             CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER));
         }
-        ThreadGroup currentGroup = Thread.currentThread().getThreadGroup();
-        ThreadFactory factory =
-                new ThreadFactory() {
-                    @Override
-                    public Thread newThread(Runnable r) {
-                        Thread t =
-                                new Thread(
-                                        currentGroup,
-                                        r,
-                                        "gcs-pool-task-" + poolNumber.getAndIncrement());
-                        t.setDaemon(true);
-                        return t;
-                    }
-                };
         File destDir = possibleDir;
         CompletableFuture<BuildRetrievalError> futureClient =
                 CompletableFuture.supplyAsync(
@@ -171,8 +178,7 @@ public class GcsRemoteFileResolver implements IRemoteFileResolver {
                                 return e;
                             }
                         },
-                        TracePropagatingExecutorService.create(
-                                Executors.newFixedThreadPool(1, factory)));
+                        service);
         if (useDirectory) {
             return new AbstractMap.SimpleEntry<File, Future<BuildRetrievalError>>(
                     destDir, futureClient);
