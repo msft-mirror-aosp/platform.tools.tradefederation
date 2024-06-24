@@ -116,37 +116,42 @@ public class RemoteCacheClient implements ICacheClient {
 
         UploadManifest manifest = manifestBuilder.build();
 
-        List<Digest> digests = new ArrayList<>();
-        digests.addAll(manifest.digestToFile().keySet());
-        digests.addAll(manifest.digestToBlob().keySet());
-        ImmutableSet<Digest> missingDigests = getFromFuture(findMissingDigests(digests));
+        try (CloseableTraceScope ignored = new CloseableTraceScope("upload blobs")) {
+            List<Digest> digests = new ArrayList<>();
+            digests.addAll(manifest.digestToFile().keySet());
+            digests.addAll(manifest.digestToBlob().keySet());
+            ImmutableSet<Digest> missingDigests = getFromFuture(findMissingDigests(digests));
 
-        List<ListenableFuture<Void>> uploads = new ArrayList<>();
-        uploads.addAll(
-                manifest.digestToFile().entrySet().stream()
-                        .filter(e -> missingDigests.contains(e.getKey()))
-                        .map(e -> mUploader.uploadFile(e.getKey(), e.getValue()))
-                        .collect(Collectors.toList()));
-        uploads.addAll(
-                manifest.digestToBlob().entrySet().stream()
-                        .filter(e -> missingDigests.contains(e.getKey()))
-                        .map(e -> mUploader.uploadBlob(e.getKey(), e.getValue()))
-                        .collect(Collectors.toList()));
-        waitForBulkTransfers(uploads);
+            List<ListenableFuture<Void>> uploads = new ArrayList<>();
+            uploads.addAll(
+                    manifest.digestToFile().entrySet().stream()
+                            .filter(e -> missingDigests.contains(e.getKey()))
+                            .map(e -> mUploader.uploadFile(e.getKey(), e.getValue()))
+                            .collect(Collectors.toList()));
+            uploads.addAll(
+                    manifest.digestToBlob().entrySet().stream()
+                            .filter(e -> missingDigests.contains(e.getKey()))
+                            .map(e -> mUploader.uploadBlob(e.getKey(), e.getValue()))
+                            .collect(Collectors.toList()));
+            waitForBulkTransfers(uploads);
+        }
 
-        getFromFuture(
-                Futures.catchingAsync(
-                        acFutureStub()
-                                .updateActionResult(
-                                        UpdateActionResultRequest.newBuilder()
-                                                .setInstanceName(mInstanceName)
-                                                .setDigestFunction(DigestCalculator.DIGEST_FUNCTION)
-                                                .setActionDigest(action.actionDigest())
-                                                .setActionResult(actionResultBuilder.build())
-                                                .build()),
-                        StatusRuntimeException.class,
-                        (sre) -> Futures.immediateFailedFuture(new IOException(sre)),
-                        MoreExecutors.directExecutor()));
+        try (CloseableTraceScope ignored = new CloseableTraceScope("update action result")) {
+            getFromFuture(
+                    Futures.catchingAsync(
+                            acFutureStub()
+                                    .updateActionResult(
+                                            UpdateActionResultRequest.newBuilder()
+                                                    .setInstanceName(mInstanceName)
+                                                    .setDigestFunction(
+                                                            DigestCalculator.DIGEST_FUNCTION)
+                                                    .setActionDigest(action.actionDigest())
+                                                    .setActionResult(actionResultBuilder.build())
+                                                    .build()),
+                            StatusRuntimeException.class,
+                            (sre) -> Futures.immediateFailedFuture(new IOException(sre)),
+                            MoreExecutors.directExecutor()));
+        }
     }
 
     /** {@inheritDoc} */
