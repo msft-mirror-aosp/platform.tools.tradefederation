@@ -267,6 +267,28 @@ public class JarHostTestTest {
     }
 
     @Test
+    public void testFilter_countWithMalformedIncludeRegex() throws Exception {
+        mTest =
+                setupTestFilter(
+                        "com.google.android.apps.yts.tvts.YtsReport#yts[MSEConformanceTestsMSECoreVideoBufferSize-1.3.11.1]");
+        // Just testing it doesn't throw exceptions we don't expect any matches.
+        assertEquals(0, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithMalformedExcludeRegex() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue(
+                "exclude-filter",
+                // Ensure this malformed regex does not cause problems.
+                "com.google.android.apps.yts.tvts.YtsReport#yts[MSEConformanceTestsMSECoreVideoBufferSize-1.3.11.1]");
+
+        // Same as #testFilter_countWithFilterMethodRegex
+        assertEquals(4, mTest.countTestCases());
+    }
+
+    @Test
     public void testFilter_countWithClassFilter() throws Exception {
         mTest = setupTestFilter("com.android.tradefed.referencetests.SimplePassingTest");
         assertEquals(mTestInfo.toString(), 1, mTest.countTestCases());
