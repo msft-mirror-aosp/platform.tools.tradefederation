@@ -32,6 +32,8 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.FastbootDeviceFlasher;
+import com.android.tradefed.targetprep.FlashingResourcesParser;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -451,8 +453,10 @@ public class IncrementalImageUtil {
                             InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
                 }
             }
+            mDevice.rebootIntoBootloader();
             if (mApplySnapshot) {
-                attemptBootloaderAndRadioFlashing(true, currentBootloader, currentRadio);
+                updateBootloaderAndBasebandIfNeeded(
+                        targetDirectory, currentBootloader, currentRadio);
             }
             flashStaticPartition(targetDirectory);
             mSourceDirectory = srcDirectory;
@@ -519,7 +523,7 @@ public class IncrementalImageUtil {
                 return;
             }
             try (CloseableTraceScope ignored = new CloseableTraceScope("teardownDevice")) {
-                attemptBootloaderAndRadioFlashing(false, mSrcBootloader, mSrcBaseband);
+                revertBootloaderAndBasebandifNeeded(mSrcBootloader, mSrcBaseband);
                 if (mDevice.isStateBootloaderOrFastbootd()) {
                     mDevice.reboot();
                 }
@@ -535,6 +539,8 @@ public class IncrementalImageUtil {
                             InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
                 }
                 if (mSourceDirectory != null) {
+                    // flash all static partition in bootloader
+                    mDevice.rebootIntoBootloader();
                     flashStaticPartition(mSourceDirectory);
                 }
                 if (mSourceDirectory != null && mAllowUnzipBaseline) {
@@ -572,10 +578,41 @@ public class IncrementalImageUtil {
         }
     }
 
-    private void attemptBootloaderAndRadioFlashing(
-            boolean forceFlashing, File bootloader, File baseband)
+    private void updateBootloaderAndBasebandIfNeeded(
+            File deviceImageUnzipped, File bootloader, File baseband)
+            throws DeviceNotAvailableException, TargetSetupError {
+        FlashingResourcesParser parser = new FlashingResourcesParser(deviceImageUnzipped);
+        if (bootloader == null) {
+            CLog.w("No bootloader file to flash.");
+        } else {
+            if (shouldFlashBootloader(mDevice, parser.getRequiredBootloaderVersion())) {
+                CommandResult bootloaderFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash", "bootloader", bootloader.getAbsolutePath());
+                CLog.d("Status: %s", bootloaderFlashTarget.getStatus());
+                CLog.d("stdout: %s", bootloaderFlashTarget.getStdout());
+                CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
+                mDevice.rebootIntoBootloader();
+            }
+        }
+        if (baseband == null) {
+            CLog.w("No baseband file to flash");
+        } else {
+            if (shouldFlashBaseband(mDevice, parser.getRequiredBasebandVersion())) {
+                CommandResult radioFlashTarget =
+                        mDevice.executeFastbootCommand(
+                                "flash", "radio", baseband.getAbsolutePath());
+                CLog.d("Status: %s", radioFlashTarget.getStatus());
+                CLog.d("stdout: %s", radioFlashTarget.getStdout());
+                CLog.d("stderr: %s", radioFlashTarget.getStderr());
+                mDevice.rebootIntoBootloader();
+            }
+        }
+    }
+
+    private void revertBootloaderAndBasebandifNeeded(File bootloader, File baseband)
             throws DeviceNotAvailableException {
-        if (mBootloaderNeedsFlashing || forceFlashing) {
+        if (mBootloaderNeedsFlashing) {
             if (bootloader == null) {
                 CLog.w("No bootloader file to flash.");
             } else {
@@ -589,7 +626,7 @@ public class IncrementalImageUtil {
                 CLog.d("stderr: %s", bootloaderFlashTarget.getStderr());
             }
         }
-        if (mBasebandNeedsFlashing || forceFlashing) {
+        if (mBasebandNeedsFlashing) {
             if (baseband == null) {
                 CLog.w("No baseband file to flash");
             } else {
@@ -630,8 +667,6 @@ public class IncrementalImageUtil {
     }
 
     private boolean flashStaticPartition(File imageDirectory) throws DeviceNotAvailableException {
-        // flash all static partition in bootloader
-        mDevice.rebootIntoBootloader();
         Map<String, String> envMap = new HashMap<>();
         envMap.put("ANDROID_PRODUCT_OUT", imageDirectory.getAbsolutePath());
         CommandResult fastbootResult =
@@ -667,6 +702,32 @@ public class IncrementalImageUtil {
                         patch.getName(),
                         patch.length());
             }
+        }
+    }
+
+    private boolean shouldFlashBootloader(ITestDevice device, String bootloaderVersion)
+            throws DeviceNotAvailableException, TargetSetupError {
+        String currentBootloaderVersion =
+                FastbootDeviceFlasher.fetchImageVersion(mRunUtil, device, "bootloader");
+        if (bootloaderVersion != null && !bootloaderVersion.equals(currentBootloaderVersion)) {
+            CLog.i("Flashing bootloader %s", bootloaderVersion);
+            return true;
+        } else {
+            CLog.i("Bootloader is already version %s, skipping flashing", currentBootloaderVersion);
+            return false;
+        }
+    }
+
+    private boolean shouldFlashBaseband(ITestDevice device, String basebandVersion)
+            throws DeviceNotAvailableException, TargetSetupError {
+        String currentBaseBandVersion =
+                FastbootDeviceFlasher.fetchImageVersion(mRunUtil, device, "baseband");
+        if (basebandVersion != null && !basebandVersion.equals(currentBaseBandVersion)) {
+            CLog.i("Flashing bootloader %s", basebandVersion);
+            return true;
+        } else {
+            CLog.i("Bootloader is already version %s, skipping flashing", currentBaseBandVersion);
+            return false;
         }
     }
 
