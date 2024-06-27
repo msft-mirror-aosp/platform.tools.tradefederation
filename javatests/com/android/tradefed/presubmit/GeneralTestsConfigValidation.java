@@ -110,7 +110,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             // Others
                             "com.google.android.deviceconfig.RebootTest",
                             "com.android.scenario.AppSetup",
-                            "com.android.power.PowerRunner"));
+                            "com.android.power.PowerRunner",
+                            "com.android.boot.BootTimeTest"));
 
     /**
      * List of configs that will be exempted until they are converted to use MediaPreparers.

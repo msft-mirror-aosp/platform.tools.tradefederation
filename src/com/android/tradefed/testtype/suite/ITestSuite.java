@@ -217,6 +217,9 @@ public abstract class ITestSuite
     )
     private Set<String> mSystemStatusCheckBlacklist = new HashSet<>();
 
+    @Option(name = "enable-resolve-sym-links", description = "Enable symlinks resolving")
+    protected boolean mEnableResolveSymlinks = false;
+
     @Option(
         name = "report-system-checkers",
         description = "Whether reporting system checkers as test or not."
@@ -585,6 +588,7 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+                    args.put("enable-resolve-sym-links", String.valueOf(mEnableResolveSymlinks));
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
@@ -645,7 +649,10 @@ public abstract class ITestSuite
             return runModules;
         }
         try (CloseableTraceScope ignore = new CloseableTraceScope("suite:createExecutionList")) {
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> runConfig = loadAndFilter();
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEST_SETUP_PAIR, start, System.currentTimeMillis());
             if (runConfig.isEmpty()) {
                 CLog.i("No config were loaded. Nothing to run.");
                 return runModules;
@@ -1294,7 +1301,10 @@ public abstract class ITestSuite
 
         mIsSplitting = true;
         try {
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> runConfig = loadAndFilter();
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEST_SETUP_PAIR, start, System.currentTimeMillis());
             if (runConfig.isEmpty()) {
                 CLog.i("No config were loaded. Nothing to run.");
                 return null;

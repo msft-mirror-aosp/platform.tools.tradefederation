@@ -59,7 +59,13 @@ public class RemoteSshUtil {
             if (remoteInstance.isOxygenationDevice()) {
                 oxygenClient = new OxygenClient(options.getAvdDriverBinary());
                 // To execute ssh/scp on a remote instance, create the ssh tunnel first.
-                sshTunnel = oxygenClient.createTunnelViaLHP(LHPTunnelMode.SSH);
+                Integer portNumber = oxygenClient.createServerSocket();
+                sshTunnel =
+                        oxygenClient.createTunnelViaLHP(
+                                LHPTunnelMode.SSH,
+                                Integer.toString(portNumber),
+                                remoteInstance.instanceName(),
+                                remoteInstance.getOxygenationDeviceId());
                 if (sshTunnel == null || !sshTunnel.isAlive()) {
                     resSsh = new CommandResult(CommandStatus.EXCEPTION);
                     resSsh.setStderr("Failed to establish an ssh tunnel via LHP.");
