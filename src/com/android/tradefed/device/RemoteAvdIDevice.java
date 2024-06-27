@@ -21,8 +21,9 @@ import com.android.ddmlib.IDevice;
  * A placeholder {@link IDevice} used by {@link DeviceManager} to allocate when {@link
  * DeviceSelectionOptions#gceDeviceRequested()} is <code>true</code>
  */
-public class RemoteAvdIDevice extends TcpDevice {
+public class RemoteAvdIDevice extends StubDevice implements IConfigurableVirtualDevice {
 
+    private String mKnownDeviceIp = null;
     protected String mUser = null;
     protected Integer mDeviceNumOffset = null;
 
@@ -31,14 +32,22 @@ public class RemoteAvdIDevice extends TcpDevice {
         super(serial);
     }
 
-    public RemoteAvdIDevice(String serial, String knowDeviceIp) {
-        super(serial, knowDeviceIp);
+    public RemoteAvdIDevice(String serial, String knownDeviceIp) {
+        super(serial, false);
+        this.mKnownDeviceIp = knownDeviceIp;
     }
 
-    public RemoteAvdIDevice(String serial, String knowDeviceIp, String user, Integer offset) {
-        super(serial, knowDeviceIp);
+    public RemoteAvdIDevice(String serial, String knownDeviceIp, String user, Integer offset) {
+        super(serial, false);
+        this.mKnownDeviceIp = knownDeviceIp;
         this.mUser = user;
         this.mDeviceNumOffset = offset;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getKnownDeviceIp() {
+        return mKnownDeviceIp;
     }
 
     /** {@inheritDoc} */

@@ -34,7 +34,7 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.TestDeviceState;
@@ -1296,8 +1296,8 @@ public class DeviceSetupTest {
 
     /** Test that tearDown is inop when using a stub device instance. */
     @Test
-    public void testTearDown_tcpDevice() throws Exception {
-        when(mMockDevice.getIDevice()).thenReturn(new TcpDevice("tcp-device-0"));
+    public void testTearDown_gceDevice() throws Exception {
+        when(mMockDevice.getIDevice()).thenReturn(new RemoteAvdIDevice("gce-device-0"));
 
         mDeviceSetup.tearDown(mTestInfo, null);
     }

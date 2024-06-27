@@ -35,6 +35,7 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceLHPTunnelMonitor;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
+import com.android.tradefed.device.cloud.HostOrchestratorUtil;
 import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.cloud.RemoteFileUtil;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
@@ -277,6 +278,16 @@ public class AdbSshConnection extends AdbTcpConnection {
             if (mGceAvd != null) {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
+                } else if (useCvdCF()) {
+                    File cvdLogsDir =
+                            new HostOrchestratorUtil(getDevice(), mGceAvd).pullCvdHostLogs();
+                    if (cvdLogsDir != null) {
+                        GceManager.logDirectory(
+                                cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
+                        FileUtil.recursiveDelete(cvdLogsDir);
+                    } else {
+                        CLog.i("CVD Logs is null, skip logging cvd logs.");
+                    }
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -525,6 +536,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     public CommandResult powerwashGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
 
+        CommandResult powerwashRes = null;
         if (mGceAvd == null) {
             String errorMsg = String.format("Can not get GCE AVD Info. launch GCE first?");
             throw new TargetSetupError(
@@ -532,46 +544,50 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
-        // Get the user from options instance-user if user is null.
-        if (user == null) {
-            user = getDevice().getOptions().getInstanceUser();
-        }
+        if (useCvdCF()) {
+            powerwashRes = new HostOrchestratorUtil(getDevice(), mGceAvd).powerwashGce();
+        } else {
+            // Get the user from options instance-user if user is null.
+            if (user == null) {
+                user = getDevice().getOptions().getInstanceUser();
+            }
 
-        String powerwashCommand = String.format("/home/%s/bin/powerwash_cvd", user);
+            String powerwashCommand = String.format("/home/%s/bin/powerwash_cvd", user);
 
-        if (offset != null) {
-            powerwashCommand =
-                    String.format(
-                            "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/powerwash_cvd"
-                                    + " -instance_num %d",
-                            user, offset + 1, offset + 1, offset + 1);
-        }
+            if (offset != null) {
+                powerwashCommand =
+                        String.format(
+                                "HOME=/home/%s/acloud_cf_%d acloud_cf_%d/bin/powerwash_cvd"
+                                        + " -instance_num %d",
+                                user, offset + 1, offset + 1, offset + 1);
+            }
 
-        if (getDevice().getOptions().useOxygen()) {
-            // TODO(dshi): Simplify the logic after Oxygen creates symlink of the tmp dir.
-            CommandResult result =
+            if (getDevice().getOptions().useOxygen()) {
+                // TODO(dshi): Simplify the logic after Oxygen creates symlink of the tmp dir.
+                CommandResult result =
+                        GceManager.remoteSshCommandExecution(
+                                mGceAvd,
+                                getDevice().getOptions(),
+                                getRunUtil(),
+                                10000L,
+                                "toybox find /tmp -name powerwash_cvd".split(" "));
+                if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                    CLog.e("Failed to locate powerwash_cvd: %s", result.getStderr());
+                    return result;
+                }
+                String powerwashPath = result.getStdout();
+                // Remove tailing `/bin/powerwash_cvd`
+                String tmpDir = powerwashPath.substring(0, powerwashPath.length() - 18);
+                powerwashCommand = String.format("HOME=%s %s", tmpDir, powerwashPath);
+            }
+            powerwashRes =
                     GceManager.remoteSshCommandExecution(
                             mGceAvd,
                             getDevice().getOptions(),
                             getRunUtil(),
-                            10000L,
-                            "toybox find /tmp -name powerwash_cvd".split(" "));
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                CLog.e("Failed to locate powerwash_cvd: %s", result.getStderr());
-                return result;
-            }
-            String powerwashPath = result.getStdout();
-            // Remove tailing `/bin/powerwash_cvd`
-            String tmpDir = powerwashPath.substring(0, powerwashPath.length() - 18);
-            powerwashCommand = String.format("HOME=%s %s", tmpDir, powerwashPath);
+                            Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
+                            powerwashCommand.split(" "));
         }
-        CommandResult powerwashRes =
-                GceManager.remoteSshCommandExecution(
-                        mGceAvd,
-                        getDevice().getOptions(),
-                        getRunUtil(),
-                        Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        powerwashCommand.split(" "));
 
         // Time taken for powerwash this invocation
         InvocationMetricLogger.addInvocationMetrics(
@@ -619,8 +635,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         }
 
         if (getDevice().getOptions().useOxygen()) {
-            if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")
-                    && bin.equals("cvd")) {
+            if (useCvdCF() && bin.equals("cvd")) {
                 return String.format("/usr/bin/%s %s", bin, args);
             }
             CommandResult result =
@@ -653,8 +668,7 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     public CommandResult snapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
-        long startTime = System.currentTimeMillis();
-
+        CommandResult snapshotRes = null;
         if (mGceAvd == null) {
             String errorMsg = "Can not get GCE AVD Info. launch GCE first?";
             throw new TargetSetupError(
@@ -662,60 +676,54 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
-        // Get the user from options instance-user if user is null.
-        if (user == null) {
-            user = getDevice().getOptions().getInstanceUser();
-        }
 
-        String snapshotCommand;
-        if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")) {
-            snapshotCommand =
-                    commandBuilder(
-                            "cvd",
-                            String.format(
-                                    "snapshot_take --force --auto_suspend"
-                                            + " --snapshot_path=/tmp/%s/snapshots/%s",
-                                    user, snapshotId),
-                            user,
-                            offset);
+        if (useCvdCF()) {
+            snapshotRes = new HostOrchestratorUtil(getDevice(), mGceAvd).snapshotGce();
         } else {
-            snapshotCommand =
-                    commandBuilder(
-                            "snapshot_util_cvd",
-                            String.format(
-                                    "--subcmd=snapshot_take --force --auto_suspend"
-                                            + " --snapshot_path=/tmp/%s/snapshots/%s",
-                                    user, snapshotId),
-                            user,
-                            offset);
+            // Get the user from options instance-user if user is null.
+            if (user == null) {
+                user = getDevice().getOptions().getInstanceUser();
+            }
+
+            String snapshotCommand;
+            if (useCvdCF()) {
+                snapshotCommand =
+                        commandBuilder(
+                                "cvd",
+                                String.format(
+                                        "snapshot_take --force --auto_suspend"
+                                                + " --snapshot_path=/tmp/%s/snapshots/%s",
+                                        user, snapshotId),
+                                user,
+                                offset);
+            } else {
+                snapshotCommand =
+                        commandBuilder(
+                                "snapshot_util_cvd",
+                                String.format(
+                                        "--subcmd=snapshot_take --force --auto_suspend"
+                                                + " --snapshot_path=/tmp/%s/snapshots/%s",
+                                        user, snapshotId),
+                                user,
+                                offset);
+            }
+            if (Strings.isNullOrEmpty(snapshotCommand)) {
+                throw new TargetSetupError(
+                        "failed to set up snapshot command, invalid path",
+                        getDevice().getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
+            }
+            snapshotRes =
+                    GceManager.remoteSshCommandExecution(
+                            mGceAvd,
+                            getDevice().getOptions(),
+                            getRunUtil(),
+                            // TODO(khei): explore shorter timeouts.
+                            Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
+                            snapshotCommand.split(" "));
         }
-        if (Strings.isNullOrEmpty(snapshotCommand)) {
-            throw new TargetSetupError(
-                    "failed to set up snapshot command, invalid path",
-                    getDevice().getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
-        }
 
-        CommandResult snapshotRes =
-                GceManager.remoteSshCommandExecution(
-                        mGceAvd,
-                        getDevice().getOptions(),
-                        getRunUtil(),
-                        // TODO(khei): explore shorter timeouts.
-                        Math.max(30000L, getDevice().getOptions().getGceCmdTimeout()),
-                        snapshotCommand.split(" "));
-
-        if (CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
-            // Time taken for snapshot this invocation
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_DURATIONS,
-                    Long.toString(System.currentTimeMillis() - startTime));
-
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_SUCCESS_COUNT, 1);
-        } else {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_FAILURE_COUNT, 1);
+        if (!CommandStatus.SUCCESS.equals(snapshotRes.getStatus())) {
             CLog.e("%s", snapshotRes.getStderr());
             throw new TargetSetupError(
                     String.format("failed to snapshot device: %s", snapshotRes.getStderr()),
@@ -739,71 +747,63 @@ public class AdbSshConnection extends AdbTcpConnection {
     public CommandResult restoreSnapshotGce(String user, Integer offset, String snapshotId)
             throws TargetSetupError {
         stopGce(user, offset);
-        long startTime = System.currentTimeMillis();
-
-        // Get the user from options instance-user if user is null.
-        if (user == null) {
-            user = getDevice().getOptions().getInstanceUser();
-        }
-
-        String restoreCommand;
-        if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")) {
-            restoreCommand =
-                    commandBuilder(
-                            "cvd",
-                            String.format(
-                                    "start --snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
-                            user,
-                            offset);
+        CommandResult restoreRes = null;
+        if (useCvdCF()) {
+            restoreRes = new HostOrchestratorUtil(getDevice(), mGceAvd).restoreSnapshotGce();
         } else {
-            restoreCommand =
-                    commandBuilder(
-                            "launch_cvd",
-                            String.format("--snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
-                            user,
-                            offset);
-        }
-        if (restoreCommand.length() == 0) {
-            throw new TargetSetupError(
-                    "failed to set up restore command, invalid path",
-                    getDevice().getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
-        }
+            // Get the user from options instance-user if user is null.
+            if (user == null) {
+                user = getDevice().getOptions().getInstanceUser();
+            }
 
-        CommandResult restoreRes =
-                GceManager.remoteSshCommandExecution(
-                        mGceAvd,
-                        getDevice().getOptions(),
-                        getRunUtil(),
-                        Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        restoreCommand.split(" "));
-
-        if (CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
-            try {
-                waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
-                getDevice().waitForDeviceOnline(WAIT_FOR_DEVICE_ONLINE);
-            } catch (DeviceNotAvailableException e) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
-                CLog.e("%s", e.toString());
+            String restoreCommand;
+            if (useCvdCF()) {
+                restoreCommand =
+                        commandBuilder(
+                                "cvd",
+                                String.format(
+                                        "start --snapshot_path=/tmp/%s/snapshots/%s",
+                                        user, snapshotId),
+                                user,
+                                offset);
+            } else {
+                restoreCommand =
+                        commandBuilder(
+                                "launch_cvd",
+                                String.format(
+                                        "--snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                                user,
+                                offset);
+            }
+            if (restoreCommand.length() == 0) {
                 throw new TargetSetupError(
-                        String.format("failed to restore device: %s", e.toString()),
+                        "failed to set up restore command, invalid path",
                         getDevice().getDeviceDescriptor(),
                         DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
             }
-            // Time taken for restore this invocation
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_DURATIONS,
-                    Long.toString(System.currentTimeMillis() - startTime));
+            restoreRes =
+                    GceManager.remoteSshCommandExecution(
+                            mGceAvd,
+                            getDevice().getOptions(),
+                            getRunUtil(),
+                            Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
+                            restoreCommand.split(" "));
+        }
 
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT, 1);
-        } else {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
+        if (!CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             CLog.e("%s", restoreRes.getStderr());
             throw new TargetSetupError(
                     String.format("failed to restore device: %s", restoreRes.getStderr()),
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
+        }
+        try {
+            waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+            getDevice().waitForDeviceOnline(WAIT_FOR_DEVICE_ONLINE);
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("%s", e.toString());
+            throw new TargetSetupError(
+                    String.format("failed to restore device: %s", e.toString()),
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
         }
@@ -821,32 +821,35 @@ public class AdbSshConnection extends AdbTcpConnection {
      */
     private void stopGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
-
-        // Get the user from options instance-user if user is null.
-        if (user == null) {
-            user = getDevice().getOptions().getInstanceUser();
-        }
-
-        String stopCommand;
-        if (getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd")) {
-            stopCommand = commandBuilder("cvd", "stop", user, offset);
+        CommandResult stopRes = null;
+        if (useCvdCF()) {
+            stopRes = new HostOrchestratorUtil(getDevice(), mGceAvd).stopGce();
         } else {
-            stopCommand = commandBuilder("stop_cvd", "", user, offset);
-        }
-        if (stopCommand.length() == 0) {
-            throw new TargetSetupError(
-                    "failed to set up stop command, invalid path",
-                    getDevice().getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
-        }
+            // Get the user from options instance-user if user is null.
+            if (user == null) {
+                user = getDevice().getOptions().getInstanceUser();
+            }
 
-        CommandResult stopRes =
-                GceManager.remoteSshCommandExecution(
-                        mGceAvd,
-                        getDevice().getOptions(),
-                        getRunUtil(),
-                        Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
-                        stopCommand.split(" "));
+            String stopCommand;
+            if (useCvdCF()) {
+                stopCommand = commandBuilder("cvd", "stop", user, offset);
+            } else {
+                stopCommand = commandBuilder("stop_cvd", "", user, offset);
+            }
+            if (stopCommand.length() == 0) {
+                throw new TargetSetupError(
+                        "failed to set up stop command, invalid path",
+                        getDevice().getDeviceDescriptor(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_STOP);
+            }
+            stopRes =
+                    GceManager.remoteSshCommandExecution(
+                            mGceAvd,
+                            getDevice().getOptions(),
+                            getRunUtil(),
+                            Math.max(300000L, getDevice().getOptions().getGceCmdTimeout()),
+                            stopCommand.split(" "));
+        }
 
         if (CommandStatus.SUCCESS.equals(stopRes.getStatus())) {
             // Time taken for stop this invocation
@@ -951,5 +954,14 @@ public class AdbSshConnection extends AdbTcpConnection {
                 CLog.w("Failed to get kernel information by `uname -r` from device");
             }
         }
+    }
+
+    /** Helper to return true if the device is launched by cvd, false otherwise. */
+    private boolean useCvdCF() {
+        TestDeviceOptions options = getDevice().getOptions();
+        if (options.useOxygenationDevice() || options.getExtraOxygenArgs().containsKey("use_cvd")) {
+            return true;
+        }
+        return false;
     }
 }
