@@ -1081,7 +1081,7 @@ public class GceManager {
         return false;
     }
 
-    private static void logDirectory(
+    public static void logDirectory(
             File remoteDirectory, String baseName, ITestLogger logger, LogDataType type) {
         for (File f : remoteDirectory.listFiles()) {
             if (f.isFile()) {
@@ -1098,15 +1098,15 @@ public class GceManager {
 
     private static void logFile(
             File remoteFile, String baseName, ITestLogger logger, LogDataType type) {
-            try (InputStreamSource remoteFileStream = new FileInputStreamSource(remoteFile, true)) {
-                String name = baseName;
-                if (name == null) {
-                    name = remoteFile.getName();
-                }
-                logger.testLog(name, type, remoteFileStream);
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.CF_LOG_SIZE, remoteFileStream.size());
+        try (InputStreamSource remoteFileStream = new FileInputStreamSource(remoteFile, true)) {
+            String name = baseName;
+            if (name == null) {
+                name = remoteFile.getName();
             }
+            logger.testLog(name, type, remoteFileStream);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.CF_LOG_SIZE, remoteFileStream.size());
+        }
     }
 
     /**

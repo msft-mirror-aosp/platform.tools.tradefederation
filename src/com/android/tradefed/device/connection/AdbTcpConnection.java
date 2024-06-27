@@ -105,20 +105,10 @@ public class AdbTcpConnection extends DefaultConnection {
             }
         } else {
             DeviceSnapshotHandler restoreHandler = new DeviceSnapshotHandler();
-            boolean restoreSuccess = restoreHandler.restoreSnapshotDevice(device, snapshotId);
-            if (restoreSuccess) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricLogger.InvocationMetricKey
-                                .DEVICE_RECOVERED_FROM_DEVICE_RESET,
-                        1);
-            } else {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to restore device: %s with snapshot ID: %s",
-                                device.getSerialNumber(), snapshotId),
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
+            restoreHandler.restoreSnapshotDevice(device, snapshotId);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricLogger.InvocationMetricKey.DEVICE_RECOVERED_FROM_DEVICE_RESET,
+                    1);
         }
     }
 
@@ -127,16 +117,7 @@ public class AdbTcpConnection extends DefaultConnection {
     public void snapshotDevice(ITestDevice device, String snapshotId)
             throws DeviceNotAvailableException {
         if (!Strings.isNullOrEmpty(snapshotId)) {
-            DeviceSnapshotHandler snapshotHandler = new DeviceSnapshotHandler();
-            boolean snapshotSuccess = snapshotHandler.snapshotDevice(device, snapshotId);
-            if (!snapshotSuccess) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to snapshot device: %s with snapshot ID: %s",
-                                device.getSerialNumber(), snapshotId),
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
-            }
+            new DeviceSnapshotHandler().snapshotDevice(device, snapshotId);
         }
     }
 

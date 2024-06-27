@@ -67,11 +67,11 @@ public class DeviceSnapshotHandler {
      * @return True if snapshot was successful, false otherwise.
      * @throws DeviceNotAvailableException
      */
-    public boolean snapshotDevice(ITestDevice device, String snapshotId)
+    public void snapshotDevice(ITestDevice device, String snapshotId)
             throws DeviceNotAvailableException {
         if (device.getIDevice() instanceof StubDevice) {
             CLog.d("Device '%s' is a stub device. skipping snapshot.", device.getSerialNumber());
-            return true;
+            return;
         }
         FeatureResponse response;
         try {
@@ -92,7 +92,7 @@ public class DeviceSnapshotHandler {
             try {
                 o = SerializationUtil.deserialize(trace);
             } catch (IOException | RuntimeException e) {
-                CLog.e(e);
+                CLog.e("Failed to deserialize snapshot error response: %s", e.getMessage());
             }
             if (o instanceof DeviceNotAvailableException) {
                 throw (DeviceNotAvailableException) o;
@@ -106,12 +106,11 @@ public class DeviceSnapshotHandler {
                         (Exception) o,
                         InfraErrorIdentifier.UNDETERMINED);
             }
-
-            CLog.e("Snapshot failed: %s", response.getErrorInfo().getErrorTrace());
-            return false;
+            throw new HarnessRuntimeException(
+                    "Exception while snapshotting the device. Unserialized error response: "
+                            + trace,
+                    InfraErrorIdentifier.UNDETERMINED);
         }
-
-        // TODO: parse snapshot ID from response, and save it to mContext.
 
         // Save snapshot performance data
         Pattern durationPattern = Pattern.compile("Snapshot\\sfinished\\sin (\\d+)\\sms");
@@ -122,8 +121,10 @@ public class DeviceSnapshotHandler {
                     InvocationMetricKey.DEVICE_SNAPSHOT_SUCCESS_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_SNAPSHOT_DURATIONS, matcher.group(1));
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_FAILURE_COUNT, 1);
         }
-        return true;
     }
 
     /**
@@ -134,13 +135,13 @@ public class DeviceSnapshotHandler {
      * @return True if restore was successful, false otherwise.
      * @throws DeviceNotAvailableException
      */
-    public boolean restoreSnapshotDevice(ITestDevice device, String snapshotId)
+    public void restoreSnapshotDevice(ITestDevice device, String snapshotId)
             throws DeviceNotAvailableException {
         if (device.getIDevice() instanceof StubDevice) {
             CLog.d(
                     "Device '%s' is a stub device. skipping restoring snapshot.",
                     device.getSerialNumber());
-            return true;
+            return;
         }
         FeatureResponse response;
         try {
@@ -164,7 +165,7 @@ public class DeviceSnapshotHandler {
             try {
                 o = SerializationUtil.deserialize(trace);
             } catch (IOException | RuntimeException e) {
-                CLog.e(e);
+                CLog.e("Failed to deserialize snapshot error response: %s", e.getMessage());
             }
             if (o instanceof DeviceNotAvailableException) {
                 throw (DeviceNotAvailableException) o;
@@ -178,9 +179,11 @@ public class DeviceSnapshotHandler {
                         (Exception) o,
                         InfraErrorIdentifier.UNDETERMINED);
             }
-
-            CLog.e("Restoring snapshot failed: %s", response.getErrorInfo().getErrorTrace());
-            return false;
+            throw new HarnessRuntimeException(
+                    "Exception while restoring snapshot of the device. Unserialized error response:"
+                            + " "
+                            + trace,
+                    InfraErrorIdentifier.UNDETERMINED);
         }
         if (device instanceof NativeDevice) {
             ((NativeDevice) device).resetContentProviderSetup();
@@ -197,7 +200,9 @@ public class DeviceSnapshotHandler {
                     InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_SUCCESS_COUNT, 1);
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_DURATIONS, matcher.group(1));
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_SNAPSHOT_RESTORE_FAILURE_COUNT, 1);
         }
-        return true;
     }
 }
