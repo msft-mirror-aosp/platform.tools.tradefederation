@@ -21,13 +21,29 @@ import com.android.ddmlib.IDevice;
  * A placeholder {@link IDevice} used by {@link DeviceManager} to allocate when {@link
  * DeviceSelectionOptions#localVirtualDeviceRequested()} is <code>true</code>
  */
-public class StubLocalAndroidVirtualDevice extends TcpDevice implements IConfigurableVirtualDevice {
+public class StubLocalAndroidVirtualDevice extends StubDevice implements IConfigurableVirtualDevice {
 
+    private String mKnownDeviceIp = null;
     private int mDeviceNumOffset;
+
+    public StubLocalAndroidVirtualDevice(String serial) {
+        super(serial, false);
+    }
+
+    public StubLocalAndroidVirtualDevice(String serial, String knownDeviceIp) {
+        super(serial, false);
+        mKnownDeviceIp = knownDeviceIp;
+    }
 
     public StubLocalAndroidVirtualDevice(String serial, int offset) {
         super(serial);
         mDeviceNumOffset = offset;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getKnownDeviceIp() {
+        return mKnownDeviceIp;
     }
 
     @Override
