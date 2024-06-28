@@ -256,7 +256,6 @@ public class NativeDevice
     private DeviceDescriptor mCachedDeviceDescriptor = null;
     private final Object mCacheLock = new Object();
 
-    private String mTrackingSerialNumber = null;
     private String mFastbootSerialNumber = null;
     private File mUnpackedFastbootDir = null;
     // Connection for the device.
@@ -574,19 +573,6 @@ public class NativeDevice
     @Override
     public String getSerialNumber() {
         return getIDevice().getSerialNumber();
-    }
-
-    @Override
-    public void setTrackingSerial(String trackingSerial) {
-        mTrackingSerialNumber = trackingSerial;
-    }
-
-    @Override
-    public String getTrackingSerial() {
-        if (Strings.isNullOrEmpty(mTrackingSerialNumber)) {
-            return getSerialNumber();
-        }
-        return mTrackingSerialNumber;
     }
 
     /**

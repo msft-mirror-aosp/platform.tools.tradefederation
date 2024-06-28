@@ -82,14 +82,6 @@ public interface INativeDevice {
      */
     public String getSerialNumber();
 
-    /** For device management purpose track the serial we use for referencing the device. */
-    public void setTrackingSerial(String trackingSerial);
-
-    /** For device management purpose get the serial used to track the device. */
-    public default String getTrackingSerial() {
-        return getSerialNumber();
-    }
-
     /** Returns the fastboot mode serial number. */
     public String getFastbootSerialNumber();
 
