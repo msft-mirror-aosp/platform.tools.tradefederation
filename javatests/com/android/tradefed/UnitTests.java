@@ -25,13 +25,14 @@ import com.android.tradefed.build.DeviceBuildInfoTest;
 import com.android.tradefed.build.DeviceFolderBuildInfoTest;
 import com.android.tradefed.build.FileDownloadCacheTest;
 import com.android.tradefed.build.LocalDeviceBuildProviderTest;
-import com.android.tradefed.build.OtaZipfileBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
 import com.android.tradefed.cache.remote.ByteStreamDownloaderTest;
+import com.android.tradefed.cache.remote.ByteStreamUploaderTest;
+import com.android.tradefed.cache.remote.ChunkerTest;
 import com.android.tradefed.cache.remote.RemoteCacheClientTest;
 import com.android.tradefed.clearcut.ClearcutClientTest;
 import com.android.tradefed.cluster.ClusterBuildProviderTest;
@@ -519,7 +520,6 @@ import org.junit.runners.Suite.SuiteClasses;
     DeviceFolderBuildInfoTest.class,
     FileDownloadCacheTest.class,
     LocalDeviceBuildProviderTest.class,
-    OtaZipfileBuildProviderTest.class,
 
     // build.cache
     PartialZipDownloadCacheTest.class,
@@ -532,6 +532,8 @@ import org.junit.runners.Suite.SuiteClasses;
     // cache
     MerkleTreeTest.class,
     ByteStreamDownloaderTest.class,
+    ByteStreamUploaderTest.class,
+    ChunkerTest.class,
     RemoteCacheClientTest.class,
 
     // clearcut

@@ -217,6 +217,9 @@ public abstract class ITestSuite
     )
     private Set<String> mSystemStatusCheckBlacklist = new HashSet<>();
 
+    @Option(name = "enable-resolve-sym-links", description = "Enable symlinks resolving")
+    protected boolean mEnableResolveSymlinks = false;
+
     @Option(
         name = "report-system-checkers",
         description = "Whether reporting system checkers as test or not."
@@ -585,6 +588,7 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+                    args.put("enable-resolve-sym-links", String.valueOf(mEnableResolveSymlinks));
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
@@ -812,16 +816,13 @@ public abstract class ITestSuite
                 if (((AdbTcpConnection) connection).getSuiteSnapshots().containsKey(mDevice)) {
                     CLog.d("Suite snapshot already taken for '%s'", mDevice.getSerialNumber());
                 } else {
-                    ((AdbTcpConnection) connection)
-                            .snapshotDevice(mDevice, mContext.getInvocationId());
-                    ((AdbTcpConnection) connection)
-                            .getSuiteSnapshots()
-                            .put(mDevice, mContext.getInvocationId());
-                }
-                if (mUseSnapshotBeforeFirstModule) {
-                    String snapshot =
-                            ((AdbTcpConnection) connection).getSuiteSnapshots().get(mDevice);
-                    ((AdbTcpConnection) connection).recoverVirtualDevice(mDevice, snapshot, null);
+                    String snapshotId = mContext.getInvocationId();
+                    ((AdbTcpConnection) connection).snapshotDevice(mDevice, snapshotId);
+                    ((AdbTcpConnection) connection).getSuiteSnapshots().put(mDevice, snapshotId);
+                    if (mUseSnapshotBeforeFirstModule) {
+                        ((AdbTcpConnection) connection)
+                                .recoverVirtualDevice(mDevice, snapshotId, null);
+                    }
                 }
             }
         }

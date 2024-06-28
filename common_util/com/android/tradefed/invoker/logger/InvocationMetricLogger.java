@@ -275,6 +275,10 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_NFS_LOCAL_CACHE_CONCURRENCY("cas_download_nfs_local_cache_concurrency", false),
         CAS_DOWNLOAD_ACQUIRE_LOCAL_CACHE_LOCK_TIME(
                 "cas_download_acquire_local_cache_lock_time_ms", true),
+        CAS_DOWNLOAD_DIR_RETRIEVE_TIME("cas_download_dir_retrieve_time_ms", true),
+        CAS_DOWNLOAD_DIR_PREPARE_TIME("cas_download_dir_prepare_time_ms", true),
+        CAS_DOWNLOAD_FILE_DOWNLOAD_TIME("cas_download_file_download_time_ms", true),
+        CAS_DOWNLOAD_CHUNK_RESTORE_TIME("cas_download_chunk_restore_time_ms", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),

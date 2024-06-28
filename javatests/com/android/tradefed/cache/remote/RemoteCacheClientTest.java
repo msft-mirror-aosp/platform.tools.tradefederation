@@ -22,9 +22,12 @@ import static org.junit.Assert.assertNull;
 
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheImplBase;
 import build.bazel.remote.execution.v2.ActionResult;
+import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc.ContentAddressableStorageImplBase;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
+import build.bazel.remote.execution.v2.FindMissingBlobsRequest;
+import build.bazel.remote.execution.v2.FindMissingBlobsResponse;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
 import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import com.android.tradefed.cache.DigestCalculator;
@@ -54,6 +57,7 @@ import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.runner.RunWith;
@@ -108,6 +112,10 @@ public class RemoteCacheClientTest {
     private static class FakeByteStreamUploader extends ByteStreamUploader {
         public final Map<Digest, ByteString> blobs = new HashMap<>();
 
+        public FakeByteStreamUploader() {
+            super(INSTANCE, null, null, Duration.ofSeconds(5));
+        }
+
         @Override
         public ListenableFuture<Void> uploadFile(Digest digest, File file) {
             try {
@@ -122,6 +130,20 @@ public class RemoteCacheClientTest {
         public ListenableFuture<Void> uploadBlob(Digest digest, ByteString blob) {
             blobs.put(digest, blob);
             return Futures.immediateVoidFuture();
+        }
+    }
+
+    private static class DefaultContentAddressableStorage
+            extends ContentAddressableStorageImplBase {
+        @Override
+        public void findMissingBlobs(
+                FindMissingBlobsRequest request,
+                StreamObserver<FindMissingBlobsResponse> responseObserver) {
+            responseObserver.onNext(
+                    FindMissingBlobsResponse.newBuilder()
+                            .addAllMissingBlobDigests(request.getBlobDigestsList())
+                            .build());
+            responseObserver.onCompleted();
         }
     }
 
@@ -164,6 +186,7 @@ public class RemoteCacheClientTest {
         }
         SpyActionCacheImpl actionCache = new SpyActionCacheImpl();
         mServiceRegistry.addService(actionCache);
+        mServiceRegistry.addService(new DefaultContentAddressableStorage());
         ExecutableAction action =
                 ExecutableAction.create(
                         mInput, Arrays.asList("test", "command"), new HashMap<>(), 100L);
@@ -187,7 +210,7 @@ public class RemoteCacheClientTest {
     }
 
     @Test
-    public void uploadCache_files_and_blobs_are_uploaded_successfully()
+    public void uploadCache_all_files_and_blobs_are_uploaded_except_existing_blobs()
             throws IOException, InterruptedException {
         mServiceRegistry.addService(
                 new ActionCacheImplBase() {
@@ -207,9 +230,15 @@ public class RemoteCacheClientTest {
         File testFile = new File(x86, "hello_world_test");
         String test = "test cases";
         MerkleTreeTest.addFile(testFile, test, true);
+        File existingDataFile = new File(x86, "existing_test_data");
+        MerkleTreeTest.addFile(existingDataFile, "test data", false);
+        Digest existingDataFileDigest = DigestCalculator.compute(existingDataFile);
         Digest testFileDigest = DigestCalculator.compute(testFile);
         Directory x86Dir =
                 Directory.newBuilder()
+                        .addFiles(
+                                MerkleTreeTest.newFileNode(
+                                        "existing_test_data", existingDataFileDigest, false))
                         .addFiles(
                                 MerkleTreeTest.newFileNode(
                                         "hello_world_test", testFileDigest, true))
@@ -235,7 +264,32 @@ public class RemoteCacheClientTest {
         ExecutableActionResult result = ExecutableActionResult.create(0, stdoutFile, stderrFile);
         FakeByteStreamUploader uploader = new FakeByteStreamUploader();
         RemoteCacheClient client = newClient(new FakeByteStreamDownloader(), uploader);
-        Map<Digest, ByteString> digestToBlob =
+        mServiceRegistry.addService(
+                new ContentAddressableStorageImplBase() {
+                    @Override
+                    public void findMissingBlobs(
+                            FindMissingBlobsRequest request,
+                            StreamObserver<FindMissingBlobsResponse> responseObserver) {
+                        responseObserver.onNext(
+                                FindMissingBlobsResponse.newBuilder()
+                                        .addAllMissingBlobDigests(
+                                                request.getBlobDigestsList().stream()
+                                                        // Assume that the test data file and the
+                                                        // Command message already exist.
+                                                        .filter(
+                                                                d ->
+                                                                        !d.equals(
+                                                                                        existingDataFileDigest)
+                                                                                && !d.equals(
+                                                                                        action
+                                                                                                .commandDigest()))
+                                                        .collect(Collectors.toList()))
+                                        .build());
+                        responseObserver.onCompleted();
+                    }
+                });
+        // The test data file and the Command message should not be in the output.
+        Map<Digest, ByteString> expectedDigestToBlob =
                 Map.of(
                         DigestCalculator.compute(stdoutFile),
                         ByteString.copyFromUtf8(stdout),
@@ -243,8 +297,6 @@ public class RemoteCacheClientTest {
                         ByteString.copyFromUtf8(stderr),
                         action.actionDigest(),
                         action.action().toByteString(),
-                        action.commandDigest(),
-                        action.command().toByteString(),
                         configFileDigest,
                         ByteString.copyFromUtf8(config),
                         testFileDigest,
@@ -256,7 +308,7 @@ public class RemoteCacheClientTest {
 
         client.uploadCache(action, result);
 
-        assertEquals(digestToBlob, uploader.blobs);
+        assertEquals(expectedDigestToBlob, uploader.blobs);
     }
 
     @Test
@@ -270,6 +322,7 @@ public class RemoteCacheClientTest {
         int exitCode = 0;
         String stdout = "STDOUT";
         Digest stdOutDigest = DigestCalculator.compute(stdout.getBytes());
+        mServiceRegistry.addService(new DefaultContentAddressableStorage());
         mServiceRegistry.addService(
                 new ActionCacheImplBase() {
                     @Override
