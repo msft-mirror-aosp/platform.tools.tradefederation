@@ -43,6 +43,8 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
 
+import perfetto.protos.PerfettoMergedMetrics.TraceMetrics;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -51,8 +53,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import perfetto.protos.PerfettoMergedMetrics.TraceMetrics;
 
 /** Unit tests for {@link PerfettoGenericPostProcessor}. */
 @RunWith(JUnit4.class)
@@ -500,11 +500,18 @@ public class PerfettoGenericPostProcessorTest {
         Map<String, Metric.Builder> parsedMetrics = mProcessor
                 .processRunMetricsAndLogs(new HashMap<>(), testLogs);
 
+        if (DEBUG) {
+            printOutputMetricsForDebug(parsedMetrics);
+        }
         assertMetricsContain(
                 parsedMetrics,
                 "android_jank_cuj-cuj-name-com.android.systemui-name-NOTIFICATION_ADD-timeline_"
                 + "metrics-frame_dur_avg",
                 5040562);
+        assertMetricsContain(
+                parsedMetrics,
+                "perfetto_android_jank_cuj-cuj-name-NOTIFICATION_ADD-dur",
+                460793302);
     }
 
     @Test

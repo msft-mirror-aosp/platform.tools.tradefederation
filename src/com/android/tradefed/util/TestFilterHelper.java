@@ -33,6 +33,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Helper class for filtering tests
@@ -256,8 +257,13 @@ public class TestFilterHelper {
             // passes 'testFoo':
             //   #testFoo
             //   #testFooAndBar
-            if (methodName.matches(filter)) {
-                return true;
+            try {
+                if (methodName.matches(filter)) {
+                    return true;
+                }
+            } catch (PatternSyntaxException pse) {
+                // Ignore names that form a bad regex,
+                // like ones using a versioned parameter or module MyClass#myTest[foo-1.23]
             }
         }
         return false;
@@ -334,11 +340,15 @@ public class TestFilterHelper {
         }
         for (String filter : mExcludeFilters) {
             // The whole method name must match so user must pass .* on ends.
-            if (methodName.matches(filter)) {
-                return false;
+            try {
+                if (methodName.matches(filter)) {
+                    return false;
+                }
+            } catch (PatternSyntaxException pse) {
+                // Ignore names that form a bad regex,
+                // like ones using a versioned parameter or module MyClass#myTest[foo-1.23]
             }
         }
-
         return true;
     }
 }
