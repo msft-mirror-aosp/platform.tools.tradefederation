@@ -17,6 +17,8 @@ package com.android.tradefed.build;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.invoker.ExecutionFiles;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.FlashingResourcesParser;
@@ -216,6 +218,10 @@ public class LocalDeviceBuildProvider extends StubBuildProvider {
         if (testsDir != null) {
             buildInfo.setTestsDir(testsDir, buildInfo.getBuildId());
             CLog.d("Using test files from %s", testsDir.getAbsolutePath());
+            if (CurrentInvocation.getInvocationFiles() != null) {
+                CurrentInvocation.getInvocationFiles()
+                        .put(ExecutionFiles.FilesKey.TESTS_DIRECTORY, testsDir);
+            }
         }
     }
 
