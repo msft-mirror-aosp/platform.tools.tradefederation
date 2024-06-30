@@ -71,14 +71,7 @@ public class XmlSuiteResultFormatterTest {
 
     @Before
     public void setUp() throws Exception {
-        mFormatter =
-                new XmlSuiteResultFormatter() {
-                    @Override
-                    protected String sanitizeXmlContent(String s) {
-                        // Stub sanitize to avoid some versioning issues
-                        return s.replace("\0", "0");
-                    }
-                };
+        mFormatter = new XmlSuiteResultFormatter();
         mResultHolder = new SuiteResultHolder();
         mContext = new InvocationContext();
         mResultDir = FileUtil.createTempDir("result-dir");
