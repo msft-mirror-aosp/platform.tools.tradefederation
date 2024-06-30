@@ -219,7 +219,7 @@ public class SandboxConfigDump {
             if (m.matches() && m.groupCount() > 0) {
                 String key = m.group(2);
                 String keyValue = keyClient.fetchKey(key);
-                String newValue = argList.get(i).replaceAll("USE_KEYSTORE@" + key, keyValue);
+                String newValue = argList.get(i).replace("USE_KEYSTORE@" + key, keyValue);
                 argList.set(i, newValue);
             }
         }

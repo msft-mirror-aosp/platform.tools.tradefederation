@@ -49,6 +49,7 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     INCREMENTAL_FLASHING_ERROR(500_020, FailureStatus.INFRA_FAILURE),
     BLOCK_COMPARE_ERROR(500_021, FailureStatus.INFRA_FAILURE),
     FLASHSTATION_CACHE_PREPARATION_ERROR(500_022, FailureStatus.INFRA_FAILURE),
+    FLASHSTATION_SETUP_ERROR(500_023, FailureStatus.INFRA_FAILURE),
 
     // 500_400 - 500_500: General errors - subprocess related
     INTERRUPTED_DURING_SUBPROCESS_SHUTDOWN(500_401, FailureStatus.INFRA_FAILURE),
