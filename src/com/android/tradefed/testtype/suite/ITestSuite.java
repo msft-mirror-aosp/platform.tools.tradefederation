@@ -816,16 +816,13 @@ public abstract class ITestSuite
                 if (((AdbTcpConnection) connection).getSuiteSnapshots().containsKey(mDevice)) {
                     CLog.d("Suite snapshot already taken for '%s'", mDevice.getSerialNumber());
                 } else {
-                    ((AdbTcpConnection) connection)
-                            .snapshotDevice(mDevice, mContext.getInvocationId());
-                    ((AdbTcpConnection) connection)
-                            .getSuiteSnapshots()
-                            .put(mDevice, mContext.getInvocationId());
-                }
-                if (mUseSnapshotBeforeFirstModule) {
-                    String snapshot =
-                            ((AdbTcpConnection) connection).getSuiteSnapshots().get(mDevice);
-                    ((AdbTcpConnection) connection).recoverVirtualDevice(mDevice, snapshot, null);
+                    String snapshotId = mContext.getInvocationId();
+                    ((AdbTcpConnection) connection).snapshotDevice(mDevice, snapshotId);
+                    ((AdbTcpConnection) connection).getSuiteSnapshots().put(mDevice, snapshotId);
+                    if (mUseSnapshotBeforeFirstModule) {
+                        ((AdbTcpConnection) connection)
+                                .recoverVirtualDevice(mDevice, snapshotId, null);
+                    }
                 }
             }
         }
