@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.targetprep.TargetSetupError;
@@ -387,6 +388,12 @@ public class LocalAndroidVirtualDeviceTest {
         return runUtil;
     }
 
+    private void assertDeviceDescriptor() {
+        DeviceDescriptor descriptor = mLocalAvd.getDeviceDescriptor(true);
+        Assert.assertNull(descriptor.getPreconfiguredIp());
+        Assert.assertEquals(DEVICE_NUM_OFFSET, descriptor.getPreconfiguredDeviceNumOffset());
+    }
+
     private void assertFinalDeviceState(IDevice device) {
         Assert.assertTrue(StubLocalAndroidVirtualDevice.class.equals(device.getClass()));
         StubLocalAndroidVirtualDevice stubDevice = (StubLocalAndroidVirtualDevice) device;
@@ -435,12 +442,14 @@ public class LocalAndroidVirtualDeviceTest {
         ITestLogger testLogger = mock(ITestLogger.class);
 
         // Test setUp.
+        assertDeviceDescriptor();
         mLocalAvd.setTestLogger(testLogger);
         mLocalAvd.currentRunUtil = acloudCreateRunUtil;
         mLocalAvd.expectToConnect = true;
         mLocalAvd.preInvocationSetup(mMockBuildInfo, null);
 
         Assert.assertEquals(ONLINE_SERIAL_NUMBER, mLocalAvd.getIDevice().getSerialNumber());
+        assertDeviceDescriptor();
         verify(acloudCreateRunUtil).setEnvVariable(eq("TMPDIR"), any());
 
         for (Map.Entry<String, ArgumentCaptor<String>> entry : captureDirs.entrySet()) {
@@ -453,6 +462,7 @@ public class LocalAndroidVirtualDeviceTest {
         mLocalAvd.expectToConnect = false;
         mLocalAvd.postInvocationTearDown(null);
 
+        assertDeviceDescriptor();
         assertFinalDeviceState(mLocalAvd.getIDevice());
         verify(acloudDeleteRunUtil).setEnvVariable(eq("TMPDIR"), any());
         verify(testLogger).testLog(eq("kernel.1.log"), eq(LogDataType.KERNEL_LOG), any());

@@ -100,6 +100,11 @@ public class GTest extends GTestBase implements IDeviceTest {
             description = "Whether to use the updated logic for retry with sharding.")
     private boolean mUseUpdatedShardRetry = true;
 
+    @Option(
+            name = "force-no-test-error",
+            description = "Whether to throw an error if no test binary is found to execute.")
+    private boolean mForceNoTestError = false;
+
     /** Whether any incomplete test is found in the current run. */
     private boolean mIncompleteTestFound = false;
 
@@ -192,8 +197,10 @@ public class GTest extends GTestBase implements IDeviceTest {
             }
         }
         String[] executableFiles = getExecutableFiles(testDevice, root, excludeDirectories);
+        boolean gtestExecutableFound = false;
         for (String filePath : executableFiles) {
             if (shouldRunFile(filePath)) {
+                gtestExecutableFound = true;
                 IShellOutputReceiver resultParser =
                         createResultParser(getFileName(filePath), listener);
                 String flags = getAllGTestFlags(filePath);
@@ -203,6 +210,13 @@ public class GTest extends GTestBase implements IDeviceTest {
                 } else {
                     runTest(testDevice, resultParser, filePath, flags);
                 }
+            }
+        }
+        if (!gtestExecutableFound) {
+            CLog.d("Failed to find any native test in directory %s.", root);
+            if (mForceNoTestError) {
+                throw new RuntimeException(
+                        String.format("Failed to find any native test in directory %s.", root));
             }
         }
     }
