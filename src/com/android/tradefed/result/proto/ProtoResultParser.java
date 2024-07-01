@@ -290,7 +290,7 @@ public class ProtoResultParser {
     private void evalProto(TestRecord childProto, boolean isInRun) {
         if (isInRun) {
             // test case
-            String[] info = childProto.getTestRecordId().split("#");
+            String[] info = childProto.getTestRecordId().split("#", 2);
             TestDescription description = new TestDescription(info[0], info[1]);
             mListener.testStarted(description, timeStampToMillis(childProto.getStartTime()));
             handleTestCaseEnd(description, childProto);

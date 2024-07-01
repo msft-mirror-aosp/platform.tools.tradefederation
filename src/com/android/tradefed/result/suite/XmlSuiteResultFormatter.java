@@ -145,6 +145,29 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
         public String hostName;
     }
 
+    /** Sanitizes a string to escape the special characters. */
+    public static String sanitizeXmlContent(String s) {
+        return XmlEscapers.xmlContentEscaper().escape(s);
+    }
+
+    /** Truncates the full stack trace with maximum {@link STACK_TRACE_MAX_SIZE} characters. */
+    public static String truncateStackTrace(String fullStackTrace, String testCaseName) {
+        if (fullStackTrace == null) {
+            return null;
+        }
+        if (fullStackTrace.length() > STACK_TRACE_MAX_SIZE) {
+            CLog.i(
+                    "The stack trace for test case %s contains %d characters, and has been"
+                            + " truncated to %d characters in %s.",
+                    testCaseName,
+                    fullStackTrace.length(),
+                    STACK_TRACE_MAX_SIZE,
+                    TEST_RESULT_FILE_NAME);
+            return fullStackTrace.substring(0, STACK_TRACE_MAX_SIZE);
+        }
+        return fullStackTrace;
+    }
+
     /**
      * Allows to add some attributes to the <Result> tag via {@code serializer.attribute}.
      *
@@ -409,7 +432,7 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             }
             ErrorIdentifier errorIdentifier =
                     testResult.getValue().getFailure().getErrorIdentifier();
-            String truncatedStackTrace = getTruncatedStackTrace(fullStack, testResult.getKey());
+            String truncatedStackTrace = truncateStackTrace(fullStack, testResult.getKey());
             serializer.startTag(NS, FAILURE_TAG);
 
             serializer.attribute(NS, MESSAGE_ATTR, sanitizeXmlContent(message));
@@ -423,24 +446,6 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
 
             serializer.endTag(NS, FAILURE_TAG);
         }
-    }
-
-    /** Truncates the full stack trace with maximum {@link STACK_TRACE_MAX_SIZE} characters. */
-    private static String getTruncatedStackTrace(String fullStackTrace, String testCaseName) {
-        if (fullStackTrace == null) {
-            return null;
-        }
-        if (fullStackTrace.length() > STACK_TRACE_MAX_SIZE) {
-            CLog.i(
-                    "The stack trace for test case %s contains %d characters, and has been"
-                            + " truncated to %d characters in %s.",
-                    testCaseName,
-                    fullStackTrace.length(),
-                    STACK_TRACE_MAX_SIZE,
-                    TEST_RESULT_FILE_NAME);
-            return fullStackTrace.substring(0, STACK_TRACE_MAX_SIZE);
-        }
-        return fullStackTrace;
     }
 
     /** Add files captured on test failures. */
@@ -744,11 +749,6 @@ public class XmlSuiteResultFormatter implements IFormatterGenerator {
             parser.require(XmlPullParser.END_TAG, NS, METRIC_TAG);
         }
         return metrics;
-    }
-
-    @VisibleForTesting
-    protected String sanitizeXmlContent(String s) {
-        return XmlEscapers.xmlContentEscaper().escape(s);
     }
 
     private static String sanitizeAttributesKey(String attribute) {

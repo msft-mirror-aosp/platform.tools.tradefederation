@@ -150,7 +150,7 @@ public class NoisyDryRunTest implements IRemoteTest {
                 commands.size());
         StoreAndForwardTestCases forwarder = new StoreAndForwardTestCases(listener);
         ParallelDeviceExecutor<Boolean> executor =
-                new ParallelDeviceExecutor<Boolean>(Math.min(4, commands.size()));
+                new ParallelDeviceExecutor<Boolean>(Math.min(20, commands.size()));
         List<Callable<Boolean>> callableTasks = new ArrayList<>();
         for (int i = 0; i < commands.size(); ++i) {
             final int j = i;
@@ -177,6 +177,11 @@ public class NoisyDryRunTest implements IRemoteTest {
             try {
                 TradefedDelegator delegator = CommandScheduler.checkDelegation(args);
                 if (delegator.shouldUseDelegation()) {
+                    if (delegator.getTfRootDir().getPath().isEmpty()) {
+                        listener.testFailed(
+                                parseCmdTest,
+                                "Delegation option was set, but path was empty string");
+                    }
                     // TODO: Add some validation of delegated config.
                     return;
                 }
