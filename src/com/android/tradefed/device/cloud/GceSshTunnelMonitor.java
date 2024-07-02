@@ -56,7 +56,7 @@ public class GceSshTunnelMonitor extends AbstractTunnelMonitor {
     private static final long ADBD_RETRY_INTERVAL_MS = 15000;
     private static final int ADBD_MAX_RETRIES = 10;
     private static final long DEFAULT_SHORT_CMD_TIMEOUT = 20 * 1000;
-    private static final int WAIT_FOR_FIRST_CONNECT = 10 * 1000;
+    private static final long WAIT_FOR_FIRST_CONNECT = 500L;
     private static final long WAIT_AFTER_REBOOT = 60 * 1000;
 
     // Format string for local hostname.
