@@ -121,7 +121,9 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         if (mTradefedUserType.isManagedProfile()
                 && !featuresAreSupported(testInfo, "android.software.managed_users")) {
             return false;
-        } else if (mTradefedUserType.isCloneProfile() && !matchesApiLevel(testInfo, 34)) {
+        } else if (mTradefedUserType.isCloneProfile()
+                && (!matchesApiLevel(testInfo, 34)
+                        || !isCloneProfileEnabled(testInfo.getDevice()))) {
             // Clone profile type was introduced in Android S(api 31).
             // However, major functionalities supporting clone got added in 34.
             // Android U = 34
@@ -152,6 +154,30 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
             return Boolean.parseBoolean(supportsPSValue);
         } catch (RuntimeException e) {
             throw commandError("Error reading user service information", command, dumpsysOutput, e,
+                    SHELL_COMMAND_ERROR);
+        }
+    }
+
+    private boolean isCloneProfileEnabled(ITestDevice device) throws DeviceNotAvailableException {
+        String command = "dumpsys user";
+        String dumpsysOutput = device.executeShellCommand(command);
+        if (dumpsysOutput == null
+                || !dumpsysOutput.contains("mName: android.os.usertype.profile.CLONE")) {
+            return false;
+        }
+
+        try {
+            String cloneOnwards =
+                    dumpsysOutput.split("mName: android.os.usertype.profile.CLONE", 2)[1].trim();
+            String cloneEnabledOnwards = cloneOnwards.split("mEnabled:", 2)[1].trim();
+            String supportsCloneValue = cloneEnabledOnwards.split("\n")[0].trim();
+            return Boolean.parseBoolean(supportsCloneValue);
+        } catch (RuntimeException e) {
+            throw commandError(
+                    "Error reading user service information",
+                    command,
+                    dumpsysOutput,
+                    e,
                     SHELL_COMMAND_ERROR);
         }
     }
