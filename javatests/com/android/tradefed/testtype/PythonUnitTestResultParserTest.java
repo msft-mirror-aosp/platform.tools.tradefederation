@@ -17,6 +17,7 @@ package com.android.tradefed.testtype;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -100,7 +101,7 @@ public class PythonUnitTestResultParserTest {
         assertTrue(PythonUnitTestResultParser.PATTERN_FAIL_MESSAGE.matcher(s).matches());
         s = "FAIL: a (b) (i=3)";
         assertTrue(PythonUnitTestResultParser.PATTERN_FAIL_MESSAGE.matcher(s).matches());
-        s = "FAIL: my_test_method (__main__.MyExampleTest.my_test_method)";
+        s = "FAIL: my_test_method (a.b.c.MyExampleTest.my_test_method)";
         assertTrue(PythonUnitTestResultParser.PATTERN_FAIL_MESSAGE.matcher(s).matches());
     }
 
@@ -200,14 +201,14 @@ public class PythonUnitTestResultParserTest {
     @Test
     public void testParseSingleWithModuleClass() throws Exception {
         String[] output = {
-            "test_1_pass (__main__.MyExampleTest.test_1_pass) ... ok",
+            "test_1_pass (module.package.MyExampleTest.test_1_pass) ... ok",
             "",
             PythonUnitTestResultParser.DASH_LINE,
             "Ran 1 test in 1s",
             "",
             "OK"
         };
-        TestDescription id = new TestDescription("__main__.MyExampleTest", "test_1_pass");
+        TestDescription id = new TestDescription("module.package.MyExampleTest", "test_1_pass");
 
         mParser.processNewLines(output);
 
@@ -217,6 +218,77 @@ public class PythonUnitTestResultParserTest {
         inOrder.verify(mMockListener, times(1))
                 .testEnded(Mockito.eq(id), Mockito.<HashMap<String, Metric>>any());
         inOrder.verify(mMockListener, times(1)).testRunEnded(1000L, new HashMap<String, Metric>());
+    }
+
+    @Test
+    public void testParseMultipleWithFullyQualifiedClassNameAndClassFilter() throws Exception {
+        String[] output = {
+            "test_1 (atest.module.package.TestClass.test_1) ... ok",
+            "test_2 (atest.module.package.TestClass.test_2) ... ok",
+            "test_3 (atest.module.package.MyOtherTestClass.test_3) ... ok",
+            "",
+            PythonUnitTestResultParser.DASH_LINE,
+            "Ran 3 tests in 1s",
+            "",
+            "OK"
+        };
+        TestDescription id1 = new TestDescription("atest.module.package.TestClass", "test_1");
+        TestDescription id2 = new TestDescription("atest.module.package.TestClass", "test_2");
+        TestDescription id3 =
+                new TestDescription("atest.module.package.MyOtherTestClass", "test_3");
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        includeFilters.add("TestClass");
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        mParser.processNewLines(output);
+
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener, times(1)).testRunStarted("test", 3);
+        inOrder.verify(mMockListener, times(1)).testStarted(Mockito.eq(id1));
+        inOrder.verify(mMockListener, times(1))
+                .testEnded(Mockito.eq(id1), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener, times(1)).testStarted(Mockito.eq(id2));
+        inOrder.verify(mMockListener, times(1))
+                .testEnded(Mockito.eq(id2), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener, times(1)).testRunEnded(1000L, new HashMap<String, Metric>());
+        verify(mMockListener, never()).testIgnored(id1);
+        verify(mMockListener, never()).testIgnored(id2);
+        verify(mMockListener).testIgnored(id3);
+    }
+
+    @Test
+    public void testParseMultipleWithFullyQualifiedClassNameAndClassMethodFilter()
+            throws Exception {
+        String[] output = {
+            "test_1 (atest.module.package.TestClass.test_1) ... ok",
+            "test_2 (atest.module.package.TestClass.test_2) ... ok",
+            "",
+            PythonUnitTestResultParser.DASH_LINE,
+            "Ran 2 tests in 1s",
+            "",
+            "OK"
+        };
+        TestDescription id1 = new TestDescription("atest.module.package.TestClass", "test_1");
+        TestDescription id2 = new TestDescription("atest.module.package.TestClass", "test_2");
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        includeFilters.add("TestClass#test_1");
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        mParser.processNewLines(output);
+
+        InOrder inOrder = Mockito.inOrder(mMockListener);
+        inOrder.verify(mMockListener, times(1)).testRunStarted("test", 2);
+        inOrder.verify(mMockListener, times(1)).testStarted(Mockito.eq(id1));
+        inOrder.verify(mMockListener, times(1))
+                .testEnded(Mockito.eq(id1), Mockito.<HashMap<String, Metric>>any());
+        verify(mMockListener, never()).testIgnored(id1);
+        verify(mMockListener).testIgnored(id2);
     }
 
     @Test
