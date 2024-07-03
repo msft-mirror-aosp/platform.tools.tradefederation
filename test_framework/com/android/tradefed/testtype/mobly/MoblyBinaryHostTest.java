@@ -315,10 +315,6 @@ public class MoblyBinaryHostTest
             return true;
         }
 
-        public boolean isMatched() {
-            return mMatched;
-        }
-
         @Override
         public String toString() {
             return mFilter;
@@ -369,34 +365,6 @@ public class MoblyBinaryHostTest
             //   - filtered in by an include filter, or no include filters at all.
             tests.add(testName);
             if (!excluded && (included || includeFilters.isEmpty())) includedTests.add(testName);
-        }
-        if (!includeFilters.isEmpty()) {
-            String invalidIncludeFilters =
-                    includeFilters.stream()
-                            .filter(filter -> !filter.isMatched())
-                            .map(filter -> filter.toString())
-                            .collect(Collectors.joining(", "));
-            if (!invalidIncludeFilters.isEmpty()) {
-                reportFailure(
-                        listener,
-                        runName,
-                        "Invalid include filters: [" + invalidIncludeFilters + "]");
-                return Optional.empty();
-            }
-        }
-        if (!excludeFilters.isEmpty()) {
-            String invalidExcludeFilters =
-                    excludeFilters.stream()
-                            .filter(filter -> !filter.isMatched())
-                            .map(filter -> filter.toString())
-                            .collect(Collectors.joining(", "));
-            if (!invalidExcludeFilters.isEmpty()) {
-                reportFailure(
-                        listener,
-                        runName,
-                        "Invalid exclude filters: [" + invalidExcludeFilters + "]");
-                return Optional.empty();
-            }
         }
         return Optional.of(new Pair<>(tests, includedTests));
     }
