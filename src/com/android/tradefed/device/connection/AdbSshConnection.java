@@ -280,8 +280,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (useCvdCF()) {
-                    File cvdLogsDir =
-                            new HostOrchestratorUtil(getDevice(), mGceAvd).pullCvdHostLogs();
+                    HostOrchestratorUtil hOUtil = new HostOrchestratorUtil(getDevice(), mGceAvd);
+                    File cvdLogsDir = hOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
                                 cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
@@ -289,6 +289,10 @@ public class AdbSshConnection extends AdbTcpConnection {
                     } else {
                         CLog.i("CVD Logs is null, skip logging cvd logs.");
                     }
+                    hOUtil.collectLogByCommand(
+                            getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                    hOUtil.collectLogByCommand(
+                            getLogger(), "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
