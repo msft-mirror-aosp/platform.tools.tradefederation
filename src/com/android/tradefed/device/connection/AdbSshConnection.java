@@ -42,6 +42,7 @@ import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
@@ -155,7 +156,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         RecoveryMode previousMode = getDevice().getRecoveryMode();
         getDevice().setRecoveryMode(RecoveryMode.NONE);
         boolean unresponsive = true;
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_device_available")) {
             for (int i = 0; i < WAIT_TIME_DIVISION; i++) {
                 // We don't have a way to bail out of waitForDeviceAvailable if the Gce Avd
                 // boot up and then fail some other setup so we check to make sure the monitor
@@ -279,8 +280,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (useCvdCF()) {
-                    File cvdLogsDir =
-                            new HostOrchestratorUtil(getDevice(), mGceAvd).pullCvdHostLogs();
+                    HostOrchestratorUtil hOUtil = new HostOrchestratorUtil(getDevice(), mGceAvd);
+                    File cvdLogsDir = hOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
                                 cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
@@ -288,6 +289,10 @@ public class AdbSshConnection extends AdbTcpConnection {
                     } else {
                         CLog.i("CVD Logs is null, skip logging cvd logs.");
                     }
+                    hOUtil.collectLogByCommand(
+                            getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                    hOUtil.collectLogByCommand(
+                            getLogger(), "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -445,25 +450,27 @@ public class AdbSshConnection extends AdbTcpConnection {
 
     /** Check if the tunnel monitor is running. */
     protected void waitForTunnelOnline(final long waitTime) throws DeviceNotAvailableException {
-        CLog.i("Waiting %d ms for tunnel to be restarted", waitTime);
-        long startTime = getCurrentTime();
-        while (getCurrentTime() - startTime < waitTime) {
-            if (getGceTunnelMonitor() == null) {
-                CLog.e("Tunnel Thread terminated, something went wrong with the device.");
-                break;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_tunnel")) {
+            CLog.i("Waiting %d ms for tunnel to be restarted", waitTime);
+            long startTime = getCurrentTime();
+            while (getCurrentTime() - startTime < waitTime) {
+                if (getGceTunnelMonitor() == null) {
+                    CLog.e("Tunnel Thread terminated, something went wrong with the device.");
+                    break;
+                }
+                if (getGceTunnelMonitor().isTunnelAlive()) {
+                    CLog.d("Tunnel online again, resuming.");
+                    return;
+                }
+                getRunUtil().sleep(RETRY_INTERVAL_MS);
             }
-            if (getGceTunnelMonitor().isTunnelAlive()) {
-                CLog.d("Tunnel online again, resuming.");
-                return;
-            }
-            getRunUtil().sleep(RETRY_INTERVAL_MS);
+            mTunnelInitFailed =
+                    new DeviceNotAvailableException(
+                            String.format("Tunnel did not come back online after %sms", waitTime),
+                            getDevice().getSerialNumber(),
+                            DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_GCE);
+            throw mTunnelInitFailed;
         }
-        mTunnelInitFailed =
-                new DeviceNotAvailableException(
-                        String.format("Tunnel did not come back online after %sms", waitTime),
-                        getDevice().getSerialNumber(),
-                        DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_GCE);
-        throw mTunnelInitFailed;
     }
 
     /**
