@@ -22,13 +22,14 @@ import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
+import com.android.tradefed.log.ITestLogger;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 
 import com.google.common.net.HostAndPort;
 
-import java.io.OutputStream;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -36,6 +37,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
+
+import java.io.OutputStream;
 
 /** Unit tests for {@link HostOrchestratorUtil} */
 @RunWith(JUnit4.class)
@@ -48,6 +51,7 @@ public class HostOrchestratorUtilTest {
     private TestDeviceOptions mTestDeviceOptions;
     private IRunUtil mMockRunUtil;
     private Process mMockProcess;
+    private ITestLogger mMockLogger;
     private static final String LIST_CVD_RES =
             "{\"cvds\":[{\"group\":\"cvd_1\",\"name\":\"ins-1\",\"build_source\":{},"
                     + "\"status\":\"Running\",\"displays\":[\"720 x 1280 ( 320 )\"],"
@@ -64,6 +68,7 @@ public class HostOrchestratorUtilTest {
         mMockClient = Mockito.mock(OxygenClient.class);
         mMockProcess = Mockito.mock(Process.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
+        mMockLogger = Mockito.mock(ITestLogger.class);
         mTestDeviceOptions = new TestDeviceOptions();
         mHOUtil = new HostOrchestratorUtil(mMockDevice, mMockGceAvd, mMockClient);
     }
@@ -103,6 +108,112 @@ public class HostOrchestratorUtilTest {
         Mockito.verify(mMockClient, times(0))
                 .createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id");
         mHOUtil.createHostOrchestratorTunnel("1111");
+    }
+
+    @Test
+    public void testCollectLogByCommand_Success() throws Exception {
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(mTestDeviceOptions).when(mMockDevice).getOptions();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(HostAndPort.fromString("host:2080")).when(mMockGceAvd).hostAndPort();
+        mHOUtil =
+                new HostOrchestratorUtil(mMockDevice, mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
+        cvdCommandRes.setStdout("some output");
+        cvdCommandRes.setStderr("some error");
+        Mockito.doReturn(cvdCommandRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        (String[]) Mockito.any());
+        mHOUtil.collectLogByCommand(mMockLogger, "log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        Mockito.verify(mMockRunUtil, times(1))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq(
+                                String.format(
+                                        "http://host:1111/%s",
+                                        HostOrchestratorUtil.URL_HOST_KERNEL_LOG)),
+                        Mockito.eq("--compressed"),
+                        Mockito.eq("-o"),
+                        Mockito.any());
+        Mockito.verify(mMockLogger, times(1))
+                .testLog(Mockito.eq("log"), Mockito.eq(LogDataType.CUTTLEFISH_LOG), Mockito.any());
+        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
+    }
+
+    @Test
+    public void testCollectLogByCommand_Fail() throws Exception {
+        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(mTestDeviceOptions).when(mMockDevice).getOptions();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(HostAndPort.fromString("host:2080")).when(mMockGceAvd).hostAndPort();
+        mHOUtil =
+                new HostOrchestratorUtil(mMockDevice, mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdCommandRes = new CommandResult(CommandStatus.FAILED);
+        cvdCommandRes.setStdout("some output");
+        cvdCommandRes.setStderr("some error");
+        Mockito.doReturn(cvdCommandRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        (String[]) Mockito.any());
+        mHOUtil.collectLogByCommand(mMockLogger, "log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        Mockito.verify(mMockRunUtil, times(1))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq(
+                                String.format(
+                                        "http://host:1111/%s",
+                                        HostOrchestratorUtil.URL_HOST_KERNEL_LOG)),
+                        Mockito.eq("--compressed"),
+                        Mockito.eq("-o"),
+                        Mockito.any());
+        Mockito.verify(mMockLogger, times(0))
+                .testLog(Mockito.eq("log"), Mockito.eq(LogDataType.CUTTLEFISH_LOG), Mockito.any());
+        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
     }
 
     @Test
