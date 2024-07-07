@@ -24,6 +24,7 @@ import static com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer.TES
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,6 +58,21 @@ public final class RunOnCloneProfileTargetPreparerTest {
                     + " --for-testing user";
     public static final String USERTYPE_PROFILE_CLONE = "android.os.usertype.profile.CLONE";
 
+    private static final String DUMPSYS_USER_COMMAND = "dumpsys user";
+
+    private static final String SAMPLE_DUMPSYS_USER_CAN_ADD_CP =
+            "android.os.usertype.profile.CLONE: \n"
+                    + " mName: android.os.usertype.profile.CLONE\n"
+                    + " mBaseType: PROFILE\n"
+                    + " mEnabled: true\n"
+                    + " mMaxAllowed: -1\n";
+    private static final String SAMPLE_DUMPSYS_USER_CAN_NOT_ADD_CP =
+            "android.os.usertype.profile.CLONE: \n"
+                    + " mName: android.os.usertype.profile.CLONE\n"
+                    + " mBaseType: PROFILE\n"
+                    + " mEnabled: false\n"
+                    + " mMaxAllowed: -1\n";
+
     @Rule public final MockitoRule mockito = MockitoJUnit.rule();
 
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
@@ -87,10 +103,12 @@ public final class RunOnCloneProfileTargetPreparerTest {
         when(mTestInfo.getDevice().getMaxNumberOfUsersSupported()).thenReturn(2);
         when(mTestInfo.getDevice().listUsers()).thenReturn(userIds);
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(34);
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND))
+                .thenReturn(SAMPLE_DUMPSYS_USER_CAN_ADD_CP);
     }
 
     @Test
-    public void setUp_doesNotSupportCloneUser_doesNotChangeTestUser() throws Exception {
+    public void setUp_apiDoesNotSupportCloneUser_doesNotChangeTestUser() throws Exception {
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(30);
 
         mPreparer.setUp(mTestInfo);
@@ -99,8 +117,28 @@ public final class RunOnCloneProfileTargetPreparerTest {
     }
 
     @Test
-    public void setUp_doesNotSupportCloneUser_setsArgumentToSkipTests() throws Exception {
+    public void setUp_apiDoesNotSupportCloneUser_setsArgumentToSkipTests() throws Exception {
         when(mTestInfo.getDevice().getApiLevel()).thenReturn(32);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.properties()).put(eq(SKIP_TESTS_REASON_KEY), any());
+    }
+
+    @Test
+    public void setUp_deviceDoesNotSupportCloneUser_doesNotChangeTestUser() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND))
+                .thenReturn(SAMPLE_DUMPSYS_USER_CAN_NOT_ADD_CP);
+
+        mPreparer.setUp(mTestInfo);
+
+        verify(mTestInfo.properties(), never()).put(eq(RUN_TESTS_AS_USER_KEY), any());
+    }
+
+    @Test
+    public void setUp_deviceDoesNotSupportCloneUser_setsArgumentToSkipTests() throws Exception {
+        when(mTestInfo.getDevice().executeShellCommand(DUMPSYS_USER_COMMAND))
+                .thenReturn(SAMPLE_DUMPSYS_USER_CAN_NOT_ADD_CP);
 
         mPreparer.setUp(mTestInfo);
 
@@ -134,7 +172,7 @@ public final class RunOnCloneProfileTargetPreparerTest {
 
         mPreparer.setUp(mTestInfo);
 
-        verify(mTestInfo.getDevice(), never()).executeShellCommand(any());
+        verify(mTestInfo.getDevice(), never()).executeShellCommand(contains("pm create-user"));
     }
 
     @Test
