@@ -187,6 +187,11 @@ public class DeviceManagerTest {
                         invocation -> {
                             return capturedIDevice.getValue().getSerialNumber();
                         });
+        when(mMockTestDevice.getTrackingSerial())
+                .thenAnswer(
+                        invocation -> {
+                            return capturedIDevice.getValue().getSerialNumber();
+                        });
         when(mMockTestDevice.getMonitor()).thenReturn(mMockStateMonitor);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(), (String) Mockito.any(), (String) Mockito.any()))
