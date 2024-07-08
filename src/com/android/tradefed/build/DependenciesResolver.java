@@ -112,6 +112,10 @@ public class DependenciesResolver
             }
             build.setTestsDir(mTestsDir, "1");
         }
+        if (CurrentInvocation.getInvocationFiles() != null) {
+            CurrentInvocation.getInvocationFiles()
+                    .put(ExecutionFiles.FilesKey.TESTS_DIRECTORY, build.getTestsDir());
+        }
         return build;
     }
 

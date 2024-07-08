@@ -379,28 +379,31 @@ public class TestDiscoveryExecutor {
         CLog.d("Seaching parent configs.");
         try (CloseableTraceScope ignored = new CloseableTraceScope("find parent configs")) {
             Set<File> testCasesDirs = FileUtil.findFilesObject(new File(rootDirPath), "testcases");
-            Set<File> moduleFileDirs = Collections.synchronizedSet(new HashSet<>());
+            Set<String> moduleDirs = Collections.synchronizedSet(new HashSet<>());
             testCasesDirs.parallelStream()
                     .forEach(
                             f -> {
-                                File[] modulesFile = f.listFiles();
-                                if (modulesFile != null) {
-                                    moduleFileDirs.addAll(Arrays.asList(modulesFile));
+                                String[] modules = f.list();
+                                if (modules != null) {
+                                    moduleDirs.addAll(Arrays.asList(modules));
                                 }
                             });
-            moduleFileDirs.parallelStream()
+            Set<String> moduleNameMismatch =
+                    moduleNames.parallelStream()
+                            .filter(m -> !moduleDirs.contains(m))
+                            .collect(Collectors.toSet());
+            // Only search the mismatch
+            moduleNameMismatch.parallelStream()
                     .forEach(
-                            module -> {
-                                for (String moduleName : moduleNames) {
-                                    if (!module.getName().equals(moduleName)) {
-                                        File config = new File(module, moduleName + ".config");
-                                        if (config.exists()) {
-                                            CLog.d(
-                                                    "Parent: %s being added for the extra"
-                                                            + " configs",
-                                                    config.getParentFile().getName());
-                                            parentModules.add(config.getParentFile().getName());
-                                        }
+                            name -> {
+                                File config =
+                                        FileUtil.findFile(new File(rootDirPath), name + ".config");
+                                if (config != null) {
+                                    if (!config.getParentFile().getName().equals(name)) {
+                                        CLog.d(
+                                                "Parent: %s being added for the extra configs",
+                                                config.getParentFile().getName());
+                                        parentModules.add(config.getParentFile().getName());
                                     }
                                 }
                             });
