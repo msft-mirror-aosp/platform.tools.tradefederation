@@ -131,12 +131,10 @@ public class RunUtilTest {
                 System.out.println("heidoudou");
                 System.out.println(FileUtil.readStringFromFile(actionResult.stdOut()));
                 File stdout = FileUtil.createTempFile("stdout_", ".txt");
-                stdout.deleteOnExit();
                 FileUtil.copyFile(actionResult.stdOut(), stdout);
                 File stderr = null;
                 if (actionResult.stdErr() != null) {
                     stderr = FileUtil.createTempFile("stderr_", ".txt");
-                    stderr.deleteOnExit();
                     FileUtil.copyFile(actionResult.stdErr(), stderr);
                 }
                 mCache.putIfAbsent(
