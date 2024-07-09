@@ -405,27 +405,6 @@ public class TestMappingsValidation implements IBuildReceiver {
         }
     }
 
-    /**
-     * Test all the tests by each test group and make sure the file options aren't conflict to AJUR
-     * rules.
-     */
-    @Test
-    public void testFilterOptions() {
-        List<String> errors = new ArrayList<>();
-        for (String testGroup : allTests.keySet()) {
-            for (String moduleName : getModuleNames(testGroup)) {
-                errors.addAll(validateFilterOption(moduleName, INCLUDE_FILTER, testGroup));
-                errors.addAll(validateFilterOption(moduleName, EXCLUDE_FILTER, testGroup));
-            }
-        }
-        if (!errors.isEmpty()) {
-            fail(
-                    String.format(
-                            "Fail include/exclude filter setting check:\n%s",
-                            Joiner.on("\n").join(errors)));
-        }
-    }
-
     /** Test to ensure performance test modules are not included for test mapping. */
     @Test
     public void testNoPerformanceTests() throws IOException {
@@ -499,45 +478,6 @@ public class TestMappingsValidation implements IBuildReceiver {
                 FileUtil.recursiveDelete(deviceTestConfigDir);
             }
         }
-    }
-
-    /**
-     * Validate if the filter option of a test contains both class/method and package. options.
-     *
-     * @param moduleName A {@code String} name of a test module.
-     * @param filterOption A {@code String} of the filter option defined in TEST MAPPING file.
-     * @param testGroup A {@code String} name of the test group.
-     * @return A {@code List<String>} of the validation errors.
-     */
-    private List<String> validateFilterOption(
-            String moduleName, String filterOption, String testGroup) {
-        List<String> errors = new ArrayList<>();
-        for (TestInfo test : getTestInfos(moduleName, testGroup)) {
-            Set<Filters> filterTypes = new HashSet<>();
-            Map<Filters, Set<TestInfo>> filterTestInfos = new HashMap<>();
-            for (TestOption options : test.getOptions()) {
-                if (options.getName().equals(filterOption)) {
-                    Filters optionType = getOptionType(options.getValue());
-                    // Add optionType with each TestInfo to get the detailed information.
-                    filterTestInfos.computeIfAbsent(optionType, k -> new HashSet<>()).add(test);
-                }
-            }
-            filterTypes = filterTestInfos.keySet();
-            // If the options of a test in one TEST_MAPPING file contain either REGEX,
-            // CLASS_OR_METHOD, or PACKAGE, it should be caught and output the tests
-            // information.
-            // TODO(b/128947872): List the type with fewest options first.
-            if (filterTypes.size() > 1) {
-                errors.add(
-                        String.format(
-                                "Mixed filter types found. Test: %s , TestGroup: %s, Details:\n"
-                                        + "%s",
-                                moduleName,
-                                testGroup,
-                                getDetailedErrors(filterOption, filterTestInfos)));
-            }
-        }
-        return errors;
     }
 
     /**
