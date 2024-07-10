@@ -85,6 +85,7 @@ public class AdbSshConnectionTest {
     @Mock GceSshTunnelMonitor mGceSshMonitor;
     @Mock ITestDevice mMockTestDevice;
     @Mock GceAvdInfo mMockAvdInfo;
+    @Mock File mMockFile;
 
     public static interface TestableConfigurableVirtualDevice
             extends IDevice, IConfigurableVirtualDevice {}
@@ -100,6 +101,7 @@ public class AdbSshConnectionTest {
 
     @Before
     public void setUp() throws Exception {
+        mMockFile = Mockito.mock(File.class);
         MockitoAnnotations.initMocks(this);
         mOptions = new TestDeviceOptions();
         OptionSetter setter = new OptionSetter(mOptions);
@@ -745,24 +747,28 @@ public class AdbSshConnectionTest {
         }
     }
 
-    /** Test ssh tunnel monitor will be initialized when use-oxygenation-device is True */
+    /** Test LHP tunnel monitor will be initialized when use-oxygenation-device is True */
     @Test
-    public void testCreateGceTunnelMonitor_SSHTunnel() throws Exception {
+    public void testCreateGceTunnelMonitor_LHPTunnel() throws Exception {
         mConnection =
                 new AdbSshConnection(
                         new ConnectionBuilder(
                                 mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger));
         mOptions = new TestDeviceOptions();
+        mOptions.setAvdDriverBinary(mMockFile);
         OptionSetter setter = new OptionSetter(mOptions);
         setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
         setter.setOptionValue("use-oxygenation-device", "true");
-        mConnection.createGceTunnelMonitor(mMockTestDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        mConnection.createGceTunnelMonitor(mMockDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
         assertTrue(mConnection.getGceTunnelMonitor() instanceof GceLHPTunnelMonitor);
     }
 
-    /** Test LHP tunnel monitor will be initialized when use-oxygenation-device is False */
+    /** Test SSH tunnel monitor will be initialized when use-oxygenation-device is False */
     @Test
-    public void testCreateGceTunnelMonitor_LHPTunnel() throws Exception {
+    public void testCreateGceTunnelMonitor_SSHTunnel() throws Exception {
         mConnection =
                 new AdbSshConnection(
                         new ConnectionBuilder(
