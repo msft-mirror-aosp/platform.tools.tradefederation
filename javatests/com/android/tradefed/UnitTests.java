@@ -455,6 +455,7 @@ import com.android.tradefed.util.RequestUtilTest;
 import com.android.tradefed.util.ResourceUtilTest;
 import com.android.tradefed.util.RestApiHelperTest;
 import com.android.tradefed.util.RunUtilTest;
+import com.android.tradefed.util.SearchArtifactUtilTest;
 import com.android.tradefed.util.SerializationUtilTest;
 import com.android.tradefed.util.ShellOutputReceiverStreamTest;
 import com.android.tradefed.util.SimplePerfStatResultParserTest;
@@ -1071,6 +1072,7 @@ import org.junit.runners.Suite.SuiteClasses;
     RestApiHelperTest.class,
     RequestUtilTest.class,
     RunUtilTest.class,
+    SearchArtifactUtilTest.class,
     SerializationUtilTest.class,
     ShellOutputReceiverStreamTest.class,
     SimplePerfStatResultParserTest.class,
