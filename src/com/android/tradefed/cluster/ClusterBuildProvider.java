@@ -39,7 +39,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** A {@link IBuildProvider} to download TFC test resources. */
@@ -62,6 +64,9 @@ public class ClusterBuildProvider implements IBuildProvider {
 
     @Option(name = "build-target", description = "Build target name")
     private String mBuildTarget = "stub";
+
+    @Option(name = "build-attribute", description = "Build attributes to supply")
+    private Map<String, String> mBuildAttributes = new HashMap<String, String>();
 
     // The keys are the URLs; the values are the downloaded files shared among all build providers
     // in the invocation.
@@ -140,6 +145,7 @@ public class ClusterBuildProvider implements IBuildProvider {
             }
             buildInfo.setFile(resource.getName(), file, DEFAULT_FILE_VERSION);
         }
+        buildInfo.addBuildAttributes(mBuildAttributes);
         File testsDir = buildInfo.getFile(BuildInfoKey.BuildInfoFileKey.TESTDIR_IMAGE);
         if (testsDir != null && CurrentInvocation.getInvocationFiles() != null) {
             CurrentInvocation.getInvocationFiles()
