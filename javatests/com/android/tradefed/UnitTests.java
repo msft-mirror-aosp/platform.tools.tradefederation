@@ -165,6 +165,7 @@ import com.android.tradefed.invoker.logger.InvocationLocalTest;
 import com.android.tradefed.invoker.logger.InvocationMetricLoggerTest;
 import com.android.tradefed.invoker.logger.TfObjectTrackerTest;
 import com.android.tradefed.invoker.sandbox.ParentSandboxInvocationExecutionTest;
+import com.android.tradefed.invoker.shard.DynamicShardHelperTest;
 import com.android.tradefed.invoker.shard.ParentShardReplicateTest;
 import com.android.tradefed.invoker.shard.RemoteDynamicPoolTest;
 import com.android.tradefed.invoker.shard.ShardHelperTest;
@@ -717,6 +718,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TfObjectTrackerTest.class,
 
     // invoker.shard
+    DynamicShardHelperTest.class,
     ParentShardReplicateTest.class,
     RemoteDynamicPoolTest.class,
     ShardHelperTest.class,
