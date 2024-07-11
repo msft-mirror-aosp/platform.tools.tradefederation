@@ -192,6 +192,9 @@ public interface ICommandOptions {
     /** Returns the experimental flags map, that can be used to feature gate projects. */
     public Map<String, String> getExperimentalFlags();
 
+    /** Whether to skip experiments for TRYBOT runs. */
+    public boolean skipTrybotExperiment();
+
     /** Whether or not to capture a screenshot on test case failure */
     public boolean captureScreenshotOnFailure();
 
