@@ -299,4 +299,7 @@ public interface ICommandOptions {
 
     /** Set whether to attempt to distribute number of modules evenly across shards */
     public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding);
+
+    /** Returns the name of the instance used to handle remote caching. */
+    public String getRemoteCacheInstanceName();
 }
