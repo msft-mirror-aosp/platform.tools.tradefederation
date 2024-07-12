@@ -149,12 +149,9 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
 
         String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
-        // Don't inherit `PATH` from main process when caching is enabled, because there are too
-        // many dependencies, which would cause stack overflow when computing the cache key.
-        if (Strings.isNullOrEmpty(instanceName)) {
-            paths.add(System.getenv("PATH"));
-            paths.add(gtestFile.getParentFile().getAbsolutePath());
-        }
+        paths.add("/usr/bin");
+        paths.add("/usr/sbin");
+        paths.add(".");
         String path = paths.stream().distinct().collect(Collectors.joining(separator));
         CLog.d("Using updated $PATH: %s", path);
         runUtil.setEnvVariablePriority(EnvPriority.SET);
