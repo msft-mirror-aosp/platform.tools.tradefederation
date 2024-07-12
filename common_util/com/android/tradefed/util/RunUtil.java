@@ -242,6 +242,7 @@ public class RunUtil implements IRunUtil {
         }
         if (cachedResult != null) {
             try {
+                CLog.d("Cache is hit with action: %s", action.action());
                 return handleCachedResult(cachedResult, stdout, stderr);
             } catch (IOException e) {
                 CLog.e("Exception occurred when handling cached result!");
@@ -267,6 +268,11 @@ public class RunUtil implements IRunUtil {
                 // Disable cache upload.
                 cacheClient = null;
             }
+            CLog.d(
+                    "Caching command [%s] running in [%s] with environment variables:\n%s",
+                    processBuilder.command(),
+                    processBuilder.directory(),
+                    processBuilder.environment());
         }
         RunnableResult osRunnable = createRunnableResult(stdout, stderr, processBuilder);
 
@@ -282,6 +288,7 @@ public class RunUtil implements IRunUtil {
                         stderr != null ? (ForkedOutputStream) stderr : null;
                 if (stdoutForkedStream.isSuccess()
                         && (stderr == null || stderrForkedStream.isSuccess())) {
+                    CLog.d("Uploading cache for action: %s", action.action());
                     cacheClient.uploadCache(
                             action,
                             ExecutableActionResult.create(
