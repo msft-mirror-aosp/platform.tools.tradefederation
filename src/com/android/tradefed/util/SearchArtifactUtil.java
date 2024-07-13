@@ -35,7 +35,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -53,11 +52,9 @@ public class SearchArtifactUtil {
      * @param fileName The name of the file to look for.
      * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
      *     search.
-     * @return The found artifact file.
-     * @throws FileNotFoundException If the file is not found.
+     * @return The found artifact file or null if none.
      */
-    public static File searchFile(String fileName, boolean targetFirst)
-            throws FileNotFoundException {
+    public static File searchFile(String fileName, boolean targetFirst) {
         return searchFile(fileName, targetFirst, null, null, null);
     }
 
@@ -68,11 +65,9 @@ public class SearchArtifactUtil {
      * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
      *     search.
      * @param abi The {@link IAbi} to match the file.
-     * @return The found artifact file.
-     * @throws FileNotFoundException If the file is not found.
+     * @return The found artifact file or null if none.
      */
-    public static File searchFile(String fileName, boolean targetFirst, IAbi abi)
-            throws FileNotFoundException {
+    public static File searchFile(String fileName, boolean targetFirst, IAbi abi) {
         return searchFile(fileName, targetFirst, abi, null, null);
     }
 
@@ -85,12 +80,13 @@ public class SearchArtifactUtil {
      * @param altDirs Alternative search paths, in addition to the default search paths.
      * @param altDirBehavior how alternative search paths should be used against default paths: as
      *     fallback, or as override; if unspecified, fallback will be used
-     * @return The found artifact file.
-     * @throws FileNotFoundException If the file is not found.
+     * @return The found artifact file or null if none.
      */
     public static File searchFile(
-            String fileName, boolean targetFirst, List<File> altDirs, AltDirBehavior altDirBehavior)
-            throws FileNotFoundException {
+            String fileName,
+            boolean targetFirst,
+            List<File> altDirs,
+            AltDirBehavior altDirBehavior) {
         return searchFile(fileName, targetFirst, null, altDirs, altDirBehavior);
     }
 
@@ -104,16 +100,14 @@ public class SearchArtifactUtil {
      * @param altDirs Alternative search paths, in addition to the default search paths.
      * @param altDirBehavior how alternative search paths should be used against default paths: as
      *     fallback, or as override; if unspecified, fallback will be used
-     * @return The found artifact file.
-     * @throws FileNotFoundException If the file is not found.
+     * @return The found artifact file or null if none.
      */
     public static File searchFile(
             String fileName,
             boolean targetFirst,
             IAbi abi,
             List<File> altDirs,
-            AltDirBehavior altDirBehavior)
-            throws FileNotFoundException {
+            AltDirBehavior altDirBehavior) {
         List<File> searchDirectories =
                 singleton.getSearchDirectories(targetFirst, altDirs, altDirBehavior);
 
@@ -155,8 +149,8 @@ public class SearchArtifactUtil {
                 }
             }
         }
-        throw new FileNotFoundException(
-                String.format("Could not find an artifact file associated with %s", fileName));
+        CLog.e("Could not find an artifact file associated with %s.", fileName);
+        return null;
     }
 
     /** Returns the list of search locations in correct order. */
