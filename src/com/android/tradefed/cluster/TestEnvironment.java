@@ -47,6 +47,7 @@ public class TestEnvironment {
     final List<TradefedConfigObject> mTradefedConfigObjects = new ArrayList<>();
     boolean mUseParallelSetup = false;
     private final List<String> mExcludedFilesInJavaClasspath = new ArrayList<>();
+    private final Map<String, String> mBuildAttributes = new HashMap<>();
 
     /**
      * Adds an environment variable.
@@ -257,14 +258,34 @@ public class TestEnvironment {
         return Collections.unmodifiableList(mExcludedFilesInJavaClasspath);
     }
 
+    @VisibleForTesting
+    void addBuildAttribute(String key, String value) {
+        mBuildAttributes.put(key, value);
+    }
+
+    /**
+     * Returns a {@link Map} object containing all build attrbitues.
+     *
+     * @return unmodifiable map of all build attributes
+     */
+    public Map<String, String> getBuildAttributes() {
+        return Collections.unmodifiableMap(mBuildAttributes);
+    }
+
+    private static Map<String, String> loadKeyValuePairs(JSONArray pairs) throws JSONException {
+        Map<String, String> map = new HashMap<>();
+        for (int i = 0; i < pairs.length(); i++) {
+            final JSONObject pair = pairs.getJSONObject(i);
+            map.put(pair.getString("key"), pair.getString("value"));
+        }
+        return map;
+    }
+
     public static TestEnvironment fromJson(JSONObject json) throws JSONException {
         TestEnvironment obj = new TestEnvironment();
         final JSONArray envVars = json.optJSONArray("env_vars");
         if (envVars != null) {
-            for (int i = 0; i < envVars.length(); i++) {
-                final JSONObject envVar = envVars.getJSONObject(i);
-                obj.addEnvVar(envVar.getString("key"), envVar.getString("value"));
-            }
+            obj.mEnvVars.putAll(loadKeyValuePairs(envVars));
         } else {
             CLog.w("env_vars is null");
         }
@@ -278,10 +299,7 @@ public class TestEnvironment {
         }
         final JSONArray javaProperties = json.optJSONArray("java_properties");
         if (javaProperties != null) {
-            for (int i = 0; i < javaProperties.length(); i++) {
-                final JSONObject javaProperty = javaProperties.getJSONObject(i);
-                obj.addJavaProperty(javaProperty.getString("key"), javaProperty.getString("value"));
-            }
+            obj.mJavaProperties.putAll(loadKeyValuePairs(javaProperties));
         } else {
             CLog.w("java_properties is null");
         }
@@ -333,6 +351,12 @@ public class TestEnvironment {
             }
         } else {
             CLog.w("exclude_files_in_java_classpath is null");
+        }
+        final JSONArray buildAttributes = json.optJSONArray("build_attributes");
+        if (buildAttributes != null) {
+            obj.mBuildAttributes.putAll(loadKeyValuePairs(buildAttributes));
+        } else {
+            CLog.w("build_attributes is null");
         }
         return obj;
     }

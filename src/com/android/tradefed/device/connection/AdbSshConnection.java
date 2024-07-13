@@ -74,6 +74,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private GceManager mGceHandler = null;
     private AbstractTunnelMonitor mGceTunnelMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
+    private HostOrchestratorUtil mHOUtil = null;
 
     private boolean mIsRemote = false;
     private String mKnownIp = null;
@@ -280,8 +281,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (useCvdCF()) {
-                    HostOrchestratorUtil hOUtil = new HostOrchestratorUtil(getDevice(), mGceAvd);
-                    File cvdLogsDir = hOUtil.pullCvdHostLogs();
+                    File cvdLogsDir = mHOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
                                 cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
@@ -289,9 +289,9 @@ public class AdbSshConnection extends AdbTcpConnection {
                     } else {
                         CLog.i("CVD Logs is null, skip logging cvd logs.");
                     }
-                    hOUtil.collectLogByCommand(
+                    mHOUtil.collectLogByCommand(
                             getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    hOUtil.collectLogByCommand(
+                    mHOUtil.collectLogByCommand(
                             getLogger(), "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
@@ -439,6 +439,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
             mGceTunnelMonitor = new GceLHPTunnelMonitor();
+            mHOUtil = new HostOrchestratorUtil(device, gceAvdInfo);
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
@@ -552,7 +553,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
         if (useCvdCF()) {
-            powerwashRes = new HostOrchestratorUtil(getDevice(), mGceAvd).powerwashGce();
+            powerwashRes = mHOUtil.powerwashGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {
@@ -685,7 +686,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         }
 
         if (useCvdCF()) {
-            snapshotRes = new HostOrchestratorUtil(getDevice(), mGceAvd).snapshotGce();
+            snapshotRes = mHOUtil.snapshotGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {
@@ -756,7 +757,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         stopGce(user, offset);
         CommandResult restoreRes = null;
         if (useCvdCF()) {
-            restoreRes = new HostOrchestratorUtil(getDevice(), mGceAvd).restoreSnapshotGce();
+            restoreRes = mHOUtil.restoreSnapshotGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {
@@ -830,7 +831,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         long startTime = System.currentTimeMillis();
         CommandResult stopRes = null;
         if (useCvdCF()) {
-            stopRes = new HostOrchestratorUtil(getDevice(), mGceAvd).stopGce();
+            stopRes = mHOUtil.stopGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {

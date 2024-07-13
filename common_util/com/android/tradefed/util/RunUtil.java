@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -211,7 +212,7 @@ public class RunUtil implements IRunUtil {
             OutputStream stderr,
             ICacheClient cacheClient,
             final String... command) {
-        ProcessBuilder processBuilder = createProcessBuilder(command);
+        ProcessBuilder processBuilder = createProcessBuilder(cacheClient != null, command);
         ExecutableAction action = null;
         if (cacheClient != null) {
             try {
@@ -241,6 +242,7 @@ public class RunUtil implements IRunUtil {
         }
         if (cachedResult != null) {
             try {
+                CLog.d("Cache is hit with action: %s", action.action());
                 return handleCachedResult(cachedResult, stdout, stderr);
             } catch (IOException e) {
                 CLog.e("Exception occurred when handling cached result!");
@@ -266,6 +268,11 @@ public class RunUtil implements IRunUtil {
                 // Disable cache upload.
                 cacheClient = null;
             }
+            CLog.d(
+                    "Caching command [%s] running in [%s] with environment variables:\n%s",
+                    processBuilder.command(),
+                    processBuilder.directory(),
+                    processBuilder.environment());
         }
         RunnableResult osRunnable = createRunnableResult(stdout, stderr, processBuilder);
 
@@ -281,6 +288,7 @@ public class RunUtil implements IRunUtil {
                         stderr != null ? (ForkedOutputStream) stderr : null;
                 if (stdoutForkedStream.isSuccess()
                         && (stderr == null || stderrForkedStream.isSuccess())) {
+                    CLog.d("Uploading cache for action: %s", action.action());
                     cacheClient.uploadCache(
                             action,
                             ExecutableActionResult.create(
@@ -347,25 +355,52 @@ public class RunUtil implements IRunUtil {
         return createProcessBuilder(Arrays.asList(command));
     }
 
+    private synchronized ProcessBuilder createProcessBuilder(
+            boolean enableCache, String... command) {
+        return createProcessBuilder(null, Arrays.asList(command), enableCache);
+    }
+
     private synchronized ProcessBuilder createProcessBuilder(Redirect redirect, String... command) {
-        return createProcessBuilder(redirect, Arrays.asList(command));
+        return createProcessBuilder(redirect, Arrays.asList(command), false);
     }
 
     private synchronized ProcessBuilder createProcessBuilder(List<String> commandList) {
-        return createProcessBuilder(null, commandList);
+        return createProcessBuilder(null, commandList, false);
     }
 
     private synchronized ProcessBuilder createProcessBuilder(
-            Redirect redirect, List<String> commandList) {
+            Redirect redirect, List<String> commandList, boolean enableCache) {
         ProcessBuilder processBuilder = new ProcessBuilder();
         if (mWorkingDir != null) {
             processBuilder.directory(mWorkingDir);
         }
+        Map<String, String> env = mEnvVariables;
+        if (enableCache) {
+            File workingDir =
+                    processBuilder.directory() != null
+                            ? processBuilder.directory()
+                            : new File(System.getProperty("user.dir"));
+            for (int i = 0; i < commandList.size(); i++) {
+                String prefix = i < 1 ? "./" : "";
+                commandList.set(i, prefix + toRelative(workingDir, commandList.get(i)));
+            }
+            for (Map.Entry<String, String> entry : env.entrySet()) {
+                String key = entry.getKey();
+                if (key.equals("LD_LIBRARY_PATH")) {
+                    env.put(
+                            key,
+                            Arrays.asList(entry.getValue().split(pathSeparator())).stream()
+                                    .map(p -> toRelative(workingDir, p))
+                                    .sorted()
+                                    .collect(Collectors.joining(pathSeparator())));
+                }
+            }
+        }
         // By default unset an env. for process has higher priority, but in some case we might want
         // the 'set' to have priority.
         if (EnvPriority.UNSET.equals(mEnvVariablePriority)) {
-            if (!mEnvVariables.isEmpty()) {
-                processBuilder.environment().putAll(mEnvVariables);
+            if (!env.isEmpty()) {
+                processBuilder.environment().putAll(env);
             }
             if (!mUnsetEnvVariables.isEmpty()) {
                 // in this implementation, the unsetEnv's priority is higher than set.
@@ -375,9 +410,9 @@ public class RunUtil implements IRunUtil {
             if (!mUnsetEnvVariables.isEmpty()) {
                 processBuilder.environment().keySet().removeAll(mUnsetEnvVariables);
             }
-            if (!mEnvVariables.isEmpty()) {
+            if (!env.isEmpty()) {
                 // in this implementation, the setEnv's priority is higher than set.
-                processBuilder.environment().putAll(mEnvVariables);
+                processBuilder.environment().putAll(env);
             }
         }
         processBuilder.redirectErrorStream(mRedirectStderr);
@@ -511,7 +546,7 @@ public class RunUtil implements IRunUtil {
     public Process runCmdInBackground(Redirect redirect, final List<String> command)
             throws IOException {
         CLog.v("Running in background: %s", command);
-        return createProcessBuilder(redirect, command).start();
+        return createProcessBuilder(redirect, command, false).start();
     }
 
     /**
@@ -1303,5 +1338,18 @@ public class RunUtil implements IRunUtil {
         public boolean isSuccess() {
             return mSuccess;
         }
+    }
+
+    private static String toRelative(File start, String target) {
+        File targetFile = new File(target);
+        return targetFile.exists() ? toRelative(start, targetFile) : target;
+    }
+
+    private static String toRelative(File start, File target) {
+        return start.toPath().relativize(target.toPath()).toString();
+    }
+
+    private static String pathSeparator() {
+        return System.getProperty("path.separator");
     }
 }
