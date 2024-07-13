@@ -171,6 +171,17 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
                             + " --timeout-millis for bundletool install-apks.")
     private long mStagedReadyTimeoutMs = 0;
 
+    // Option used to ignore specific, known (and presumed harmless) crashes of critical services
+    // with updatable components, that would otherwise trigger a rollback of the updated APEX
+    // modules (see `system/core/init/README.md` for more information about critical services).
+    @Option(
+            name = "non-fatal-service",
+            description =
+                    "Services (declared as \"critical\" in `init`) whose repeated crashes are no"
+                        + " longer consider fatal and will not trigger a rollback of the updated"
+                        + " APEX modules (via a reboot).")
+    private List<String> mNonFatalServices = new ArrayList<String>();
+
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
@@ -275,6 +286,23 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             // Do a second post-boot setup (by default it is just adb root)
             // in case its first execution inside reboot() was not at a right time.
             device.postBootSetup();
+        }
+        // Instruct `init` to stop considering crashes of `mNonFatalServices` as fatal, thus
+        // preventing rollbacks triggered by such crashes.
+        for (String service : mNonFatalServices) {
+            String cmd = String.format("setprop init.svc_debug.no_fatal.%s true", service);
+            // Shell v2 with command status checks.
+            CommandResult result = device.executeShellV2Command(cmd);
+            // Ensure the command ran successfully.
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                CLog.d(
+                        "cmd: '%s' failed, returned:\nstdout:%s\nstderr:%s",
+                        cmd, result.getStdout(), result.getStderr());
+            } else {
+                CLog.d(
+                        "cmd: '%s', returned:\nstdout:%s\nstderr:%s",
+                        cmd, result.getStdout(), result.getStderr());
+            }
         }
     }
 
