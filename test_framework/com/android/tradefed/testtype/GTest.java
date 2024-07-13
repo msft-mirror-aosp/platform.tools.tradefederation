@@ -103,7 +103,7 @@ public class GTest extends GTestBase implements IDeviceTest {
     @Option(
             name = "force-no-test-error",
             description = "Whether to throw an error if no test binary is found to execute.")
-    private boolean mForceNoTestError = false;
+    private boolean mForceNoTestError = true;
 
     /** Whether any incomplete test is found in the current run. */
     private boolean mIncompleteTestFound = false;

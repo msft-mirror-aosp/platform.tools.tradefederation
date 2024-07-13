@@ -60,7 +60,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nullable;
 
 /**
  * Host test meant to run a python binary file from the Android Build system (Soong)
@@ -305,6 +309,21 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
         }
 
         AdbUtils.updateAdb(testInfo, getRunUtil(), getAdbPath());
+
+        // Pass the test filters to python's unittest framework.
+        for (String filter : mIncludeFilters) {
+            // Python's unittest filter will accept the fully qualified class name without
+            // the method name.
+            // If a method name is passed, replace the filter by the method name only.
+            mTestOptions.add("-k");
+            String testName = getTestNameFromFullyQualifiedName(filter);
+            if (testName != null) {
+                mTestOptions.add(testName);
+                continue;
+            }
+            mTestOptions.add(filter);
+        }
+
         // Add all the other options
         commandLine.addAll(mTestOptions);
 
@@ -410,6 +429,16 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
             FileUtil.deleteFile(stderrFile);
             FileUtil.deleteFile(tempTestOutputFile);
         }
+    }
+
+    @Nullable
+    private String getTestNameFromFullyQualifiedName(String fullyQualifiedName) {
+        Pattern p = Pattern.compile(".*#(\\w*)");
+        Matcher matcher = p.matcher(fullyQualifiedName);
+        if (!matcher.matches()) {
+            return null;
+        }
+        return matcher.group(1);
     }
 
     @VisibleForTesting

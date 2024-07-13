@@ -23,8 +23,8 @@ import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
-import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement;
@@ -35,14 +35,14 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.Pair;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /** Unit tests for {@link com.android.tradefed.testtype.binary.KUnitModuleTest}. */
 @RunWith(JUnit4.class)
@@ -131,6 +131,7 @@ public class KUnitModuleTestTest {
         OptionSetter setter = new OptionSetter(mKUnitModuleTest);
         setter.setOptionValue("binary", MODULE_NAME_01, MODULE_01);
         setter.setOptionValue("binary", MODULE_NAME_02, MODULE_02);
+        setter.setOptionValue("ktap-result-parser-resolution", "AGGREGATED_SUITE");
 
         // For 2 modules: first rmmod call expect fail, second rmmod call expect pass
         when(mMockDevice.executeShellV2Command(
