@@ -258,6 +258,11 @@ public class CommandOptions implements ICommandOptions {
             description = "Map of experimental flags that can be used for feature gating projects.")
     private Map<String, String> mExperimentalFlags = new LinkedHashMap<>();
 
+    @Option(
+            name = "skip-trybot-experiment",
+            description = "Whether to skip experiments for TRYBOT runs.")
+    private boolean mSkipTrybotExperiment = true;
+
     @Deprecated
     @Option(
         name = "logcat-on-failure",
@@ -644,6 +649,12 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public Map<String, String> getExperimentalFlags() {
         return mExperimentalFlags;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean skipTrybotExperiment() {
+        return mSkipTrybotExperiment;
     }
 
     /** {@inheritDoc} */

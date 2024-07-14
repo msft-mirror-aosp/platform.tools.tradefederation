@@ -485,14 +485,33 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             throws DeviceNotAvailableException, HarnessRuntimeException {
         String rollbackState = ROLLBACK_STATE_UNKNOWN;
         String rollbacks = device.executeShellCommand("dumpsys rollback");
-        // On Android R, the SessionId line is on the third line of the dumpsys rollback output,
-        // while on Android S/T it is on the fourth line.
-        // On Android R/S, "stagedSessionId" identifier is used in the dumpsys rollback output. On
-        // Android T, "originalSessionId" identifier is used. Both identifiers will need to be
-        // supported in pattern matching.
+
+        // Log output from rollback dumpsys for debugging
+        CLog.d("Rollback status on device: \n%s", rollbacks);
+
+        // Construct a regex pattern to extract rollback information for a
+        // session id. There are a few things to consider
+        // 1. The session id is named as "stagedSessionId" on R, wheres it is
+        //    named as "originalSessionId" on S+ platforms.
+        // 2. And, the session id is in different line for different Android
+        //    platforms.
+        //
+        // Here's an example rollback status dump
+        // 235429677:
+        //   -state: available
+        //   -stateDescription:
+        //   -timestamp: 2024-06-28T17:44:07.066049Z
+        //   -rollbackLifetimeMillis: 0
+        //   -isStaged: true
+        //   -originalSessionId: 236876998
+        //   -packages:
+        //     com.google.android.ipsec 352090000 -> 340914280 [0]
+        //   -extensionVersions:
+        //     {30=10, 31=10, 33=10, 34=10, 1000000=10}
+
         Pattern rollbackPattern =
                 Pattern.compile(
-                        "(.*[\\r\\n]+){3,4}.*-(staged|original)SessionId\\:\\s" + sessionId);
+                        "(\\d+:[\\r\\n]+)(.*[\\r\\n]+){2,6}.*-.*SessionId\\:\\s" + sessionId);
         Matcher rollbackMatcher = rollbackPattern.matcher(rollbacks);
         if (rollbackMatcher.find()) {
             Matcher stateMatcher = ROLLBACK_STATE_PATTERN.matcher(rollbackMatcher.group());
@@ -524,6 +543,13 @@ public class InstallApexModuleTargetPreparer extends SuiteApkInstaller {
             CLog.e("Device %s is not available. Teardown() skipped.", device.getSerialNumber());
             return;
         }
+        // Log activated APEXes during device tearDown
+        Set<ApexInfo> activatedApexes = device.getActiveApexes();
+        CLog.i("Activated apex packages before device tearDown:");
+        for (ApexInfo info : activatedApexes) {
+            CLog.i("Activated apex: %s", info.toString());
+        }
+
         // Check if mainline modules were rolled-back before tearDown()
         if (mDetectModuleRollback && !Strings.isNullOrEmpty(mParentSessionId)) {
             detectModuleRollback(mParentSessionId, device);
