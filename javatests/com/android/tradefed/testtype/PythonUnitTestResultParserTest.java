@@ -130,6 +130,85 @@ public class PythonUnitTestResultParserTest {
     }
 
     @Test
+    public void testShouldSkipCurrentTestPartialClassnameIncludeFilterDoesntSkip() {
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        includeFilters.add("MyExample");
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        assertFalse(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.MyExampleTest", "test_1", includeFilters, excludeFilters));
+    }
+
+    @Test
+    public void testShouldSkipCurrentTestFullyQualifiedClassMethodIncludeFilterSkipsVariation() {
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        includeFilters.add("a.b.c.MyExample#test_1");
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        assertFalse(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.c.MyExample", "test_1", includeFilters, excludeFilters));
+        assertTrue(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.c.MyExample", "test_1_variation", includeFilters, excludeFilters));
+    }
+
+    @Test
+    public void testShouldSkipCurrentTestPartialMethodNameIncludeFilterDoesntSkip() {
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        includeFilters.add("test");
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        assertFalse(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.MyExampleTest", "test_1", includeFilters, excludeFilters));
+        assertFalse(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.MyExampleTest", "test_2", includeFilters, excludeFilters));
+    }
+
+    @Test
+    public void testShouldSkipCurrentTestFnMatchPatternIncludeFilterDoesntSkip() {
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        includeFilters.add("test*1");
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        assertFalse(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.MyExampleTest", "test_1", includeFilters, excludeFilters));
+    }
+
+    @Test
+    public void testShouldSkipCurrentTestMalFormedRegexIncludeFilterDoesntSkip() {
+        Set<String> includeFilters = new LinkedHashSet<>();
+        Set<String> excludeFilters = new LinkedHashSet<>();
+        includeFilters.add("test[12]");
+        mParser =
+                new PythonUnitTestResultParser(
+                        ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
+
+        assertFalse(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.MyExampleTest", "test_1", includeFilters, excludeFilters));
+        assertFalse(
+                mParser.shouldSkipCurrentTest(
+                        "a.b.MyExampleTest", "test_2", includeFilters, excludeFilters));
+    }
+
+    @Test
     public void testParseNoTests() throws Exception {
         String[] output = {
             "", PythonUnitTestResultParser.DASH_LINE, "Ran 0 tests in 0.000s", "", "OK"
@@ -221,24 +300,25 @@ public class PythonUnitTestResultParserTest {
     }
 
     @Test
-    public void testParseMultipleWithFullyQualifiedClassNameAndClassFilter() throws Exception {
+    public void testParseMultipleWithFullyQualifiedClassNameAndClassIncludeFilter()
+            throws Exception {
         String[] output = {
-            "test_1 (atest.module.package.TestClass.test_1) ... ok",
-            "test_2 (atest.module.package.TestClass.test_2) ... ok",
-            "test_3 (atest.module.package.MyOtherTestClass.test_3) ... ok",
+            "test_1 (atest.module.package.MyClassTest.test_1) ... ok",
+            "test_2 (atest.module.package.MyClassTest.test_2) ... ok",
+            "test_3 (atest.module.package.MyOtherClassTest.test_3) ... ok",
             "",
             PythonUnitTestResultParser.DASH_LINE,
             "Ran 3 tests in 1s",
             "",
             "OK"
         };
-        TestDescription id1 = new TestDescription("atest.module.package.TestClass", "test_1");
-        TestDescription id2 = new TestDescription("atest.module.package.TestClass", "test_2");
+        TestDescription id1 = new TestDescription("atest.module.package.MyClassTest", "test_1");
+        TestDescription id2 = new TestDescription("atest.module.package.MyClassTest", "test_2");
         TestDescription id3 =
-                new TestDescription("atest.module.package.MyOtherTestClass", "test_3");
+                new TestDescription("atest.module.package.MyOtherClassTest", "test_3");
         Set<String> includeFilters = new LinkedHashSet<>();
         Set<String> excludeFilters = new LinkedHashSet<>();
-        includeFilters.add("TestClass");
+        includeFilters.add("MyClassTest");
         mParser =
                 new PythonUnitTestResultParser(
                         ArrayUtil.list(mMockListener), "test", includeFilters, excludeFilters);
@@ -260,7 +340,7 @@ public class PythonUnitTestResultParserTest {
     }
 
     @Test
-    public void testParseMultipleWithFullyQualifiedClassNameAndClassMethodFilter()
+    public void testParseMultipleWithFullyQualifiedClassNameAndMethodIncludeFilter()
             throws Exception {
         String[] output = {
             "test_1 (atest.module.package.TestClass.test_1) ... ok",
