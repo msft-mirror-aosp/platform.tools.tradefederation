@@ -346,6 +346,15 @@ public class CommandOptions implements ICommandOptions {
                             + " folder instead of current one.")
     private File mJdkFolder;
 
+    @Option(
+            name = "remote-cache-instance-name",
+            description =
+                    "The name of the instance used to handle remote caching. Set this option to"
+                        + " enable caching in the test runners that support caching. The instance"
+                        + " name should be in this format:"
+                        + " projects/[PROJECT_ID]/instances/[INSTANCE_ID].")
+    private String mRemoteCacheInstanceName = null;
+
     /**
      * Set the help mode for the config.
      * <p/>
@@ -857,5 +866,11 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding) {
         mEvenModuleSharding = useEvenModuleSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getRemoteCacheInstanceName() {
+        return mRemoteCacheInstanceName;
     }
 }
