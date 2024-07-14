@@ -507,9 +507,11 @@ public abstract class ITestSuite
             }
             filterPreparers(config.getValue(), mAllowedPreparers);
 
-            // Copy the CoverageOptions from the main configuration to the module configuration.
             if (mMainConfiguration != null) {
+                // Copy the CoverageOptions from the main configuration to the module configuration.
                 config.getValue().setCoverageOptions(mMainConfiguration.getCoverageOptions());
+                // Copy the CommandOptions from the main configuration to the module configuration.
+                config.getValue().setCommandOptions(mMainConfiguration.getCommandOptions());
             }
 
             filteredConfig.put(config.getKey(), config.getValue());

@@ -155,10 +155,12 @@ public class CdmaDeviceFlasher extends FastbootDeviceFlasher {
         if (mShouldFlashBaseband) {
             // Unpack updater zip and flash partitions manually
             CLog.i("MANUALLY flashing individual partitions on %s.", device.getSerialNumber());
-            File updateDir = null;
+            File updateDir = deviceBuild.getDeviceImageFile();
             try {
-                // unzip
-                updateDir = extractSystemZip(deviceBuild);
+                if (updateDir == null || !updateDir.isDirectory()) {
+                    // unzip
+                    updateDir = extractSystemZip(deviceBuild);
+                }
 
                 // Expect updateDir to contain boot.img, recovery.img, system.img
                 flashNamedPartition(device, updateDir, "boot");
@@ -168,7 +170,7 @@ public class CdmaDeviceFlasher extends FastbootDeviceFlasher {
                 throw new TargetSetupError(String.format("Got IOException: %s", e.getMessage()),
                         device.getDeviceDescriptor());
             } finally {
-                if (updateDir != null) {
+                if (updateDir != null && !updateDir.equals(deviceBuild.getDeviceImageFile())) {
                     FileUtil.recursiveDelete(updateDir);
                     updateDir = null;
                 }
