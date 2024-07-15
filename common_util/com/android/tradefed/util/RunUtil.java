@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -1371,7 +1372,8 @@ public class RunUtil implements IRunUtil {
     }
 
     private static String toRelative(File start, File target) {
-        return start.toPath().relativize(target.toPath()).toString();
+        String relPath = start.toPath().relativize(target.toPath()).toString();
+        return relPath.length() != 0 ? relPath : ".";
     }
 
     private static String pathSeparator() {
@@ -1384,5 +1386,28 @@ public class RunUtil implements IRunUtil {
             return false;
         }
         return (stdout == null || stdout.isSuccess()) && (stderr == null || stderr.isSuccess());
+    }
+
+    /**
+     * Links the {@code target} to a place under {@code destRoot}.
+     *
+     * <p>If the target file or the symlink is already existed under the {@code destRoot}, the file
+     * won't be linked.
+     *
+     * @param destRoot The root of the destination.
+     * @param relToRoot The relative path from the destination dir to root.
+     * @param target The target file to be linked.
+     * @throws IOException if the target file fails to be linked.
+     */
+    public static void linkFile(File destRoot, String relToRoot, File target) throws IOException {
+        if (target.getAbsolutePath().startsWith(destRoot.getAbsolutePath())) {
+            return;
+        }
+        String relPath = Paths.get(relToRoot, target.getName()).toString();
+        File symlink = new File(destRoot, relPath);
+        if (!symlink.exists()) {
+            symlink.getParentFile().mkdirs();
+            FileUtil.symlinkFile(target, symlink);
+        }
     }
 }
