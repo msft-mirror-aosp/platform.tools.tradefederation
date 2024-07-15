@@ -1365,7 +1365,7 @@ public class RunUtil implements IRunUtil {
         }
     }
 
-    private static String toRelative(File start, String target) {
+    public static String toRelative(File start, String target) {
         File targetFile = new File(target);
         return targetFile.exists() ? toRelative(start, targetFile) : target;
     }
