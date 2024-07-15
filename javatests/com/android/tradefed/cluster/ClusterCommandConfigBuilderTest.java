@@ -299,4 +299,13 @@ public class ClusterCommandConfigBuilderTest {
         verify(mConfig, times(1))
                 .injectOptionValue("cluster:exclude-file-in-java-classpath", "art-run-test.*");
     }
+
+    @Test
+    public void testBuild_buildAttributes()
+            throws IOException, ConfigurationException, JSONException {
+        mTestEnvironment.addBuildAttribute("attr", "value");
+
+        builder.build();
+        verify(mConfig, times(1)).injectOptionValue("cluster:build-attribute", "attr", "value");
+    }
 }
