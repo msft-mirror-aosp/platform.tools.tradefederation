@@ -379,34 +379,40 @@ public class TestDiscoveryExecutor {
         CLog.d("Seaching parent configs.");
         try (CloseableTraceScope ignored = new CloseableTraceScope("find parent configs")) {
             Set<File> testCasesDirs = FileUtil.findFilesObject(new File(rootDirPath), "testcases");
+            CLog.d("testcases folders: %s", testCasesDirs);
             Set<String> moduleDirs = Collections.synchronizedSet(new HashSet<>());
-            testCasesDirs.parallelStream()
-                    .forEach(
-                            f -> {
-                                String[] modules = f.list();
-                                if (modules != null) {
-                                    moduleDirs.addAll(Arrays.asList(modules));
-                                }
-                            });
+            try (CloseableTraceScope listDirs = new CloseableTraceScope("list_module_dirs")) {
+                testCasesDirs.parallelStream()
+                        .forEach(
+                                f -> {
+                                    String[] modules = f.list();
+                                    if (modules != null) {
+                                        moduleDirs.addAll(Arrays.asList(modules));
+                                    }
+                                });
+            }
             Set<String> moduleNameMismatch =
                     moduleNames.parallelStream()
                             .filter(m -> !moduleDirs.contains(m))
                             .collect(Collectors.toSet());
             // Only search the mismatch
-            moduleNameMismatch.parallelStream()
-                    .forEach(
-                            name -> {
-                                File config =
-                                        FileUtil.findFile(new File(rootDirPath), name + ".config");
-                                if (config != null) {
-                                    if (!config.getParentFile().getName().equals(name)) {
-                                        CLog.d(
-                                                "Parent: %s being added for the extra configs",
-                                                config.getParentFile().getName());
-                                        parentModules.add(config.getParentFile().getName());
+            try (CloseableTraceScope listDirs = new CloseableTraceScope("search_mismatch")) {
+                moduleNameMismatch.parallelStream()
+                        .forEach(
+                                name -> {
+                                    File config =
+                                            FileUtil.findFile(
+                                                    new File(rootDirPath), name + ".config");
+                                    if (config != null) {
+                                        if (!config.getParentFile().getName().equals(name)) {
+                                            CLog.d(
+                                                    "Parent: %s being added for the extra configs",
+                                                    config.getParentFile().getName());
+                                            parentModules.add(config.getParentFile().getName());
+                                        }
                                     }
-                                }
-                            });
+                                });
+            }
         } catch (IOException e) {
             CLog.e(e);
         }
