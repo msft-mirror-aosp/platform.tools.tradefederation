@@ -378,7 +378,13 @@ public class TestDiscoveryExecutor {
         }
         CLog.d("Seaching parent configs.");
         try (CloseableTraceScope ignored = new CloseableTraceScope("find parent configs")) {
-            Set<File> testCasesDirs = FileUtil.findFilesObject(new File(rootDirPath), "testcases");
+            Set<File> testCasesDirs = new LinkedHashSet<File>();
+            if (new File(rootDirPath, "host/testcases/").exists()) {
+                testCasesDirs.add(new File(rootDirPath, "host/testcases/"));
+            }
+            if (new File(rootDirPath, "target/testcases/").exists()) {
+                testCasesDirs.add(new File(rootDirPath, "target/testcases/"));
+            }
             CLog.d("testcases folders: %s", testCasesDirs);
             Set<String> moduleDirs = Collections.synchronizedSet(new HashSet<>());
             try (CloseableTraceScope listDirs = new CloseableTraceScope("list_module_dirs")) {
@@ -413,8 +419,6 @@ public class TestDiscoveryExecutor {
                                     }
                                 });
             }
-        } catch (IOException e) {
-            CLog.e(e);
         }
         CLog.d("Done searching parent configs.");
         return parentModules;
