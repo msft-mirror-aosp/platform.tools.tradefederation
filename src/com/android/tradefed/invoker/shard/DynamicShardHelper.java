@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.invoker.shard;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IRescheduler;
@@ -108,17 +109,15 @@ public class DynamicShardHelper extends StrictShardHelper {
 
         if (shouldDelegate) {
             CLog.d(
-                    "Setting option 'remote-dynamic-sharding' to false since precondition checks"
-                            + " failed.");
-            config.getCommandOptions().setShouldRemoteDynamicShard(false);
-            return super.shardConfig(config, testInfo, rescheduler, logger);
+                    "Re-entering StrictShardHelper with dynamic sharding disabled due to failed"
+                            + " precondition checks.");
+            return shardConfigStrict(config, testInfo, rescheduler, logger);
         }
 
         // Initialize Dynamic Sharding client
         IDynamicShardingClient client = getClient();
 
         String poolId = String.format("invocation-%s", invocationId);
-
 
         Map<String, ITestSuite> moduleMapping = new HashMap<>();
         for (ITestSuite test : allModules) {
@@ -180,6 +179,16 @@ public class DynamicShardHelper extends StrictShardHelper {
         return false;
     }
 
+    @VisibleForTesting
+    protected boolean shardConfigStrict(
+            IConfiguration config,
+            TestInformation testInfo,
+            IRescheduler rescheduler,
+            ITestLogger logger) {
+        return super.shardConfigInternal(config, testInfo, rescheduler, logger);
+    }
+
+    @VisibleForTesting
     private IDynamicShardingClient getClient() {
         FeatureResponse resp = null;
         try (TradefedFeatureClient featureClient = new TradefedFeatureClient()) {

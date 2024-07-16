@@ -80,7 +80,10 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
-        if (checkIfUserTypeIsNotSupported(testInfo)) {
+        if (!checkTrueOrSkipOnDevice(
+                userTypeIsSupported(testInfo),
+                "User type is not supported " + mProfileUserType,
+                testInfo)) {
             return;
         }
 
@@ -113,31 +116,28 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         testInfo.properties().put(RUN_TESTS_AS_USER_KEY, Integer.toString(profileId));
     }
 
-    private boolean checkIfUserTypeIsNotSupported(TestInformation testInfo)
+    private boolean userTypeIsSupported(TestInformation testInfo)
             throws TargetSetupError, DeviceNotAvailableException {
         if (mTradefedUserType.isManagedProfile()
-                && !requireFeatures(testInfo, "android.software.managed_users")) {
-            return true;
-        } else if (mTradefedUserType.isCloneProfile() && !matchesApiLevel(testInfo, 34)) {
+                && !featuresAreSupported(testInfo, "android.software.managed_users")) {
+            return false;
+        } else if (mTradefedUserType.isCloneProfile()
+                && (!matchesApiLevel(testInfo, 34)
+                        || !isCloneProfileEnabled(testInfo.getDevice()))) {
             // Clone profile type was introduced in Android S(api 31).
             // However, major functionalities supporting clone got added in 34.
             // Android U = 34
-            return true;
-        } else if (mTradefedUserType.isPrivateProfile() && isPrivateProfileSupported(
+            return false;
+        } else if (mTradefedUserType.isPrivateProfile() && !isPrivateProfileSupported(
                 testInfo.getDevice())) {
-            return true;
+            return false;
         }
-        return false;
+        return true;
     }
 
     private boolean matchesApiLevel(TestInformation testInfo, int apiLevel)
             throws DeviceNotAvailableException, TargetSetupError {
-        return checkTrueOrSkipOnDevice(
-                (testInfo.getDevice().getApiLevel() >= apiLevel),
-                "Device does not support feature as api level "
-                        + apiLevel
-                        + " requirement does not match",
-                testInfo);
+        return testInfo.getDevice().getApiLevel() >= apiLevel;
     }
 
     private boolean isPrivateProfileSupported(ITestDevice device)
@@ -154,6 +154,30 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
             return Boolean.parseBoolean(supportsPSValue);
         } catch (RuntimeException e) {
             throw commandError("Error reading user service information", command, dumpsysOutput, e,
+                    SHELL_COMMAND_ERROR);
+        }
+    }
+
+    private boolean isCloneProfileEnabled(ITestDevice device) throws DeviceNotAvailableException {
+        String command = "dumpsys user";
+        String dumpsysOutput = device.executeShellCommand(command);
+        if (dumpsysOutput == null
+                || !dumpsysOutput.contains("mName: android.os.usertype.profile.CLONE")) {
+            return false;
+        }
+
+        try {
+            String cloneOnwards =
+                    dumpsysOutput.split("mName: android.os.usertype.profile.CLONE", 2)[1].trim();
+            String cloneEnabledOnwards = cloneOnwards.split("mEnabled:", 2)[1].trim();
+            String supportsCloneValue = cloneEnabledOnwards.split("\n")[0].trim();
+            return Boolean.parseBoolean(supportsCloneValue);
+        } catch (RuntimeException e) {
+            throw commandError(
+                    "Error reading user service information",
+                    command,
+                    dumpsysOutput,
+                    e,
                     SHELL_COMMAND_ERROR);
         }
     }
@@ -195,7 +219,7 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
 
         if (!checkTrueOrSkipOnDevice(
                 !createUserOutput.contains("Cannot add a user of disabled type"),
-                "Device does not support " + mProfileUserType,
+                "Device does not support " + mProfileUserType + " (detected late)",
                 testInfo)) {
             return USERTYPE_NOT_SUPPORTED;
         }
@@ -292,15 +316,12 @@ public abstract class ProfileTargetPreparer extends BaseTargetPreparer {
         return value;
     }
 
-    private boolean requireFeatures(TestInformation testInfo, String... features)
+    private boolean featuresAreSupported(TestInformation testInfo, String... features)
             throws TargetSetupError, DeviceNotAvailableException {
         for (String feature : features) {
-            if (!checkTrueOrSkipOnDevice(
-                    testInfo.getDevice().hasFeature(feature),
-                    "Device does not have feature " + feature,
-                    testInfo)) {
-                return false;
-            }
+          if (!testInfo.getDevice().hasFeature(feature)) {
+            return false;
+          }
         }
 
         return true;

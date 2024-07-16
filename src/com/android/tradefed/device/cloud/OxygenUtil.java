@@ -128,7 +128,7 @@ public class OxygenUtil {
                                                     "Setup failed for cuttlefish::ConfigServer",
                                                     "config_server_failed")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*launcher.*"),
+                                            Pattern.compile(".*(launcher|kernel).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "VIRTUAL_DEVICE_BOOT_FAILED: Dependencies not"
                                                             + " ready after 10 checks: Bluetooth",

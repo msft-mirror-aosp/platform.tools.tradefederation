@@ -416,6 +416,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     private boolean mOptimizeNonPersistentSetup = true;
 
     @Option(
+            name = "delay-reboot",
+            description =
+                    "Should reboot be needed in the setup, delay it because we know it will occur"
+                            + " later.")
+    private boolean mDelayReboot = false;
+
+    @Option(
             name = "dismiss-setup-wizard",
             description = "Attempt to dismiss the setup wizard if present.")
     private boolean mDismissSetupWizard = true;
@@ -1015,8 +1022,12 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         }
 
         if (needsReboot) {
-            CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
-            device.reboot();
+            if (mDelayReboot) {
+                CLog.i("Delay the reboot to later in the setup.");
+            } else {
+                CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
+                device.reboot();
+            }
         }
 
         // Log nonpersistent device properties (that change/lose values after reboot).

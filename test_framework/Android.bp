@@ -30,6 +30,8 @@ tradefed_java_library_host {
         "perfetto_metrics-full",
         "test-composers",
         "truth",
+        "grpc-java-api",
+        "grpc-java-auth",
         "platformprotos",
     ],
     libs: [

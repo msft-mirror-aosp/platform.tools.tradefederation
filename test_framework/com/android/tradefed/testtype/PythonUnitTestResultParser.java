@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.MultiLineReceiver;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -36,6 +37,7 @@ import java.util.Set;
 import java.util.regex.MatchResult;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Interprets the output of tests run with Python's unittest framework and translates it into calls
@@ -470,7 +472,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
     private void reportNonFailureTestResult() throws PythonUnitTestParseException {
         TestDescription testId = new TestDescription(mCurrentTestClass, mCurrentTestName);
 
-        if (shouldSkipCurrentTest()) {
+        if (shouldSkipCurrentTest(
+                mCurrentTestClass, mCurrentTestName, mIncludeFilters, mExcludeFilters)) {
             // Force to skip any test not listed in include filters, or listed in exclude filters.
             mTestResultCache.put(testId, SKIPPED_ENTRY);
         } else if (PATTERN_TEST_SUCCESS.matcher(mCurrentTestStatus).matches()) {
@@ -489,7 +492,8 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
     /** Record a failed test case and its traceback message. */
     private void reportFailureTestResult() {
         TestDescription testId = new TestDescription(mCurrentTestClass, mCurrentTestName);
-        if (shouldSkipCurrentTest()) {
+        if (shouldSkipCurrentTest(
+                mCurrentTestClass, mCurrentTestName, mIncludeFilters, mExcludeFilters)) {
             mTestResultCache.put(testId, SKIPPED_ENTRY);
         } else {
             mTestResultCache.put(testId, mCurrentTraceback.toString());
@@ -501,23 +505,62 @@ public class PythonUnitTestResultParser extends MultiLineReceiver {
      *
      * @return true if the test should be skipped.
      */
-    private boolean shouldSkipCurrentTest() {
+    @VisibleForTesting
+    boolean shouldSkipCurrentTest(
+            String testClass,
+            String testName,
+            Set<String> includeFilters,
+            Set<String> excludeFilters) {
         // Force to skip any test not listed in include filters, or listed in exclude filters.
         // exclude filters have highest priority.
-        if (mExcludeFilters.contains(mCurrentTestClass + "#" + mCurrentTestName)
-                || mExcludeFilters.contains(mCurrentTestClass)) {
+        if (excludeFilters.contains(testClass + "#" + testName)
+                || excludeFilters.contains(testClass)) {
             return true;
         }
-        if (!mIncludeFilters.isEmpty()) {
-            if (mIncludeFilters.contains(mCurrentTestClass + "#" + mCurrentTestName)
-                    || mIncludeFilters.contains(mCurrentTestClass)) {
+        if (!includeFilters.isEmpty()) {
+            if (includeFilters.contains(testClass + "#" + testName)
+                    || includeFilters.contains(testClass)) {
                 return false;
             }
-            for (String filter : mIncludeFilters) {
-                if ((mCurrentTestClass + "#" + mCurrentTestName).matches(filter)) {
+            for (String filter : includeFilters) {
+                // If the filter is in fnMatch format, assume the tests have already been filtered.
+                if (isFnMatchFormat(filter)) {
                     return false;
                 }
+                // Also ensure the filter matches the fully.qualified.ClassName
+                String fullyQualifiedClassNameFilter = "(\\w*\\.)*" + filter;
+                try {
+                    if (testClass.matches(fullyQualifiedClassNameFilter)
+                            || (testClass + "#" + testName)
+                                    .matches(fullyQualifiedClassNameFilter)) {
+                        return false;
+                    }
+                } catch (PatternSyntaxException pse) {
+                    // Ignore.
+                }
+                // If the filter is not in Class#method format, apply it broadly as a pattern.
+                try {
+                    if (!filter.matches("(\\w*\\.)*\\w*#\\w*")) {
+                        if ((testClass + "#" + testName).matches(".*" + filter + ".*")) {
+                            return false;
+                        }
+                    }
+                } catch (PatternSyntaxException pse) {
+                    // Ignore.
+                }
             }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isFnMatchFormat(String filter) {
+        // A Fnmatch-formatted filter can contain any of the following characters:
+        // '*', '?', set of square brackets '[' and ']', '!'.
+        if (filter.matches(".*\\*.*")
+                || filter.matches(".*\\?.*")
+                || filter.matches(".*\\[.*].*")
+                || filter.matches(".*\\!.*")) {
             return true;
         }
         return false;
