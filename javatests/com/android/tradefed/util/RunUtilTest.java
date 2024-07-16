@@ -296,6 +296,34 @@ public class RunUtilTest {
                 FileUtil.readStringFromFile(secondStderr));
     }
 
+    /** Test cache works when the stdout stream and stderr stream are not specified. */
+    @Test
+    public void runTimedCmdWithOutputMonitor_cache_works_without_output_stream()
+            throws IOException {
+        File workingDir = FileUtil.createTempDir("first_run_", mWorkingDir);
+        File testBinary = new File(workingDir, "hello_world_test.sh");
+        testBinary.createNewFile();
+        FileUtil.writeToFile("echo test-cache-stdout", testBinary);
+        FileUtil.ensureGroupRWX(testBinary);
+        RunUtil runUtil = new RunUtil();
+        runUtil.setWorkingDir(workingDir);
+        ICacheClient cacheClient = new FakeCacheClient();
+
+        CommandResult firstResult =
+                runUtil.runTimedCmdWithOutputMonitor(
+                        LONG_TIMEOUT_MS, 0, null, null, cacheClient, testBinary.getAbsolutePath());
+        CommandResult secondResult =
+                runUtil.runTimedCmdWithOutputMonitor(
+                        LONG_TIMEOUT_MS, 0, null, null, cacheClient, testBinary.getAbsolutePath());
+
+        assertFalse(firstResult.isCached());
+        assertTrue(secondResult.isCached());
+        assertEquals(CommandStatus.SUCCESS, firstResult.getStatus());
+        assertEquals(CommandStatus.SUCCESS, secondResult.getStatus());
+        assertTrue(firstResult.getStdout().startsWith("test-cache-stdout"));
+        assertTrue(secondResult.getStdout().startsWith("test-cache-stdout"));
+    }
+
     /**
      * Test {@link RunUtil#runTimedCmd(long, String[])} exits with status SUCCESS since the output
      * monitor observed output on streams through the command time until finished.
