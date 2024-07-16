@@ -52,14 +52,30 @@ public class StrictShardHelper extends ShardHelper {
             TestInformation testInfo,
             IRescheduler rescheduler,
             ITestLogger logger) {
-        // need to look up attempt id somewhere and make sure we only attempt this on attempt 0
         if (config.getCommandOptions().shouldRemoteDynamicShard()) {
-            // We are using dynamic sharding
-            DynamicShardHelper helper = new DynamicShardHelper();
-            // TODO(murj) handle the case where dynamic sharding fails
-            return helper.shardConfig(config, testInfo, rescheduler, logger);
+            return shardConfigDynamic(config, testInfo, rescheduler, logger);
+        } else {
+            return shardConfigInternal(config, testInfo, rescheduler, logger);
         }
+    }
 
+    @VisibleForTesting
+    protected boolean shardConfigDynamic(
+            IConfiguration config,
+            TestInformation testInfo,
+            IRescheduler rescheduler,
+            ITestLogger logger) {
+        // attempt dynamic sharding
+        // may call #shardConfigInternal itself if preconditions are not met
+        DynamicShardHelper helper = new DynamicShardHelper();
+        return helper.shardConfig(config, testInfo, rescheduler, logger);
+    }
+
+    protected boolean shardConfigInternal(
+            IConfiguration config,
+            TestInformation testInfo,
+            IRescheduler rescheduler,
+            ITestLogger logger) {
         Integer shardCount = config.getCommandOptions().getShardCount();
         Integer shardIndex = config.getCommandOptions().getShardIndex();
         boolean optimizeMainline = config.getCommandOptions().getOptimizeMainlineTest();
@@ -106,14 +122,16 @@ public class StrictShardHelper extends ShardHelper {
      * @param tests the {@link IRemoteTest} containing all the tests that need to run.
      */
     private void reorderTestModules(List<IRemoteTest> tests) {
-        Collections.sort(tests, new Comparator<IRemoteTest>() {
-            @Override
-            public int compare(IRemoteTest o1, IRemoteTest o2) {
-                String moduleId1 = ((ITestSuite)o1).getDirectModule().getId();
-                String moduleId2 = ((ITestSuite)o2).getDirectModule().getId();
-                return getMainlineId(moduleId1).compareTo(getMainlineId(moduleId2));
-            }
-        });
+        Collections.sort(
+                tests,
+                new Comparator<IRemoteTest>() {
+                    @Override
+                    public int compare(IRemoteTest o1, IRemoteTest o2) {
+                        String moduleId1 = ((ITestSuite) o1).getDirectModule().getId();
+                        String moduleId2 = ((ITestSuite) o2).getDirectModule().getId();
+                        return getMainlineId(moduleId1).compareTo(getMainlineId(moduleId2));
+                    }
+                });
     }
 
     /**
