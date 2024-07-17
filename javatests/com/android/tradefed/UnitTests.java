@@ -99,7 +99,6 @@ import com.android.tradefed.device.cloud.AcloudConfigParserTest;
 import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
 import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
-import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
 import com.android.tradefed.device.cloud.HostOrchestratorUtilTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
@@ -432,6 +431,7 @@ import com.android.tradefed.util.FileUtilTest;
 import com.android.tradefed.util.FixedByteArrayOutputStreamTest;
 import com.android.tradefed.util.FuseUtilTest;
 import com.android.tradefed.util.GCSFileDownloaderTest;
+import com.android.tradefed.util.GceRemoteCmdFormatterTest;
 import com.android.tradefed.util.GoogleApiClientUtilTest;
 import com.android.tradefed.util.HprofAllocSiteParserTest;
 import com.android.tradefed.util.JUnitXmlParserTest;
@@ -628,7 +628,6 @@ import org.junit.runners.Suite.SuiteClasses;
     CommonLogRemoteFileUtilTest.class,
     GceAvdInfoTest.class,
     GceManagerTest.class,
-    GceRemoteCmdFormatterTest.class,
     GceSshTunnelMonitorTest.class,
     HostOrchestratorUtilTest.class,
     ManagedRemoteDeviceTest.class,
@@ -1049,6 +1048,7 @@ import org.junit.runners.Suite.SuiteClasses;
     FileUtilTest.class,
     FixedByteArrayOutputStreamTest.class,
     FuseUtilTest.class,
+    GceRemoteCmdFormatterTest.class,
     GCSFileDownloaderTest.class,
     GoogleApiClientUtilTest.class,
     HprofAllocSiteParserTest.class,
