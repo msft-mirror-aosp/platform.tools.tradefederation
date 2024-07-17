@@ -16,14 +16,17 @@
 package com.android.tradefed.testtype.rust;
 
 import com.android.ddmlib.IShellOutputReceiver;
+import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
-import com.android.tradefed.testtype.IRemoteTest;
-import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IAbiReceiver;
+import com.android.tradefed.testtype.IRemoteTest;
+import com.android.tradefed.testtype.ITestFilterReceiver;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -35,7 +38,8 @@ import java.util.Set;
 
 /** Base class of RustBinaryHostTest and RustBinaryTest */
 @OptionClass(alias = "rust-test")
-public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver, IAbiReceiver {
+public abstract class RustTestBase
+        implements IRemoteTest, ITestFilterReceiver, IAbiReceiver, IConfigurationReceiver {
     protected class EnvPair {
         public String key;
         public String val;
@@ -103,6 +107,8 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver, 
                             + "`--ld-library-path-64` are set, only the latter is honored "
                             + "for 64-bit tests.")
     private String mLdLibraryPath64 = null;
+
+    private IConfiguration mConfiguration = null;
 
     private IAbi mAbi;
 
@@ -263,5 +269,23 @@ public abstract class RustTestBase implements IRemoteTest, ITestFilterReceiver, 
         }
 
         return out;
+    }
+
+    /**
+     * Returns the test configuration.
+     *
+     * @return an IConfiguration
+     */
+    protected IConfiguration getConfiguration() {
+        if (mConfiguration == null) {
+            return new Configuration("", "");
+        }
+        return mConfiguration;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfiguration = configuration;
     }
 }
