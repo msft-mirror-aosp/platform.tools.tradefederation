@@ -196,7 +196,9 @@ public final class PythonBinaryHostTestTest {
                             Mockito.anyLong(),
                             Mockito.isNull(),
                             (OutputStream) Mockito.any(),
-                            Mockito.eq(mPythonBinary.getAbsolutePath())))
+                            Mockito.eq(mPythonBinary.getAbsolutePath()),
+                            Mockito.eq("-k"),
+                            Mockito.eq("test1")))
                     .thenAnswer(
                             invocation -> {
                                 throw new RuntimeException("Parser error");
@@ -253,7 +255,9 @@ public final class PythonBinaryHostTestTest {
                             Mockito.anyLong(),
                             Mockito.isNull(),
                             (OutputStream) Mockito.any(),
-                            Mockito.eq(mPythonBinary.getAbsolutePath())))
+                            Mockito.eq(mPythonBinary.getAbsolutePath()),
+                            Mockito.eq("-k"),
+                            Mockito.eq("test_1")))
                     .thenAnswer(
                             invocation -> {
                                 OutputStream stream = (OutputStream) invocation.getArguments()[2];
@@ -283,6 +287,140 @@ public final class PythonBinaryHostTestTest {
                             Mockito.anyLong());
             verify(mMockListener)
                     .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener)
+                    .testLog(
+                            Mockito.eq(mPythonBinary.getName() + "-stderr"),
+                            Mockito.eq(LogDataType.TEXT),
+                            Mockito.any());
+        } finally {
+            FileUtil.deleteFile(mPythonBinary);
+        }
+    }
+
+    /**
+     * Test that when running a python binary with include filters containing the fully qualified
+     * class name, the filters are passed to the run command.
+     */
+    @Test
+    public void testRun_withIncludeFiltersClass_addsClassNameToCmd() throws Exception {
+        try {
+            OptionSetter setter = new OptionSetter(mTest);
+            setter.setOptionValue("python-binaries", mPythonBinary.getAbsolutePath());
+            mTest.addIncludeFilter("__main__.Class1");
+
+            expectedAdbPath();
+
+            CommandResult res = new CommandResult();
+            res.setStatus(CommandStatus.SUCCESS);
+            String output =
+                    "test_1 (__main__.Class1)\n"
+                        + "run first test. ... ok\n"
+                        + "test_2 (__main__.Class1)\n"
+                        + "run second test. ... ok\n"
+                        + "----------------------------------------------------------------------\n"
+                        + "Ran 2 tests in 1s\n";
+            res.setStderr(output);
+            when(mMockRunUtil.runTimedCmd(
+                            Mockito.anyLong(),
+                            Mockito.isNull(),
+                            (OutputStream) Mockito.any(),
+                            Mockito.eq(mPythonBinary.getAbsolutePath()),
+                            Mockito.eq("-k"),
+                            Mockito.eq("__main__.Class1")))
+                    .thenAnswer(
+                            invocation -> {
+                                OutputStream stream = (OutputStream) invocation.getArguments()[2];
+                                StreamUtil.copyStreams(
+                                        new ByteArrayInputStream(output.getBytes()), stream);
+                                return res;
+                            });
+            when(mMockDevice.getIDevice()).thenReturn(new StubDevice("serial"));
+
+            mTest.run(mTestInfo, mMockListener);
+
+            verify(mMockRunUtil)
+                    .setEnvVariable("PATH", String.format("%s:bin/", mFakeAdb.getParent()));
+            verify(mMockRunUtil).setEnvVariable(Mockito.eq("LD_LIBRARY_PATH"), Mockito.any());
+            verify(mMockListener)
+                    .testRunStarted(
+                            Mockito.eq(mPythonBinary.getName()),
+                            Mockito.eq(2),
+                            Mockito.eq(0),
+                            Mockito.anyLong());
+            verify(mMockListener)
+                    .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener, times(2)).testStarted(Mockito.any(), Mockito.anyLong());
+            verify(mMockListener, times(2))
+                    .testEnded(
+                            Mockito.<TestDescription>any(),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener)
+                    .testLog(
+                            Mockito.eq(mPythonBinary.getName() + "-stderr"),
+                            Mockito.eq(LogDataType.TEXT),
+                            Mockito.any());
+        } finally {
+            FileUtil.deleteFile(mPythonBinary);
+        }
+    }
+
+    /**
+     * Test that when running a python binary with include filters that use the class#method format,
+     * only the method name is passed to the run command.
+     */
+    @Test
+    public void testRun_withIncludeFiltersClassAndMethod_addsMethodNameToCmd() throws Exception {
+        try {
+            OptionSetter setter = new OptionSetter(mTest);
+            setter.setOptionValue("python-binaries", mPythonBinary.getAbsolutePath());
+            mTest.addIncludeFilter("__main__.Class1#test_1");
+
+            expectedAdbPath();
+
+            CommandResult res = new CommandResult();
+            res.setStatus(CommandStatus.SUCCESS);
+            String output =
+                    "test_1 (__main__.Class1)\n"
+                        + "run first test. ... ok\n"
+                        + "----------------------------------------------------------------------\n"
+                        + "Ran 1 tests in 1s\n";
+            res.setStderr(output);
+            when(mMockRunUtil.runTimedCmd(
+                            Mockito.anyLong(),
+                            Mockito.isNull(),
+                            (OutputStream) Mockito.any(),
+                            Mockito.eq(mPythonBinary.getAbsolutePath()),
+                            Mockito.eq("-k"),
+                            Mockito.eq("test_1")))
+                    .thenAnswer(
+                            invocation -> {
+                                OutputStream stream = (OutputStream) invocation.getArguments()[2];
+                                StreamUtil.copyStreams(
+                                        new ByteArrayInputStream(output.getBytes()), stream);
+                                return res;
+                            });
+            when(mMockDevice.getIDevice()).thenReturn(new StubDevice("serial"));
+
+            mTest.run(mTestInfo, mMockListener);
+
+            verify(mMockRunUtil)
+                    .setEnvVariable("PATH", String.format("%s:bin/", mFakeAdb.getParent()));
+            verify(mMockRunUtil).setEnvVariable(Mockito.eq("LD_LIBRARY_PATH"), Mockito.any());
+            verify(mMockListener)
+                    .testRunStarted(
+                            Mockito.eq(mPythonBinary.getName()),
+                            Mockito.eq(1),
+                            Mockito.eq(0),
+                            Mockito.anyLong());
+            verify(mMockListener)
+                    .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener, times(1)).testStarted(Mockito.any(), Mockito.anyLong());
+            verify(mMockListener, times(1))
+                    .testEnded(
+                            Mockito.<TestDescription>any(),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
             verify(mMockListener)
                     .testLog(
                             Mockito.eq(mPythonBinary.getName() + "-stderr"),

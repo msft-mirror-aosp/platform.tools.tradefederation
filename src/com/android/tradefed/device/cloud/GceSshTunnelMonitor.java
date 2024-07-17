@@ -31,7 +31,9 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.GceRemoteCmdFormatter;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.ProcessUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 
@@ -39,11 +41,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.net.HostAndPort;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.SocketException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -56,7 +56,8 @@ public class GceSshTunnelMonitor extends AbstractTunnelMonitor {
     private static final long ADBD_RETRY_INTERVAL_MS = 15000;
     private static final int ADBD_MAX_RETRIES = 10;
     private static final long DEFAULT_SHORT_CMD_TIMEOUT = 20 * 1000;
-    private static final int WAIT_FOR_FIRST_CONNECT = 10 * 1000;
+    private static final long WAIT_FOR_FIRST_CONNECT = 500L;
+    private static final long WAIT_FOR_FIRST_CONNECT_CHEEPS = 10000L;
     private static final long WAIT_AFTER_REBOOT = 60 * 1000;
 
     // Format string for local hostname.
@@ -288,8 +289,12 @@ public class GceSshTunnelMonitor extends AbstractTunnelMonitor {
                 CLog.e("Failed creating the ssh tunnel to GCE.");
                 return;
             }
-            // Device serial should contain tunnel host and port number.
-            getRunUtil().sleep(WAIT_FOR_FIRST_CONNECT);
+            if (InstanceType.CHEEPS.equals(mDeviceOptions.getInstanceType())) {
+                getRunUtil().sleep(WAIT_FOR_FIRST_CONNECT_CHEEPS);
+            } else {
+                // Device serial should contain tunnel host and port number.
+                getRunUtil().sleep(WAIT_FOR_FIRST_CONNECT);
+            }
             // Checking if it is actually running.
             if (isTunnelAlive()) {
                 mLocalHostAndPort = HostAndPort.fromString(mDevice.getSerialNumber());
@@ -363,24 +368,20 @@ public class GceSshTunnelMonitor extends AbstractTunnelMonitor {
             StreamUtil.close(s);
             // Note there is a race condition here. between when we close
             // the server socket and when we try to connect to the tunnel.
-            List<String> tunnelParam = new ArrayList<>();
-            tunnelParam.add(String.format(TUNNEL_PARAM, mLastUsedPort, remotePort));
-            tunnelParam.add("-N");
-            List<String> sshTunnel =
-                    GceRemoteCmdFormatter.getSshCommand(
-                            getTestDeviceOptions().getSshPrivateKeyPath(),
-                            tunnelParam,
-                            getTestDeviceOptions().getInstanceUser(),
-                            remoteHost,
-                            "" /* no command */);
             if (mSshTunnelLogs == null || !mSshTunnelLogs.exists()) {
                 mSshTunnelLogs = FileUtil.createTempFile("ssh-tunnel-logs", ".txt");
                 FileUtil.writeToFile("=== Beginning ===\n", mSshTunnelLogs);
             }
+
             Process p =
-                    getRunUtil()
-                            .runCmdInBackground(
-                                    sshTunnel, new FileOutputStream(mSshTunnelLogs, true));
+                    ProcessUtil.createSshTunnel(
+                            remoteHost,
+                            mLastUsedPort,
+                            remotePort,
+                            getTestDeviceOptions().getSshPrivateKeyPath(),
+                            getTestDeviceOptions().getInstanceUser(),
+                            mSshTunnelLogs,
+                            getRunUtil());
             return p;
         } catch (IOException e) {
             CLog.d("Failed to connect to remote GCE using ssh tunnel %s", e.getMessage());

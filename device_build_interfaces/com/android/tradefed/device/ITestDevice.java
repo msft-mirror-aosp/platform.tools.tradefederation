@@ -886,7 +886,11 @@ public interface ITestDevice extends INativeDevice {
      * @return the userId of the primary user if there is one, and null if there is no primary user.
      * @throws DeviceNotAvailableException
      * @throws DeviceRuntimeException if the output from the device is not as expected.
+     * @deprecated getPrimaryUser was deprecated from UserManager service, use
+     *             {@link android.os.UserManager#getMainUserId()} to get first full user
+     *             or 0 for system. Note that for headless system it is not a full user.
      */
+    @Deprecated
     public Integer getPrimaryUserId() throws DeviceNotAvailableException;
 
     /**
