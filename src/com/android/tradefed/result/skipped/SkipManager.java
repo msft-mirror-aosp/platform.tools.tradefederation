@@ -35,10 +35,12 @@ import com.proto.tradefed.feature.PartResponse;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * Based on a variety of criteria the skip manager helps to decide what should be skipped at
@@ -90,6 +92,7 @@ public class SkipManager implements IDisableable {
     private List<String> mDependencyFiles = new ArrayList<String>();
 
     private String mReasonForSkippingInvocation = "SkipManager decided to skip.";
+    private Set<String> mUnchangedModules = new HashSet<>();
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -206,6 +209,8 @@ public class SkipManager implements IDisableable {
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.DEVICE_IMAGE_NOT_CHANGED, 1);
         if (results.hasTestsArtifacts()) {
+            // Keep track of the set or sub-set of modules that didn't change.
+            mUnchangedModules.addAll(results.getUnchangedModules());
             if (results.hasChangesInTestsArtifacts()) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
