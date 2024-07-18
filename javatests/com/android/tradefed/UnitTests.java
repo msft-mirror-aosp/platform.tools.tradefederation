@@ -30,6 +30,7 @@ import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
+import com.android.tradefed.cache.UploadManifestTest;
 import com.android.tradefed.cache.remote.ByteStreamDownloaderTest;
 import com.android.tradefed.cache.remote.ByteStreamUploaderTest;
 import com.android.tradefed.cache.remote.ChunkerTest;
@@ -537,6 +538,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ByteStreamUploaderTest.class,
     ChunkerTest.class,
     RemoteCacheClientTest.class,
+    UploadManifestTest.class,
 
     // clearcut
     ClearcutClientTest.class,
