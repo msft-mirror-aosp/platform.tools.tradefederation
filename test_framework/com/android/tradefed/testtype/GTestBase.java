@@ -64,6 +64,11 @@ public abstract class GTestBase
     @Option(name = "run-disable-tests", description = "Determine to run disable tests or not.")
     private boolean mRunDisabledTests = false;
 
+    @Option(
+            name = "collect-disable-tests",
+            description = "Determine to collect disable tests or not.")
+    private boolean mCollectDisabledTests = false;
+
     @Option(name = "module-name", description = "The name of the native test module to run.")
     private String mTestModule = null;
 
@@ -643,7 +648,8 @@ public abstract class GTestBase
     IShellOutputReceiver createResultParser(String runName, ITestInvocationListener listener) {
         IShellOutputReceiver receiver = null;
         if (mCollectTestsOnly) {
-            GTestListTestParser resultParser = new GTestListTestParser(runName, listener);
+            GTestListTestParser resultParser =
+                    new GTestListTestParser(runName, listener, mCollectDisabledTests);
             resultParser.setPrependFileName(mPrependFileName);
             receiver = resultParser;
         } else {
