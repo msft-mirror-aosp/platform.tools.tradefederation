@@ -13,9 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.util;
-
-import com.android.tradefed.host.HostOptions;
+package com.android.tradefed.util.gcs;
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpRequestInitializer;
@@ -29,47 +27,40 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Collection;
 
-/**
- * Base class for Gcs operation like download and upload. {@link GCSFileDownloader} and {@link
- * GCSFileUploader}.
- */
+/** Base class for Gcs operation like download and upload. */
 public abstract class GCSCommon {
-    /** This is the key for {@link HostOptions}'s service-account-json-key-file option. */
-    private static final String GCS_JSON_KEY = "gcs-json-key";
 
-    protected static final int DEFAULT_TIMEOUT = 10 * 60 * 1000; // 10minutes
+    public static final int DEFAULT_TIMEOUT = 10 * 60 * 1000; // 10minutes
 
-    private File mJsonKeyFile = null;
-    private Storage mStorage;
+    protected File mJsonKeyFile = null;
 
-    public GCSCommon(File jsonKeyFile) {
-        mJsonKeyFile = jsonKeyFile;
-    }
+    protected Storage mStorage;
 
     public GCSCommon() {}
 
-    void setJsonKeyFile(File jsonKeyFile) {
+    protected void setJsonKeyFile(File jsonKeyFile) {
         mJsonKeyFile = jsonKeyFile;
     }
 
+    /*
+     * The base implementation only supports using default credential.
+     */
     protected Storage getStorage(Collection<String> scopes) throws IOException {
         Credentials credential = null;
         try {
             if (mStorage == null) {
-                credential =
-                        GoogleApiClientUtil.createCredential(
-                                scopes, true, mJsonKeyFile, GCS_JSON_KEY);
+                credential = GoogleApiClientUtilBase.createCredential(scopes);
                 HttpRequestInitializer requestInitializer = new HttpCredentialsAdapter(credential);
                 mStorage =
                         new Storage.Builder(
                                         GoogleNetHttpTransport.newTrustedTransport(),
                                         GsonFactory.getDefaultInstance(),
-                                        GoogleApiClientUtil.configureRetryStrategy(
-                                                GoogleApiClientUtil.setHttpTimeout(
+                                        GoogleApiClientUtilBase.configureRetryStrategy(
+                                                GoogleApiClientUtilBase.setHttpTimeout(
                                                         requestInitializer,
                                                         DEFAULT_TIMEOUT,
                                                         DEFAULT_TIMEOUT)))
-                                .setApplicationName(GoogleApiClientUtil.APP_NAME)
+                                .setApplicationName(GoogleApiClientUtilBase.APP_NAME)
                                 .build();
             }
             return mStorage;
