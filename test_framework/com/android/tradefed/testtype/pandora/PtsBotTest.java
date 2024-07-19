@@ -525,12 +525,13 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
     private Set<String> flagsToEnable(ITestDevice testDevice, String testName) {
         Set<String> flagsSet = new LinkedHashSet<>();
-        flagsConfig.forEach((flag, tests) -> {
-            if (tests.contains(testName)) {
-                CLog.i("flagsToEnable: " + flag);
-                flagsSet.add(flag);
-            }
-        });
+        flagsConfig.forEach(
+                (flag, prefixes) -> {
+                    if (prefixes.stream().anyMatch(testName::startsWith)) {
+                        CLog.i("flagsToEnable: " + flag);
+                        flagsSet.add(flag);
+                    }
+                });
 
         return flagsSet;
     }
