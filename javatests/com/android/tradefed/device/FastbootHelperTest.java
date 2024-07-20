@@ -22,8 +22,19 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
-import static java.util.Map.entry;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -33,9 +44,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 
 import java.util.Collection;
 import java.util.Map;
@@ -208,41 +216,5 @@ public class FastbootHelperTest {
         assertEquals(2, result.size());
         assertFalse(result.get("04035EEB0B01F01C"));
         assertTrue(result.get("HT99PP800024"));
-    }
-
-    @Test
-    public void testGetBootloaderAndFastbootdTcpDevices() {
-        Map<String, String> serials =
-                Map.ofEntries(
-                        entry("localhost:45378", "tcp:127.0.0.1:38946"),
-                        entry("localhost:45379", "tcp:127.0.0.1:38947"));
-        CommandResult fakeRes38946 = new CommandResult(CommandStatus.SUCCESS);
-        fakeRes38946.setStderr("is-userspace: no");
-        CommandResult fakeRes38947 = new CommandResult(CommandStatus.SUCCESS);
-        fakeRes38947.setStderr("is-userspace: yes");
-        when(mMockRunUtil.runTimedCmdSilently(
-                        Mockito.anyLong(),
-                        Mockito.eq("fastboot"),
-                        Mockito.eq("-s"),
-                        Mockito.eq("tcp:127.0.0.1:38946"),
-                        Mockito.eq("getvar"),
-                        Mockito.eq("is-userspace")))
-                .thenReturn(fakeRes38946);
-        when(mMockRunUtil.runTimedCmdSilently(
-                        Mockito.anyLong(),
-                        Mockito.eq("fastboot"),
-                        Mockito.eq("-s"),
-                        Mockito.eq("tcp:127.0.0.1:38947"),
-                        Mockito.eq("getvar"),
-                        Mockito.eq("is-userspace")))
-                .thenReturn(fakeRes38947);
-        Map<String, Boolean> result = mFastbootHelper.getBootloaderAndFastbootdTcpDevices(serials);
-        assertEquals(2, result.size());
-        assertTrue(result.containsKey("tcp:127.0.0.1:38946"));
-        assertTrue(result.containsKey("tcp:127.0.0.1:38947"));
-        assertFalse(result.containsKey("localhost:45378"));
-        assertFalse(result.containsKey("localhost:45379"));
-        assertFalse(result.get("tcp:127.0.0.1:38946"));
-        assertTrue(result.get("tcp:127.0.0.1:38947"));
     }
 }

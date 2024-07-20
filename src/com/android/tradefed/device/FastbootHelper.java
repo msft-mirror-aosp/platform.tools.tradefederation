@@ -98,10 +98,9 @@ public class FastbootHelper {
     }
 
     /**
-     * Returns a map of device fastboot mode serials and whether they are in fastbootd mode or not.
+     * Returns a map of device serials and whether they are in fastbootd mode or not.
      *
-     * @return a Map of fastboot mode serial numbers in bootloader or fastbootd, the boolean is true
-     *     if in fastbootd
+     * @return a Map of serial in bootloader or fastbootd, the boolean is true if in fastbootd
      */
     public Map<String, Boolean> getBootloaderAndFastbootdDevices() {
         CommandResult fastbootResult =
@@ -127,11 +126,10 @@ public class FastbootHelper {
     }
 
     /**
-     * Returns a map of device fastboot mode serials and whether they are in fastbootd mode or not.
+     * Returns a map of device serials and whether they are in fastbootd mode or not.
      *
      * @param serials a map of devices serial number and fastboot mode serial number.
-     * @return a Map of fastboot mode serial numbers in bootloader or fastbootd, the boolean is true
-     *     if in fastbootd
+     * @return a Map of serial in bootloader or fastbootd, the boolean is true if in fastbootd
      */
     public Map<String, Boolean> getBootloaderAndFastbootdTcpDevices(Map<String, String> serials) {
         HashMap<String, Boolean> devices = new LinkedHashMap<>();
@@ -149,9 +147,9 @@ public class FastbootHelper {
                             "is-userspace");
             if (fastbootResult.getStatus().equals(CommandStatus.SUCCESS)) {
                 if (fastbootResult.getStderr().contains("yes")) {
-                    devices.put(entry.getValue(), true);
+                    devices.put(entry.getKey(), true);
                 } else {
-                    devices.put(entry.getValue(), false);
+                    devices.put(entry.getKey(), false);
                 }
             }
         }
