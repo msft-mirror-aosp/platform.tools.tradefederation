@@ -665,8 +665,16 @@ public class InvocationExecution implements IInvocationExecution {
                     new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
                 runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
             } catch (TargetSetupError e) {
-                OxygenUtil util = new OxygenUtil();
-                util.downloadLaunchFailureLogs(e, logger);
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (context.getDevices().get(0).getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(e, logger);
+                }
                 throw e;
             }
         } else {

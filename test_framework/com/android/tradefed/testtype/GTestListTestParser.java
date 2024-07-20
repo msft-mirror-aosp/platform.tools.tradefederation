@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 /**
  * A result parser for gtest dry run mode with "--gtest_list_tests" parameter.
  *
@@ -53,6 +54,8 @@ public class GTestListTestParser extends MultiLineReceiver {
     /** Track if we have already reported {@link #done()} */
     private boolean mIsDone = false;
 
+    private boolean mCollectDisabledTests = false;
+
     /**
      * Creates the GTestListTestParser for a single listener.
      *
@@ -65,6 +68,22 @@ public class GTestListTestParser extends MultiLineReceiver {
         mTestRunListener = listener;
         // don't trim, since we need the leading whitespace
         setTrimLine(false);
+    }
+
+    /**
+     * Creates the GTestListTestParser for a single listener.
+     *
+     * @param testRunName the test run name to provide to {@link
+     *     ITestInvocationListener#testRunStarted(String, int)}
+     * @param listener informed of test results as the tests are executing
+     * @param shouldCollectDisabledTest collect disabled tests or not
+     */
+    public GTestListTestParser(
+            String testRunName,
+            ITestInvocationListener listener,
+            boolean shouldCollectDisabledTest) {
+        this(testRunName, listener);
+        mCollectDisabledTests = shouldCollectDisabledTest;
     }
 
     /**
@@ -108,8 +127,11 @@ public class GTestListTestParser extends MultiLineReceiver {
                         "parsed new test case name %s but no test class name has been set", line));
             }
             // Test method name found
-            mTests.add(
-                    new TestDescription(getTestClass(mLastTestClassName), methodMatcher.group(1)));
+            if (!methodMatcher.group(1).startsWith("DISABLED_") || mCollectDisabledTests) {
+                mTests.add(
+                        new TestDescription(
+                                getTestClass(mLastTestClassName), methodMatcher.group(1)));
+            }
         } else {
             CLog.v("line ignored: %s", line);
         }
