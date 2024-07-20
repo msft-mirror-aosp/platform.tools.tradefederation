@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util;
 
 import static org.junit.Assert.*;
 
-import com.android.tradefed.device.cloud.GceRemoteCmdFormatter.ScpMode;
+import com.android.tradefed.util.GceRemoteCmdFormatter.ScpMode;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;

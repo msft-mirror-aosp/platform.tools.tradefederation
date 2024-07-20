@@ -16,6 +16,8 @@
 
 package com.android.tradefed.util;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.android.annotations.Nullable;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
@@ -31,6 +33,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -256,10 +259,12 @@ public class RunUtil implements IRunUtil {
             try {
                 stdoutBuffer = FileUtil.createTempFile("stdout-to-upload", ".txt");
                 stdoutBuffer.deleteOnExit();
-                stdout = new ForkedOutputStream(stdout, new FileOutputStream(stdoutBuffer));
+                if (stdout != null) {
+                    stdout = new ForkedOutputStream(stdout, new FileOutputStream(stdoutBuffer));
+                }
+                stderrBuffer = FileUtil.createTempFile("stderr-to-upload", ".txt");
+                stderrBuffer.deleteOnExit();
                 if (stderr != null) {
-                    stderrBuffer = FileUtil.createTempFile("stderr-to-upload", ".txt");
-                    stderrBuffer.deleteOnExit();
                     stderr = new ForkedOutputStream(stderr, new FileOutputStream(stderrBuffer));
                 }
             } catch (IOException e) {
@@ -282,18 +287,24 @@ public class RunUtil implements IRunUtil {
         result.setStatus(status);
 
         try {
-            if (CommandStatus.SUCCESS.equals(status) && action != null && cacheClient != null) {
-                ForkedOutputStream stdoutForkedStream = (ForkedOutputStream) stdout;
-                ForkedOutputStream stderrForkedStream =
-                        stderr != null ? (ForkedOutputStream) stderr : null;
-                if (stdoutForkedStream.isSuccess()
-                        && (stderr == null || stderrForkedStream.isSuccess())) {
-                    CLog.d("Uploading cache for action: %s", action.action());
-                    cacheClient.uploadCache(
-                            action,
-                            ExecutableActionResult.create(
-                                    result.getExitCode(), stdoutBuffer, stderrBuffer));
+            if (action != null
+                    && cacheClient != null
+                    && succeed(status, (ForkedOutputStream) stdout, (ForkedOutputStream) stderr)) {
+                CLog.d("Uploading cache for action: %s", action.action());
+                if (stdout == null) {
+                    FileUtil.writeToFile(
+                            new ByteArrayInputStream(result.getStdout().getBytes(UTF_8)),
+                            stdoutBuffer);
                 }
+                if (stderr == null) {
+                    FileUtil.writeToFile(
+                            new ByteArrayInputStream(result.getStderr().getBytes(UTF_8)),
+                            stderrBuffer);
+                }
+                cacheClient.uploadCache(
+                        action,
+                        ExecutableActionResult.create(
+                                result.getExitCode(), stdoutBuffer, stderrBuffer));
             }
         } catch (IOException e) {
             CLog.e("Failed to upload cache!");
@@ -485,9 +496,7 @@ public class RunUtil implements IRunUtil {
         return result;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public CommandResult runTimedCmdSilently(final long timeout, final String... command) {
         RunnableResult osRunnable = new RunnableResult(null, createProcessBuilder(command), false);
@@ -1240,22 +1249,38 @@ public class RunUtil implements IRunUtil {
         // Only success run will be cached.
         commandResult.setStatus(CommandStatus.SUCCESS);
         commandResult.setCached(true);
-        if (result.stdOut() != null && stdout != null) {
-            FileInputStream stdoutStream = new FileInputStream(result.stdOut());
-            try {
-                StreamUtil.copyStreams(stdoutStream, stdout);
-            } finally {
-                stdoutStream.close();
-                FileUtil.deleteFile(result.stdOut());
+        if (result.stdOut() != null) {
+            if (stdout != null) {
+                FileInputStream stdoutStream = new FileInputStream(result.stdOut());
+                try {
+                    StreamUtil.copyStreams(stdoutStream, stdout);
+                } finally {
+                    stdoutStream.close();
+                    FileUtil.deleteFile(result.stdOut());
+                }
+            } else {
+                try {
+                    commandResult.setStdout(FileUtil.readStringFromFile(result.stdOut()));
+                } finally {
+                    FileUtil.deleteFile(result.stdOut());
+                }
             }
         }
-        if (result.stdErr() != null && stderr != null) {
-            FileInputStream stderrStream = new FileInputStream(result.stdErr());
-            try {
-                StreamUtil.copyStreams(stderrStream, stderr);
-            } finally {
-                stderrStream.close();
-                FileUtil.deleteFile(result.stdErr());
+        if (result.stdErr() != null) {
+            if (stderr != null) {
+                FileInputStream stderrStream = new FileInputStream(result.stdErr());
+                try {
+                    StreamUtil.copyStreams(stderrStream, stderr);
+                } finally {
+                    stderrStream.close();
+                    FileUtil.deleteFile(result.stdErr());
+                }
+            } else {
+                try {
+                    commandResult.setStderr(FileUtil.readStringFromFile(result.stdErr()));
+                } finally {
+                    FileUtil.deleteFile(result.stdErr());
+                }
             }
         }
         return commandResult;
@@ -1351,5 +1376,13 @@ public class RunUtil implements IRunUtil {
 
     private static String pathSeparator() {
         return System.getProperty("path.separator");
+    }
+
+    private static boolean succeed(
+            CommandStatus status, ForkedOutputStream stdout, ForkedOutputStream stderr) {
+        if (!CommandStatus.SUCCESS.equals(status)) {
+            return false;
+        }
+        return (stdout == null || stdout.isSuccess()) && (stderr == null || stderr.isSuccess());
     }
 }
