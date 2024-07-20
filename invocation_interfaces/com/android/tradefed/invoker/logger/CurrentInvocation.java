@@ -70,6 +70,7 @@ public class CurrentInvocation {
         public IsolationGrade mIsModuleIsolated = IsolationGrade.FULLY_ISOLATED;
         public IsolationGrade mIsRunIsolated = IsolationGrade.FULLY_ISOLATED;
         public IInvocationContext mContext;
+        public IInvocationContext mModuleContext;
     }
 
     /**
@@ -215,6 +216,31 @@ public class CurrentInvocation {
                 return null;
             }
             return mPerGroupInfo.get(group).mContext;
+        }
+    }
+
+    /** Sets the module {@link IInvocationContext} of the currently running module. */
+    public static void setModuleContext(IInvocationContext moduleContext) {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupInfo) {
+            if (mPerGroupInfo.get(group) == null) {
+                mPerGroupInfo.put(group, new InternalInvocationTracking());
+            }
+            mPerGroupInfo.get(group).mModuleContext = moduleContext;
+        }
+    }
+
+    /**
+     * Returns the module {@link IInvocationContext} for the current module. Can be null if out of
+     * scope of a module run.
+     */
+    public static @Nullable IInvocationContext getModuleContext() {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupInfo) {
+            if (mPerGroupInfo.get(group) == null) {
+                return null;
+            }
+            return mPerGroupInfo.get(group).mModuleContext;
         }
     }
 
