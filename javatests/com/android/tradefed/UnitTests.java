@@ -30,6 +30,7 @@ import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
+import com.android.tradefed.cache.UploadManifestTest;
 import com.android.tradefed.cache.remote.ByteStreamDownloaderTest;
 import com.android.tradefed.cache.remote.ByteStreamUploaderTest;
 import com.android.tradefed.cache.remote.ChunkerTest;
@@ -99,7 +100,6 @@ import com.android.tradefed.device.cloud.AcloudConfigParserTest;
 import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
 import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
-import com.android.tradefed.device.cloud.GceRemoteCmdFormatterTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
 import com.android.tradefed.device.cloud.HostOrchestratorUtilTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
@@ -165,6 +165,7 @@ import com.android.tradefed.invoker.logger.InvocationLocalTest;
 import com.android.tradefed.invoker.logger.InvocationMetricLoggerTest;
 import com.android.tradefed.invoker.logger.TfObjectTrackerTest;
 import com.android.tradefed.invoker.sandbox.ParentSandboxInvocationExecutionTest;
+import com.android.tradefed.invoker.shard.DynamicShardHelperTest;
 import com.android.tradefed.invoker.shard.ParentShardReplicateTest;
 import com.android.tradefed.invoker.shard.RemoteDynamicPoolTest;
 import com.android.tradefed.invoker.shard.ShardHelperTest;
@@ -282,6 +283,7 @@ import com.android.tradefed.targetprep.GsiDeviceFlashPreparerTest;
 import com.android.tradefed.targetprep.InstallAllTestZipAppsSetupTest;
 import com.android.tradefed.targetprep.InstallApexModuleTargetPreparerTest;
 import com.android.tradefed.targetprep.InstallApkSetupTest;
+import com.android.tradefed.targetprep.InstallKernelModulePreparerTest;
 import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
@@ -431,6 +433,7 @@ import com.android.tradefed.util.FileUtilTest;
 import com.android.tradefed.util.FixedByteArrayOutputStreamTest;
 import com.android.tradefed.util.FuseUtilTest;
 import com.android.tradefed.util.GCSFileDownloaderTest;
+import com.android.tradefed.util.GceRemoteCmdFormatterTest;
 import com.android.tradefed.util.GoogleApiClientUtilTest;
 import com.android.tradefed.util.HprofAllocSiteParserTest;
 import com.android.tradefed.util.JUnitXmlParserTest;
@@ -536,6 +539,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ByteStreamUploaderTest.class,
     ChunkerTest.class,
     RemoteCacheClientTest.class,
+    UploadManifestTest.class,
 
     // clearcut
     ClearcutClientTest.class,
@@ -627,7 +631,6 @@ import org.junit.runners.Suite.SuiteClasses;
     CommonLogRemoteFileUtilTest.class,
     GceAvdInfoTest.class,
     GceManagerTest.class,
-    GceRemoteCmdFormatterTest.class,
     GceSshTunnelMonitorTest.class,
     HostOrchestratorUtilTest.class,
     ManagedRemoteDeviceTest.class,
@@ -717,6 +720,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TfObjectTrackerTest.class,
 
     // invoker.shard
+    DynamicShardHelperTest.class,
     ParentShardReplicateTest.class,
     RemoteDynamicPoolTest.class,
     ShardHelperTest.class,
@@ -836,6 +840,7 @@ import org.junit.runners.Suite.SuiteClasses;
     InstallAllTestZipAppsSetupTest.class,
     InstallApexModuleTargetPreparerTest.class,
     InstallApkSetupTest.class,
+    InstallKernelModulePreparerTest.class,
     InstrumentationPreparerTest.class,
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
@@ -1047,6 +1052,7 @@ import org.junit.runners.Suite.SuiteClasses;
     FileUtilTest.class,
     FixedByteArrayOutputStreamTest.class,
     FuseUtilTest.class,
+    GceRemoteCmdFormatterTest.class,
     GCSFileDownloaderTest.class,
     GoogleApiClientUtilTest.class,
     HprofAllocSiteParserTest.class,

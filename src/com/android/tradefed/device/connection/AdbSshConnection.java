@@ -280,7 +280,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             if (mGceAvd != null) {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
-                } else if (useCvdCF()) {
+                } else if (getDevice().getOptions().useCvdCF()) {
                     File cvdLogsDir = mHOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
@@ -401,8 +401,13 @@ public class AdbSshConnection extends AdbTcpConnection {
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getDevice().getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
-
-                if (getDevice().getOptions().useOxygen()) {
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (getDevice().getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else if (getDevice().getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
                     util.downloadLaunchFailureLogs(tse, getLogger());
                 }
@@ -552,7 +557,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
-        if (useCvdCF()) {
+        if (getDevice().getOptions().useCvdCF()) {
             powerwashRes = mHOUtil.powerwashGce();
         } else {
             // Get the user from options instance-user if user is null.
@@ -643,9 +648,6 @@ public class AdbSshConnection extends AdbTcpConnection {
         }
 
         if (getDevice().getOptions().useOxygen()) {
-            if (useCvdCF() && bin.equals("cvd")) {
-                return String.format("/usr/bin/%s %s", bin, args);
-            }
             CommandResult result =
                     GceManager.remoteSshCommandExecution(
                             mGceAvd,
@@ -685,7 +687,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
 
-        if (useCvdCF()) {
+        if (getDevice().getOptions().useCvdCF()) {
             snapshotRes = mHOUtil.snapshotGce();
         } else {
             // Get the user from options instance-user if user is null.
@@ -693,28 +695,15 @@ public class AdbSshConnection extends AdbTcpConnection {
                 user = getDevice().getOptions().getInstanceUser();
             }
 
-            String snapshotCommand;
-            if (useCvdCF()) {
-                snapshotCommand =
-                        commandBuilder(
-                                "cvd",
-                                String.format(
-                                        "snapshot_take --force --auto_suspend"
-                                                + " --snapshot_path=/tmp/%s/snapshots/%s",
-                                        user, snapshotId),
-                                user,
-                                offset);
-            } else {
-                snapshotCommand =
-                        commandBuilder(
-                                "snapshot_util_cvd",
-                                String.format(
-                                        "--subcmd=snapshot_take --force --auto_suspend"
-                                                + " --snapshot_path=/tmp/%s/snapshots/%s",
-                                        user, snapshotId),
-                                user,
-                                offset);
-            }
+            String snapshotCommand =
+                    commandBuilder(
+                            "snapshot_util_cvd",
+                            String.format(
+                                    "--subcmd=snapshot_take --force --auto_suspend"
+                                            + " --snapshot_path=/tmp/%s/snapshots/%s",
+                                    user, snapshotId),
+                            user,
+                            offset);
             if (Strings.isNullOrEmpty(snapshotCommand)) {
                 throw new TargetSetupError(
                         "failed to set up snapshot command, invalid path",
@@ -756,7 +745,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             throws TargetSetupError {
         stopGce(user, offset);
         CommandResult restoreRes = null;
-        if (useCvdCF()) {
+        if (getDevice().getOptions().useCvdCF()) {
             restoreRes = mHOUtil.restoreSnapshotGce();
         } else {
             // Get the user from options instance-user if user is null.
@@ -764,25 +753,12 @@ public class AdbSshConnection extends AdbTcpConnection {
                 user = getDevice().getOptions().getInstanceUser();
             }
 
-            String restoreCommand;
-            if (useCvdCF()) {
-                restoreCommand =
-                        commandBuilder(
-                                "cvd",
-                                String.format(
-                                        "start --snapshot_path=/tmp/%s/snapshots/%s",
-                                        user, snapshotId),
-                                user,
-                                offset);
-            } else {
-                restoreCommand =
-                        commandBuilder(
-                                "launch_cvd",
-                                String.format(
-                                        "--snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
-                                user,
-                                offset);
-            }
+            String restoreCommand =
+                    commandBuilder(
+                            "launch_cvd",
+                            String.format("--snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                            user,
+                            offset);
             if (restoreCommand.length() == 0) {
                 throw new TargetSetupError(
                         "failed to set up restore command, invalid path",
@@ -830,7 +806,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private void stopGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
         CommandResult stopRes = null;
-        if (useCvdCF()) {
+        if (getDevice().getOptions().useCvdCF()) {
             stopRes = mHOUtil.stopGce();
         } else {
             // Get the user from options instance-user if user is null.
@@ -838,12 +814,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 user = getDevice().getOptions().getInstanceUser();
             }
 
-            String stopCommand;
-            if (useCvdCF()) {
-                stopCommand = commandBuilder("cvd", "stop", user, offset);
-            } else {
-                stopCommand = commandBuilder("stop_cvd", "", user, offset);
-            }
+            String stopCommand = commandBuilder("stop_cvd", "", user, offset);
             if (stopCommand.length() == 0) {
                 throw new TargetSetupError(
                         "failed to set up stop command, invalid path",
@@ -962,14 +933,5 @@ public class AdbSshConnection extends AdbTcpConnection {
                 CLog.w("Failed to get kernel information by `uname -r` from device");
             }
         }
-    }
-
-    /** Helper to return true if the device is launched by cvd, false otherwise. */
-    private boolean useCvdCF() {
-        TestDeviceOptions options = getDevice().getOptions();
-        if (options.useOxygenationDevice() || options.getExtraOxygenArgs().containsKey("use_cvd")) {
-            return true;
-        }
-        return false;
     }
 }
