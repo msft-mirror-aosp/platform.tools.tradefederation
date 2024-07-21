@@ -1,4 +1,4 @@
-// Copyright 2019 The Android Open Source Project
+// Copyright 2024 The Android Open Source Project
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,28 +16,23 @@ package {
     default_applicable_licenses: ["Android-Apache-2.0"],
 }
 
-tradefed_java_library_host {
-    name: "tradefed-test-framework",
+java_library_host {
+    name: "tradefed-avd-util",
+    // Restrict visibility to only those targets that need to access it.
+    visibility: [
+        "//tools/tradefederation/core",
+    ],
     defaults: ["tradefed_defaults"],
+    java_version: "11",
     srcs: [
         "com/**/*.java",
     ],
-    java_resources: [
-        ":tradefed-isolation",
-    ],
     static_libs: [
-        "diffutils-prebuilt-jar",
-        "perfetto_metrics-full",
-        "test-composers",
-        "truth",
-        "grpc-java-api",
-        "grpc-java-auth",
-        "platformprotos",
+        "tradefed-common-util",
+        "virtual-device-manager-proto",
     ],
     libs: [
-        "tradefed-lib-core",
-        "loganalysis",
     ],
-    // b/267831518: Pin tradefed and dependencies to Java 11.
-    java_version: "11",
+    plugins: [
+    ],
 }
