@@ -1255,7 +1255,10 @@ public class TestInvocation implements ITestInvocation {
                             .getInvocationData()
                             .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
                     && !RunMode.DELEGATED_INVOCATION.equals(mode)) {
-                if (config.getSkipManager().shouldSkipInvocation(info)) {
+
+                boolean skipInvocation = config.getSkipManager().shouldSkipInvocation(info);
+                // TODO: report unchanged modules possibly for cache purpose.
+                if (skipInvocation) {
                     CLog.d("Skipping invocation early.");
                     startInvocation(config, info.getContext(), listener);
                     // Backfill accounting metrics with zeros

@@ -21,6 +21,7 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.mobly.IMoblyYamlResultHandler.ITestResult;
 import com.android.tradefed.testtype.mobly.MoblyYamlResultHandlerFactory.InvalidResultTypeException;
 
@@ -135,7 +136,13 @@ public class MoblyYamlResultParser {
                         listener.testStarted(testDescription, record.getBeginTime());
                         if (MoblyYamlResultRecordHandler.RecordResult.SKIP.equals(
                                 record.getResult())) {
-                            listener.testIgnored(testDescription);
+                            // In case of run failed, the most likely is that test did not execute
+                            if (mRunFailed) {
+                                SkipReason reason = new SkipReason(record.getStackTrace(), "");
+                                listener.testSkipped(testDescription, reason);
+                            } else {
+                                listener.testIgnored(testDescription);
+                            }
                         } else if (!MoblyYamlResultRecordHandler.RecordResult.PASS.equals(
                                 record.getResult())) {
                             listener.testFailed(testDescription, failureDescription);
