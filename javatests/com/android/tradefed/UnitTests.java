@@ -30,6 +30,7 @@ import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
+import com.android.tradefed.cache.UploadManifestTest;
 import com.android.tradefed.cache.remote.ByteStreamDownloaderTest;
 import com.android.tradefed.cache.remote.ByteStreamUploaderTest;
 import com.android.tradefed.cache.remote.ChunkerTest;
@@ -282,6 +283,7 @@ import com.android.tradefed.targetprep.GsiDeviceFlashPreparerTest;
 import com.android.tradefed.targetprep.InstallAllTestZipAppsSetupTest;
 import com.android.tradefed.targetprep.InstallApexModuleTargetPreparerTest;
 import com.android.tradefed.targetprep.InstallApkSetupTest;
+import com.android.tradefed.targetprep.InstallKernelModulePreparerTest;
 import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
@@ -537,6 +539,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ByteStreamUploaderTest.class,
     ChunkerTest.class,
     RemoteCacheClientTest.class,
+    UploadManifestTest.class,
 
     // clearcut
     ClearcutClientTest.class,
@@ -837,6 +840,7 @@ import org.junit.runners.Suite.SuiteClasses;
     InstallAllTestZipAppsSetupTest.class,
     InstallApexModuleTargetPreparerTest.class,
     InstallApkSetupTest.class,
+    InstallKernelModulePreparerTest.class,
     InstrumentationPreparerTest.class,
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
