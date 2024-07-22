@@ -44,6 +44,7 @@ import com.android.tradefed.testtype.TestTimeoutEnforcer;
 import com.android.tradefed.util.AdbUtils;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.DeviceActionUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
@@ -156,6 +157,16 @@ public class PythonBinaryHostTest
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
+
+    // TODO(b/335688080): Remove this option once the caching is stable and no test needs this
+    // option.
+    @Option(
+            name = "additional-paths",
+            description =
+                    "Additional paths that will be appended to the `PATH` of the subprocess used to"
+                        + " execute the test. Note, the content of these paths won't be included in"
+                        + " the cache key set and using this option could cause false cache hit.")
+    private Set<String> mAdditionalPaths = new LinkedHashSet<>();
 
     private TestInformation mTestInfo;
     private IRunUtil mRunUtil;
@@ -291,10 +302,24 @@ public class PythonBinaryHostTest
         // Set the parent dir on the PATH
         String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
+        // Link adb and aapt to working dir as default dependencies.
+        String runtimeDepsFolderName = "runtime_deps";
+        try {
+            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAdb());
+        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
+            CLog.e("Failed to link adb to working dir %s", workingDir);
+            CLog.e(e);
+        }
+        try {
+            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt());
+        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
+            CLog.e("Failed to link aapt to working dir %s", workingDir);
+            CLog.e(e);
+        }
         // Bundle binaries / dependencies have priorities over existing PATH
-        paths.addAll(
-                toRelative(workingDir, findAllSubdir(pyFile.getParentFile(), new ArrayList<>())));
-        paths.add(System.getenv("PATH"));
+        paths.addAll(toRelative(workingDir, findAllSubdir(workingDir, new ArrayList<>())));
+        paths.addAll(mAdditionalPaths);
+        paths.add("/usr/bin");
         String path = paths.stream().distinct().collect(Collectors.joining(separator));
         CLog.d("Using updated $PATH: %s", path);
         getRunUtil().setEnvVariablePriority(EnvPriority.SET);
@@ -484,6 +509,16 @@ public class PythonBinaryHostTest
             mRunUtil = new RunUtil();
         }
         return mRunUtil;
+    }
+
+    @VisibleForTesting
+    File getAapt() throws DeviceActionUtil.DeviceActionConfigError {
+        return DeviceActionUtil.getAapt();
+    }
+
+    @VisibleForTesting
+    File getAdb() throws DeviceActionUtil.DeviceActionConfigError {
+        return DeviceActionUtil.getAdb();
     }
 
     @VisibleForTesting
