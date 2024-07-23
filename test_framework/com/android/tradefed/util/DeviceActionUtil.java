@@ -200,7 +200,7 @@ public class DeviceActionUtil {
         }
     }
 
-    private static File getAdb() throws DeviceActionConfigError {
+    public static File getAdb() throws DeviceActionConfigError {
         File adbFile = new File(GlobalConfiguration.getDeviceManagerInstance().getAdbPath());
         if (!adbFile.exists()) {
             // Assume adb is in the PATH.
@@ -209,7 +209,7 @@ public class DeviceActionUtil {
         return adbFile;
     }
 
-    private static File getAapt() throws DeviceActionConfigError {
+    public static File getAapt() throws DeviceActionConfigError {
         // Assume aapt2 is in the PATH. @see doc for {@link AaptParser}.
         return findExecutableOnPath("aapt2");
     }
