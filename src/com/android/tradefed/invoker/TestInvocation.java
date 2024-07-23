@@ -116,6 +116,7 @@ import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.IOException;
@@ -1280,20 +1281,7 @@ public class TestInvocation implements ITestInvocation {
                             InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
                     listener.invocationSkipped(
                             new SkipReason(config.getSkipManager().getInvocationSkipReason(), ""));
-                    for (String moduleName : config.getSkipManager().getUnchangedModules()) {
-                        IInvocationContext moduleContext = new InvocationContext();
-                        ConfigurationDescriptor configDescriptor = new ConfigurationDescriptor();
-                        configDescriptor.setModuleName(moduleName);
-
-                        moduleContext.setConfigurationDescriptor(configDescriptor);
-                        moduleContext.addInvocationAttribute(ModuleDefinition.MODULE_ABI, "x86_64");
-                        moduleContext.addInvocationAttribute(
-                                ModuleDefinition.MODULE_NAME, moduleName);
-                        moduleContext.addInvocationAttribute(
-                                ModuleDefinition.MODULE_ID, "x86_64 " + moduleName);
-                        listener.testModuleStarted(moduleContext);
-                        listener.testModuleEnded();
-                    }
+                    reportModuleSkip(config, listener);
                     reportHostLog(listener, config);
                     reportInvocationEnded(config, info.getContext(), listener, 0L);
                     return;
@@ -1929,6 +1917,43 @@ public class TestInvocation implements ITestInvocation {
             }
         }
         return dnae;
+    }
+
+    private void reportModuleSkip(IConfiguration config, ITestInvocationListener listener) {
+        if (!config.getSkipManager().reportSkippedModule()) {
+            return;
+        }
+        // Make a heuristic determination of ABI.
+        String abi = "arm64";
+        if (config.getDeviceConfig().get(0).getDeviceRequirements().nullDeviceRequested()
+                || config.getDeviceConfig().get(0).getDeviceRequirements().gceDeviceRequested()) {
+            abi = "x86_64";
+        }
+        String buildTarget =
+                config.getCommandOptions()
+                        .getInvocationData()
+                        .getUniqueMap()
+                        .get("test_result.build_target");
+        if (!Strings.isNullOrEmpty(buildTarget) && buildTarget.contains("cf_arm64")) {
+            abi = "arm64";
+        }
+
+        for (String moduleName : config.getSkipManager().getUnchangedModules()) {
+            IInvocationContext moduleContext = new InvocationContext();
+            ConfigurationDescriptor configDescriptor = new ConfigurationDescriptor();
+            configDescriptor.setModuleName(moduleName);
+
+            moduleContext.setConfigurationDescriptor(configDescriptor);
+            moduleContext.addInvocationAttribute(ModuleDefinition.MODULE_ABI, abi);
+            moduleContext.addInvocationAttribute(ModuleDefinition.MODULE_NAME, moduleName);
+            moduleContext.addInvocationAttribute(
+                    ModuleDefinition.MODULE_ID, abi + " " + moduleName);
+            moduleContext.addInvocationAttribute(
+                    ModuleDefinition.MODULE_SKIPPED,
+                    config.getSkipManager().getInvocationSkipReason());
+            listener.testModuleStarted(moduleContext);
+            listener.testModuleEnded();
+        }
     }
 
     /**

@@ -82,6 +82,12 @@ public class SkipManager implements IDisableable {
     @Option(name = "analysis-level", description = "Alter assumptions level of the analysis.")
     private AnalysisHeuristic mAnalysisLevel = AnalysisHeuristic.REMOVE_EXEMPTION;
 
+    @Option(
+            name = "report-module-skipped",
+            description =
+                    "Report a placeholder skip when module are skipped as unchanged in presubmit.")
+    private boolean mReportModuleSkipped = false;
+
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
 
@@ -294,5 +300,9 @@ public class SkipManager implements IDisableable {
 
     public String getInvocationSkipReason() {
         return mReasonForSkippingInvocation;
+    }
+
+    public boolean reportSkippedModule() {
+        return mReportModuleSkipped;
     }
 }
