@@ -113,6 +113,14 @@ public class SkipManager implements IDisableable {
         return mDemotionFilters;
     }
 
+    /**
+     * Returns the list of unchanged modules. Modules are only unchanged if device image is also
+     * unchanged.
+     */
+    public Set<String> getUnchangedModules() {
+        return mUnchangedModules;
+    }
+
     public void setImageAnalysis(ITestDevice device, ContentAnalysisContext analysisContext) {
         CLog.d(
                 "Received image artifact analysis '%s' for %s",
