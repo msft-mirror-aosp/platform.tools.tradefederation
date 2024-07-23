@@ -18,7 +18,7 @@ package com.android.tradefed.targetprep;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.ArgumentMatchers.matches;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.command.remote.DeviceDescriptor;
@@ -37,7 +37,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -111,10 +110,10 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("install-arg", "enable=1");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
-        when(mMockDevice.executeShellV2Command(startsWith(KUNIT_MODULE_REMOVAL_COMMAND)))
+        when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(
-                        startsWith(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
+                        matches(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
                 .thenReturn(mSuccessResult);
         mPreparer.setUp(mTestInfo);
     }
@@ -130,13 +129,12 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("install-arg", "stats_enabled=0");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
-        when(mMockDevice.executeShellV2Command(startsWith(KUNIT_MODULE_REMOVAL_COMMAND)))
+        when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(
-                        ArgumentMatchers.matches(
-                                String.format("insmod %s enable=0 stats_enabled=0", KUNIT_MODULE)),
-                        ArgumentMatchers.anyLong(),
-                        ArgumentMatchers.anyObject()))
+                        matches(String.format("insmod %s enable=0 stats_enabled=0", KUNIT_MODULE)),
+                        anyLong(),
+                        any()))
                 .thenReturn(mSuccessResult);
         mPreparer.setUp(mTestInfo);
     }
@@ -152,21 +150,21 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("module-path", "/data/kunit/kunit-test.ko");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
-        when(mMockDevice.executeShellV2Command(startsWith(KUNIT_MODULE_REMOVAL_COMMAND)))
+        when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(
-                        startsWith(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
+                        matches(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeShellV2Command(startsWith("rmmod kunit-test")))
+        when(mMockDevice.executeShellV2Command(matches("rmmod kunit_test")))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(
-                        startsWith("insmod /data/kunit/kunit-test.ko enable=1"), anyLong(), any()))
+                        matches("insmod /data/kunit/kunit-test.ko enable=1"), anyLong(), any()))
                 .thenReturn(mSuccessResult);
         mPreparer.setUp(mTestInfo);
     }
 
     /**
-     * Test {@link InstallKernelModulePreparer#setUp()} by having set disable-verity failure and
+     * Test {@link InstallKernelModulePreparer#setUp()} by having module installation failure and
      * throwing an exception
      */
     @Test
@@ -175,9 +173,9 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("install-arg", "enable=1");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
-        when(mMockDevice.executeShellV2Command(startsWith(KUNIT_MODULE_REMOVAL_COMMAND)))
+        when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
-        when(mMockDevice.executeShellV2Command(startsWith(KUNIT_MODULE_INSTALLATION_COMMAND)))
+        when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_INSTALLATION_COMMAND)))
                 .thenReturn(mFailedResult);
 
         try {
@@ -197,8 +195,7 @@ public class InstallKernelModulePreparerTest {
                     BuildError,
                     TargetSetupError,
                     ConfigurationException {
-        when(mMockDevice.executeShellV2Command(startsWith("rmmod kunit")))
-                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeShellV2Command(matches("rmmod kunit"))).thenReturn(mSuccessResult);
         mPreparer.tearDown(mTestInfo, null);
     }
 
@@ -213,13 +210,12 @@ public class InstallKernelModulePreparerTest {
                     TargetSetupError,
                     ConfigurationException {
         mOptionSetter.setOptionValue("module-path", "/data/kunit/kunit_test.ko");
-        when(mMockDevice.executeShellV2Command(startsWith("rmmod kunit_test")))
+        when(mMockDevice.executeShellV2Command(matches("rmmod kunit_test")))
                 .thenReturn(mFailedResult);
-        when(mMockDevice.executeShellV2Command(startsWith("rmmod kunit")))
-                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeShellV2Command(matches("rmmod kunit"))).thenReturn(mSuccessResult);
         mPreparer.tearDown(mTestInfo, null);
         InOrder inOrder = Mockito.inOrder(mMockDevice);
-        inOrder.verify(mMockDevice).executeShellV2Command(startsWith("rmmod kunit_test"));
-        inOrder.verify(mMockDevice).executeShellV2Command(startsWith("rmmod kunit"));
+        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit_test"));
+        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit"));
     }
 }
