@@ -18,10 +18,10 @@ package com.android.tradefed.result.skipped;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.build.content.ContentAnalysisResults;
 import com.android.tradefed.build.content.ImageContentAnalyzer;
 import com.android.tradefed.build.content.TestContentAnalyzer;
-import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.invoker.TestInformation;
@@ -104,6 +104,7 @@ public class ArtifactsAnalyzer {
                     } else {
                         CLog.d("%s", analysisResults.toString());
                         finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
+                        finalReport.addUnchangedModules(analysisResults.getUnchangedModules());
                     }
                 } catch (RuntimeException e) {
                     CLog.e(e);
