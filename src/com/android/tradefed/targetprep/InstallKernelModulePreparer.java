@@ -127,6 +127,14 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
         // Unload module before hand in case it's already loaded for some reason
         CommandResult result = device.executeShellV2Command(command);
 
+        if (result == null) {
+            throw new TargetSetupError(
+                    String.format(
+                            "Failed to get return from command '%s' from %s",
+                            command, device.getSerialNumber()),
+                    DeviceErrorIdentifier.KERNEL_MODULE_INSTALLATION_FAILED);
+        }
+
         if (CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.w("Module '%s' unexpectedly still loaded, it has been unloaded.", kernelModule);
         }
