@@ -58,5 +58,8 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/tools/tradefederation/core/tradefed-dynamic-sharding-grpc/linux_glibc_common/javac/tradefed-dynamic-sharding-grpc.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/misc/common/tools-common/tools-common-prebuilt/linux_glibc_common/combined/tools-common-prebuilt.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/misc/common/json/json-prebuilt/linux_glibc_common/combined/json-prebuilt.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/bazelbuild-remote-apis/build/bazel/remote/execution/v2/remote-execution-java-grpc/linux_glibc_common/javac/remote-execution-java-grpc.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/bazelbuild-remote-apis/build/bazel/remote/execution/v2/remote-execution-java-proto/linux_glibc_common/combined/remote-execution-java-proto.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/auto/value/auto_value_annotations/linux_glibc_common/javac/auto_value_annotations.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
