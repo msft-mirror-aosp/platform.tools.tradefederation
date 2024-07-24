@@ -149,8 +149,10 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsPermissionUiTestCases",// Renamed from Permission3 in 2023
                     "CtsMediaAudioTestCases");
 
-    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST = ImmutableSet.of(
+    private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST =
+            ImmutableSet.of(
                     "binderRpcTestNoKernel",
+                    "CtsLibcoreOjTestCases_time",
                     "CtsTelecomTestCases",
                     "CtsAppTestCases",
                     "binderRpcTestSingleThreadedNoKernel",
@@ -170,6 +172,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsScopedStoragePublicVolumeHostTest",
                     "CtsContentTestCases",
                     "CtsHostsideNetworkTests",
+                    "CtsHostsideNetworkPolicyTests",
                     "vm-tests-tf",
                     "CtsStatsdAtomHostTestCases",
                     "CtsMediaPlayerTestCases",
@@ -257,7 +260,12 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(configZip != null);
         List<String> errors = new ArrayList<>();
         List<String> testConfigs = new ArrayList<>();
-        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        File testConfigDir = null;
+        if (configZip.isDirectory()) {
+            testConfigDir = configZip;
+        } else {
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+        }
         testConfigs.addAll(
                 ConfigurationUtil.getConfigNamesFromDirs(null, Arrays.asList(testConfigDir)));
         for (String configName : testConfigs) {
@@ -397,27 +405,6 @@ public class TestMappingsValidation implements IBuildReceiver {
         }
     }
 
-    /**
-     * Test all the tests by each test group and make sure the file options aren't conflict to AJUR
-     * rules.
-     */
-    @Test
-    public void testFilterOptions() {
-        List<String> errors = new ArrayList<>();
-        for (String testGroup : allTests.keySet()) {
-            for (String moduleName : getModuleNames(testGroup)) {
-                errors.addAll(validateFilterOption(moduleName, INCLUDE_FILTER, testGroup));
-                errors.addAll(validateFilterOption(moduleName, EXCLUDE_FILTER, testGroup));
-            }
-        }
-        if (!errors.isEmpty()) {
-            fail(
-                    String.format(
-                            "Fail include/exclude filter setting check:\n%s",
-                            Joiner.on("\n").join(errors)));
-        }
-    }
-
     /** Test to ensure performance test modules are not included for test mapping. */
     @Test
     public void testNoPerformanceTests() throws IOException {
@@ -435,17 +422,29 @@ public class TestMappingsValidation implements IBuildReceiver {
 
         File testConfigDir = null;
         File deviceTestConfigDir = null;
+        boolean deleteConfigDir = false;
+        boolean deleteDeviceConfigDir = false;
         try {
             File configZip = deviceBuildInfo.getFile("general-tests_configs.zip");
             File deviceConfigZip = deviceBuildInfo.getFile("device-tests_configs.zip");
             Assume.assumeTrue(configZip != null);
             List<String> testConfigs = new ArrayList<>();
             List<File> dirToLoad = new ArrayList<>();
-            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+            if (configZip.isDirectory()) {
+                testConfigDir = configZip;
+            } else {
+                testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+                deleteConfigDir = true;
+            }
             dirToLoad.add(testConfigDir);
             if (deviceConfigZip != null) {
-                deviceTestConfigDir =
-                        ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                if (deviceConfigZip.isDirectory()) {
+                    deviceTestConfigDir = deviceConfigZip;
+                } else {
+                    deviceTestConfigDir =
+                            ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                    deleteDeviceConfigDir = true;
+                }
                 dirToLoad.add(deviceTestConfigDir);
             }
             testConfigs.addAll(ConfigurationUtil.getConfigNamesFromDirs(null, dirToLoad));
@@ -472,48 +471,13 @@ public class TestMappingsValidation implements IBuildReceiver {
         } catch (ConfigurationException e) {
             fail(e.toString());
         } finally {
-            FileUtil.recursiveDelete(testConfigDir);
-            FileUtil.recursiveDelete(deviceTestConfigDir);
-        }
-    }
-
-    /**
-     * Validate if the filter option of a test contains both class/method and package. options.
-     *
-     * @param moduleName A {@code String} name of a test module.
-     * @param filterOption A {@code String} of the filter option defined in TEST MAPPING file.
-     * @param testGroup A {@code String} name of the test group.
-     * @return A {@code List<String>} of the validation errors.
-     */
-    private List<String> validateFilterOption(
-            String moduleName, String filterOption, String testGroup) {
-        List<String> errors = new ArrayList<>();
-        for (TestInfo test : getTestInfos(moduleName, testGroup)) {
-            Set<Filters> filterTypes = new HashSet<>();
-            Map<Filters, Set<TestInfo>> filterTestInfos = new HashMap<>();
-            for (TestOption options : test.getOptions()) {
-                if (options.getName().equals(filterOption)) {
-                    Filters optionType = getOptionType(options.getValue());
-                    // Add optionType with each TestInfo to get the detailed information.
-                    filterTestInfos.computeIfAbsent(optionType, k -> new HashSet<>()).add(test);
-                }
+            if (deleteConfigDir) {
+                FileUtil.recursiveDelete(testConfigDir);
             }
-            filterTypes = filterTestInfos.keySet();
-            // If the options of a test in one TEST_MAPPING file contain either REGEX,
-            // CLASS_OR_METHOD, or PACKAGE, it should be caught and output the tests
-            // information.
-            // TODO(b/128947872): List the type with fewest options first.
-            if (filterTypes.size() > 1) {
-                errors.add(
-                        String.format(
-                                "Mixed filter types found. Test: %s , TestGroup: %s, Details:\n"
-                                        + "%s",
-                                moduleName,
-                                testGroup,
-                                getDetailedErrors(filterOption, filterTestInfos)));
+            if (deleteDeviceConfigDir) {
+                FileUtil.recursiveDelete(deviceTestConfigDir);
             }
         }
-        return errors;
     }
 
     /**
@@ -725,12 +689,25 @@ public class TestMappingsValidation implements IBuildReceiver {
         Assume.assumeTrue(configZip != null);
         List<String> testConfigs = new ArrayList<>();
         List<File> dirToLoad = new ArrayList<>();
-        File testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
-        File deviceTestConfigDir = null;
+        File testConfigDir = null;
+        boolean deleteConfigDir = false;
+        if (configZip.isDirectory()) {
+            testConfigDir = configZip;
+        } else {
+            testConfigDir = ZipUtil2.extractZipToTemp(configZip, "general-tests_configs");
+            deleteConfigDir = true;
+        }
         dirToLoad.add(testConfigDir);
+        File deviceTestConfigDir = null;
+        boolean deleteDeviceConfigDir = false;
         if (deviceConfigZip != null) {
-            deviceTestConfigDir =
-                    ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+            if (deviceConfigZip.isDirectory()) {
+                deviceTestConfigDir = deviceConfigZip;
+            } else {
+                deviceTestConfigDir =
+                        ZipUtil2.extractZipToTemp(deviceConfigZip, "device-tests_configs");
+                deleteDeviceConfigDir = true;
+            }
             dirToLoad.add(deviceTestConfigDir);
         }
         try {
@@ -773,8 +750,12 @@ public class TestMappingsValidation implements IBuildReceiver {
                 fail(Joiner.on("\n").join(errors));
             }
         } finally {
-            FileUtil.recursiveDelete(testConfigDir);
-            FileUtil.recursiveDelete(deviceTestConfigDir);
+            if (deleteConfigDir) {
+                FileUtil.recursiveDelete(testConfigDir);
+            }
+            if (deleteDeviceConfigDir) {
+                FileUtil.recursiveDelete(deviceTestConfigDir);
+            }
         }
     }
 

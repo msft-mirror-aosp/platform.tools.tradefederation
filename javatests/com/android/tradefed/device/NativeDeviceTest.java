@@ -45,6 +45,7 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.IWifiHelper.WifiConnectionResult;
 import com.android.tradefed.device.NativeDevice.RebootMode;
+import com.android.tradefed.device.contentprovider.ContentProviderHandler;
 import com.android.tradefed.host.HostOptions;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -97,6 +98,7 @@ public class NativeDeviceTest {
     @Mock IRunUtil mMockRunUtil;
     @Mock IWifiHelper mMockWifi;
     @Mock IDeviceMonitor mMockDvcMonitor;
+    @Mock ContentProviderHandler mMockContentProviderHandler;
     private IHostOptions mHostOptions;
 
     /** A {@link TestDevice} that is suitable for running tests against */
@@ -126,6 +128,12 @@ public class NativeDeviceTest {
         @Override
         public int getCurrentUser() throws DeviceNotAvailableException {
             return 0;
+        }
+
+        @Override
+        public ContentProviderHandler getContentProvider(int userId) throws DeviceNotAvailableException {
+            when(mMockContentProviderHandler.getUserId()).thenReturn(userId);
+            return mMockContentProviderHandler;
         }
     }
 
@@ -280,6 +288,47 @@ public class NativeDeviceTest {
         fail("getScreenshot should have thrown an exception");
     }
 
+    @Test
+    public void testPushDir_withUserId() throws Exception {
+        int testUserId = 99;
+        String deviceFilePath = NativeDevice.SD_CARD;
+        File testDir = FileUtil.createTempDir("pushDirTest");
+
+        try {
+            mTestDevice.pushDir(testDir, deviceFilePath, testUserId);
+
+            assertEquals(mMockContentProviderHandler.getUserId().intValue(), testUserId);
+            verify(mMockContentProviderHandler)
+                    .pushDir(Mockito.eq(testDir), Mockito.eq(deviceFilePath), Mockito.any());
+        } finally {
+            FileUtil.recursiveDelete(testDir);
+        }
+    }
+
+    @Test
+    public void testPushDir_withoutUserId() throws Exception {
+        int currentUserId = 100; // non-zero userId to use ContentProvider.
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return currentUserId;
+                    }
+                };
+        String deviceFilePath = NativeDevice.SD_CARD;
+        File testDir = FileUtil.createTempDir("pushDirTest");
+
+        try {
+            mTestDevice.pushDir(testDir, deviceFilePath);
+
+            assertEquals(mMockContentProviderHandler.getUserId().intValue(), currentUserId);
+            verify(mMockContentProviderHandler)
+                    .pushDir(Mockito.eq(testDir), Mockito.eq(deviceFilePath), Mockito.any());
+        } finally {
+            FileUtil.recursiveDelete(testDir);
+        }
+    }
+
     /** Unit test for {@link NativeDevice#pushDir(File, String)}. */
     @Test
     public void testPushDir_notADir() throws Exception {
@@ -293,7 +342,10 @@ public class NativeDeviceTest {
                 new TestableAndroidNativeDevice() {
                     @Override
                     public boolean pushFileInternal(
-                            File localFile, String remoteFilePath, boolean skipContentProvider)
+                            File localFile,
+                            String remoteFilePath,
+                            boolean skipContentProvider,
+                            int userId)
                             throws DeviceNotAvailableException {
                         return true;
                     }
@@ -360,6 +412,45 @@ public class NativeDeviceTest {
         }
     }
 
+    @Test
+    public void testPullDir_withUserId() throws Exception {
+        int testUserId = 99;
+        String deviceFilePath = NativeDevice.SD_CARD;
+        File dir = FileUtil.createTempDir("tf-test");
+
+        try {
+            mTestDevice.pullDir(deviceFilePath, dir, testUserId);
+
+            assertEquals(mMockContentProviderHandler.getUserId().intValue(), testUserId);
+            verify(mMockContentProviderHandler).pullDir(deviceFilePath, dir);
+        } finally {
+            FileUtil.recursiveDelete(dir);
+        }
+    }
+
+    @Test
+    public void testPullDir_withoutUserId() throws Exception {
+        int currentUserId = 100; // non-zero userId to use ContentProvider.
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return currentUserId;
+                    }
+                };
+        String deviceFilePath = NativeDevice.SD_CARD;
+        File dir = FileUtil.createTempDir("tf-test");
+
+        try {
+            mTestDevice.pullDir(deviceFilePath, dir);
+
+            assertEquals(mMockContentProviderHandler.getUserId().intValue(), currentUserId);
+            verify(mMockContentProviderHandler).pullDir(deviceFilePath, dir);
+        } finally {
+            FileUtil.recursiveDelete(dir);
+        }
+    }
+
     /** Test {@link NativeDevice#pullDir(String, File)} when the remote directory is empty. */
     @Test
     public void testPullDir_nothingToDo() throws Exception {
@@ -384,9 +475,9 @@ public class NativeDeviceTest {
                     }
                 };
         File dir = FileUtil.createTempDir("tf-test");
-        Collection<IFileEntry> childrens = new ArrayList<>();
-        when(fakeEntry.getChildren(false)).thenReturn(childrens);
-        // Empty list of childen
+        Collection<IFileEntry> children = new ArrayList<>();
+        when(fakeEntry.getChildren(false)).thenReturn(children);
+        // Empty list of children
 
         try {
             boolean res = mTestDevice.pullDir("/some_device_path/screenshots/", dir);
@@ -2086,6 +2177,45 @@ public class NativeDeviceTest {
         assertNull(res);
     }
 
+    @Test
+    public void testPushFile_withUserId() throws Exception {
+        int testUserId = 99;
+        String remotePath = NativeDevice.SD_CARD;
+        File tmpFile = FileUtil.createTempFile("push", ".test");
+
+        try {
+            mTestDevice.pushFile(tmpFile, remotePath, testUserId);
+
+            assertEquals(mMockContentProviderHandler.getUserId().intValue(), testUserId);
+            verify(mMockContentProviderHandler).pushFile(tmpFile, remotePath);
+        } finally {
+            FileUtil.deleteFile(tmpFile);
+        }
+    }
+
+    @Test
+    public void testPushFile_withoutUserId() throws Exception {
+        int currentUserId = 100; // non-zero userId to use ContentProvider.
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return currentUserId;
+                    }
+                };
+        String remotePath = NativeDevice.SD_CARD;
+        File tmpFile = FileUtil.createTempFile("push", ".test");
+
+        try {
+            mTestDevice.pushFile(tmpFile, remotePath);
+
+            assertEquals(mMockContentProviderHandler.getUserId().intValue(), currentUserId);
+            verify(mMockContentProviderHandler).pushFile(tmpFile, remotePath);
+        } finally {
+            FileUtil.deleteFile(tmpFile);
+        }
+    }
+
     /**
      * Test that {@link NativeDevice#pushFile(File, String)} returns true when the push is
      * successful.
@@ -2142,6 +2272,35 @@ public class NativeDeviceTest {
         } finally {
             FileUtil.deleteFile(tmpFile);
         }
+    }
+
+    @Test
+    public void testDeleteFile_withUserId() throws Exception {
+        int testUserId = 99;
+        String remotePath = NativeDevice.SD_CARD + "deleteTest";
+
+        mTestDevice.deleteFile(remotePath, testUserId);
+
+        assertEquals(mMockContentProviderHandler.getUserId().intValue(), testUserId);
+        verify(mMockContentProviderHandler).deleteFile(remotePath);
+    }
+
+    @Test
+    public void testDeleteFile_withoutUserId() throws Exception {
+        int currentUserId = 100; // non-zero userId to use ContentProvider.
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public int getCurrentUser() throws DeviceNotAvailableException {
+                        return currentUserId;
+                    }
+                };
+        String remotePath = NativeDevice.SD_CARD + "deleteTest";
+
+        mTestDevice.deleteFile(remotePath);
+
+        assertEquals(mMockContentProviderHandler.getUserId().intValue(), currentUserId);
+        verify(mMockContentProviderHandler).deleteFile(remotePath);
     }
 
     /** Test get Process pid by process name */
@@ -2817,8 +2976,9 @@ public class NativeDeviceTest {
 
         verify(mMockIDevice)
                 .executeShellCommand(
-                        Mockito.eq(String.format(
-                            "logcat -b all -v threadtime -t '%s'", dateFormatted)),
+                        Mockito.eq(
+                                String.format(
+                                        "logcat -b all -v threadtime -t '%s'", dateFormatted)),
                         Mockito.any());
     }
 

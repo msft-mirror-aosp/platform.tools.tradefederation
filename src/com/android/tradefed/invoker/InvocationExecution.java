@@ -43,6 +43,7 @@ import com.android.tradefed.device.metric.CollectorHelper;
 import com.android.tradefed.device.metric.CountTestCasesCollector;
 import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.device.metric.IMetricCollectorReceiver;
+import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInvocation.Stage;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -447,6 +448,9 @@ public class InvocationExecution implements IInvocationExecution {
                     if (error instanceof DeviceNotAvailableException) {
                         throw (DeviceNotAvailableException) error;
                     }
+                    if (error instanceof HarnessRuntimeException) {
+                        throw (HarnessRuntimeException) error;
+                    }
                     throw new RuntimeException(error);
                 }
             }
@@ -661,8 +665,16 @@ public class InvocationExecution implements IInvocationExecution {
                     new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
                 runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
             } catch (TargetSetupError e) {
-                OxygenUtil util = new OxygenUtil();
-                util.downloadLaunchFailureLogs(e, logger);
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (context.getDevices().get(0).getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(e, logger);
+                }
                 throw e;
             }
         } else {
@@ -1206,6 +1218,8 @@ public class InvocationExecution implements IInvocationExecution {
                     if (!decision.isAutoRetryEnabled()
                             || RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())
                             || test instanceof ITestSuite
+                            // Exclude special launcher
+                            || test.getClass().getSimpleName().equals("CtsTestLauncher")
                             // TODO: Handle auto-retry in local-sharding for non-suite
                             || test instanceof TestsPoolPoller
                             // If test doesn't support auto-retry

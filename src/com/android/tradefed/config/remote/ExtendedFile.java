@@ -16,9 +16,11 @@
 package com.android.tradefed.config.remote;
 
 import com.android.tradefed.build.BuildRetrievalError;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 
 import java.io.File;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
 /** A extension of standard file to carry a build related metadata. */
@@ -30,6 +32,7 @@ public class ExtendedFile extends File {
     private String mRemoteFilePath;
 
     private Future<BuildRetrievalError> mParallelDownload;
+    private ExecutorService mExecutorService;
 
     ExtendedFile(String path) {
         super(path);
@@ -76,6 +79,12 @@ public class ExtendedFile extends File {
         mParallelDownload = download;
     }
 
+    public void setDownloadFuture(
+            ExecutorService serviceUsed, Future<BuildRetrievalError> download) {
+        mExecutorService = serviceUsed;
+        mParallelDownload = download;
+    }
+
     public void cancelDownload() {
         if (!isDownloadingInParallel()) {
             return;
@@ -84,6 +93,10 @@ public class ExtendedFile extends File {
             mParallelDownload.cancel(true);
         } catch (RuntimeException ignored) {
             // Ignore
+        } finally {
+            if (mExecutorService != null) {
+                mExecutorService.shutdown();
+            }
         }
     }
 
@@ -91,7 +104,7 @@ public class ExtendedFile extends File {
         if (!isDownloadingInParallel()) {
             return;
         }
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_" + mRemoteFilePath)) {
             BuildRetrievalError error = mParallelDownload.get();
             if (error == null) {
                 return;
@@ -100,6 +113,10 @@ public class ExtendedFile extends File {
         } catch (ExecutionException | InterruptedException e) {
             throw new BuildRetrievalError(
                     String.format("Error during parallel download: %s", e.getMessage()), e);
+        } finally {
+            if (mExecutorService != null) {
+                mExecutorService.shutdown();
+            }
         }
     }
 

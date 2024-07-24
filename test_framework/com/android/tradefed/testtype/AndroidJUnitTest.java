@@ -172,14 +172,13 @@ public class AndroidJUnitTest extends InstrumentationTest
     private Integer mMaxShard = 4;
 
     @Option(
-        name = "device-listeners",
-        description =
-                "Specify device side instrumentation listeners to be added for the run. "
-                        + "Can be repeated. Note that while the ordering here is followed for "
-                        + "now, future versions of AndroidJUnitRunner might not preserve the "
-                        + "listener ordering."
-    )
-    private List<String> mExtraDeviceListeners = new ArrayList<>();
+            name = "device-listeners",
+            description =
+                    "Specify device side instrumentation listeners to be added for the run. "
+                            + "Can be repeated. Note that while the ordering here is followed for "
+                            + "now, future versions of AndroidJUnitRunner might not preserve the "
+                            + "listener ordering.")
+    private Set<String> mExtraDeviceListeners = new LinkedHashSet<>();
 
     @Option(
         name = "use-new-run-listener-order",
@@ -362,7 +361,7 @@ public class AndroidJUnitTest extends InstrumentationTest
             if (params != null && params.contains(InstantAppHandler.INSTANT_APP_ID)) {
                 mUseTestStorage = false;
                 CLog.d("Disable test storage on instant app module.");
-            } else if (mInstrumentSdkSandbox || mInstrumentSdkInSandbox) {
+            } else if (isTestRunningOnSdkSandbox(testInfo)) {
                 // SDK sandboxes don't have access to the test ContentProvider.
                 mUseTestStorage = false;
                 CLog.d("Disable test storage for SDK sandbox instrumentation tests.");
@@ -498,6 +497,15 @@ public class AndroidJUnitTest extends InstrumentationTest
             } else {
                 notPackageArg.add(test);
             }
+        }
+        if (!regexArg.isEmpty()
+                && (!classArg.isEmpty()
+                        || !notClassArg.isEmpty()
+                        || !packageArg.isEmpty()
+                        || !notPackageArg.isEmpty())) {
+            throw new IllegalArgumentException(
+                    "Mixed filter types found. AndroidJUnitTest does not support mixing both regex"
+                            + " and class/method/package filters.");
         }
         if (!classArg.isEmpty()) {
             runner.addInstrumentationArg(INCLUDE_CLASS_INST_ARGS_KEY,

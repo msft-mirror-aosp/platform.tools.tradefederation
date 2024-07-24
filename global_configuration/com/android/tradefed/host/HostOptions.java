@@ -99,13 +99,6 @@ public class HostOptions implements IHostOptions {
     private List<String> mLabels = new ArrayList<>();
 
     @Option(
-            name = "known-tcp-device-ip-pool",
-            description =
-                    "known remote device available via ip associated with the "
-                            + "tcp-device placeholder.")
-    private Set<String> mKnownTcpDeviceIpPool = new HashSet<>();
-
-    @Option(
             name = "known-gce-device-ip-pool",
             description =
                     "known remote device available via ip associated with the "
@@ -153,16 +146,6 @@ public class HostOptions implements IHostOptions {
                             + "stop it. A value of zero will indicate no timeout.",
             isTimeVal = true)
     private long mTestPhaseTimeout = 0;
-
-    @Option(
-            name = "enable-flashstation",
-            description = "Feature flag to enable the support for flashstation.")
-    private boolean mEnableFlashstation = false;
-
-    @Option(
-            name = "cl-flashstation",
-            description = "cl_flashstation script stored in remote GCS bucket.")
-    private File mClFlashstation = new File("/tradefed/cl_flashstation");
 
     @Option(
             name = "enable-incremental-flashing",
@@ -255,12 +238,6 @@ public class HostOptions implements IHostOptions {
     @Override
     public List<String> getLabels() {
         return new ArrayList<>(mLabels);
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public Set<String> getKnownTcpDeviceIpPool() {
-        return new HashSet<>(mKnownTcpDeviceIpPool);
     }
 
     /** {@inheritDoc} */
@@ -403,18 +380,6 @@ public class HostOptions implements IHostOptions {
     @Override
     public boolean shouldFlashWithFuseZip() {
         return mFlashWithFuseZip;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public boolean isFlashstationEnabled() {
-        return mEnableFlashstation;
-    }
-
-    /** {@inheritDoc} */
-    @Override
-    public File getClFlashstation() {
-        return mClFlashstation;
     }
 
     /** {@inheritDoc} */

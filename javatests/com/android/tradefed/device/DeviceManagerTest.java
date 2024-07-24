@@ -187,6 +187,11 @@ public class DeviceManagerTest {
                         invocation -> {
                             return capturedIDevice.getValue().getSerialNumber();
                         });
+        when(mMockTestDevice.getTrackingSerial())
+                .thenAnswer(
+                        invocation -> {
+                            return capturedIDevice.getValue().getSerialNumber();
+                        });
         when(mMockTestDevice.getMonitor()).thenReturn(mMockStateMonitor);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(), (String) Mockito.any(), (String) Mockito.any()))
@@ -256,7 +261,6 @@ public class DeviceManagerTest {
         mgr.setSynchronousMode(true);
         mgr.setMaxEmulators(0);
         mgr.setMaxNullDevices(0);
-        mgr.setMaxTcpDevices(0);
         mgr.setMaxGceDevices(0);
         mgr.setMaxRemoteDevices(0);
         return mgr;
@@ -853,7 +857,7 @@ public class DeviceManagerTest {
     /** Test freeing a tcp device, it must return to an unavailable status */
     @Test
     public void testFreeDevice_tcpDevice() {
-        mDeviceSelections.setTcpDeviceRequested(true);
+        mDeviceSelections.setGceDeviceRequested(true);
         when(mMockTestDevice.handleAllocationEvent(DeviceEvent.FORCE_AVAILABLE))
                 .thenReturn(new DeviceEventResponse(DeviceAllocationState.Available, true));
         when(mMockIDevice.isEmulator()).thenReturn(Boolean.FALSE);
@@ -867,7 +871,7 @@ public class DeviceManagerTest {
                 .thenReturn(new DeviceEventResponse(DeviceAllocationState.Available, true));
 
         DeviceManager manager = createDeviceManagerNoInit();
-        manager.setMaxTcpDevices(1);
+        manager.setMaxGceDevices(1);
         manager.init(null, null, mMockDeviceFactory);
         IManagedTestDevice tcpDevice =
                 (IManagedTestDevice) manager.allocateDevice(mDeviceSelections, false);

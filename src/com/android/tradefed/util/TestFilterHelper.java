@@ -33,6 +33,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Helper class for filtering tests
@@ -220,6 +221,7 @@ public class TestFilterHelper {
     public boolean shouldRun(String packageName, Class<?> classObj, Method method) {
         String className = classObj.getName();
         String methodName = String.format("%s#%s", className, method.getName());
+
         if (!shouldRunFilter(packageName, className, methodName)) {
             return false;
         }
@@ -243,7 +245,28 @@ public class TestFilterHelper {
         return mIncludeFilters.isEmpty()
                 || mIncludeFilters.contains(methodName)
                 || mIncludeFilters.contains(className)
-                || mIncludeFilters.contains(packageName);
+                || mIncludeFilters.contains(packageName)
+                || includeFilterMatches(methodName);
+    }
+
+    private boolean includeFilterMatches(String methodName) {
+        for (var filter : mIncludeFilters) {
+            // if (methodName.contains(filter)) {
+            // The Whole method name must match so user must pass .* on ends.
+            // This is good so we don't accidentally two method when user
+            // passes 'testFoo':
+            //   #testFoo
+            //   #testFooAndBar
+            try {
+                if (methodName.matches(filter)) {
+                    return true;
+                }
+            } catch (PatternSyntaxException pse) {
+                // Ignore names that form a bad regex,
+                // like ones using a versioned parameter or module MyClass#myTest[foo-1.23]
+            }
+        }
+        return false;
     }
 
     /**
@@ -291,7 +314,8 @@ public class TestFilterHelper {
             return mIncludeFilters.isEmpty()
                     || mIncludeFilters.contains(methodName)
                     || mIncludeFilters.contains(className)
-                    || mIncludeFilters.contains(packageName);
+                    || mIncludeFilters.contains(packageName)
+                    || includeFilterMatches(methodName);
         } finally {
             StreamUtil.close(cl);
         }
@@ -313,6 +337,17 @@ public class TestFilterHelper {
         if (mExcludeFilters.contains(methodName)) {
             // Skip method because it was excluded
             return false;
+        }
+        for (String filter : mExcludeFilters) {
+            // The whole method name must match so user must pass .* on ends.
+            try {
+                if (methodName.matches(filter)) {
+                    return false;
+                }
+            } catch (PatternSyntaxException pse) {
+                // Ignore names that form a bad regex,
+                // like ones using a versioned parameter or module MyClass#myTest[foo-1.23]
+            }
         }
         return true;
     }

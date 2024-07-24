@@ -28,7 +28,7 @@ java_library_host {
     proto: {
         include_dirs: ["external/protobuf/src"],
         type: "full",
-    }
+    },
 }
 
 tradefed_java_library_host {
@@ -49,6 +49,7 @@ tradefed_java_library_host {
         ":SimplePassingTest",
         ":PassIgnoreAssumeTest",
         ":MultipleClassesTest",
+        ":IncludeFilterTest",
     ],
 
     javacflags: [

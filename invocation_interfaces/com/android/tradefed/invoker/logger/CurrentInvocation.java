@@ -70,6 +70,7 @@ public class CurrentInvocation {
         public IsolationGrade mIsModuleIsolated = IsolationGrade.FULLY_ISOLATED;
         public IsolationGrade mIsRunIsolated = IsolationGrade.FULLY_ISOLATED;
         public IInvocationContext mContext;
+        public IInvocationContext mModuleContext;
     }
 
     /**
@@ -81,6 +82,18 @@ public class CurrentInvocation {
 
     private static final Map<ThreadGroup, Map<InvocationLocal<?>, Optional<?>>> mInvocationLocals =
             new ConcurrentHashMap<>();
+
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
 
     /**
      * Add one key-value to be tracked at the invocation level.
@@ -102,6 +115,9 @@ public class CurrentInvocation {
     public static File getInfo(InvocationInfo key) {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
         synchronized (mPerGroupInfo) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
             if (mPerGroupInfo.get(group) == null) {
                 mPerGroupInfo.put(group, new InternalInvocationTracking());
             }
@@ -200,6 +216,31 @@ public class CurrentInvocation {
                 return null;
             }
             return mPerGroupInfo.get(group).mContext;
+        }
+    }
+
+    /** Sets the module {@link IInvocationContext} of the currently running module. */
+    public static void setModuleContext(IInvocationContext moduleContext) {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupInfo) {
+            if (mPerGroupInfo.get(group) == null) {
+                mPerGroupInfo.put(group, new InternalInvocationTracking());
+            }
+            mPerGroupInfo.get(group).mModuleContext = moduleContext;
+        }
+    }
+
+    /**
+     * Returns the module {@link IInvocationContext} for the current module. Can be null if out of
+     * scope of a module run.
+     */
+    public static @Nullable IInvocationContext getModuleContext() {
+        ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupInfo) {
+            if (mPerGroupInfo.get(group) == null) {
+                return null;
+            }
+            return mPerGroupInfo.get(group).mModuleContext;
         }
     }
 

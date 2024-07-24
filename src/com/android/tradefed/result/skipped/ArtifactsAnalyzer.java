@@ -18,10 +18,10 @@ package com.android.tradefed.result.skipped;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.build.content.ContentAnalysisResults;
 import com.android.tradefed.build.content.ImageContentAnalyzer;
 import com.android.tradefed.build.content.TestContentAnalyzer;
-import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.invoker.TestInformation;
@@ -47,18 +47,21 @@ public class ArtifactsAnalyzer {
     private final List<ContentAnalysisContext> mTestArtifactsAnalysisContent;
     private final List<String> mModulesDiscovered;
     private final List<String> mDependencyFiles;
+    private final AnalysisHeuristic mAnalysisLevel;
 
     public ArtifactsAnalyzer(
             TestInformation information,
             MultiMap<ITestDevice, ContentAnalysisContext> imageAnalysis,
             List<ContentAnalysisContext> testAnalysisContexts,
             List<String> moduleDiscovered,
-            List<String> dependencyFiles) {
+            List<String> dependencyFiles,
+            AnalysisHeuristic analysisLevel) {
         this.information = information;
         this.mImageAnalysis = imageAnalysis;
         this.mTestArtifactsAnalysisContent = testAnalysisContexts;
         this.mModulesDiscovered = moduleDiscovered;
         this.mDependencyFiles = dependencyFiles;
+        this.mAnalysisLevel = analysisLevel;
     }
 
     public BuildAnalysis analyzeArtifacts() {
@@ -101,6 +104,7 @@ public class ArtifactsAnalyzer {
                     } else {
                         CLog.d("%s", analysisResults.toString());
                         finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
+                        finalReport.addUnchangedModules(analysisResults.getUnchangedModules());
                     }
                 } catch (RuntimeException e) {
                     CLog.e(e);
@@ -134,7 +138,8 @@ public class ArtifactsAnalyzer {
                                         c ->
                                                 c.analysisMethod()
                                                         .equals(AnalysisMethod.DEVICE_IMAGE));
-                ImageContentAnalyzer analyze = new ImageContentAnalyzer(presubmit, context);
+                ImageContentAnalyzer analyze =
+                        new ImageContentAnalyzer(presubmit, context, mAnalysisLevel);
                 ContentAnalysisResults res = analyze.evaluate();
                 if (res == null) {
                     deviceImageChanged = true;

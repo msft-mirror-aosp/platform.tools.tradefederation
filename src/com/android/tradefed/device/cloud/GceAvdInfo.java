@@ -25,7 +25,6 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -38,6 +37,8 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -155,8 +156,10 @@ public class GceAvdInfo {
     private boolean mIsIpPreconfigured = false;
     private Integer mDeviceOffset = null;
     private String mInstanceUser = null;
-    // Skip collecting bugreport if set to true.
-    private boolean mSkipBugreportCollection = false;
+    // Skip collecting device log if set to true.
+    private boolean mSkipDeviceLogCollection = false;
+    private boolean mIsOxygenationDevice = false;
+    private String mOxygenationDeviceId = null;
 
     public static enum GceStatus {
         SUCCESS,
@@ -204,10 +207,22 @@ public class GceAvdInfo {
                 + ", mIsIpPreconfigured="
                 + mIsIpPreconfigured
                 + ", mBuildVars="
+                + ", mOxygenationDeviceId="
+                + mOxygenationDeviceId
+                + ", mIsOxygenationDevice="
+                + mIsOxygenationDevice
                 + mBuildVars.toString()
                 + ", mLogs="
                 + mLogs.toString()
                 + "]";
+    }
+
+    public boolean isOxygenationDevice() {
+        return mIsOxygenationDevice;
+    }
+
+    public String getOxygenationDeviceId() {
+        return mOxygenationDeviceId;
     }
 
     public String instanceName() {
@@ -287,12 +302,17 @@ public class GceAvdInfo {
         return new HashMap<String, String>(mBuildVars);
     }
 
-    public boolean getSkipBugreportCollection() {
-        return mSkipBugreportCollection;
+    public boolean getSkipDeviceLogCollection() {
+        return mSkipDeviceLogCollection;
     }
 
-    public void setSkipBugreportCollection(boolean skipBugreportCollection) {
-        mSkipBugreportCollection = skipBugreportCollection;
+    // TODO(b/329150949): Remove after lab update
+    public void setSkipBugreportCollection(boolean skipDeviceLogCollection) {
+        mSkipDeviceLogCollection = skipDeviceLogCollection;
+    }
+
+    public void setSkipDeviceLogCollection(boolean skipDeviceLogCollection) {
+        mSkipDeviceLogCollection = skipDeviceLogCollection;
     }
 
     /**
@@ -307,7 +327,7 @@ public class GceAvdInfo {
             File f, DeviceDescriptor descriptor, int remoteAdbPort) throws TargetSetupError {
         String data;
         try {
-            data = FileUtil.readStringFromFile(f);
+          data = Files.readString(f.toPath(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             CLog.e("Failed to read result file from GCE driver:");
             CLog.e(e);

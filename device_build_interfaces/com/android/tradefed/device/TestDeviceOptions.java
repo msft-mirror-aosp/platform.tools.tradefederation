@@ -89,6 +89,14 @@ public class TestDeviceOptions {
             "time in ms to wait for a device to boot into fastboot.")
     private int mFastbootTimeout = 1 * 60 * 1000;
 
+    @Option(
+            name = "fastboot-output-timeout",
+            isTimeVal = true,
+            description =
+                    "Maximum time to wait for a fastboot command to output something. If non"
+                            + " zero, timeout will be enforced.")
+    private long mFastbootOutputTimeout = 5 * 60 * 1000;
+
     @Option(name = "adb-command-timeout", description =
             "time to wait for an adb command.", isTimeVal = true)
     private long mAdbCommandTimeout = 2 * 60 * 1000;
@@ -129,6 +137,12 @@ public class TestDeviceOptions {
             description = "time in ms to wait for a device to become unavailable after adb root.",
             isTimeVal = true)
     private long mAdbRootUnavailableTimeout = 2 * 1000;
+
+    @Option(
+            name = "snapuserd-timeout",
+            description = "time to wait for a device to finish committing patches with snapuserd",
+            isTimeVal = true)
+    private long mSnapuserdTimeout = 10 * 60 * 1000;
 
     @Option(name = "conn-check-url",
             description = "default URL to be used for connectivity checks.")
@@ -388,7 +402,19 @@ public class TestDeviceOptions {
     @Option(
             name = "use-cmd-wifi",
             description = "Feature flag to switch the wifi connection to using cmd commands.")
-    private boolean mUseCmdWidi = false;
+    private boolean mUseCmdWifi = false;
+
+    @Option(name = "cmd-wifi-virtual", description = "Whether to use cmd wifi for virtual devices.")
+    private boolean mCmdWifiVirtual = true;
+
+    @Option(
+            name = "use-oxygenation-device",
+            description =
+                    "Whether or not to use virtual devices created by Oxygenation. This is under"
+                            + " development, and should be set on demand for running platform"
+                            + " tests against an oxygenation device.")
+    private boolean mUseOxygenationDevice = false;
+
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -453,6 +479,10 @@ public class TestDeviceOptions {
      */
     public int getFastbootTimeout() {
         return mFastbootTimeout;
+    }
+
+    public long getFastbootOutputTimeout() {
+        return mFastbootOutputTimeout;
     }
 
     /**
@@ -891,7 +921,15 @@ public class TestDeviceOptions {
 
     /** Returns whether or not to use cmd wifi commands instead of apk. */
     public boolean useCmdWifiCommands() {
-        return mUseCmdWidi;
+        return mUseCmdWifi;
+    }
+
+    public void setUseCmdWifi(boolean useCmdWifi) {
+        mUseCmdWifi = useCmdWifi;
+    }
+
+    public boolean isCmdWifiVirtual() {
+        return mCmdWifiVirtual;
     }
 
     public static String getCreateCommandByInstanceType(InstanceType type) {
@@ -982,6 +1020,23 @@ public class TestDeviceOptions {
 
     public String getDefaultNetworkType() {
         return mDefaultNetworkType;
+    }
+
+    public long getSnapuserdTimeout() {
+        return mSnapuserdTimeout;
+    }
+
+    /** Returns true if it's to lease oxygenation devices in OmniLab's infra. False otherwise. */
+    public boolean useOxygenationDevice() {
+        return mUseOxygenationDevice;
+    }
+
+    /** Helper to return true if the device is launched by cvd, false otherwise. */
+    public boolean useCvdCF() {
+        if (mUseOxygenationDevice || getExtraOxygenArgs().containsKey("use_cvd")) {
+            return true;
+        }
+        return false;
     }
 }
 

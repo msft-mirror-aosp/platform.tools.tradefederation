@@ -127,6 +127,27 @@ public class GTestTest {
         }
     }
 
+    /** Test run when no executable file is found should throw an exception. */
+    @Test
+    public void testRun_noExecutableFile() throws Exception {
+        OptionSetter setter = new OptionSetter(mGTest);
+        // turn on flag for throwing error
+        setter.setOptionValue("force-no-test-error", "true");
+        final String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
+        final String findCmd = String.format("find -L %s -type f -perm -u+r,u+x", nativeTestPath);
+        final String findCmdOut = "";
+
+        when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
+        when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
+
+        try {
+            mGTest.run(mTestInfo, mMockInvocationListener);
+            fail("an exception should have been thrown");
+        } catch (RuntimeException e) {
+            // expected
+        }
+    }
+
     /** Test the run method for a couple tests */
     @Test
     public void testRun() throws DeviceNotAvailableException {
@@ -135,7 +156,7 @@ public class GTestTest {
         final String test2 = "test2";
         final String testPath1 = String.format("%s/%s", nativeTestPath, test1);
         final String testPath2 = String.format("%s/%s", nativeTestPath, test2);
-        final String findCmd = String.format("find -L %s -type f -perm -a=x", nativeTestPath);
+        final String findCmd = String.format("find -L %s -type f -perm -u+r,u+x", nativeTestPath);
         final String findCmdOut = testPath1 + "\n" + testPath2;
 
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
@@ -167,7 +188,7 @@ public class GTestTest {
         final String testPath2 = String.format("%s/%s", nativeTestPath, test2);
         final String findCmd =
                 String.format(
-                        "find -L %s -type f -perm -a=x -not -path \"*/arm/*\" -not -path"
+                        "find -L %s -type f -perm -u+r,u+x -not -path \"*/arm/*\" -not -path"
                             + " \"*/x86/*\" -not -path \"*/x86_64/*\" -not -path \"*/mips/*\" -not"
                             + " -path \"*/mips64/*\" -not -path \"*/riscv64/*\"",
                         nativeTestPath);
@@ -197,7 +218,7 @@ public class GTestTest {
         final String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
         final String module = "test1";
         final String modulePath = String.format("%s/%s", nativeTestPath, module);
-        final String findCmd = String.format("find -L %s -type f -perm -a=x", modulePath);
+        final String findCmd = String.format("find -L %s -type f -perm -u+r,u+x", modulePath);
         final String findCmdOut = modulePath;
 
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, module, "not_a_test");
@@ -226,7 +247,7 @@ public class GTestTest {
     private void doTestFilter(String filterString) throws DeviceNotAvailableException {
         String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
         String testPath = nativeTestPath + "/test1";
-        String findCmd = String.format("find -L %s -type f -perm -a=x", nativeTestPath);
+        String findCmd = String.format("find -L %s -type f -perm -u+r,u+x", nativeTestPath);
         String findCmdOut = testPath;
         // configure the mock file system to have a single test
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, "test1");
@@ -315,7 +336,7 @@ public class GTestTest {
 
         String nativeTestPath = GTest.DEFAULT_NATIVETEST_PATH;
         String testPath = nativeTestPath + "/" + testName;
-        String findCmd = String.format("find -L %s -type f -perm -a=x", nativeTestPath);
+        String findCmd = String.format("find -L %s -type f -perm -u+r,u+x", nativeTestPath);
         String findCmdOut = testPath;
         when(mMockITestDevice.doesFileExist(nativeTestPath)).thenReturn(true);
         when(mMockITestDevice.executeShellCommand(findCmd)).thenReturn(findCmdOut);
@@ -408,7 +429,7 @@ public class GTestTest {
         final String test2 = "test2";
         final String testPath1 = String.format("%s/%s", nativeTestPath, test1);
         final String testPath2 = String.format("%s/%s", nativeTestPath, test2);
-        final String findCmd = String.format("find -L %s -type f -perm -a=x", nativeTestPath);
+        final String findCmd = String.format("find -L %s -type f -perm -u+r,u+x", nativeTestPath);
         final String findCmdOut = testPath1 + "\n" + testPath2;
 
         MockitoFileUtil.setMockDirContents(mMockITestDevice, nativeTestPath, test1, test2);

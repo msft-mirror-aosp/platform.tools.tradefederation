@@ -44,17 +44,17 @@ public class XmlFormattedGeneratorReporter extends FormattedGeneratorReporter {
         File resultReportFile = null;
         try {
             resultReportFile = generator.writeResults(resultHolder, resultDir);
-            // Once report is created, release memory from base class
-            for (String runName : getTestRunNames()) {
-                clearResultsForName(runName);
-            }
+            // Post-formatting step if something in particular needs to be done with the results.
+            postFormattingStep(resultDir, resultReportFile);
         } catch (IOException e) {
             CLog.e("Failed to generate the formatted report file:");
             CLog.e(e);
-            return;
+        } finally {
+            // Once report and checksum files are created, release memory from base class.
+            for (String runName : getTestRunNames()) {
+                clearResultsForName(runName);
+            }
         }
-        // Post-formatting step if something in particular needs to be done with the results.
-        postFormattingStep(resultDir, resultReportFile);
     }
 
     /**

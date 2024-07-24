@@ -633,30 +633,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                                 .getInvocationData()
                                 .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
             }
-            // Set experimental flags
-            if (config.getCommandOptions().isExperimentEnabled()) {
-                try {
-                    for (Map.Entry<String, String> entry :
-                            config.getCommandOptions().getExperimentalFlags().entrySet()) {
-                        String optionName = entry.getKey();
-                        String optionValue = entry.getValue();
-                        // Support map experiments, where optionValue is a key=value pair
-                        int equalsIndex = optionValue.indexOf('=');
-                        if (equalsIndex != -1) {
-                            String mapKey = optionValue.substring(0, equalsIndex);
-                            String mapValue = optionValue.substring(equalsIndex + 1);
-                            config.injectOptionValue(optionName, mapKey, mapValue);
-                        } else {
-                            config.injectOptionValue(optionName, optionValue);
-                        }
-                        mInvocationContext.addInvocationAttribute(
-                                "experiment:" + optionName, optionValue);
-                    }
-                } catch (ConfigurationException e) {
-                    CLog.e("Configuration Exception caught while setting experimental flags.");
-                    CLog.e(e);
-                }
-            }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
             instance.setClearcutClient(mClient);
@@ -679,6 +655,33 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         && !config.getCommandOptions().getInvocationData().isEmpty()) {
                     mInvocationContext.addInvocationAttributes(
                             config.getCommandOptions().getInvocationData());
+                }
+                // Set experimental flags
+                if (config.getCommandOptions().isExperimentEnabled()
+                        && !skipExperiment(config, mInvocationContext)) {
+                    for (Map.Entry<String, String> entry :
+                            config.getCommandOptions().getExperimentalFlags().entrySet()) {
+                        try {
+                            String optionName = entry.getKey();
+                            String optionValue = entry.getValue();
+                            // Support map experiments, where optionValue is a key=value pair
+                            int equalsIndex = optionValue.indexOf('=');
+                            if (equalsIndex != -1) {
+                                String mapKey = optionValue.substring(0, equalsIndex);
+                                String mapValue = optionValue.substring(equalsIndex + 1);
+                                config.injectOptionValue(optionName, mapKey, mapValue);
+                            } else {
+                                config.injectOptionValue(optionName, optionValue);
+                            }
+                            mInvocationContext.addInvocationAttribute(
+                                    "experiment:" + optionName, optionValue);
+                        } catch (ConfigurationException e) {
+                            CLog.e(
+                                    "Configuration Exception caught while setting experimental"
+                                            + " flags.");
+                            CLog.e(e);
+                        }
+                    }
                 }
                 mCmd.commandStarted();
                 long invocTimeout = config.getCommandOptions().getInvocationTimeout();
@@ -848,6 +851,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
 
             return Arrays.asList(listThreads).stream()
                     .filter(t -> !(t instanceof ForkJoinWorkerThread))
+                    .filter(t -> t != null && !t.getName().contains("-pool-task"))
                     .collect(Collectors.toList());
         }
 
@@ -978,6 +982,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     }
                 }
             }
+        }
+
+        private boolean skipExperiment(IConfiguration config, IInvocationContext context) {
+            // skip experiment for TRYBOT runs
+            return config.getCommandOptions().skipTrybotExperiment()
+                    && "TRYBOT".equals(context.getAttribute("trigger"));
         }
     }
 

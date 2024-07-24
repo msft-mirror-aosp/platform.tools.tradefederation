@@ -62,6 +62,7 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -314,10 +315,6 @@ public class MoblyBinaryHostTest
             return true;
         }
 
-        public boolean isMatched() {
-            return mMatched;
-        }
-
         @Override
         public String toString() {
             return mFilter;
@@ -368,34 +365,6 @@ public class MoblyBinaryHostTest
             //   - filtered in by an include filter, or no include filters at all.
             tests.add(testName);
             if (!excluded && (included || includeFilters.isEmpty())) includedTests.add(testName);
-        }
-        if (!includeFilters.isEmpty()) {
-            String invalidIncludeFilters =
-                    includeFilters.stream()
-                            .filter(filter -> !filter.isMatched())
-                            .map(filter -> filter.toString())
-                            .collect(Collectors.joining(", "));
-            if (!invalidIncludeFilters.isEmpty()) {
-                reportFailure(
-                        listener,
-                        runName,
-                        "Invalid include filters: [" + invalidIncludeFilters + "]");
-                return Optional.empty();
-            }
-        }
-        if (!excludeFilters.isEmpty()) {
-            String invalidExcludeFilters =
-                    excludeFilters.stream()
-                            .filter(filter -> !filter.isMatched())
-                            .map(filter -> filter.toString())
-                            .collect(Collectors.joining(", "));
-            if (!invalidExcludeFilters.isEmpty()) {
-                reportFailure(
-                        listener,
-                        runName,
-                        "Invalid exclude filters: [" + invalidExcludeFilters + "]");
-                return Optional.empty();
-            }
         }
         return Optional.of(new Pair<>(tests, includedTests));
     }
@@ -452,14 +421,21 @@ public class MoblyBinaryHostTest
         CLog.d("Included tests: %s", includedTests);
 
         // Split test across shards.
-        int chunkSize = includedTests.size() / totalShards;
-        if (includedTests.size() % totalShards > 0) chunkSize++;
-        int startIndex = shardIndex * chunkSize;
-        int endIndex =
-                (totalShards == 1 || shardIndex == totalShards - 1)
-                        ? includedTests.size()
-                        : (shardIndex + 1) * chunkSize;
-        includedTests = includedTests.subList(startIndex, endIndex);
+        int totalTests = includedTests.size();
+        int chunkSize = totalTests / totalShards;
+        if (totalTests % totalShards > 0) chunkSize++;
+        // Ensure shards beyond the number of available tests get no tests
+        if (shardIndex >= totalTests) {
+            includedTests = Collections.emptyList();
+        } else {
+            int startIndex = shardIndex * chunkSize;
+            int endIndex = Math.min((shardIndex + 1) * chunkSize, totalTests);
+            if (startIndex >= totalTests) {
+                startIndex = Math.max(0, totalTests - 1);
+                endIndex = totalTests;
+            }
+            includedTests = includedTests.subList(startIndex, endIndex);
+        }
         int testCount = includedTests.size();
 
         // Start run.
@@ -768,6 +744,9 @@ public class MoblyBinaryHostTest
                     }
                     if (cleanName.contains("btsnoop")) {
                         type = LogDataType.BT_SNOOP_LOG;
+                    }
+                    if (cleanName.contains("mp4")) {
+                        type = LogDataType.MP4;
                     }
                     listener.testLog(cleanName, type, dataStream);
                 }

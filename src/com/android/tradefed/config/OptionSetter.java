@@ -500,7 +500,12 @@ public class OptionSetter {
                                 "Unable to add value to map field '%s'. Key is null.",
                                 field.getName()));
                     }
-                    map.put(key, value);
+                    Object o = map.put(key, value);
+                    if (o != null) {
+                        CLog.d(
+                                "Overridden option value '%s' in map for option '%s' and key '%s'",
+                                o, optionName, key);
+                    }
                 }
             } else if (MultiMap.class.isAssignableFrom(field.getType())) {
                 // TODO: see if we can combine this with Map logic above

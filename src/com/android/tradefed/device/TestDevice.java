@@ -45,6 +45,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.KeyguardControllerState;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.TimeUtil;
 import com.android.tradefed.util.ZipUtil2;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -61,6 +62,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.io.Reader;
 import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -94,7 +96,7 @@ public class TestDevice extends NativeDevice {
     static final String DISMISS_DIALOG_CMD = "input keyevent 23";
 
     static final String DISMISS_DIALOG_BROADCAST =
-            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOG";
+            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS";
     // Collapse notifications
     private static final String COLLAPSE_STATUS_BAR = "cmd statusbar collapse";
 
@@ -173,7 +175,7 @@ public class TestDevice extends NativeDevice {
     /** Contains a set of Microdroid instances running in this TestDevice, and their resources. */
     private Map<Process, MicrodroidTracker> mStartedMicrodroids = new HashMap<>();
 
-    private static final String TEST_ROOT = "/data/local/tmp/virt/";
+    private static final String TEST_ROOT = "/data/local/tmp/virt/tradefed/";
     private static final String VIRT_APEX = "/apex/com.android.virt/";
     private static final String INSTANCE_ID_FILE = "instance_id";
     private static final String INSTANCE_IMG = "instance.img";
@@ -206,6 +208,10 @@ public class TestDevice extends NativeDevice {
         ExecutorService executor;
         String cid;
     }
+
+    private boolean mWaitForSnapuserd = false;
+    private SnapuserdWaitPhase mWaitPhase = null;
+    private long mSnapuserNotificationTimestamp = 0L;
 
     /**
      * @param device
@@ -2659,6 +2665,57 @@ public class TestDevice extends NativeDevice {
     }
 
     @Override
+    public void notifySnapuserd(SnapuserdWaitPhase waitPhase) {
+        mWaitForSnapuserd = true;
+        mSnapuserNotificationTimestamp = System.currentTimeMillis();
+        mWaitPhase = waitPhase;
+        CLog.d("Notified to wait for snapuserd at %s", waitPhase);
+    }
+
+    @Override
+    public void waitForSnapuserd(SnapuserdWaitPhase currentPhase)
+            throws DeviceNotAvailableException {
+        if (!mWaitForSnapuserd) {
+            CLog.d("No snapuserd notification in progress for %s", currentPhase);
+            return;
+        }
+        // At releasing or at the reported phase, block for snapuserd.
+        if (!SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING.equals(currentPhase)
+                && !currentPhase.equals(mWaitPhase)) {
+            return;
+        }
+        long startTime = System.currentTimeMillis();
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_snapuserd")) {
+            long maxTimeout = getOptions().getSnapuserdTimeout();
+            while (System.currentTimeMillis() - startTime < maxTimeout) {
+                CommandResult psOutput = executeShellV2Command("ps -ef | grep snapuserd");
+                CLog.d("stdout: %s, stderr: %s", psOutput.getStdout(), psOutput.getStderr());
+                if (psOutput.getStdout().contains("snapuserd -")) {
+                    RunUtil.getDefault().sleep(2500);
+                    CLog.d("waiting for snapuserd to complete.");
+                } else {
+                    return;
+                }
+            }
+            throw new DeviceRuntimeException(
+                    String.format(
+                            "snapuserd didn't complete in %s",
+                            TimeUtil.formatElapsedTime(maxTimeout)),
+                    InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+        } finally {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME,
+                    System.currentTimeMillis() - startTime);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INCREMENTAL_SNAPUSERD_WRITE_TIME,
+                    System.currentTimeMillis() - mSnapuserNotificationTimestamp);
+            mWaitForSnapuserd = false;
+            mSnapuserNotificationTimestamp = 0L;
+            mWaitPhase = null;
+        }
+    }
+
+    @Override
     public DeviceFoldableState getCurrentFoldableState() throws DeviceNotAvailableException {
         if (getIDevice() instanceof StubDevice) {
             return null;
@@ -2767,8 +2824,9 @@ public class TestDevice extends NativeDevice {
     }
 
     private boolean isVirtFeatureEnabled(String feature) throws DeviceNotAvailableException {
-        String result = executeShellCommand(VIRT_APEX + "bin/vm check-feature-enabled " + feature);
-        return result.contains("enabled");
+        CommandResult result =
+                executeShellV2Command(VIRT_APEX + "bin/vm check-feature-enabled " + feature);
+        return result.getExitCode() == 0 && result.getStdout().contains("is enabled");
     }
 
     /**
@@ -2797,6 +2855,7 @@ public class TestDevice extends NativeDevice {
                     "mkdir -p " + TEST_ROOT + " has failed: " + result,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
+
         for (File localFile : builder.mBootFiles.keySet()) {
             String remoteFileName = builder.mBootFiles.get(localFile);
             pushFile(localFile, TEST_ROOT + remoteFileName);
@@ -2817,8 +2876,6 @@ public class TestDevice extends NativeDevice {
                 TEST_ROOT
                         + (builder.mApkFile != null ? builder.mApkFile.getName() : "NULL")
                         + ".idsig";
-        final String instanceIdFile = TEST_ROOT + INSTANCE_ID_FILE;
-        final String instanceImg = TEST_ROOT + INSTANCE_IMG;
         final String consolePath = TEST_ROOT + "console.txt";
         final String logPath = TEST_ROOT + "log.txt";
         final String debugFlag =
@@ -2833,6 +2890,7 @@ public class TestDevice extends NativeDevice {
                         ? ""
                         : "--cpu-topology " + builder.mCpuTopology;
         final String gkiFlag = Strings.isNullOrEmpty(builder.mGki) ? "" : "--gki " + builder.mGki;
+        final String hugePagesFlag = builder.mHugePages ? "--hugepages" : "";
 
         List<String> args =
                 new ArrayList<>(
@@ -2851,14 +2909,15 @@ public class TestDevice extends NativeDevice {
                                 cpuAffinityFlag,
                                 cpuTopologyFlag,
                                 gkiFlag,
+                                hugePagesFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
-                                instanceImg,
+                                builder.mInstanceImg,
                                 "--config-path",
                                 builder.mConfigPath));
         if (isVirtFeatureEnabled("com.android.kvm.LLPVM_CHANGES")) {
             args.add("--instance-id-file");
-            args.add(instanceIdFile);
+            args.add(builder.mInstanceIdFile);
         }
         if (builder.mProtectedVm) {
             args.add("--protected");
@@ -2873,32 +2932,22 @@ public class TestDevice extends NativeDevice {
         }
 
         // Run the VM
-        String cid;
-        Process process;
+        String cid = null;
+        Process process = null;
         try {
             PipedInputStream pipe = new PipedInputStream();
             process = getRunUtil().runCmdInBackground(args, new PipedOutputStream(pipe));
-            BufferedReader stdout = new BufferedReader(new InputStreamReader(pipe));
-
-            // Retrieve the CID from the vm tool output
-            Pattern pattern = Pattern.compile("with CID (\\d+)");
-            while ((cid = stdout.readLine()) != null) {
-                Matcher matcher = pattern.matcher(cid);
-                if (matcher.find()) {
-                    cid = matcher.group(1);
-                    break;
-                }
-            }
-            if (cid == null) {
-                throw new DeviceRuntimeException(
-                        "Failed to find the CID of the VM",
-                        DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
-            }
+            cid = getCidFromVmRunOutput(new InputStreamReader(pipe));
         } catch (IOException ex) {
             throw new DeviceRuntimeException(
-                    "IOException trying to start a VM",
+                    "Exception trying to start a VM",
                     ex,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        } finally {
+            if (cid == null) {
+                // Don't leak the process on failure
+                process.destroyForcibly();
+            }
         }
 
         // Redirect log.txt to logd using logwrapper
@@ -2952,6 +3001,40 @@ public class TestDevice extends NativeDevice {
         tracker.cid = cid;
         mStartedMicrodroids.put(process, tracker);
         return microdroid;
+    }
+
+    private static String getCidFromVmRunOutput(Reader outputReader) {
+        BufferedReader stdout = new BufferedReader(outputReader);
+
+        StringBuilder output = new StringBuilder();
+
+        // Retrieve the CID from the vm tool output
+        String cid = null;
+        Pattern pattern = Pattern.compile("with CID (\\d+)");
+        String line;
+        try {
+            while ((line = stdout.readLine()) != null) {
+                output.append(line);
+                output.append(' ');
+
+                Matcher matcher = pattern.matcher(line);
+                if (matcher.find()) {
+                    cid = matcher.group(1);
+                    break;
+                }
+            }
+        } catch (IOException ex) {
+            throw new DeviceRuntimeException(
+                    "Failed to find the CID of the VM: " + output,
+                    ex,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        if (cid == null) {
+            throw new DeviceRuntimeException(
+                    "Failed to find the CID of the VM: " + output,
+                    DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
+        }
+        return cid;
     }
 
     /** Find an unused port and forward microdroid's adb connection. Returns the port number. */
@@ -3018,7 +3101,7 @@ public class TestDevice extends NativeDevice {
                 .runTimedCmd(10000, deviceManager.getAdbPath(), "-s", serial, "forward", from, to);
 
         boolean disconnected = true;
-        while (disconnected) {
+        while (disconnected && timeoutMillis >= 0) {
             elapsed = System.currentTimeMillis() - start;
             timeoutMillis -= elapsed;
             start = System.currentTimeMillis();
@@ -3051,14 +3134,15 @@ public class TestDevice extends NativeDevice {
 
         elapsed = System.currentTimeMillis() - start;
         timeoutMillis -= elapsed;
-        getRunUtil()
-                .runTimedCmd(
-                        timeoutMillis,
-                        deviceManager.getAdbPath(),
-                        "-s",
-                        microdroidSerial,
-                        "wait-for-device");
-
+        if (timeoutMillis > 0) {
+            getRunUtil()
+                    .runTimedCmd(
+                            timeoutMillis,
+                            deviceManager.getAdbPath(),
+                            "-s",
+                            microdroidSerial,
+                            "wait-for-device");
+        }
         boolean dataAvailable = false;
         while (!dataAvailable && timeoutMillis >= 0) {
             elapsed = System.currentTimeMillis() - start;
@@ -3170,6 +3254,9 @@ public class TestDevice extends NativeDevice {
         private long mAdbConnectTimeoutMs;
         private List<String> mAssignedDevices;
         private String mGki;
+        private String mInstanceIdFile; // Path to instance_id file
+        private String mInstanceImg; // Path to instance_img file
+        private boolean mHugePages;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3186,6 +3273,8 @@ public class TestDevice extends NativeDevice {
             mBootFiles = new LinkedHashMap<>();
             mAdbConnectTimeoutMs = MICRODROID_DEFAULT_ADB_CONNECT_TIMEOUT_MINUTES * 60 * 1000;
             mAssignedDevices = new ArrayList<>();
+            mInstanceIdFile = null;
+            mInstanceImg = null;
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -3322,6 +3411,36 @@ public class TestDevice extends NativeDevice {
             return this;
         }
 
+        /**
+         * Sets the instance_id path.
+         *
+         * @param instanceIdPath: Path to the instanceId
+         */
+        public MicrodroidBuilder instanceIdFile(String instanceIdPath) {
+            mInstanceIdFile = instanceIdPath;
+            return this;
+        }
+
+        /**
+         * Sets instance.img file path.
+         *
+         * @param instanceIdPath: Path to the instanceId
+         */
+        public MicrodroidBuilder instanceImgFile(String instanceImgPath) {
+            mInstanceImg = instanceImgPath;
+            return this;
+        }
+
+        /**
+         * Sets whether to hint the kernel for transparent hugepages.
+         *
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder hugePages(boolean hintHugePages) {
+            mHugePages = hintHugePages;
+            return this;
+        }
+
         /** Starts a Micrdroid TestDevice on the given TestDevice. */
         public ITestDevice build(@Nonnull TestDevice device) throws DeviceNotAvailableException {
             if (mNumCpus != null) {
@@ -3348,6 +3467,12 @@ public class TestDevice extends NativeDevice {
                     throw new IllegalArgumentException(
                             "CPU affinity [" + mCpuAffinity + "]" + " is invalid");
                 }
+            }
+            if (mInstanceIdFile == null) {
+                mInstanceIdFile = TEST_ROOT + INSTANCE_ID_FILE;
+            }
+            if (mInstanceImg == null) {
+                mInstanceImg = TEST_ROOT + INSTANCE_IMG;
             }
 
             return device.startMicrodroid(this);

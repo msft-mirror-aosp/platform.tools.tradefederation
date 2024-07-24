@@ -15,15 +15,14 @@
  */
 package com.android.tradefed.invoker.shard;
 
-import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.ITestSuite;
+import com.android.tradefed.util.RequestUtil;
 
 import com.google.internal.android.engprod.v1.ProvideTestTargetRequest;
 import com.google.internal.android.engprod.v1.ProvideTestTargetResponse;
@@ -36,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
 /** Implementation of a pool of remote work queued tests */
@@ -93,14 +93,8 @@ public class RemoteDynamicPool implements ITestsPool {
 
             long startTime = mClock.millis();
 
-            RequestTestTargetResponse response;
-
-            try {
-                response = mClient.requestTestTarget(request);
-            } catch (Throwable e) {
-                throw new HarnessRuntimeException(
-                        e.getMessage(), InfraErrorIdentifier.SCHEDULING_ERROR);
-            }
+            RequestTestTargetResponse response =
+                    RequestUtil.requestWithBackoff(new RequestCallable(mClient, request));
 
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DYNAMIC_SHARDING_REQUEST_LATENCY,
@@ -132,5 +126,20 @@ public class RemoteDynamicPool implements ITestsPool {
     @Override
     public ITokenRequest pollRejectedTokenModule() {
         return null;
+    }
+
+    protected class RequestCallable implements Callable<RequestTestTargetResponse> {
+        IDynamicShardingClient mCallableClient;
+        RequestTestTargetRequest mCallableRequest;
+
+        public RequestCallable(IDynamicShardingClient client, RequestTestTargetRequest request) {
+            this.mCallableClient = client;
+            this.mCallableRequest = request;
+        }
+
+        @Override
+        public RequestTestTargetResponse call() throws Exception {
+            return mCallableClient.requestTestTarget(mCallableRequest);
+        }
     }
 }

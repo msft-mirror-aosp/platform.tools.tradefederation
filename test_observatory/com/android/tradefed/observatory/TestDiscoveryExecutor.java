@@ -20,7 +20,6 @@ import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.DdmPreferences;
 import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
@@ -30,6 +29,7 @@ import com.android.tradefed.invoker.tracing.ActiveTrace;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.LogRegistry;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
@@ -51,6 +51,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -377,20 +378,47 @@ public class TestDiscoveryExecutor {
         }
         CLog.d("Seaching parent configs.");
         try (CloseableTraceScope ignored = new CloseableTraceScope("find parent configs")) {
-            moduleNames.parallelStream()
-                    .forEach(
-                            name -> {
-                                File config =
-                                        FileUtil.findFile(new File(rootDirPath), name + ".config");
-                                if (config != null) {
-                                    if (!config.getParentFile().getName().equals(name)) {
-                                        CLog.d(
-                                                "Parent: %s being added for the extra configs",
-                                                config.getParentFile().getName());
-                                        parentModules.add(config.getParentFile().getName());
+            Set<File> testCasesDirs = new LinkedHashSet<File>();
+            if (new File(rootDirPath, "host/testcases/").exists()) {
+                testCasesDirs.add(new File(rootDirPath, "host/testcases/"));
+            }
+            if (new File(rootDirPath, "target/testcases/").exists()) {
+                testCasesDirs.add(new File(rootDirPath, "target/testcases/"));
+            }
+            CLog.d("testcases folders: %s", testCasesDirs);
+            Set<String> moduleDirs = Collections.synchronizedSet(new HashSet<>());
+            try (CloseableTraceScope listDirs = new CloseableTraceScope("list_module_dirs")) {
+                testCasesDirs.parallelStream()
+                        .forEach(
+                                f -> {
+                                    String[] modules = f.list();
+                                    if (modules != null) {
+                                        moduleDirs.addAll(Arrays.asList(modules));
                                     }
-                                }
-                            });
+                                });
+            }
+            Set<String> moduleNameMismatch =
+                    moduleNames.parallelStream()
+                            .filter(m -> !moduleDirs.contains(m))
+                            .collect(Collectors.toSet());
+            // Only search the mismatch
+            try (CloseableTraceScope listDirs = new CloseableTraceScope("search_mismatch")) {
+                moduleNameMismatch.parallelStream()
+                        .forEach(
+                                name -> {
+                                    File config =
+                                            FileUtil.findFile(
+                                                    new File(rootDirPath), name + ".config");
+                                    if (config != null) {
+                                        if (!config.getParentFile().getName().equals(name)) {
+                                            CLog.d(
+                                                    "Parent: %s being added for the extra configs",
+                                                    config.getParentFile().getName());
+                                            parentModules.add(config.getParentFile().getName());
+                                        }
+                                    }
+                                });
+            }
         }
         CLog.d("Done searching parent configs.");
         return parentModules;

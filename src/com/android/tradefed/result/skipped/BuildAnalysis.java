@@ -15,7 +15,9 @@
  */
 package com.android.tradefed.result.skipped;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /** Represents the results of a single build analysis. */
 public class BuildAnalysis {
@@ -23,6 +25,7 @@ public class BuildAnalysis {
     private final boolean mDeviceImageChanged;
     private final boolean mHasTestsArtifacts;
     private boolean mHasChangesInTests = false;
+    private Set<String> mUnchangedModules = new HashSet<>();
 
     public BuildAnalysis(boolean deviceImageChanged, boolean hasTestsArtifacts) {
         this.mDeviceImageChanged = deviceImageChanged;
@@ -43,6 +46,14 @@ public class BuildAnalysis {
 
     public void setChangesInTests(boolean hasChanges) {
         mHasChangesInTests = hasChanges;
+    }
+
+    public void addUnchangedModules(Set<String> unchangedModules) {
+        mUnchangedModules.addAll(unchangedModules);
+    }
+
+    public Set<String> getUnchangedModules() {
+        return mUnchangedModules;
     }
 
     @Override

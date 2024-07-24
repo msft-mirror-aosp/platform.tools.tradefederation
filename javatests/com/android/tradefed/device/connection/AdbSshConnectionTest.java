@@ -33,8 +33,10 @@ import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.TestDeviceOptions;
+import com.android.tradefed.device.cloud.AbstractTunnelMonitor;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
+import com.android.tradefed.device.cloud.GceLHPTunnelMonitor;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
 import com.android.tradefed.device.connection.DefaultConnection.ConnectionBuilder;
@@ -81,6 +83,9 @@ public class AdbSshConnectionTest {
     @Mock ITestLogger mMockLogger;
     @Mock GceManager mGceHandler;
     @Mock GceSshTunnelMonitor mGceSshMonitor;
+    @Mock ITestDevice mMockTestDevice;
+    @Mock GceAvdInfo mMockAvdInfo;
+    @Mock File mMockFile;
 
     public static interface TestableConfigurableVirtualDevice
             extends IDevice, IConfigurableVirtualDevice {}
@@ -96,6 +101,7 @@ public class AdbSshConnectionTest {
 
     @Before
     public void setUp() throws Exception {
+        mMockFile = Mockito.mock(File.class);
         MockitoAnnotations.initMocks(this);
         mOptions = new TestDeviceOptions();
         OptionSetter setter = new OptionSetter(mOptions);
@@ -115,7 +121,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
                 };
@@ -466,16 +472,16 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    void createGceSshMonitor(
+                    void createGceTunnelMonitor(
                             ITestDevice device,
                             IBuildInfo buildInfo,
-                            HostAndPort hostAndPort,
+                            GceAvdInfo gceAvdInfo,
                             TestDeviceOptions deviceOptions) {
                         // Ignore
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
 
@@ -546,7 +552,6 @@ public class AdbSshConnectionTest {
         String snapshotId = "snapshot_user1";
         OptionSetter setter = new OptionSetter(mOptions);
         setter.setOptionValue("instance-user", instanceUser);
-        String cvdBin = String.format("/home/%s/bin/cvd", instanceUser);
         String snapshotPath = String.format("/tmp/%s/snapshots/%s", instanceUser, snapshotId);
         String snapshotCommandPath = String.format("--snapshot_path=%s", snapshotPath);
         String restoreSnapshotCommandPath = String.format("--snapshot_path=%s", snapshotPath);
@@ -568,7 +573,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
 
@@ -605,30 +610,12 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("suspend")))
-                .thenReturn(successCmdResult);
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(stdout),
-                        Mockito.eq(stderr),
-                        Mockito.eq("ssh"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("LogLevel=ERROR"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("UserKnownHostsFile=/dev/null"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("StrictHostKeyChecking=no"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("ServerAliveInterval=10"),
-                        Mockito.eq("-i"),
-                        Mockito.any(),
-                        Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("snapshot_take"),
+                        Mockito.eq(String.format("/home/%s/bin/snapshot_util_cvd", instanceUser)),
+                        Mockito.eq("--subcmd=snapshot_take"),
+                        Mockito.eq("--force"),
+                        Mockito.eq("--auto_suspend"),
                         Mockito.eq(snapshotCommandPath)))
                 .thenReturn(successCmdResult);
-        // Make sure the instance resumes
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
                         Mockito.eq(stdout),
@@ -645,8 +632,7 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("resume")))
+                        Mockito.eq(String.format("/home/%s/bin/stop_cvd", instanceUser))))
                 .thenReturn(successCmdResult);
         when(mMockRunUtil.runTimedCmd(
                         Mockito.anyLong(),
@@ -664,49 +650,8 @@ public class AdbSshConnectionTest {
                         Mockito.eq("-i"),
                         Mockito.any(),
                         Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("stop")))
-                .thenReturn(successCmdResult);
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(stdout),
-                        Mockito.eq(stderr),
-                        Mockito.eq("ssh"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("LogLevel=ERROR"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("UserKnownHostsFile=/dev/null"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("StrictHostKeyChecking=no"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("ServerAliveInterval=10"),
-                        Mockito.eq("-i"),
-                        Mockito.any(),
-                        Mockito.eq(avdConnectHost),
-                        Mockito.eq(cvdBin),
-                        Mockito.eq("start"),
+                        Mockito.eq(String.format("/home/%s/bin/launch_cvd", instanceUser)),
                         Mockito.eq(restoreSnapshotCommandPath)))
-                .thenReturn(successCmdResult);
-        // Make sure the instance resumes
-        when(mMockRunUtil.runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq(stdout),
-                        Mockito.eq(stderr),
-                        Mockito.eq("ssh"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("LogLevel=ERROR"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("UserKnownHostsFile=/dev/null"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("StrictHostKeyChecking=no"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("ServerAliveInterval=10"),
-                        Mockito.eq("-i"),
-                        Mockito.any(),
-                        Mockito.eq(avdConnectHost),
-                        Mockito.eq("rm"),
-                        Mockito.eq("-rf"),
-                        Mockito.eq(snapshotPath)))
                 .thenReturn(successCmdResult);
         CommandResult adbResult = new CommandResult();
         adbResult.setStatus(CommandStatus.SUCCESS);
@@ -752,7 +697,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
                 };
@@ -786,7 +731,7 @@ public class AdbSshConnectionTest {
                     }
 
                     @Override
-                    public GceSshTunnelMonitor getGceSshMonitor() {
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
                         return mGceSshMonitor;
                     }
                 };
@@ -800,5 +745,39 @@ public class AdbSshConnectionTest {
         } catch (TargetSetupError expected) {
             // expected
         }
+    }
+
+    /** Test LHP tunnel monitor will be initialized when use-oxygenation-device is True */
+    @Test
+    public void testCreateGceTunnelMonitor_LHPTunnel() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger));
+        mOptions = new TestDeviceOptions();
+        mOptions.setAvdDriverBinary(mMockFile);
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("use-oxygenation-device", "true");
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        mConnection.createGceTunnelMonitor(mMockDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
+        assertTrue(mConnection.getGceTunnelMonitor() instanceof GceLHPTunnelMonitor);
+    }
+
+    /** Test SSH tunnel monitor will be initialized when use-oxygenation-device is False */
+    @Test
+    public void testCreateGceTunnelMonitor_SSHTunnel() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger));
+        mOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("use-oxygenation-device", "false");
+        mConnection.createGceTunnelMonitor(mMockTestDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
+        assertTrue(mConnection.getGceTunnelMonitor() instanceof GceSshTunnelMonitor);
     }
 }

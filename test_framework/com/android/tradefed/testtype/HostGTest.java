@@ -16,6 +16,8 @@
 
 package com.android.tradefed.testtype;
 
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
+
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.DeviceBuildInfo;
@@ -26,6 +28,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.TestInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -35,6 +38,8 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.util.CacheClientFactory;
+import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -42,6 +47,8 @@ import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ShellOutputReceiverStream;
 import com.android.tradefed.util.TestRunnerUtil;
+
+import com.google.common.base.Strings;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -69,6 +76,11 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             name = "use-updated-shard-retry",
             description = "Whether to use the updated logic for retry with sharding.")
     private boolean mUseUpdatedShardRetry = true;
+
+    @Option(
+            name = "enable-cache",
+            description = "Used to enable/disable caching for specific modules.")
+    private boolean mEnableCache = false;
 
     /** Whether any incomplete test is found in the current run. */
     private boolean mIncompleteTestFound = false;
@@ -130,10 +142,16 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         // Set the working dir to the folder containing the binary to execute from the same path.
         runUtil.setWorkingDir(gtestFile.getParentFile());
 
+        String instanceName =
+                mEnableCache
+                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
+                        : null;
+
         String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
-        paths.add(System.getenv("PATH"));
-        paths.add(gtestFile.getParentFile().getAbsolutePath());
+        paths.add("/usr/bin");
+        paths.add("/usr/sbin");
+        paths.add(".");
         String path = paths.stream().distinct().collect(Collectors.joining(separator));
         CLog.d("Using updated $PATH: %s", path);
         runUtil.setEnvVariablePriority(EnvPriority.SET);
@@ -143,6 +161,18 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(gtestFile);
         if (ldLibraryPath != null) {
             runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
+        }
+
+        // Set LLVM_PROFILE_FILE for coverage.
+        File coverageDir = null;
+        if (isClangCoverageEnabled()) {
+            try {
+                coverageDir = FileUtil.createTempDir("clang");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            runUtil.setEnvVariable(
+                    "LLVM_PROFILE_FILE", coverageDir.getAbsolutePath() + "/clang-%m.profraw");
         }
 
         // If there's a shell output receiver to pass results along to, then
@@ -156,7 +186,17 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                             String.format("%s-output", gtestFile.getName()), ".txt");
             try (ShellOutputReceiverStream stream =
                     new ShellOutputReceiverStream(receiver, new FileOutputStream(stdout))) {
-                result = runUtil.runTimedCmd(timeoutMs, stream, null, cmds);
+                result =
+                        runUtil.runTimedCmdWithOutputMonitor(
+                                timeoutMs,
+                                0,
+                                stream,
+                                null,
+                                Strings.isNullOrEmpty(instanceName)
+                                        ? null
+                                        : CacheClientFactory.createCacheClient(
+                                                CurrentInvocation.getWorkFolder(), instanceName),
+                                cmds);
             } catch (IOException e) {
                 throw new RuntimeException(
                         "Should never happen, ShellOutputReceiverStream.close is a no-op", e);
@@ -186,6 +226,27 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                 }
             }
             FileUtil.deleteFile(stdout);
+
+            if (isClangCoverageEnabled()) {
+                File profdata = null;
+                try {
+                    Set<String> profraws = FileUtil.findFiles(coverageDir, ".*\\.profraw");
+                    ClangProfileIndexer indexer =
+                            new ClangProfileIndexer(
+                                    getConfiguration().getCoverageOptions().getLlvmProfdataPath());
+                    profdata = FileUtil.createTempFile(gtestFile.getName(), ".profdata");
+                    indexer.index(profraws, profdata);
+
+                    try (FileInputStreamSource source = new FileInputStreamSource(profdata, true)) {
+                        logger.testLog(gtestFile.getName(), LogDataType.CLANG_COVERAGE, source);
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    FileUtil.deleteFile(profdata);
+                    FileUtil.recursiveDelete(coverageDir);
+                }
+            }
         }
         return result;
     }
@@ -420,5 +481,11 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             }
         }
         return new LinkedHashSet(seen.values());
+    }
+
+    /** Returns whether Clang code coverage is enabled. */
+    private boolean isClangCoverageEnabled() {
+        return getConfiguration().getCoverageOptions().isCoverageEnabled()
+                && getConfiguration().getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 }

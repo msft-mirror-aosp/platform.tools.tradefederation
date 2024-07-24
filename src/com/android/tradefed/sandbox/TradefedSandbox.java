@@ -63,6 +63,7 @@ import com.android.tradefed.util.SubprocessExceptionParser;
 import com.android.tradefed.util.SubprocessTestResultsParser;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.keystore.IKeyStoreClient;
+import com.android.tradefed.util.keystore.KeyStoreException;
 
 import com.google.common.base.Joiner;
 
@@ -614,12 +615,16 @@ public class TradefedSandbox implements ISandbox {
             }
             tmpParentConfig = FileUtil.createTempFile("parent-config", ".xml", mSandboxTmpFolder);
             pw = new PrintWriter(tmpParentConfig);
-            parentConfig = ConfigurationFactory.getInstance().createConfigurationFromArgs(args);
+            IKeyStoreClient keyStoreClient =
+                    GlobalConfiguration.getInstance().getKeyStoreFactory().createKeyStoreClient();
+            parentConfig =
+                    ConfigurationFactory.getInstance()
+                            .createConfigurationFromArgs(args, null, keyStoreClient);
             // Do not print deprecated options to avoid compatibility issues, and do not print
             // unchanged options.
             parentConfig.dumpXml(pw, new ArrayList<>(), false, false);
             return tmpParentConfig;
-        } catch (ConfigurationException | IOException e) {
+        } catch (ConfigurationException | IOException | KeyStoreException e) {
             CLog.e("Parent doesn't understand the command either:");
             CLog.e(e);
             FileUtil.deleteFile(tmpParentConfig);

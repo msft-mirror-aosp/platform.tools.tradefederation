@@ -61,6 +61,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.testtype.suite.GranularRetriableTestWrapperTest.CalledMetricCollector;
 import com.android.tradefed.util.ListInstrumentationParser;
@@ -321,6 +322,34 @@ public class InstrumentationTestTest {
         assertThat(runner.getRunOptions()).contains("--instrument-sdk-in-sandbox");
     }
 
+    /** Ensure isolated-Tests is turned off when run in dry-mode */
+    @Test
+    public void testRun_runInIsolatedTestsAndDryModeTurnsOffIsolatedTests() throws Exception {
+        mInstrumentationTest.setOrchestrator(true);
+        mInstrumentationTest.setCollectTestsOnly(true);
+        mInstrumentationTest.run(mTestInfo, mMockListener);
+        assertThat(mInstrumentationTest.isOrchestrator()).isFalse();
+    }
+
+    /** Ensure runOptions are comma-delimited to be compatible with the orchestrator */
+    @Test
+    public void testRun_runOptionsAreCommaDelimitedWhenRunInIsolatedTests() throws Exception {
+        doReturn(31).when(mMockTestDevice).getApiLevel();
+        mInstrumentationTest.setOrchestrator(true);
+        OptionSetter setter = new OptionSetter(mInstrumentationTest);
+        setter.setOptionValue("window-animation", "false");
+        setter.setOptionValue("hidden-api-checks", "false");
+        RemoteAndroidTestRunner runner =
+                (RemoteAndroidTestRunner)
+                        mInstrumentationTest.createRemoteAndroidTestRunner(
+                                "", "", mMockIDevice, mTestInfo);
+
+        // Use three different assert to avoid creating a dependency on the order of flags.
+        assertThat(runner.getRunOptions()).contains("--no-hidden-api-checks");
+        assertThat(runner.getRunOptions()).contains(",");
+        assertThat(runner.getRunOptions()).contains("--no-window-animation");
+    }
+
     /** Test normal run scenario with a test class specified. */
     @Test
     public void testRun_class() {
@@ -521,7 +550,7 @@ public class InstrumentationTestTest {
                 .testRunFailed(
                         FailureDescription.create(RUN_ERROR_MSG, FailureStatus.TEST_FAILURE));
         inOrder.verify(mMockListener).testStarted(eq(TEST2), anyLong());
-        inOrder.verify(mMockListener).testFailed(eq(TEST2), (FailureDescription) any());
+        inOrder.verify(mMockListener).testSkipped(eq(TEST2), (SkipReason) any());
         inOrder.verify(mMockListener).testEnded(eq(TEST2), anyLong(), eq(EMPTY_STRING_MAP));
         inOrder.verify(mMockListener).testRunEnded(1, EMPTY_STRING_MAP);
         verify(mMockTestDevice).waitForDeviceAvailable();

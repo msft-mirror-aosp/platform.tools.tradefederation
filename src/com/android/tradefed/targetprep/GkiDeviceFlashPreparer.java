@@ -22,6 +22,7 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.host.IHostOptions;
@@ -36,6 +37,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil2;
+import com.android.tradefed.util.image.DeviceImageTracker;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -197,6 +199,9 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
+        // If we use the GKI preparer invalidate baseline
+        DeviceImageTracker.getDefaultCache()
+                .invalidateTracking(testInfo.getDevice().getSerialNumber());
         ITestDevice device = testInfo.getDevice();
         IBuildInfo buildInfo = testInfo.getBuildInfo();
 
@@ -276,6 +281,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         }
         long start = System.currentTimeMillis();
         getHostOptions().takePermit(PermitLimitType.CONCURRENT_FLASHER);
+        // Ensure snapuserd isn't running
+        device.waitForSnapuserd(SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
         CLog.v(
                 "Flashing permit obtained after %ds",
                 TimeUnit.MILLISECONDS.toSeconds((System.currentTimeMillis() - start)));
@@ -845,7 +852,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                             device.getSerialNumber(),
                             result.getStdout(),
                             result.getStderr()),
-                    device.getDeviceDescriptor());
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
         }
         if (result.getStderr().length() > 0) {
             return result.getStderr();

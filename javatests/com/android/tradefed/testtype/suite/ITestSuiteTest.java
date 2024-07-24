@@ -49,7 +49,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
-import com.android.tradefed.device.TcpDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.device.metric.IMetricCollector;
@@ -1730,7 +1730,7 @@ public class ITestSuiteTest {
     @Test
     public void testNoAbi() throws Exception {
         Mockito.reset(mMockDevice);
-        when(mMockDevice.getIDevice()).thenReturn(new TcpDevice("tcp-device-0"));
+        when(mMockDevice.getIDevice()).thenReturn(new RemoteAvdIDevice("gce-device-0"));
         when(mMockDevice.getProperty("ro.product.cpu.abilist")).thenReturn(null);
         when(mMockDevice.getProperty("ro.product.cpu.abi")).thenReturn(null);
         when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
@@ -1750,7 +1750,7 @@ public class ITestSuiteTest {
         OptionSetter setter = new OptionSetter(mTestSuite);
         setter.setOptionValue(ITestSuite.PRIMARY_ABI_RUN, "true");
         Mockito.reset(mMockDevice);
-        when(mMockDevice.getIDevice()).thenReturn(new TcpDevice("tcp-device-0"));
+        when(mMockDevice.getIDevice()).thenReturn(new RemoteAvdIDevice("gce-device-0"));
         when(mMockDevice.getProperty("ro.product.cpu.abi")).thenReturn(null);
         when(mMockDevice.getSerialNumber()).thenReturn("SERIAL");
 
@@ -1838,7 +1838,8 @@ public class ITestSuiteTest {
                         assertEquals(destDir, testsDir);
                         assertEquals(remoteFilePath, remoteFilePath);
                         assertArrayEquals(new String[] {"/test/"}, includeFilters.toArray());
-                        assertArrayEquals(new String[] {"[.]config$"}, excludeFilters.toArray());
+                        assertArrayEquals(
+                                new String[] {"[.]config$", "[.]jar$"}, excludeFilters.toArray());
                     }
                 };
         OptionSetter setter = new OptionSetter(mTestSuite);
@@ -1855,7 +1856,7 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        verify(mockBuildInfo, times(4)).getRemoteFiles();
+        verify(mockBuildInfo, times(3)).getRemoteFiles();
     }
 
     /** Test for {@link ITestSuite#reportNotExecuted(ITestInvocationListener, String)}. */

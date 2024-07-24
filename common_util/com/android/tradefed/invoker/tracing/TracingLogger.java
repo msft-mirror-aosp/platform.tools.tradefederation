@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.invoker.tracing;
 
+
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
@@ -59,6 +60,18 @@ public class TracingLogger {
         }
     }
 
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
+
     /**
      * Sets the currently active trace for an invocation.
      *
@@ -75,6 +88,18 @@ public class TracingLogger {
     /** Returns the current active trace for the invocation, or null if none. */
     public static ActiveTrace getActiveTrace() {
         ThreadGroup group = Thread.currentThread().getThreadGroup();
+        synchronized (mPerGroupActiveTrace) {
+            if (sLocal.get() != null) {
+                group = sLocal.get();
+            }
+            return mPerGroupActiveTrace.get(group);
+        }
+    }
+
+    public static ActiveTrace getActiveTraceForGroup(ThreadGroup group) {
+        if (group == null) {
+            return null;
+        }
         synchronized (mPerGroupActiveTrace) {
             return mPerGroupActiveTrace.get(group);
         }

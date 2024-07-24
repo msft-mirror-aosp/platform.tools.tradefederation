@@ -36,6 +36,7 @@ import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -339,7 +340,7 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     "Force switching to root before the setup.Root should only be need for system"
                         + " props, but adding this flag while transitioning in case someone reports"
                         + " issues.")
-    private boolean mForceRoot = true;
+    private boolean mForceRoot = false;
 
     @Option(name = "force-skip-settings",
             description = "Force setup to not modify any device settings. All other setting " +
@@ -413,6 +414,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             name = "optimized-non-persistent-setup",
             description = "Feature to evaluate a faster non-persistent props setup.")
     private boolean mOptimizeNonPersistentSetup = true;
+
+    @Option(
+            name = "delay-reboot",
+            description =
+                    "Should reboot be needed in the setup, delay it because we know it will occur"
+                            + " later.")
+    private boolean mDelayReboot = false;
 
     @Option(
             name = "dismiss-setup-wizard",
@@ -510,6 +518,9 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
 
     @Option(name = "parallelize-core-setup")
     private boolean mParallelCoreSetup = false;
+
+    @Option(name = "dismiss-keyguard-via-wm", description = "Flag to dismiss keyguard via wm")
+    private boolean mDismissViaWm = false;
 
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
@@ -1011,8 +1022,12 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         }
 
         if (needsReboot) {
-            CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
-            device.reboot();
+            if (mDelayReboot) {
+                CLog.i("Delay the reboot to later in the setup.");
+            } else {
+                CLog.i("Rebooting %s due to system property change", device.getSerialNumber());
+                device.reboot();
+            }
         }
 
         // Log nonpersistent device properties (that change/lose values after reboot).
@@ -1046,19 +1061,34 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         String cmd = "svc power stayon %s";
         switch (mScreenAlwaysOn) {
             case ON:
-                CLog.d("Setting screen always on to true");
-                device.executeShellCommand(String.format(cmd, "true"));
-                // send MENU press in case keygaurd needs to be dismissed again
-                device.executeShellCommand("input keyevent 82");
-                // send HOME press in case keyguard was already dismissed, so we bring device back
-                // to home screen
-                // No need for this on Wear OS, since that causes the launcher to show
-                // instead of the home screen
-                if ((device instanceof TestDevice)
-                        && !device.hasFeature("android.hardware.type.watch")) {
-                    device.executeShellCommand("input keyevent 3");
+                try (CloseableTraceScope ignored =
+                        new CloseableTraceScope(InvocationMetricKey.screen_on_setup.toString())) {
+                    CLog.d("Setting screen always on to true");
+                    String cmdStayOn = String.format(cmd, "true");
+                    CommandResult stayOn = device.executeShellV2Command(cmdStayOn);
+                    CLog.d("%s output: %s", cmdStayOn, stayOn);
+                    if (mDismissViaWm) {
+                        CommandResult res =
+                                device.executeShellV2Command(
+                                        "wm dismiss-keyguard", 30000L, TimeUnit.MILLISECONDS, 0);
+                        CLog.d("Output of dismiss-keyguard: %s", res);
+                    } else {
+                        // send MENU press in case keyguard needs to be dismissed again
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 82");
+                        CLog.d("Output of input keyevent 82: %s", inputKey);
+                    }
+                    // send HOME press in case keyguard was already dismissed, so we bring device
+                    // back
+                    // to home screen
+                    // No need for this on Wear OS, since that causes the launcher to show
+                    // instead of the home screen
+                    if ((device instanceof TestDevice)
+                            && !device.hasFeature("android.hardware.type.watch")) {
+                        CommandResult inputKey = device.executeShellV2Command("input keyevent 3");
+                        CLog.d("Output of input keyevent 3: %s", inputKey);
+                    }
+                    break;
                 }
-                break;
             case OFF:
                 CLog.d("Setting screen always on to false");
                 device.executeShellCommand(String.format(cmd, "false"));

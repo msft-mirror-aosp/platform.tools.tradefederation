@@ -71,6 +71,7 @@ public class JarHostTestTest {
     private static final String QUALIFIED_PATH = "/com/android/tradefed/referencetests";
     private static final String TEST_JAR1 = "/MultipleClassesTest.jar";
     private static final String TEST_JAR2 = "/OnePassingOneFailingTest.jar";
+    private static final String MULTI_PKG_WITH_PARAM_TESTS_JAR = "/IncludeFilterTest.jar";
     private HostTest mTest;
     private DeviceBuildInfo mStubBuildInfo;
     private TestInformation mTestInfo;
@@ -206,6 +207,170 @@ public class JarHostTestTest {
         // full class count without sharding should be 1
         mTest.setTestInformation(mTestInfo);
         assertEquals(1, mTest.countTestCases());
+    }
+
+    // Given these test cases, do some tests with filters
+    // com.android.tradefed.referencetests.SimpleFailingTest#test2Plus2
+    // com.android.tradefed.referencetests.SimplePassingTest#test2Plus2
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test1Passing
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test2Failing
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OnePass]
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OneFail]
+    // com.android.tradefed.otherpkg.SimplePassingTest#test2Plus2
+
+    private HostTest setupTestFilter(String... includeFilters) throws Exception {
+        File testJar = getJarResource(MULTI_PKG_WITH_PARAM_TESTS_JAR, mTestDir);
+        HostTest jarHostTest = new HostTestLoader(testJar);
+        jarHostTest.setBuild(mStubBuildInfo);
+        ITestDevice device = mock(ITestDevice.class);
+        jarHostTest.setDevice(device);
+        OptionSetter setter = new OptionSetter(jarHostTest);
+        setter.setOptionValue("enable-pretty-logs", "false");
+        setter.setOptionValue("jar", testJar.getName());
+
+        for (String filter : includeFilters) {
+            setter.setOptionValue("include-filter", filter);
+        }
+        jarHostTest.setTestInformation(mTestInfo);
+        return jarHostTest;
+    }
+
+    @Test
+    public void testFilter_countWithFilterShortClassNameShouldNotMatch() throws Exception {
+        mTest = setupTestFilter("OnePassingOneFailingTest");
+        assertEquals(0, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithFilterShortClassNameRegex() throws Exception {
+        // Regex must match whole method name, not just class name.
+        mTest = setupTestFilter("OnePassingOneFailingTest.*");
+        assertEquals(0, mTest.countTestCases());
+
+        mTest = setupTestFilter(".*OnePassingOneFailingTest.*");
+        assertEquals(2, mTest.countTestCases());
+
+        mTest = setupTestFilter(".*OnePass.*");
+        assertEquals(4, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithFilterShortClassNameAndShortMethod() throws Exception {
+        mTest = setupTestFilter(".*OnePassingOneFailingTest#test1.*");
+        assertEquals(1, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithFilterMethodRegex() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        assertEquals(4, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithMalformedIncludeRegex() throws Exception {
+        mTest =
+                setupTestFilter(
+                        "com.google.android.apps.yts.tvts.YtsReport#yts[MSEConformanceTestsMSECoreVideoBufferSize-1.3.11.1]");
+        // Just testing it doesn't throw exceptions we don't expect any matches.
+        assertEquals(0, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithMalformedExcludeRegex() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue(
+                "exclude-filter",
+                // Ensure this malformed regex does not cause problems.
+                "com.google.android.apps.yts.tvts.YtsReport#yts[MSEConformanceTestsMSECoreVideoBufferSize-1.3.11.1]");
+
+        // Same as #testFilter_countWithFilterMethodRegex
+        assertEquals(4, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithClassFilter() throws Exception {
+        mTest = setupTestFilter("com.android.tradefed.referencetests.SimplePassingTest");
+        assertEquals(mTestInfo.toString(), 1, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithPackageFilter() throws Exception {
+        mTest = setupTestFilter("com.android.tradefed.referencetests");
+        assertEquals(mTestInfo.toString(), 6, mTest.countTestCases());
+
+        mTest = setupTestFilter("com.android.tradefed.otherpkg");
+        assertEquals(mTestInfo.toString(), 1, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithPartialPackageReturnsNone() throws Exception {
+        mTest = setupTestFilter("com.android.tradefed");
+        assertEquals(mTestInfo.toString(), 0, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countMultipleIncludes() throws Exception {
+        mTest = setupTestFilter(".*OnePassingOneFailingTest.*", ".*otherpkg.SimplePassingTest.*");
+        assertEquals(3, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_repeatedIncludesOnlyCountOnce() throws Exception {
+        String testRegex = ".*OnePassingOneFailingTest.*";
+        mTest = setupTestFilter(testRegex, testRegex);
+        assertEquals(2, mTest.countTestCases());
+    }
+
+    // com.android.tradefed.referencetests.SimpleFailingTest#test2Plus2
+    // com.android.tradefed.referencetests.SimplePassingTest#test2Plus2
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test1Passing
+    // com.android.tradefed.referencetests.OnePassingOneFailingTest#test2Failing
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OnePass]
+    // com.android.tradefed.referencetests.OnePassOneFailParamTest#testBoolean[OneFail]
+    // com.android.tradefed.otherpkg.SimplePassingTest#test2Plus2
+    @Test
+    public void testFilter_countMultipleOverlappingIncludes() throws Exception {
+        mTest =
+                setupTestFilter(
+                        ".*OnePassingOneFailingTest.*", // 2
+                        ".*test2.*"); // 4, but one should match above.
+        assertEquals(5, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithIncludeRegexAndExclude2() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue(
+                "exclude-filter",
+                "com.android.tradefed.referencetests.SimplePassingTest#test2Plus2");
+        assertEquals(3, mTest.countTestCases());
+    }
+
+    // Only use an exclude regex-filter
+    @Test
+    public void testFilter_countWithExcludeRegex() throws Exception {
+        mTest = setupTestFilter(new String[] {}); // no include-filters
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue("exclude-filter", ".*otherpkg.*");
+        assertEquals(6, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithIncludeRegexAndExcludeRegex() throws Exception {
+        mTest = setupTestFilter(".*#test2.*");
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue("exclude-filter", ".*referencetests.SimplePassingTest#test2.*");
+        assertEquals(3, mTest.countTestCases());
+    }
+
+    @Test
+    public void testFilter_countWithNonMatchingExcludeRegex() throws Exception {
+        mTest = setupTestFilter(new String[] {}); // no include-filters
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue("exclude-filter", ".*RETURN_ALL_TESTS.*");
+        assertEquals(7, mTest.countTestCases());
     }
 
     /**

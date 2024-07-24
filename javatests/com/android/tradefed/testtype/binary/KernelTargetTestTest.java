@@ -17,6 +17,8 @@ package com.android.tradefed.testtype.binary;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 
 import com.android.tradefed.config.ConfigurationException;
@@ -26,11 +28,16 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement;
+import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.Pair;
+
+import java.util.ArrayList;
 import java.util.HashMap;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -40,10 +47,26 @@ import org.mockito.Mockito;
 /** Unit tests for {@link com.android.tradefed.testtype.binary.KernelTargetTest}. */
 @RunWith(JUnit4.class)
 public class KernelTargetTestTest {
-    private final String testName1 = "testName1";
-    private final String testCmd1 = "cmd1";
-    private final String testName2 = "testName2";
-    private final String testCmd2 = "cmd2";
+    private static final String TEST_NAME_1 = "testName1";
+    private static final String TEST_CMD_1 = "cmd1";
+    private static final String TEST_NAME_2 = "testName2";
+    private static final String TEST_CMD_2 = "cmd2";
+    private static final String TEST_KTAP_RESULT_1 =
+            "KTAP version 1\n"
+                    + "1..1\n"
+                    + "  KTAP version 1\n"
+                    + "  1..2\n"
+                    + "    KTAP version 1\n"
+                    + "    1..1\n"
+                    + "    # test_1: initializing test_1\n"
+                    + "    ok 1 test_1\n"
+                    + "  ok 1 example_test_1\n"
+                    + "    KTAP version 1\n"
+                    + "    1..2\n"
+                    + "    ok 1 test_1 # SKIP test_1 skipped\n"
+                    + "    ok 2 test_2\n"
+                    + "  ok 2 example_test_2\n"
+                    + "ok 1 main_test_01\n";
 
     private ITestInvocationListener mListener = null;
     private ITestDevice mMockITestDevice = null;
@@ -69,13 +92,13 @@ public class KernelTargetTestTest {
         mKernelTargetTest = new KernelTargetTest();
         OptionSetter setter = new OptionSetter(mKernelTargetTest);
         setter.setOptionValue("exit-code-skip", "32");
-        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("test-command-line", TEST_NAME_1, TEST_CMD_1);
         mCommandResult = new CommandResult(CommandStatus.SUCCESS);
         mCommandResult.setExitCode(32);
         mKernelTargetTest.setDevice(mMockITestDevice);
-        TestDescription testDescription = new TestDescription(testName1, testName1);
+        TestDescription testDescription = new TestDescription(TEST_NAME_1, TEST_NAME_1);
         mKernelTargetTest.checkCommandResult(mCommandResult, mListener, testDescription);
-        Mockito.verify(mListener, Mockito.times(1)).testIgnored(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1)).testIgnored(eq(testDescription));
     }
 
     /** Test that mismatched skip exit code does not cause a skip */
@@ -84,13 +107,13 @@ public class KernelTargetTestTest {
         mKernelTargetTest = new KernelTargetTest();
         OptionSetter setter = new OptionSetter(mKernelTargetTest);
         setter.setOptionValue("exit-code-skip", "32");
-        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("test-command-line", TEST_NAME_1, TEST_CMD_1);
         mCommandResult = new CommandResult(CommandStatus.SUCCESS);
         mCommandResult.setExitCode(20);
         mKernelTargetTest.setDevice(mMockITestDevice);
-        TestDescription testDescription = new TestDescription(testName1, testName1);
+        TestDescription testDescription = new TestDescription(TEST_NAME_1, TEST_NAME_1);
         mKernelTargetTest.checkCommandResult(mCommandResult, mListener, testDescription);
-        Mockito.verify(mListener, Mockito.never()).testIgnored(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription));
     }
 
     /** Test that null skip exit code does not cause a skip */
@@ -98,13 +121,13 @@ public class KernelTargetTestTest {
     public void test_noExitCodeSkip() throws ConfigurationException {
         mKernelTargetTest = new KernelTargetTest();
         OptionSetter setter = new OptionSetter(mKernelTargetTest);
-        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("test-command-line", TEST_NAME_1, TEST_CMD_1);
         mCommandResult = new CommandResult(CommandStatus.SUCCESS);
         mCommandResult.setExitCode(32);
         mKernelTargetTest.setDevice(mMockITestDevice);
-        TestDescription testDescription = new TestDescription(testName1, testName1);
+        TestDescription testDescription = new TestDescription(TEST_NAME_1, TEST_NAME_1);
         mKernelTargetTest.checkCommandResult(mCommandResult, mListener, testDescription);
-        Mockito.verify(mListener, Mockito.never()).testIgnored(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription));
     }
 
     /** Test the parsing of kernel version strings */
@@ -158,32 +181,28 @@ public class KernelTargetTestTest {
         mKernelTargetTest.setDevice(mMockITestDevice);
         // Set test commands
         OptionSetter setter = new OptionSetter(mKernelTargetTest);
-        setter.setOptionValue("test-command-line", testName1, testCmd1);
-        setter.setOptionValue("min-kernel-version", testName1, "5.10");
-        setter.setOptionValue("test-command-line", testName2, testCmd2);
+        setter.setOptionValue("test-command-line", TEST_NAME_1, TEST_CMD_1);
+        setter.setOptionValue("min-kernel-version", TEST_NAME_1, "5.10");
+        setter.setOptionValue("test-command-line", TEST_NAME_2, TEST_CMD_2);
         mKernelTargetTest.run(mTestInfo, mListener);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(any(), eq(2));
 
         // Both tests should run
-        TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
-        Mockito.verify(mListener, Mockito.never()).testIgnored(Mockito.eq(testDescription));
+        TestDescription testDescription = new TestDescription(TEST_NAME_1, TEST_NAME_1);
+        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription));
+        Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        Mockito.eq(testDescription),
-                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription), eq(new HashMap<String, MetricMeasurement.Metric>()));
 
-        TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
-        Mockito.verify(mListener, Mockito.never()).testIgnored(Mockito.eq(testDescription2));
+        TestDescription testDescription2 = new TestDescription(TEST_NAME_2, TEST_NAME_2);
+        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription2));
+        Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        Mockito.eq(testDescription2),
-                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription2), eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
-                .testRunEnded(
-                        Mockito.anyLong(),
-                        Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
+                .testRunEnded(anyLong(), Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
     }
 
     /** Test where one min kernel version dependency is not met and test is ignored */
@@ -211,33 +230,69 @@ public class KernelTargetTestTest {
         mKernelTargetTest.setDevice(mMockITestDevice);
         // Set test commands
         OptionSetter setter = new OptionSetter(mKernelTargetTest);
-        setter.setOptionValue("test-command-line", testName1, testCmd1);
-        setter.setOptionValue("min-kernel-version", testName1, "5.10.0");
-        setter.setOptionValue("test-command-line", testName2, testCmd2);
-        setter.setOptionValue("min-kernel-version", testName2, "4.14");
+        setter.setOptionValue("test-command-line", TEST_NAME_1, TEST_CMD_1);
+        setter.setOptionValue("min-kernel-version", TEST_NAME_1, "5.10.0");
+        setter.setOptionValue("test-command-line", TEST_NAME_2, TEST_CMD_2);
+        setter.setOptionValue("min-kernel-version", TEST_NAME_2, "4.14");
         mKernelTargetTest.run(mTestInfo, mListener);
-        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(any(), eq(2));
 
         // First test should be ignored
-        TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
-        Mockito.verify(mListener, Mockito.times(1)).testIgnored(Mockito.eq(testDescription));
+        TestDescription testDescription = new TestDescription(TEST_NAME_1, TEST_NAME_1);
+        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1)).testIgnored(eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        Mockito.eq(testDescription),
-                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription), eq(new HashMap<String, MetricMeasurement.Metric>()));
 
         // Second test should be run
-        TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
-        Mockito.verify(mListener, Mockito.never()).testIgnored(Mockito.eq(testDescription2));
+        TestDescription testDescription2 = new TestDescription(TEST_NAME_2, TEST_NAME_2);
+        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription2));
+        Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        Mockito.eq(testDescription2),
-                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription2), eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
-                .testRunEnded(
-                        Mockito.anyLong(),
-                        Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
+                .testRunEnded(anyLong(), Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
+    }
+
+    @Test
+    public void testRun_ktapParse() throws DeviceNotAvailableException, ConfigurationException {
+        mCommandResult = new CommandResult(CommandStatus.SUCCESS);
+        mCommandResult.setStdout(TEST_KTAP_RESULT_1);
+        mCommandResult.setExitCode(0);
+        Mockito.when(mMockITestDevice.executeShellV2Command(eq(TEST_CMD_1), anyLong(), any()))
+                .thenReturn(mCommandResult);
+
+        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
+                new ArrayList<>() {
+                    {
+                        add(Pair.create(new TestDescription(TEST_NAME_1, "main_test_01"), true));
+                    }
+                };
+
+        mKernelTargetTest = new KernelTargetTest();
+        mKernelTargetTest.setDevice(mMockITestDevice);
+        OptionSetter setter = new OptionSetter(mKernelTargetTest);
+        setter.setOptionValue("parse-ktap", "true");
+        setter.setOptionValue("skip-binary-check", "true");
+        setter.setOptionValue("test-command-line", TEST_NAME_1, TEST_CMD_1);
+
+        mKernelTargetTest.run(mTestInfo, mListener);
+
+        Mockito.verify(mListener, Mockito.times(1)).testRunStarted(any(), eq(1));
+        for (Pair<TestDescription, Boolean> testResult : expectedTestResults) {
+            Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testResult.first));
+            if (!testResult.second) {
+                Mockito.verify(mListener, Mockito.times(1))
+                        .testFailed(Mockito.eq(testResult.first), any(FailureDescription.class));
+            }
+            Mockito.verify(mListener, Mockito.times(1))
+                    .testEnded(
+                            eq(testResult.first),
+                            eq(new HashMap<String, MetricMeasurement.Metric>()));
+        }
+        Mockito.verify(mListener, Mockito.times(1))
+                .testRunEnded(anyLong(), Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
     }
 }

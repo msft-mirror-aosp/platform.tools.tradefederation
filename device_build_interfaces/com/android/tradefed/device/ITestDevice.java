@@ -1189,4 +1189,15 @@ public interface ITestDevice extends INativeDevice {
      * Bugreport#close()}.
      */
     public Bugreport takeBugreport();
+
+    /** Notify the device to wait for snapuserd completion. */
+    public default void notifySnapuserd(SnapuserdWaitPhase waitPhase) {
+        // Empty on purpose
+    }
+
+    /** If expected, wait for snapuserd to complete. */
+    public default void waitForSnapuserd(SnapuserdWaitPhase currentPhase)
+            throws DeviceNotAvailableException {
+        // Empty on purpose
+    }
 }

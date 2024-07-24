@@ -32,12 +32,14 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 
@@ -365,8 +367,21 @@ public class DynamicRemoteFileResolver {
         if (excludeFilters != null) {
             queryArgs.put("exclude_filters", String.join(";", excludeFilters));
         }
+
+        // TODO(rbraunstein): Consider changing to take map of args.
+        for (String key : ImmutableList.of(ITestSuite.ENABLE_RESOLVE_SYM_LINKS)) {
+            String value = mExtraArgs.get(key);
+            if (value != null) {
+                queryArgs.put(key, value);
+            }
+        }
         // Downloaded individual files should be saved to destDir, return value is not needed.
-        try {
+        try (CloseableTraceScope ignored =
+                new CloseableTraceScope(
+                        String.format(
+                                "resolvePartialDownload %s, %s, %s",
+                                remoteZipFilePath, protocol, queryArgs))) {
+
             IRemoteFileResolver resolver = getResolver(protocol);
             resolver.setPrimaryDevice(mDevice);
             RemoteFileResolverArgs args = new RemoteFileResolverArgs();
@@ -388,7 +403,7 @@ public class DynamicRemoteFileResolver {
 
     private IRemoteFileResolver getResolver(String protocol) throws BuildRetrievalError {
         try {
-        return mFileResolverLoader.load(protocol, mExtraArgs);
+            return mFileResolverLoader.load(protocol, mExtraArgs);
         } catch (ResolverLoadingException e) {
             throw new BuildRetrievalError(
                     String.format("Could not load resolver for protocol %s", protocol), e);
@@ -407,6 +422,9 @@ public class DynamicRemoteFileResolver {
             throws IOException {
         String unzipValue = query.get(UNZIP_KEY);
         if (unzipValue != null && "true".equals(unzipValue.toLowerCase())) {
+            if (downloadedFile.isDirectory()) {
+                return downloadedFile;
+            }
             // File was requested to be unzipped.
             try (CloseableTraceScope ignored =
                     new CloseableTraceScope("unzip " + downloadedFile.getName())) {
@@ -437,7 +455,7 @@ public class DynamicRemoteFileResolver {
         String protocol;
         Map<String, String> query;
         try {
-            URI uri = new URI(path.replace('\\','/'));
+            URI uri = new URI(path.replace('\\', '/'));
             protocol = uri.getScheme();
             query = parseQuery(uri.getQuery());
             fileToResolve = new File(protocol + ":" + uri.getPath());

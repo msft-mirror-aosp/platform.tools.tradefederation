@@ -35,10 +35,12 @@ import com.proto.tradefed.feature.PartResponse;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * Based on a variety of criteria the skip manager helps to decide what should be skipped at
@@ -65,17 +67,26 @@ public class SkipManager implements IDisableable {
     @Option(
             name = "skip-on-no-tests-discovered",
             description = "Enable the layer of skipping when there is no discovered tests to run.")
-    private boolean mSkipOnNoTestsDiscovered = false;
+    private boolean mSkipOnNoTestsDiscovered = true;
 
     @Option(
             name = "skip-on-no-change-presubmit-only",
             description = "Allow enabling the skip logic only in presubmit.")
-    private boolean mSkipOnNoChangePresubmitOnly = false;
+    private boolean mSkipOnNoChangePresubmitOnly = true;
 
     @Option(
             name = "considered-for-content-analysis",
             description = "Some tests do not directly rely on content for being relevant.")
     private boolean mConsideredForContent = true;
+
+    @Option(name = "analysis-level", description = "Alter assumptions level of the analysis.")
+    private AnalysisHeuristic mAnalysisLevel = AnalysisHeuristic.REMOVE_EXEMPTION;
+
+    @Option(
+            name = "report-module-skipped",
+            description =
+                    "Report a placeholder skip when module are skipped as unchanged in presubmit.")
+    private boolean mReportModuleSkipped = false;
 
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
@@ -87,6 +98,7 @@ public class SkipManager implements IDisableable {
     private List<String> mDependencyFiles = new ArrayList<String>();
 
     private String mReasonForSkippingInvocation = "SkipManager decided to skip.";
+    private Set<String> mUnchangedModules = new HashSet<>();
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -107,13 +119,23 @@ public class SkipManager implements IDisableable {
         return mDemotionFilters;
     }
 
+    /**
+     * Returns the list of unchanged modules. Modules are only unchanged if device image is also
+     * unchanged.
+     */
+    public Set<String> getUnchangedModules() {
+        return mUnchangedModules;
+    }
+
     public void setImageAnalysis(ITestDevice device, ContentAnalysisContext analysisContext) {
-        CLog.d("Received image artifact analysis for %s", device.getSerialNumber());
+        CLog.d(
+                "Received image artifact analysis '%s' for %s",
+                analysisContext.contentEntry(), device.getSerialNumber());
         mImageAnalysis.put(device, analysisContext);
     }
 
     public void setTestArtifactsAnalysis(ContentAnalysisContext analysisContext) {
-        CLog.d("Received test artifact analysis.");
+        CLog.d("Received test artifact analysis '%s'", analysisContext.contentEntry());
         mTestArtifactsAnalysisContent.add(analysisContext);
     }
 
@@ -153,7 +175,8 @@ public class SkipManager implements IDisableable {
                         mImageAnalysis,
                         mTestArtifactsAnalysisContent,
                         mModulesDiscovered,
-                        mDependencyFiles);
+                        mDependencyFiles,
+                        mAnalysisLevel);
         return buildAnalysisDecision(information, analyzer.analyzeArtifacts());
     }
 
@@ -200,6 +223,8 @@ public class SkipManager implements IDisableable {
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.DEVICE_IMAGE_NOT_CHANGED, 1);
         if (results.hasTestsArtifacts()) {
+            // Keep track of the set or sub-set of modules that didn't change.
+            mUnchangedModules.addAll(results.getUnchangedModules());
             if (results.hasChangesInTestsArtifacts()) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.TEST_ARTIFACT_CHANGE_ONLY, 1);
@@ -275,5 +300,9 @@ public class SkipManager implements IDisableable {
 
     public String getInvocationSkipReason() {
         return mReasonForSkippingInvocation;
+    }
+
+    public boolean reportSkippedModule() {
+        return mReportModuleSkipped;
     }
 }

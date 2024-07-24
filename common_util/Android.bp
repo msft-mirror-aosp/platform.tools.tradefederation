@@ -21,6 +21,7 @@ java_library_host {
     // Restrict visibility to only those targets that need to access it.
     visibility: [
         "//tools/tradefederation/core",
+        "//tools/tradefederation/core/avd_util",
         "//tools/tradefederation/core/clearcut_client",
         "//tools/tradefederation/core/device_build_interfaces",
         "//tools/tradefederation/core/invocation_interfaces",
@@ -35,11 +36,23 @@ java_library_host {
         "apache-commons-compress",
         // Trace protos to do invocation tracing
         "perfetto_trace-full",
+        "remote-execution-java-proto",
+        "grpc-java-api",
+        "grpc-java-stub",
+        "remote-execution-java-grpc",
+        "bytestream-java-proto",
+        "bytestream-java-grpc",
     ],
     libs: [
         "ddmlib-prebuilt",
         "guava",
         "tradefed-protos",
         "devtools-annotations-prebuilt",
+        "auto_value_annotations",
+        "libprotobuf-java-full",
+    ],
+    plugins: [
+        "auto_value_plugin",
+        "auto_annotation_plugin",
     ],
 }

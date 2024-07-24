@@ -609,9 +609,6 @@ public class TestMappingSuiteRunnerTest {
             Collection<IRemoteTest> tests = mRunner.split(2, mTestInfo);
             assertEquals(null, tests);
             assertEquals(2, mRunner.getIncludeFilter().size());
-            assertEquals(null, mRunner.getTestGroup());
-            assertEquals(0, mRunner.getTestMappingPaths().size());
-            assertEquals(false, mRunner.getUseTestMappingPath());
         } finally {
             FileUtil.recursiveDelete(tempDir);
         }

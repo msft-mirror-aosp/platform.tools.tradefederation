@@ -29,6 +29,7 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.ProcessInfo;
 
 import java.util.ArrayList;
@@ -229,13 +230,13 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             }
             for (TestDescription miss : missingTests) {
                 super.testStarted(miss);
-                FailureDescription failure =
-                        FailureDescription.create(
+                SkipReason reason =
+                        new SkipReason(
                                 String.format(
                                         "Test did not run due to instrumentation issue. %s %s",
                                         lastExecutedLog, runLevelError),
-                                FailureStatus.NOT_EXECUTED);
-                super.testFailed(miss, failure);
+                                "INSTRUMENTATION_ERROR");
+                super.testSkipped(miss, reason);
                 super.testEnded(miss, new HashMap<String, Metric>());
             }
         }
