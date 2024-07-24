@@ -16,13 +16,17 @@
 package com.android.tradefed.testtype.python;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.GlobalConfiguration;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -38,7 +42,9 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.PythonUnitTestResultParser;
 import com.android.tradefed.testtype.TestTimeoutEnforcer;
 import com.android.tradefed.util.AdbUtils;
+import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.DeviceActionUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
@@ -74,7 +80,8 @@ import javax.annotation.Nullable;
  * exclude-filter will still be executed.
  */
 @OptionClass(alias = "python-host")
-public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
+public class PythonBinaryHostTest
+        implements IRemoteTest, ITestFilterReceiver, IConfigurationReceiver {
 
     protected static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     protected static final String LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
@@ -142,12 +149,28 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
     private boolean mUseTestOutputFile = false;
 
     @Option(
+            name = "enable-cache",
+            description = "Used to enable/disable caching for specific modules.")
+    private boolean mEnableCache = false;
+
+    @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
 
+    // TODO(b/335688080): Remove this option once the caching is stable and no test needs this
+    // option.
+    @Option(
+            name = "additional-paths",
+            description =
+                    "Additional paths that will be appended to the `PATH` of the subprocess used to"
+                        + " execute the test. Note, the content of these paths won't be included in"
+                        + " the cache key set and using this option could cause false cache hit.")
+    private Set<String> mAdditionalPaths = new LinkedHashSet<>();
+
     private TestInformation mTestInfo;
     private IRunUtil mRunUtil;
+    private IConfiguration mConfiguration = new Configuration("", "");
 
     /** {@inheritDoc} */
     @Override
@@ -195,6 +218,12 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
     @Override
     public Set<String> getExcludeFilters() {
         return mExcludeFilters;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfiguration = configuration;
     }
 
     @Override
@@ -268,13 +297,29 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
             commandLine.add(mTestInfo.getDevice().getSerialNumber());
         }
         // Set the process working dir as the directory of the main binary
-        getRunUtil().setWorkingDir(pyFile.getParentFile());
+        File workingDir = pyFile.getParentFile();
+        getRunUtil().setWorkingDir(workingDir);
         // Set the parent dir on the PATH
         String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
+        // Link adb and aapt to working dir as default dependencies.
+        String runtimeDepsFolderName = "runtime_deps";
+        try {
+            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAdb());
+        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
+            CLog.e("Failed to link adb to working dir %s", workingDir);
+            CLog.e(e);
+        }
+        try {
+            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt());
+        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
+            CLog.e("Failed to link aapt to working dir %s", workingDir);
+            CLog.e(e);
+        }
         // Bundle binaries / dependencies have priorities over existing PATH
-        paths.addAll(findAllSubdir(pyFile.getParentFile(), new ArrayList<>()));
-        paths.add(System.getenv("PATH"));
+        paths.addAll(toRelative(workingDir, findAllSubdir(workingDir, new ArrayList<>())));
+        paths.addAll(mAdditionalPaths);
+        paths.add("/usr/bin");
         String path = paths.stream().distinct().collect(Collectors.joining(separator));
         CLog.d("Using updated $PATH: %s", path);
         getRunUtil().setEnvVariablePriority(EnvPriority.SET);
@@ -348,13 +393,30 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
                 result = getRunUtil().runTimedCmd(mTestTimeout, commandLine.toArray(new String[0]));
             } else {
                 try (FileOutputStream fileOutputParser = new FileOutputStream(stderrFile)) {
+                    String instanceName =
+                            mEnableCache
+                                    ? mConfiguration
+                                            .getCommandOptions()
+                                            .getRemoteCacheInstanceName()
+                                    : null;
                     result =
-                            getRunUtil()
-                                    .runTimedCmd(
-                                            mTestTimeout,
-                                            null,
-                                            fileOutputParser,
-                                            commandLine.toArray(new String[0]));
+                            Strings.isNullOrEmpty(instanceName)
+                                    ? getRunUtil()
+                                            .runTimedCmd(
+                                                    mTestTimeout,
+                                                    null,
+                                                    fileOutputParser,
+                                                    commandLine.toArray(new String[0]))
+                                    : getRunUtil()
+                                            .runTimedCmdWithOutputMonitor(
+                                                    mTestTimeout,
+                                                    0,
+                                                    null,
+                                                    fileOutputParser,
+                                                    CacheClientFactory.createCacheClient(
+                                                            CurrentInvocation.getWorkFolder(),
+                                                            instanceName),
+                                                    commandLine.toArray(new String[0]));
                     fileOutputParser.flush();
                 }
             }
@@ -450,6 +512,16 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
     }
 
     @VisibleForTesting
+    File getAapt() throws DeviceActionUtil.DeviceActionConfigError {
+        return DeviceActionUtil.getAapt();
+    }
+
+    @VisibleForTesting
+    File getAdb() throws DeviceActionUtil.DeviceActionConfigError {
+        return DeviceActionUtil.getAdb();
+    }
+
+    @VisibleForTesting
     String getAdbPath() {
         return GlobalConfiguration.getDeviceManagerInstance().getAdbPath();
     }
@@ -468,6 +540,13 @@ public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
             }
         }
         return subDir;
+    }
+
+    private static List<String> toRelative(File start, List<String> paths) {
+        return paths.stream()
+                .map(p -> RunUtil.toRelative(start, p))
+                .sorted()
+                .collect(Collectors.toList());
     }
 
     private void reportFailure(
