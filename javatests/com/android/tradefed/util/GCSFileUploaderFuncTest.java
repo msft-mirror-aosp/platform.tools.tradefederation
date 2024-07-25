@@ -125,7 +125,7 @@ public class GCSFileUploaderFuncTest {
         return os.toByteArray();
     }
 
-    private InputStream pullFileFromGcs(String gcsFilePath) throws Exception {
+    private InputStream pullFileFromGcs(String gcsFilePath) throws IOException {
         return mDownloader.downloadFile(BUCKET_NAME, gcsFilePath);
     }
 }
