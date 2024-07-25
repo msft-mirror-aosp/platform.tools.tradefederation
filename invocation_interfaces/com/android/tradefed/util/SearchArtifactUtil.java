@@ -30,7 +30,6 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.AltDirBehavior;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
-import com.android.tradefed.testtype.suite.ModuleDefinition;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -45,7 +44,9 @@ import java.util.Set;
 /** A utility class that can be used to search for test artifacts. */
 public class SearchArtifactUtil {
     // The singleton is used for mocking the non-static methods during testing..
-    @VisibleForTesting static SearchArtifactUtil singleton = new SearchArtifactUtil();
+    @VisibleForTesting public static SearchArtifactUtil singleton = new SearchArtifactUtil();
+    private static final String MODULE_NAME = "module-name";
+    private static final String MODULE_ABI = "module-abi";
 
     /**
      * Searches for a test artifact/dependency file from the test directory.
@@ -303,9 +304,8 @@ public class SearchArtifactUtil {
     @VisibleForTesting
     String findModuleName() {
         IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
-        if (moduleContext != null
-                && moduleContext.getAttributes().get(ModuleDefinition.MODULE_NAME) != null) {
-            return moduleContext.getAttributes().get(ModuleDefinition.MODULE_NAME).get(0);
+        if (moduleContext != null && moduleContext.getAttributes().get(MODULE_NAME) != null) {
+            return moduleContext.getAttributes().get(MODULE_NAME).get(0);
         } else if (moduleContext != null
                 && moduleContext.getConfigurationDescriptor().getModuleName() != null) {
             return moduleContext.getConfigurationDescriptor().getModuleName();
@@ -316,9 +316,8 @@ public class SearchArtifactUtil {
     /** returns the abi for the current module if present. */
     private static IAbi findModuleAbi() {
         IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
-        if (moduleContext != null
-                && moduleContext.getAttributes().get(ModuleDefinition.MODULE_ABI) != null) {
-            String abiName = moduleContext.getAttributes().get(ModuleDefinition.MODULE_ABI).get(0);
+        if (moduleContext != null && moduleContext.getAttributes().get(MODULE_ABI) != null) {
+            String abiName = moduleContext.getAttributes().get(MODULE_ABI).get(0);
             return new Abi(abiName, AbiUtils.getBitness(abiName));
         }
         return null;
