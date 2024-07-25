@@ -29,7 +29,6 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
-import com.android.tradefed.util.avd.LogCollector;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -106,7 +105,7 @@ public class OxygenUtilTest {
                             + "some vcpu hw run failure: 0x7.\n"
                             + "tailing string";
             FileUtil.writeToFile(content, file1);
-            List<String> signatures = LogCollector.collectErrorSignatures(tmpDir);
+            List<String> signatures = OxygenUtil.collectErrorSignatures(tmpDir);
             assertEquals("crosvm_vcpu_hw_run_failure_7", signatures.get(0));
             assertEquals("launch_cvd_port_collision", signatures.get(1));
         } finally {
@@ -134,7 +133,7 @@ public class OxygenUtilTest {
                             + " CuttlefishLauncherMainstart\n"
                             + "tailing string";
             FileUtil.writeToFile(content, file1);
-            long[] metrics = LogCollector.collectDeviceLaunchMetrics(tmpDir);
+            long[] metrics = OxygenUtil.collectDeviceLaunchMetrics(tmpDir);
             assertEquals(61880, metrics[0]);
             assertEquals(124630, metrics[1]);
 
@@ -165,7 +164,7 @@ public class OxygenUtilTest {
                         + " CuttlefishLauncherMainstart\n"
                         + "tailing string";
             FileUtil.writeToFile(content, file1);
-            long[] metrics = LogCollector.collectDeviceLaunchMetrics(tmpDir);
+            long[] metrics = OxygenUtil.collectDeviceLaunchMetrics(tmpDir);
             assertEquals(47470, metrics[0]);
             assertEquals(80800, metrics[1]);
 
@@ -182,7 +181,7 @@ public class OxygenUtilTest {
             File file1 = FileUtil.createTempFile("oxygen_version.txt", "", tmpDir);
             String content = "version_number \n\n\n";
             FileUtil.writeToFile(content, file1);
-            assertEquals("version_number", LogCollector.collectOxygenVersion(tmpDir));
+            assertEquals("version_number", OxygenUtil.collectOxygenVersion(tmpDir));
 
         } finally {
             FileUtil.recursiveDelete(tmpDir);
