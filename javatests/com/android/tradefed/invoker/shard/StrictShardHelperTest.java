@@ -22,6 +22,8 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.StubBuildProvider;
@@ -40,6 +42,7 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.IRescheduler;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.testtype.IInvocationContextReceiver;
@@ -706,6 +709,90 @@ public class StrictShardHelperTest {
                 assertTrue(testCase, maxShardSize - minShardSize <= 1);
             }
         }
+    }
+
+    @Test
+    public void testDynamicShardEnabled() throws Exception {
+        StrictShardHelper tHelper =
+                new StrictShardHelper() {
+                    @Override
+                    protected boolean shardConfigDynamic(
+                            IConfiguration config,
+                            TestInformation testInfo,
+                            IRescheduler rescheduler,
+                            ITestLogger logger) {
+                        return true;
+                    }
+                };
+        StrictShardHelper spyHelper = Mockito.spy(tHelper);
+
+        List<IRemoteTest> test = new ArrayList<>();
+        test.add(createFakeSuite("module2"));
+        test.add(createFakeSuite("module1"));
+        test.add(createFakeSuite("module3"));
+        test.add(createFakeSuite("module1"));
+        test.add(createFakeSuite("module1"));
+        test.add(createFakeSuite("module2"));
+        test.add(createFakeSuite("module3"));
+        CommandOptions options = new CommandOptions();
+        OptionSetter setter = new OptionSetter(options);
+        setter.setOptionValue("shard-count", "3");
+        setter.setOptionValue("shard-index", "1");
+
+        // Important! Setting remote-dynamic-sharding to true
+        setter.setOptionValue("remote-dynamic-sharding", "true");
+
+        mConfig.setCommandOptions(options);
+        mConfig.setCommandLine(new String[] {"empty"});
+        mConfig.setTests(test);
+
+        spyHelper.shardConfig(mConfig, mTestInfo, mRescheduler, null);
+
+        // Verify that it is called once
+        verify(spyHelper, times(1))
+                .shardConfigDynamic(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    public void testDynamicShardDisabled() throws Exception {
+        StrictShardHelper tHelper =
+                new StrictShardHelper() {
+                    @Override
+                    protected boolean shardConfigDynamic(
+                            IConfiguration config,
+                            TestInformation testInfo,
+                            IRescheduler rescheduler,
+                            ITestLogger logger) {
+                        return true;
+                    }
+                };
+        StrictShardHelper spyHelper = Mockito.spy(tHelper);
+
+        List<IRemoteTest> test = new ArrayList<>();
+        test.add(createFakeSuite("module2"));
+        test.add(createFakeSuite("module1"));
+        test.add(createFakeSuite("module3"));
+        test.add(createFakeSuite("module1"));
+        test.add(createFakeSuite("module1"));
+        test.add(createFakeSuite("module2"));
+        test.add(createFakeSuite("module3"));
+        CommandOptions options = new CommandOptions();
+        OptionSetter setter = new OptionSetter(options);
+        setter.setOptionValue("shard-count", "3");
+        setter.setOptionValue("shard-index", "1");
+
+        // Important! Setting remote-dynamic-sharding to false
+        setter.setOptionValue("remote-dynamic-sharding", "false");
+
+        mConfig.setCommandOptions(options);
+        mConfig.setCommandLine(new String[] {"empty"});
+        mConfig.setTests(test);
+
+        spyHelper.shardConfig(mConfig, mTestInfo, mRescheduler, null);
+
+        // Verify that it is not called
+        verify(spyHelper, times(0))
+                .shardConfigDynamic(Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
     }
 
     private File createTmpConfig(String objType, Object obj) throws IOException {
