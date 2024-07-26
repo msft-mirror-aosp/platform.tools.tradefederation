@@ -1544,7 +1544,7 @@ public class InvocationExecution implements IInvocationExecution {
                 InvocationMetricKey.AUTO_RETRY_TIME, retryTimeMs);
     }
 
-    private void linkExternalDirs(IBuildInfo info, TestInformation testInfo) {
+    protected void linkExternalDirs(IBuildInfo info, TestInformation testInfo) {
         if (info.getProperties().contains(BuildInfoProperties.DO_NOT_LINK_TESTS_DIR)) {
             CLog.d("Skip linking external directory as FileProperty was set.");
             return;
