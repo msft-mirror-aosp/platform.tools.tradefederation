@@ -444,7 +444,14 @@ public class AdbSshConnection extends AdbTcpConnection {
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
             mGceTunnelMonitor = new GceLHPTunnelMonitor();
-            mHOUtil = new HostOrchestratorUtil(device, gceAvdInfo);
+            mHOUtil =
+                    new HostOrchestratorUtil(
+                            deviceOptions.useOxygenationDevice(),
+                            deviceOptions.getExtraOxygenArgs().containsKey("use_cvd"),
+                            deviceOptions.getSshPrivateKeyPath(),
+                            deviceOptions.getInstanceUser(),
+                            gceAvdInfo,
+                            deviceOptions.getAvdDriverBinary());
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
