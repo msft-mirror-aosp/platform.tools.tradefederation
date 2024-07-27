@@ -88,7 +88,7 @@ public class GCSFileDownloaderFuncTest {
                 new GCSFileDownloader() {
 
                     @Override
-                    protected File createTempFile(String remoteFilePath, File rootDir)
+                    File createTempFile(String remoteFilePath, File rootDir)
                             throws BuildRetrievalError {
                         try {
                             File tmpFile =
