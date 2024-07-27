@@ -39,7 +39,7 @@ public class GCSFileDownloaderTest {
         mGCSFileDownloader =
                 new GCSFileDownloader() {
                     @Override
-                    protected void downloadFile(String bucketName, String filename, File localFile)
+                    void downloadFile(String bucketName, String filename, File localFile)
                             throws BuildRetrievalError {
                         try {
                             FileUtil.writeToFile(bucketName + "\n" + filename, localFile);

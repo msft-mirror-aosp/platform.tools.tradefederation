@@ -17,7 +17,6 @@
 package com.android.tradefed.util;
 
 import com.android.tradefed.log.LogUtil;
-import com.android.tradefed.util.gcs.GCSCommon;
 
 import com.google.api.client.http.InputStreamContent;
 import com.google.api.services.storage.Storage;
@@ -35,12 +34,10 @@ public class GCSFileUploader extends GCSCommon {
             Collections.singleton("https://www.googleapis.com/auth/devstorage.read_write");
 
     public GCSFileUploader(File jsonKeyFile) {
-        super();
-        mJsonKeyFile = jsonKeyFile;
+        super(jsonKeyFile);
     }
 
     public GCSFileUploader() {}
-
 
     /**
      * Upload data to a GCS bucket file. gs://[bucketName]/[gcsFileName]
@@ -81,17 +78,5 @@ public class GCSFileUploader extends GCSCommon {
 
     private Storage getWritableStorage() throws IOException {
         return getStorage(WRITE_SCOPE);
-    }
-
-    /**
-     * Override the implementation in base to support credential based on TF options.
-     *
-     * @param scopes specific scopes to request credential for.
-     * @return {@link Storage} object of the GCS bucket
-     * @throws IOException
-     */
-    @Override
-    protected Storage getStorage(Collection<String> scopes) throws IOException {
-        return GCSHelper.getStorage(scopes, mJsonKeyFile);
     }
 }
