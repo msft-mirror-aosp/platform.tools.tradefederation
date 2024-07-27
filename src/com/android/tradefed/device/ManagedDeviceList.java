@@ -146,7 +146,10 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
                 new IMatcher<IManagedTestDevice>() {
                     @Override
                     public boolean matches(IManagedTestDevice element) {
-                        return serialNumber.equals(element.getTrackingSerial());
+                        // For TCP devices if we find their tracking serial or serial, allow the
+                        // match
+                        return serialNumber.equals(element.getTrackingSerial())
+                                || serialNumber.equals(element.getSerialNumber());
                     }
                 });
     }
