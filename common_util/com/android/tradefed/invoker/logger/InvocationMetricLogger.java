@@ -355,6 +355,7 @@ public class InvocationMetricLogger {
         INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME(
                 "incremental_snapuserd_write_blocking_time", true),
         INCREMENTAL_FALLBACK_REASON("incremental_fallback_reason", true),
+        INCREMENTAL_RECOVERY_FALLBACK("incremental_recovery_fallback", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
@@ -366,6 +367,7 @@ public class InvocationMetricLogger {
         DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
         DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
         SEARCH_ARTIFACT_FAILURE_COUNT("search_artifact_failure_count", true),
+        RESOLVE_SYMLINK_COUNT("resolve_symlink_count", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),

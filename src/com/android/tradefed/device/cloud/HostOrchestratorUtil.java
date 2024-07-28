@@ -16,7 +16,6 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -55,16 +54,40 @@ public class HostOrchestratorUtil {
     private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
     private static final String CVD_HOST_LOGZ = "cvd_hostlog_zip";
     private static final String UNSUPPORTED_API_RESPONSE = "404 page not found";
-    private ITestDevice mDevice;
+    private boolean mUseOxygenation = false;
+    private boolean mUseCvdOxygen = false;
+    private File mSshPrivateKeyPath;
+    private String mInstanceUser;
     private GceAvdInfo mGceAvd;
     private OxygenClient mOxygenClient;
 
-    public HostOrchestratorUtil(ITestDevice device, GceAvdInfo gceAvd) {
-        this(device, gceAvd, new OxygenClient(device.getOptions().getAvdDriverBinary()));
+    public HostOrchestratorUtil(
+            boolean useOxygenation,
+            boolean useCvdOxygen,
+            File sshPrivateKeyPath,
+            String instanceUser,
+            GceAvdInfo gceAvd,
+            File avdDriverBinary) {
+        this(
+                useOxygenation,
+                useCvdOxygen,
+                sshPrivateKeyPath,
+                instanceUser,
+                gceAvd,
+                new OxygenClient(avdDriverBinary));
     }
 
-    public HostOrchestratorUtil(ITestDevice device, GceAvdInfo gceAvd, OxygenClient oxygenClient) {
-        mDevice = device;
+    public HostOrchestratorUtil(
+            boolean useOxygenation,
+            boolean useCvdOxygen,
+            File sshPrivateKeyPath,
+            String instanceUser,
+            GceAvdInfo gceAvd,
+            OxygenClient oxygenClient) {
+        mUseOxygenation = useOxygenation;
+        mUseCvdOxygen = useCvdOxygen;
+        mSshPrivateKeyPath = sshPrivateKeyPath;
+        mInstanceUser = instanceUser;
         mGceAvd = gceAvd;
         mOxygenClient = oxygenClient;
     }
@@ -235,23 +258,23 @@ public class HostOrchestratorUtil {
         // if it's oxygenation device -> portforward the CURL tunnel via LHP.
         // if `use_cvd` is set -> portforward the CURL tunnel via SSH.
         // TODO(easoncylee): Flesh out this section when it's ready.
-        if (mDevice.getOptions().useOxygenationDevice()) {
+        if (mUseOxygenation) {
             CLog.d("Portforwarding Host Orchestrator service via LHP for Oxygenation CF.");
             return mOxygenClient.createTunnelViaLHP(
                     LHPTunnelMode.CURL,
                     portNumber,
                     mGceAvd.instanceName(),
                     mGceAvd.getOxygenationDeviceId());
-        } else if (mDevice.getOptions().getExtraOxygenArgs().containsKey("use_cvd")) {
+        } else if (mUseCvdOxygen) {
             CLog.d("Portforarding Host Orchestrator service via SSH tunnel for Oxygen CF.");
             List<String> tunnelParam = new ArrayList<>();
             tunnelParam.add(String.format(OXYGEN_TUNNEL_PARAM, portNumber));
             tunnelParam.add("-N");
             List<String> cmd =
                     GceRemoteCmdFormatter.getSshCommand(
-                            mDevice.getOptions().getSshPrivateKeyPath(),
+                            mSshPrivateKeyPath,
                             tunnelParam,
-                            mDevice.getOptions().getInstanceUser(),
+                            mInstanceUser,
                             mGceAvd.hostAndPort().getHost(),
                             "" /* no command */);
             return getRunUtil().runCmdInBackground(cmd);

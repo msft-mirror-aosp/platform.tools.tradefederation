@@ -401,8 +401,13 @@ public class AdbSshConnection extends AdbTcpConnection {
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getDevice().getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
-
-                if (getDevice().getOptions().useOxygen()) {
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (getDevice().getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else if (getDevice().getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
                     util.downloadLaunchFailureLogs(tse, getLogger());
                 }
@@ -439,7 +444,14 @@ public class AdbSshConnection extends AdbTcpConnection {
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
             mGceTunnelMonitor = new GceLHPTunnelMonitor();
-            mHOUtil = new HostOrchestratorUtil(device, gceAvdInfo);
+            mHOUtil =
+                    new HostOrchestratorUtil(
+                            deviceOptions.useOxygenationDevice(),
+                            deviceOptions.getExtraOxygenArgs().containsKey("use_cvd"),
+                            deviceOptions.getSshPrivateKeyPath(),
+                            deviceOptions.getInstanceUser(),
+                            gceAvdInfo,
+                            deviceOptions.getAvdDriverBinary());
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(

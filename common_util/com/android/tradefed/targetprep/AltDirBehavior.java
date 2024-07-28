@@ -18,7 +18,9 @@ package com.android.tradefed.targetprep;
 
 /**
  * An enum to define alternative directory behaviors for various test artifact installers/pushers
+ *
  * <p>
+ *
  * @see TestAppInstallSetup
  * @see TestFilePushSetup
  */

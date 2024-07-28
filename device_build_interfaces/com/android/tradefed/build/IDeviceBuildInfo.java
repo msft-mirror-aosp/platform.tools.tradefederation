@@ -29,9 +29,7 @@ public interface IDeviceBuildInfo extends IBuildInfo {
      */
     public String getDeviceBuildId();
 
-    /**
-     * Optional method to return the type of the platform build being tested.
-     */
+    /** Optional method to return the type of the platform build being tested. */
     public String getDeviceBuildFlavor();
 
     /**
@@ -42,14 +40,10 @@ public interface IDeviceBuildInfo extends IBuildInfo {
      */
     public default void setDeviceBuildFlavor(String deviceBuildFlavor) {}
 
-    /**
-     * Get the local device image zip file.
-     */
+    /** Get the local device image zip file. */
     public File getDeviceImageFile();
 
-    /**
-     * Get the local device image zip version.
-     */
+    /** Get the local device image zip version. */
     public String getDeviceImageVersion();
 
     /**
@@ -59,14 +53,10 @@ public interface IDeviceBuildInfo extends IBuildInfo {
      */
     public void setDeviceImageFile(File deviceImageFile, String version);
 
-    /**
-     * Get the local test userdata image file.
-     */
+    /** Get the local test userdata image file. */
     public File getUserDataImageFile();
 
-    /**
-     * Get the local test userdata image version.
-     */
+    /** Get the local test userdata image version. */
     public String getUserDataImageVersion();
 
     /**
@@ -76,14 +66,10 @@ public interface IDeviceBuildInfo extends IBuildInfo {
      */
     public void setUserDataImageFile(File userDataFile, String version);
 
-    /**
-     * Get the local path to the extracted tests.zip file contents.
-     */
+    /** Get the local path to the extracted tests.zip file contents. */
     public File getTestsDir();
 
-    /**
-     * Get the extracted tests.zip version.
-     */
+    /** Get the extracted tests.zip version. */
     public String getTestsDirVersion();
 
     /**
@@ -109,14 +95,10 @@ public interface IDeviceBuildInfo extends IBuildInfo {
      */
     public void setTestsDir(File testsZipFile, String version);
 
-    /**
-     * Get the local baseband image file.
-     */
+    /** Get the local baseband image file. */
     public File getBasebandImageFile();
 
-    /**
-     * Get the baseband version.
-     */
+    /** Get the baseband version. */
     public String getBasebandVersion();
 
     /**
@@ -127,14 +109,10 @@ public interface IDeviceBuildInfo extends IBuildInfo {
      */
     public void setBasebandImage(File basebandFile, String version);
 
-    /**
-     * Get the local bootloader image file.
-     */
+    /** Get the local bootloader image file. */
     public File getBootloaderImageFile();
 
-    /**
-     * Get the bootloader version.
-     */
+    /** Get the bootloader version. */
     public String getBootloaderVersion();
 
     /**
@@ -145,55 +123,34 @@ public interface IDeviceBuildInfo extends IBuildInfo {
      */
     public void setBootloaderImageFile(File bootloaderImgFile, String version);
 
-    /**
-     * Get the device OTA package zip file.
-     */
+    /** Get the device OTA package zip file. */
     public File getOtaPackageFile();
 
-    /**
-     * Get the device OTA package zip version.
-     */
+    /** Get the device OTA package zip version. */
     public String getOtaPackageVersion();
 
-    /**
-     * Set the device OTA package zip file.
-     */
+    /** Set the device OTA package zip file. */
     public void setOtaPackageFile(File otaFile, String version);
 
-    /**
-     * Gets the mkbootimg file used to create the kernel image.
-     */
+    /** Gets the mkbootimg file used to create the kernel image. */
     public File getMkbootimgFile();
 
-    /**
-     * Gets the mkbootimg version.
-     */
+    /** Gets the mkbootimg version. */
     public String getMkbootimgVersion();
 
-    /**
-     * Sets the mkbootimg file used to create the kernel image.
-     */
+    /** Sets the mkbootimg file used to create the kernel image. */
     public void setMkbootimgFile(File mkbootimg, String version);
 
-    /**
-     * Gets the ramdisk file used to create the kernel image.
-     */
+    /** Gets the ramdisk file used to create the kernel image. */
     public File getRamdiskFile();
 
-    /**
-     * Gets the ramdisk version.
-     */
+    /** Gets the ramdisk version. */
     public String getRamdiskVersion();
 
-    /**
-     * Gets the ramdisk file used to create the kernel image.
-     */
+    /** Gets the ramdisk file used to create the kernel image. */
     public void setRamdiskFile(File ramdisk, String version);
 
-    /**
-     * Removes all temporary files.
-     */
+    /** Removes all temporary files. */
     @Override
     public void cleanUp();
-
 }
