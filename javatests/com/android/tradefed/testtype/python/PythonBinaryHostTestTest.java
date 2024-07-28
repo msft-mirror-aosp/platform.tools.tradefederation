@@ -77,6 +77,7 @@ public final class PythonBinaryHostTestTest {
     private TestInformation mTestInfo;
     @Mock ITestInvocationListener mMockListener;
     private File mFakeAdb;
+    private File mFakeAapt;
     private File mPythonBinary;
     private File mOutputFile;
     private File mModuleDir;
@@ -86,12 +87,23 @@ public final class PythonBinaryHostTestTest {
         MockitoAnnotations.initMocks(this);
 
         mFakeAdb = FileUtil.createTempFile("adb-python-tests", "");
+        mFakeAapt = FileUtil.createTempFile("aapt-python-tests", "");
 
         mTest =
                 new PythonBinaryHostTest() {
                     @Override
                     IRunUtil getRunUtil() {
                         return mMockRunUtil;
+                    }
+
+                    @Override
+                    File getAdb() {
+                        return mFakeAdb;
+                    }
+
+                    @Override
+                    File getAapt() {
+                        return mFakeAapt;
                     }
 
                     @Override
@@ -117,6 +129,7 @@ public final class PythonBinaryHostTestTest {
     @After
     public void tearDown() throws Exception {
         FileUtil.deleteFile(mFakeAdb);
+        FileUtil.deleteFile(mFakeAapt);
         FileUtil.deleteFile(mPythonBinary);
         FileUtil.deleteFile(mOutputFile);
         FileUtil.recursiveDelete(mModuleDir);
@@ -152,22 +165,23 @@ public final class PythonBinaryHostTestTest {
             when(mMockDevice.getIDevice()).thenReturn(new StubDevice("serial"));
 
             mTest.run(mTestInfo, mMockListener);
+            mTest.run(mTestInfo, mMockListener);
 
-            verify(mMockRunUtil)
-                    .setEnvVariable("PATH", String.format("%s:bin/", mFakeAdb.getParent()));
-            verify(mMockRunUtil).setEnvVariable(Mockito.eq("LD_LIBRARY_PATH"), Mockito.any());
-            verify(mMockListener)
+            verify(mMockRunUtil, times(2)).setEnvVariable("PATH", ".:runtime_deps:/usr/bin");
+            verify(mMockRunUtil, times(2))
+                    .setEnvVariable(Mockito.eq("LD_LIBRARY_PATH"), Mockito.any());
+            verify(mMockListener, times(2))
                     .testRunStarted(
                             Mockito.eq(mPythonBinary.getName()),
                             Mockito.eq(11),
                             Mockito.eq(0),
                             Mockito.anyLong());
-            verify(mMockListener)
+            verify(mMockListener, times(2))
                     .testLog(
                             Mockito.eq(mPythonBinary.getName() + "-stdout"),
                             Mockito.eq(LogDataType.TEXT),
                             Mockito.any());
-            verify(mMockListener)
+            verify(mMockListener, times(2))
                     .testLog(
                             Mockito.eq(mPythonBinary.getName() + "-stderr"),
                             Mockito.eq(LogDataType.TEXT),
