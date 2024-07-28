@@ -22,6 +22,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.SearchArtifactUtil;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -192,6 +193,19 @@ public class TestInformation {
     public File getDependencyFile(String fileName, boolean targetFirst)
             throws FileNotFoundException {
         File dependency = null;
+        try {
+            dependency = SearchArtifactUtil.searchFile(fileName, targetFirst);
+        } catch (Exception e) {
+            // TODO: handle error when migration is complete.
+            CLog.e(e);
+        }
+        if (dependency != null && dependency.isFile()) {
+            return dependency;
+        } else {
+            // Silently report not found and fall back to old logic.
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, 1);
+        }
         dependency = getFromEnv(fileName, targetFirst);
         if (dependency != null && dependency.isFile()) {
             return dependency;
@@ -208,6 +222,9 @@ public class TestInformation {
         if (dependency != null && dependency.isFile()) {
             return dependency;
         }
+        // if old logic fails too, do not report search artifact failure
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, -1);
         throw new FileNotFoundException(
                 String.format("Could not find an artifact file associated with %s", fileName));
     }

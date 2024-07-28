@@ -73,6 +73,9 @@ public class SandboxedInvocationExecution extends InvocationExecution {
         // Still set the test-tag on build infos for proper reporting
         for (IBuildInfo info : testInfo.getContext().getBuildInfos()) {
             setTestTag(info, config);
+            // Force the linking again in case there was no original testsdir
+            // this is inop if the linking already occurred.
+            super.linkExternalDirs(info, testInfo);
         }
         backFillTestInformation(testInfo, testInfo.getBuildInfo());
         return true;
