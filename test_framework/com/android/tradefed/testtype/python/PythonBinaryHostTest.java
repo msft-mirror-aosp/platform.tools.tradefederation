@@ -311,9 +311,17 @@ public class PythonBinaryHostTest
             CLog.e(e);
         }
         try {
+            // This is for backward compatibility. Nowaday we only use aapt2, but in some older
+            // branches, such as git_tm-dev, aapt is still required.
             RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt());
         } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
             CLog.e("Failed to link aapt to working dir %s", workingDir);
+            CLog.e(e);
+        }
+        try {
+            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt2());
+        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
+            CLog.e("Failed to link aapt2 to working dir %s", workingDir);
             CLog.e(e);
         }
         // Bundle binaries / dependencies have priorities over existing PATH
@@ -513,12 +521,17 @@ public class PythonBinaryHostTest
 
     @VisibleForTesting
     File getAapt() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.getAapt();
+        return DeviceActionUtil.findExecutableOnPath("aapt");
+    }
+
+    @VisibleForTesting
+    File getAapt2() throws DeviceActionUtil.DeviceActionConfigError {
+        return DeviceActionUtil.findExecutableOnPath("aapt2");
     }
 
     @VisibleForTesting
     File getAdb() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.getAdb();
+        return DeviceActionUtil.findExecutableOnPath("adb");
     }
 
     @VisibleForTesting
