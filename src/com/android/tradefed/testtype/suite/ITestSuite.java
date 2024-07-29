@@ -90,6 +90,7 @@ import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.proto.tradefed.feature.FeatureResponse;
 
@@ -155,6 +156,7 @@ public abstract class ITestSuite
     public static final String RANDOM_SEED = "random-seed";
     public static final String SKIP_STAGING_ARTIFACTS = "skip-staging-artifacts";
     public static final String STAGE_MODULE_ARTIFACTS = "stage-module-artifacts";
+    public static final String ENABLE_RESOLVE_SYM_LINKS = "enable-resolve-sym-links";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
@@ -217,7 +219,7 @@ public abstract class ITestSuite
     )
     private Set<String> mSystemStatusCheckBlacklist = new HashSet<>();
 
-    @Option(name = "enable-resolve-sym-links", description = "Enable symlinks resolving")
+    @Option(name = ENABLE_RESOLVE_SYM_LINKS, description = "Enable symlinks resolving")
     protected boolean mEnableResolveSymlinks = false;
 
     @Option(
@@ -507,9 +509,11 @@ public abstract class ITestSuite
             }
             filterPreparers(config.getValue(), mAllowedPreparers);
 
-            // Copy the CoverageOptions from the main configuration to the module configuration.
             if (mMainConfiguration != null) {
+                // Copy the CoverageOptions from the main configuration to the module configuration.
                 config.getValue().setCoverageOptions(mMainConfiguration.getCoverageOptions());
+                // Copy the CommandOptions from the main configuration to the module configuration.
+                config.getValue().setCommandOptions(mMainConfiguration.getCommandOptions());
             }
 
             filteredConfig.put(config.getKey(), config.getValue());
@@ -573,8 +577,9 @@ public abstract class ITestSuite
                         destination = mBuildInfo.getBuildAttributes().get("ROOT_DIR");
                     }
                     CLog.d(
-                            "downloading to destination: %s the following include_filters: %s",
-                            destination, includeFilters);
+                            "resolve symlinks:[%s] downloading to destination: %s the following"
+                                    + " include_filters: %s",
+                            mEnableResolveSymlinks, destination, includeFilters);
                     args.put(ResolvePartialDownload.DESTINATION_DIR, destination);
                     args.put(
                             ResolvePartialDownload.INCLUDE_FILTERS,
@@ -588,7 +593,7 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
-                    args.put("enable-resolve-sym-links", String.valueOf(mEnableResolveSymlinks));
+                    args.put(ENABLE_RESOLVE_SYM_LINKS, String.valueOf(mEnableResolveSymlinks));
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
@@ -603,9 +608,13 @@ public abstract class ITestSuite
                             e.getMessage(), e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
                 }
             } else {
+                CLog.d("Not using feature server to download %s remoteFile", mDynamicResolver);
                 mDynamicResolver.setDevice(device);
                 mDynamicResolver.addExtraArgs(
                         mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
+                mDynamicResolver.addExtraArgs(
+                        ImmutableMap.of(
+                                ENABLE_RESOLVE_SYM_LINKS, String.valueOf(mEnableResolveSymlinks)));
                 for (File remoteFile : mBuildInfo.getRemoteFiles()) {
                     try {
                         mDynamicResolver.resolvePartialDownloadZip(
