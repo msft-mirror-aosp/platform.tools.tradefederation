@@ -29,6 +29,7 @@ public interface ILogRegistry extends ILogOutput {
 
     /** Events that are useful to be logged */
     public enum EventType {
+        TRADEFED_STARTED,
         DEVICE_CONNECTED,
         DEVICE_CONNECTED_OFFLINE,
         DEVICE_DISCONNECTED,
