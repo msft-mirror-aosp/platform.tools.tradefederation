@@ -41,7 +41,6 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
-import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TestRunnerUtil;
 
 import com.google.common.base.Strings;
@@ -139,12 +138,6 @@ public class ExecutableHostTest extends ExecutableBaseTest {
             ldLibraryPath = workingDir.getAbsolutePath();
         }
         runUtil.setEnvVariable(LD_LIBRARY_PATH, ldLibraryPath);
-
-        runUtil.setEnvVariable(
-                "PATH",
-                String.format(
-                        ".:%s:/usr/bin",
-                        SystemUtil.getRunningJavaBinaryPath().getParentFile().getAbsolutePath()));
 
         // Set Tradefed adb on $PATH of binary
         AdbUtils.updateAdb(getTestInfo(), runUtil, getAdbPath());
