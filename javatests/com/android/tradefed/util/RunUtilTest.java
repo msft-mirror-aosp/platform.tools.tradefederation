@@ -122,22 +122,6 @@ public class RunUtilTest {
         }
     }
 
-    /** Test class on {@link RunUtil} in order to monitor the real process. */
-    class MonitoredRunUtil extends RunUtil {
-        public ProcessBuilder processBuilder;
-
-        public MonitoredRunUtil(boolean inheritEnvVars) {
-            super(inheritEnvVars);
-        }
-
-        @Override
-        RunnableResult createRunnableResult(
-                OutputStream stdout, OutputStream stderr, ProcessBuilder processBuilder) {
-            this.processBuilder = processBuilder;
-            return super.createRunnableResult(stdout, stderr, processBuilder);
-        }
-    }
-
     /** Test class implementing {@link ICacheClient} to mock the cache client. */
     class FakeCacheClient implements ICacheClient {
         private final Map<Digest, ExecutableActionResult> mCache = new HashMap<>();
@@ -265,12 +249,12 @@ public class RunUtilTest {
         FileUtil.ensureGroupRWX(secondBinary);
         File secondStdout = FileUtil.createTempFile("stdout_subprocess_2_", ".txt", mWorkingDir);
         File secondStderr = FileUtil.createTempFile("stderr_subprocess_2_", ".txt", mWorkingDir);
-        MonitoredRunUtil firstRunUtil = new MonitoredRunUtil(false);
+        RunUtil firstRunUtil = new RunUtil();
         firstRunUtil.setWorkingDir(firstWorkingDir);
         firstRunUtil.setEnvVariable(
                 "LD_LIBRARY_PATH",
                 sharedLibA.getAbsolutePath() + ":" + sharedLibB.getAbsolutePath());
-        MonitoredRunUtil secondRunUtil = new MonitoredRunUtil(false);
+        RunUtil secondRunUtil = new RunUtil();
         secondRunUtil.setWorkingDir(secondWorkingDir);
         secondRunUtil.setEnvVariable(
                 "LD_LIBRARY_PATH",
@@ -310,8 +294,6 @@ public class RunUtilTest {
         assertEquals(
                 FileUtil.readStringFromFile(firstStderr),
                 FileUtil.readStringFromFile(secondStderr));
-        assertEquals(
-                firstRunUtil.processBuilder.environment(), Map.of("LD_LIBRARY_PATH", "lib1:lib2"));
     }
 
     /** Test cache works when the stdout stream and stderr stream are not specified. */

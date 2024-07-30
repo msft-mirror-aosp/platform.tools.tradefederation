@@ -78,13 +78,6 @@ public class ExecutableHostTest extends ExecutableBaseTest {
             description = "Used to enable/disable caching for specific modules.")
     private boolean mEnableCache = false;
 
-    @Option(
-            name = "inherit-env-vars",
-            description =
-                    "Whether the subprocess should inherit environment variables from the main"
-                            + " process.")
-    private boolean mInheritEnvVars = true;
-
     @Override
     public String findBinary(String binary) {
         File bin = new File(binary);
@@ -230,7 +223,7 @@ public class ExecutableHostTest extends ExecutableBaseTest {
 
     @VisibleForTesting
     IRunUtil createRunUtil() {
-        return new RunUtil(mInheritEnvVars);
+        return new RunUtil();
     }
 
     @VisibleForTesting
