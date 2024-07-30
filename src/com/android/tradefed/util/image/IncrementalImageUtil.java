@@ -116,11 +116,11 @@ public class IncrementalImageUtil {
             CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
             return null;
         }
+        String serialNumber = device.getSerialNumber();
         FileCacheTracker tracker =
-                DeviceImageTracker.getDefaultCache()
-                        .getBaselineDeviceImage(device.getSerialNumber());
+                DeviceImageTracker.getDefaultCache().getBaselineDeviceImage(serialNumber);
         if (tracker == null) {
-            CLog.d("Not tracking current baseline image.");
+            CLog.d("Not tracking current baseline image for %s", serialNumber);
             return null;
         }
         String deviceBuildId = device.getBuildId();
