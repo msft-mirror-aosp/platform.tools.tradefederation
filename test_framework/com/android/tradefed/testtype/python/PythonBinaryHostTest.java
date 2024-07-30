@@ -154,6 +154,13 @@ public class PythonBinaryHostTest
     private boolean mEnableCache = false;
 
     @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
+
+    @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
@@ -514,7 +521,7 @@ public class PythonBinaryHostTest
     @VisibleForTesting
     IRunUtil getRunUtil() {
         if (mRunUtil == null) {
-            mRunUtil = new RunUtil();
+            mRunUtil = new RunUtil(mInheritEnvVars);
         }
         return mRunUtil;
     }

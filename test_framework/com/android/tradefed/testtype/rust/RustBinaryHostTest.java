@@ -37,6 +37,7 @@ import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.DeviceActionUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
@@ -67,6 +68,13 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             name = "enable-cache",
             description = "Used to enable/disable caching for specific modules.")
     private boolean mEnableCache = false;
+
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
 
     private IBuildInfo mBuildInfo;
 
@@ -240,6 +248,17 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
         }
+        String runtimeDepsFolderName = "runtime_deps";
+        try {
+            RunUtil.linkFile(
+                    invocation.workingDir,
+                    runtimeDepsFolderName,
+                    DeviceActionUtil.findExecutableOnPath("adb"));
+        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
+            CLog.e("Failed to link adb to working dir %s", invocation.workingDir);
+            CLog.e(e);
+        }
+        runUtil.setEnvVariable("PATH", String.format(".:%s:/usr/bin", runtimeDepsFolderName));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
         String instanceName =
@@ -308,6 +327,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
-        return new RunUtil();
+        return new RunUtil(mInheritEnvVars);
     }
 }
