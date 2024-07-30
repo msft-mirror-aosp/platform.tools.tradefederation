@@ -21,6 +21,7 @@ import com.android.tradefed.device.RemoteAndroidDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
 import com.android.tradefed.device.internal.DeviceSnapshotHandler;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
@@ -105,20 +106,10 @@ public class AdbTcpConnection extends DefaultConnection {
             }
         } else {
             DeviceSnapshotHandler restoreHandler = new DeviceSnapshotHandler();
-            boolean restoreSuccess = restoreHandler.restoreSnapshotDevice(device, snapshotId);
-            if (restoreSuccess) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricLogger.InvocationMetricKey
-                                .DEVICE_RECOVERED_FROM_DEVICE_RESET,
-                        1);
-            } else {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to restore device: %s with snapshot ID: %s",
-                                device.getSerialNumber(), snapshotId),
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-            }
+            restoreHandler.restoreSnapshotDevice(device, snapshotId);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricLogger.InvocationMetricKey.DEVICE_RECOVERED_FROM_DEVICE_RESET,
+                    1);
         }
     }
 
@@ -127,16 +118,7 @@ public class AdbTcpConnection extends DefaultConnection {
     public void snapshotDevice(ITestDevice device, String snapshotId)
             throws DeviceNotAvailableException {
         if (!Strings.isNullOrEmpty(snapshotId)) {
-            DeviceSnapshotHandler snapshotHandler = new DeviceSnapshotHandler();
-            boolean snapshotSuccess = snapshotHandler.snapshotDevice(device, snapshotId);
-            if (!snapshotSuccess) {
-                throw new DeviceNotAvailableException(
-                        String.format(
-                                "Failed to snapshot device: %s with snapshot ID: %s",
-                                device.getSerialNumber(), snapshotId),
-                        device.getSerialNumber(),
-                        DeviceErrorIdentifier.DEVICE_FAILED_TO_SNAPSHOT);
-            }
+            new DeviceSnapshotHandler().snapshotDevice(device, snapshotId);
         }
     }
 
@@ -148,48 +130,51 @@ public class AdbTcpConnection extends DefaultConnection {
      * @return true if we successfully connected to the device, false otherwise.
      */
     public boolean adbTcpConnect(String host, String port) {
-        for (int i = 0; i < MAX_RETRIES; i++) {
-            CommandResult result = adbConnect(host, port);
-            if (CommandStatus.SUCCESS.equals(result.getStatus())
-                    && result.getStdout().contains(ADB_SUCCESS_CONNECT_TAG)) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("adbTcpConnect")) {
+            for (int i = 0; i < MAX_RETRIES; i++) {
+                CommandResult result = adbConnect(host, port);
                 CLog.d(
                         "adb connect output: status: %s stdout: %s",
                         result.getStatus(), result.getStdout());
-
-                // It is possible to get a positive result without it being connected because of
-                // the ssh bridge. Retrying to get confirmation, and expecting "already connected".
-                if (confirmAdbTcpConnect(host, port)) {
-                    return true;
+                if (CommandStatus.SUCCESS.equals(result.getStatus())
+                        && result.getStdout().contains(ADB_SUCCESS_CONNECT_TAG)) {
+                    // It is possible to get a positive result without it being connected because of
+                    // the ssh bridge. Retrying to get confirmation, and expecting "already
+                    // connected".
+                    if (confirmAdbTcpConnect(host, port)) {
+                        return true;
+                    }
+                } else if (CommandStatus.SUCCESS.equals(result.getStatus())
+                        && result.getStdout().contains(ADB_CONN_REFUSED)) {
+                    // If we find "Connection Refused", we bail out directly as more connect won't
+                    // help
+                    return false;
                 }
-            } else if (CommandStatus.SUCCESS.equals(result.getStatus())
-                    && result.getStdout().contains(ADB_CONN_REFUSED)) {
-                // If we find "Connection Refused", we bail out directly as more connect won't help
-                return false;
+                CLog.d("adb connect retrying");
+                getRunUtil().sleep((i + 1) * RETRY_INTERVAL_MS);
             }
-            CLog.d(
-                    "adb connect output: status: %s stdout: %s stderr: %s, retrying.",
-                    result.getStatus(), result.getStdout(), result.getStderr());
-            getRunUtil().sleep((i + 1) * RETRY_INTERVAL_MS);
+            return false;
         }
-        return false;
     }
 
     /** Check if the adb connection is enabled. */
     protected void waitForAdbConnect(String serial, final long waitTime)
             throws DeviceNotAvailableException {
-        CLog.i("Waiting %d ms for adb connection.", waitTime);
-        long startTime = System.currentTimeMillis();
-        while (System.currentTimeMillis() - startTime < waitTime) {
-            if (confirmAdbTcpConnect(getHostName(serial), getPortNum(serial))) {
-                CLog.d("Adb connection confirmed.");
-                return;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("wait_for_adb_connect")) {
+            CLog.i("Waiting %d ms for adb connection.", waitTime);
+            long startTime = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startTime < waitTime) {
+                if (confirmAdbTcpConnect(getHostName(serial), getPortNum(serial))) {
+                    CLog.d("Adb connection confirmed.");
+                    return;
+                }
+                getRunUtil().sleep(RETRY_INTERVAL_MS);
             }
-            getRunUtil().sleep(RETRY_INTERVAL_MS);
+            throw new DeviceNotAvailableException(
+                    String.format("No adb connection after %sms.", waitTime),
+                    serial,
+                    DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_TCP_DEVICE);
         }
-        throw new DeviceNotAvailableException(
-                String.format("No adb connection after %sms.", waitTime),
-                serial,
-                DeviceErrorIdentifier.FAILED_TO_CONNECT_TO_TCP_DEVICE);
     }
 
     private boolean confirmAdbTcpConnect(String host, String port) {

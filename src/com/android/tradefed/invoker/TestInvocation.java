@@ -26,6 +26,7 @@ import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandOptions;
 import com.android.tradefed.command.ICommandScheduler.IScheduledInvocationListener;
 import com.android.tradefed.config.ArgsOptionParser;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.GlobalConfiguration;
@@ -100,6 +101,7 @@ import com.android.tradefed.targetprep.DeviceFailedToBootError;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.ITestInformationReceiver;
 import com.android.tradefed.testtype.SubprocessTfLauncher;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IDisableable;
@@ -114,6 +116,7 @@ import com.android.tradefed.util.executor.ParallelDeviceExecutor;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.IOException;
@@ -1255,7 +1258,8 @@ public class TestInvocation implements ITestInvocation {
                             .getInvocationData()
                             .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
                     && !RunMode.DELEGATED_INVOCATION.equals(mode)) {
-                if (config.getSkipManager().shouldSkipInvocation(info)) {
+                boolean skipInvocation = config.getSkipManager().shouldSkipInvocation(info);
+                if (skipInvocation) {
                     CLog.d("Skipping invocation early.");
                     startInvocation(config, info.getContext(), listener);
                     // Backfill accounting metrics with zeros
@@ -1277,6 +1281,7 @@ public class TestInvocation implements ITestInvocation {
                             InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
                     listener.invocationSkipped(
                             new SkipReason(config.getSkipManager().getInvocationSkipReason(), ""));
+                    reportModuleSkip(config, listener);
                     reportHostLog(listener, config);
                     reportInvocationEnded(config, info.getContext(), listener, 0L);
                     return;
@@ -1731,14 +1736,32 @@ public class TestInvocation implements ITestInvocation {
                 String output = device.executeAdbCommand("root");
                 CLog.d("adb recovery root output: %s", output);
                 File recovery_log = device.pullFile(RECOVERY_LOG_DEVICE_PATH);
-                if (recovery_log == null) {
-                    return;
+                if (recovery_log != null) {
+                    try (FileInputStreamSource fis = new FileInputStreamSource(recovery_log)) {
+                        listener.testLog(
+                                String.format("recovery_log_%s.txt", device.getSerialNumber()),
+                                LogDataType.RECOVERY_MODE_LOG,
+                                fis);
+                    }
                 }
-                try (FileInputStreamSource fis = new FileInputStreamSource(recovery_log)) {
-                    listener.testLog(
-                            String.format("recovery_log_%s.txt", device.getSerialNumber()),
-                            LogDataType.RECOVERY_MODE_LOG,
-                            fis);
+                File trustyLog = device.pullFile("/dev/trusty-log0");
+                if (trustyLog != null) {
+                    try (FileInputStreamSource fis = new FileInputStreamSource(trustyLog)) {
+                        listener.testLog(
+                                String.format("trusty-log0_%s.txt", device.getSerialNumber()),
+                                LogDataType.RECOVERY_MODE_LOG,
+                                fis);
+                    }
+                }
+                File lastKmsg = device.pullFile("/sys/fs/pstore/console-ramoops-0");
+                if (lastKmsg != null) {
+                    try (FileInputStreamSource fis = new FileInputStreamSource(lastKmsg)) {
+                        listener.testLog(
+                                String.format("recovery_mode_last_kmsg_%s.txt",
+                                device.getSerialNumber()),
+                                LogDataType.RECOVERY_MODE_LOG,
+                                fis);
+                    }
                 }
             } catch (DeviceNotAvailableException e) {
                 CLog.i("Device unavailable, can't pull recovery.log");
@@ -1894,6 +1917,43 @@ public class TestInvocation implements ITestInvocation {
             }
         }
         return dnae;
+    }
+
+    private void reportModuleSkip(IConfiguration config, ITestInvocationListener listener) {
+        if (!config.getSkipManager().reportSkippedModule()) {
+            return;
+        }
+        // Make a heuristic determination of ABI.
+        String abi = "arm64";
+        if (config.getDeviceConfig().get(0).getDeviceRequirements().nullDeviceRequested()
+                || config.getDeviceConfig().get(0).getDeviceRequirements().gceDeviceRequested()) {
+            abi = "x86_64";
+        }
+        String buildTarget =
+                config.getCommandOptions()
+                        .getInvocationData()
+                        .getUniqueMap()
+                        .get("test_result.build_target");
+        if (!Strings.isNullOrEmpty(buildTarget) && buildTarget.contains("cf_arm64")) {
+            abi = "arm64";
+        }
+
+        for (String moduleName : config.getSkipManager().getUnchangedModules()) {
+            IInvocationContext moduleContext = new InvocationContext();
+            ConfigurationDescriptor configDescriptor = new ConfigurationDescriptor();
+            configDescriptor.setModuleName(moduleName);
+
+            moduleContext.setConfigurationDescriptor(configDescriptor);
+            moduleContext.addInvocationAttribute(ModuleDefinition.MODULE_ABI, abi);
+            moduleContext.addInvocationAttribute(ModuleDefinition.MODULE_NAME, moduleName);
+            moduleContext.addInvocationAttribute(
+                    ModuleDefinition.MODULE_ID, abi + " " + moduleName);
+            moduleContext.addInvocationAttribute(
+                    ModuleDefinition.MODULE_SKIPPED,
+                    config.getSkipManager().getInvocationSkipReason());
+            listener.testModuleStarted(moduleContext);
+            listener.testModuleEnded();
+        }
     }
 
     /**

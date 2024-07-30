@@ -15,11 +15,12 @@
  */
 package com.android.tradefed.testtype.binary;
 
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.NativeDevice;
-import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -28,15 +29,21 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /** Test runner for running KUnit test modules on device. */
 @OptionClass(alias = "kunit-module-test")
 public class KUnitModuleTest extends ExecutableTargetTest {
+
+    @Option(
+            name = "ktap-result-parser-resolution",
+            description = "Parser resolution for KTap results.")
+    private KTapResultParser.ParseResolution mKTapResultParserResolution =
+            KTapResultParser.ParseResolution.AGGREGATED_MODULE;
 
     public static final String RMMOD_COMMAND_FMT = "rmmod %s";
     public static final String INSMOD_COMMAND_FMT = "insmod %s";
@@ -168,28 +175,30 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                 listener.testEnded(description, new HashMap<String, Metric>());
             }
 
+            List<String> ktapResultsList = new ArrayList<>();
             for (String testSuite : kunitTestSuitesAfter) {
                 String ktapResults =
                         getDevice().pullFileContents(String.format(KUNIT_RESULTS_FMT, testSuite));
                 CLog.i(
-                        "KUnit module '%s' KTAP result:\n%s",
-                        description.getTestName(), ktapResults);
+                        "KUnit module '%s' suite '%s' KTAP result:\n%s",
+                        description.getTestName(), testSuite, ktapResults);
+                ktapResultsList.add(ktapResults);
+            }
 
-                try {
-                    KTapResultParser.applyKTapResultToListener(
-                            listener,
-                            description.getTestName(),
-                            ktapResults,
-                            KTapResultParser.ParseResolution.AGGREGATED_TOP_LEVEL);
-                } catch (RuntimeException exception) {
-                    CLog.e("KTAP parse error: %s", exception.toString());
-                    listener.testStarted(description);
-                    listener.testFailed(
-                            description,
-                            FailureDescription.create(exception.toString())
-                                    .setFailureStatus(FailureStatus.TEST_FAILURE));
-                    listener.testEnded(description, new HashMap<String, Metric>());
-                }
+            try {
+                KTapResultParser.applyKTapResultToListener(
+                        listener,
+                        description.getTestName(),
+                        ktapResultsList,
+                        mKTapResultParserResolution);
+            } catch (RuntimeException exception) {
+                CLog.e("KTAP parse error: %s", exception.toString());
+                listener.testStarted(description);
+                listener.testFailed(
+                        description,
+                        FailureDescription.create(exception.toString())
+                                .setFailureStatus(FailureStatus.TEST_FAILURE));
+                listener.testEnded(description, new HashMap<String, Metric>());
             }
 
             // Clean up, unload module.

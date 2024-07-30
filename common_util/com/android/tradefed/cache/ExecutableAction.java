@@ -22,8 +22,10 @@ import build.bazel.remote.execution.v2.Command.EnvironmentVariable;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Platform;
 import build.bazel.remote.execution.v2.Platform.Property;
+
 import com.google.auto.value.AutoValue;
 import com.google.protobuf.Duration;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -49,7 +51,13 @@ public abstract class ExecutableAction {
                                 Platform.newBuilder()
                                         .addProperties(
                                                 Property.newBuilder()
-                                                        .setName(System.getProperty("os.name"))
+                                                        .setName(
+                                                                String.format(
+                                                                        "%s(%s)",
+                                                                        System.getProperty(
+                                                                                "os.name"),
+                                                                        System.getProperty(
+                                                                                "os.version")))
                                                         .build())
                                         .build())
                         .addAllEnvironmentVariables(
@@ -63,16 +71,22 @@ public abstract class ExecutableAction {
                                         .collect(Collectors.toList()))
                         .build();
 
+        MerkleTree inputMerkleTree = MerkleTree.buildFromDir(input);
         Action.Builder actionBuilder =
                 Action.newBuilder()
-                        .setInputRootDigest(MerkleTree.buildFromDir(input).rootDigest())
+                        .setInputRootDigest(inputMerkleTree.rootDigest())
                         .setCommandDigest(DigestCalculator.compute(command));
         if (timeout > 0L) {
             actionBuilder.setTimeout(Duration.newBuilder().setSeconds(timeout).build());
         }
 
         Action action = actionBuilder.build();
-        return new AutoValue_ExecutableAction(action, DigestCalculator.compute(action), command);
+        return new AutoValue_ExecutableAction(
+                action,
+                DigestCalculator.compute(action),
+                command,
+                DigestCalculator.compute(command),
+                inputMerkleTree);
     }
 
     public abstract Action action();
@@ -80,4 +94,8 @@ public abstract class ExecutableAction {
     public abstract Digest actionDigest();
 
     public abstract Command command();
+
+    public abstract Digest commandDigest();
+
+    public abstract MerkleTree input();
 }

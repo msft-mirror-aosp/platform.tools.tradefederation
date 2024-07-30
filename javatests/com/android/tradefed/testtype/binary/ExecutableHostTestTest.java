@@ -159,12 +159,7 @@ public class ExecutableHostTestTest {
                             Mockito.anyLong(),
                             (OutputStream) Mockito.any(),
                             Mockito.any(),
-                            Mockito.eq("bash"),
-                            Mockito.eq("-c"),
-                            Mockito.eq(
-                                    String.format(
-                                            "pushd %s; ./%s;",
-                                            tmpBinary.getParent(), tmpBinary.getName())));
+                            Mockito.eq(String.format("./%s", tmpBinary.getName())));
 
             mExecutableTest.run(mTestInfo, mMockListener);
 

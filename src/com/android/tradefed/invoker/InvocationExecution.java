@@ -665,8 +665,16 @@ public class InvocationExecution implements IInvocationExecution {
                     new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
                 runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
             } catch (TargetSetupError e) {
-                OxygenUtil util = new OxygenUtil();
-                util.downloadLaunchFailureLogs(e, logger);
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (context.getDevices().get(0).getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(e, logger);
+                }
                 throw e;
             }
         } else {
@@ -1210,6 +1218,8 @@ public class InvocationExecution implements IInvocationExecution {
                     if (!decision.isAutoRetryEnabled()
                             || RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())
                             || test instanceof ITestSuite
+                            // Exclude special launcher
+                            || test.getClass().getSimpleName().equals("CtsTestLauncher")
                             // TODO: Handle auto-retry in local-sharding for non-suite
                             || test instanceof TestsPoolPoller
                             // If test doesn't support auto-retry
@@ -1534,7 +1544,7 @@ public class InvocationExecution implements IInvocationExecution {
                 InvocationMetricKey.AUTO_RETRY_TIME, retryTimeMs);
     }
 
-    private void linkExternalDirs(IBuildInfo info, TestInformation testInfo) {
+    protected void linkExternalDirs(IBuildInfo info, TestInformation testInfo) {
         if (info.getProperties().contains(BuildInfoProperties.DO_NOT_LINK_TESTS_DIR)) {
             CLog.d("Skip linking external directory as FileProperty was set.");
             return;
