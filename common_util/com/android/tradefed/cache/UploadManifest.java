@@ -17,9 +17,11 @@
 package com.android.tradefed.cache;
 
 import build.bazel.remote.execution.v2.Digest;
+
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -37,15 +39,17 @@ public abstract class UploadManifest {
 
     @AutoValue.Builder
     public abstract static class Builder {
-        public abstract ImmutableMap.Builder<Digest, File> digestToFileBuilder();
+        private final ImmutableMap.Builder<Digest, File> mDigestToFileBuilder =
+                ImmutableMap.builder();
 
-        public abstract ImmutableMap.Builder<Digest, ByteString> digestToBlobBuilder();
+        private final ImmutableMap.Builder<Digest, ByteString> mDigestToBlobBuilder =
+                ImmutableMap.builder();
 
         public final Builder addFile(Digest digest, File file) throws IOException {
             if (!file.exists() || !file.isFile()) {
                 throw new IOException("File does not exist or is not a file!");
             }
-            digestToFileBuilder().put(digest, file);
+            mDigestToFileBuilder.put(digest, file);
             return this;
         }
 
@@ -57,15 +61,25 @@ public abstract class UploadManifest {
         }
 
         public final Builder addBlob(Digest digest, ByteString blob) {
-            digestToBlobBuilder().put(digest, blob);
+            mDigestToBlobBuilder.put(digest, blob);
             return this;
         }
 
         public final Builder addBlobs(Map<Digest, ByteString> digestToBlob) {
-            digestToBlobBuilder().putAll(digestToBlob);
+            mDigestToBlobBuilder.putAll(digestToBlob);
             return this;
         }
 
-        public abstract UploadManifest build();
+        public abstract Builder setDigestToFile(ImmutableMap<Digest, File> digestToFile);
+
+        public abstract Builder setDigestToBlob(ImmutableMap<Digest, ByteString> digestToBlob);
+
+        public abstract UploadManifest autoBuild();
+
+        public UploadManifest build() {
+            return setDigestToFile(mDigestToFileBuilder.buildKeepingLast())
+                    .setDigestToBlob(mDigestToBlobBuilder.buildKeepingLast())
+                    .autoBuild();
+        }
     }
 }

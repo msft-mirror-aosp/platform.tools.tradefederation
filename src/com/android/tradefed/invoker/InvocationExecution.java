@@ -665,8 +665,16 @@ public class InvocationExecution implements IInvocationExecution {
                     new CloseableTraceScope("runMultiVirtualDevicesPreInvocationSetup")) {
                 runMultiVirtualDevicesPreInvocationSetup(context, config, logger);
             } catch (TargetSetupError e) {
-                OxygenUtil util = new OxygenUtil();
-                util.downloadLaunchFailureLogs(e, logger);
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (context.getDevices().get(0).getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else {
+                    OxygenUtil util = new OxygenUtil();
+                    util.downloadLaunchFailureLogs(e, logger);
+                }
                 throw e;
             }
         } else {
@@ -1519,7 +1527,8 @@ public class InvocationExecution implements IInvocationExecution {
         List<ITestInvocationListener> currentTestListeners = new ArrayList<>();
         currentTestListeners.add(mainGranularLevelListener);
         currentTestListeners.add(mainListener);
-        return new RetryLogSaverResultForwarder(config.getLogSaver(), currentTestListeners) {
+        return new RetryLogSaverResultForwarder(
+                config.getLogSaver(), currentTestListeners, config) {
             @Override
             public void testLog(
                     String dataName, LogDataType dataType, InputStreamSource dataStream) {
@@ -1536,7 +1545,7 @@ public class InvocationExecution implements IInvocationExecution {
                 InvocationMetricKey.AUTO_RETRY_TIME, retryTimeMs);
     }
 
-    private void linkExternalDirs(IBuildInfo info, TestInformation testInfo) {
+    protected void linkExternalDirs(IBuildInfo info, TestInformation testInfo) {
         if (info.getProperties().contains(BuildInfoProperties.DO_NOT_LINK_TESTS_DIR)) {
             CLog.d("Skip linking external directory as FileProperty was set.");
             return;

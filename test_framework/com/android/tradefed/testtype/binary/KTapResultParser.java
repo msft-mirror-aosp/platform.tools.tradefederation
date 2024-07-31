@@ -56,7 +56,8 @@ public class KTapResultParser {
 
     public enum ParseResolution {
         INDIVIDUAL_LEAVES,
-        AGGREGATED_TOP_LEVEL,
+        AGGREGATED_SUITE,
+        AGGREGATED_MODULE,
     }
 
     enum ResultDirective {
@@ -147,11 +148,15 @@ public class KTapResultParser {
     public static void applyKTapResultToListener(
             ITestInvocationListener listener,
             String testRunName,
-            String ktapFileContent,
+            List<String> ktapFileContentList,
             ParseResolution resolution) {
         KTapResultParser parser = new KTapResultParser();
-        TestResult root = parser.processResultsFileContent(ktapFileContent);
-        parser.applyToListener(listener, testRunName, root, resolution);
+        List<TestResult> rootList = new ArrayList<>();
+        for (String ktapFileContent : ktapFileContentList) {
+            TestResult root = parser.processResultsFileContent(ktapFileContent);
+            rootList.add(root);
+        }
+        parser.applyToListener(listener, testRunName, rootList, resolution);
     }
 
     @VisibleForTesting
@@ -274,52 +279,95 @@ public class KTapResultParser {
         processLines(currentTest, lineIterator);
     }
 
+    private boolean aggregateTestResults(List<TestResult> tests, StringBuilder testName) {
+        testName.append(tests.get(0).name);
+        boolean isOk = tests.get(0).isOk;
+        for (int i = 1; i < tests.size(); ++i) {
+            testName.append(".").append(tests.get(i).name);
+            isOk &= tests.get(i).isOk;
+        }
+        return isOk;
+    }
+
     private void applyToListener(
             ITestInvocationListener listener,
             String testRunName,
-            TestResult root,
+            List<TestResult> rootList,
             ParseResolution resolution) {
         if (resolution == ParseResolution.INDIVIDUAL_LEAVES) {
-            applySubtestLeavesToListener(listener, testRunName, root, "");
-        } else if (resolution == ParseResolution.AGGREGATED_TOP_LEVEL) {
-            applyAggregatedTopLevelToListener(listener, testRunName, root, "");
+            applySubtestLeavesToListener(listener, testRunName, rootList, "");
+        } else if (resolution == ParseResolution.AGGREGATED_SUITE) {
+            applyAggregatedSuiteToListener(listener, testRunName, rootList, "");
+        } else if (resolution == ParseResolution.AGGREGATED_MODULE) {
+            applyAggregatedModuleToListener(listener, testRunName, rootList, "");
         }
     }
 
     private void applySubtestLeavesToListener(
-            ITestInvocationListener listener, String testRunName, TestResult test, String prefix) {
-        String testName = prefix == null || prefix.isEmpty() ? test.name : prefix + "." + test.name;
-        if (test.subtests.size() > 0) {
-            for (TestResult subtest : test.subtests) {
-                applySubtestLeavesToListener(listener, testRunName, subtest, testName);
+            ITestInvocationListener listener,
+            String testRunName,
+            List<TestResult> testList,
+            String prefix) {
+        for (TestResult test : testList) {
+            String testName =
+                    prefix == null || prefix.isEmpty() ? test.name : prefix + "." + test.name;
+            if (test.subtests.size() > 0) {
+                applySubtestLeavesToListener(listener, testRunName, test.subtests, testName);
+            } else {
+                applyTestResultToListener(listener, testRunName, testName, test);
             }
-        } else {
-            applyTestResultToListener(listener, testRunName, testName, test);
         }
     }
 
-    private void applyAggregatedTopLevelToListener(
+    private void applyAggregatedSuiteToListener(
             ITestInvocationListener listener,
             String testRunName,
-            TestResult root,
+            List<TestResult> rootList,
             String fullKTapResult) {
-        // Here we want to apply a single test result based on the one or more top level KTAP
-        // results. If there are more than one top level result, their names are concatenated
-        // and pass/fail results are AND'd into a final value.
+        // Here we want to apply a test result for each suite based on the one or more top
+        // level KTAP results. If there are more than one top level result, their names are
+        // concatenated and pass/fail results are AND'd into a final value.
 
-        if (root.subtests.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "No valid test results in KTAP results. " + fullKTapResult);
+        for (TestResult root : rootList) {
+            if (root.subtests.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "No valid test results in KTAP results. " + fullKTapResult);
+            }
+
+            StringBuilder testName = new StringBuilder();
+            boolean isOk = aggregateTestResults(root.subtests, testName);
+
+            TestDescription testDescription = new TestDescription(testRunName, testName.toString());
+            listener.testStarted(testDescription);
+            if (!isOk) {
+                listener.testFailed(testDescription, fullKTapResult);
+            }
+            listener.testEnded(testDescription, new HashMap<String, Metric>());
         }
+    }
 
-        String testName = root.subtests.get(0).name;
-        boolean isOk = root.subtests.get(0).isOk;
-        for (int i = 1; i < root.subtests.size(); ++i) {
-            testName += "." + root.subtests.get(i).name;
-            isOk &= root.subtests.get(i).isOk;
+    private void applyAggregatedModuleToListener(
+            ITestInvocationListener listener,
+            String testRunName,
+            List<TestResult> rootList,
+            String fullKTapResult) {
+        // Here we want to apply a test result for each module. A module can include
+        // several suites. If there are more than one suite result in the module,
+        // their names are concatenated and pass/fail results are AND'd into a final value.
+
+        StringBuilder testName = new StringBuilder();
+        boolean isOk = true;
+
+        for (TestResult root : rootList) {
+            if (root.subtests.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "No valid test results in KTAP results. " + fullKTapResult);
+            }
+
+            testName.append(",");
+            isOk &= aggregateTestResults(root.subtests, testName);
         }
-
-        TestDescription testDescription = new TestDescription(testRunName, testName);
+        TestDescription testDescription = new TestDescription(testRunName, testName.substring(1));
         listener.testStarted(testDescription);
         if (!isOk) {
             listener.testFailed(testDescription, fullKTapResult);

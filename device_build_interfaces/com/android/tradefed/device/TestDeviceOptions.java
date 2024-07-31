@@ -1030,5 +1030,13 @@ public class TestDeviceOptions {
     public boolean useOxygenationDevice() {
         return mUseOxygenationDevice;
     }
+
+    /** Helper to return true if the device is launched by cvd, false otherwise. */
+    public boolean useCvdCF() {
+        if (mUseOxygenationDevice || getExtraOxygenArgs().containsKey("use_cvd")) {
+            return true;
+        }
+        return false;
+    }
 }
 
