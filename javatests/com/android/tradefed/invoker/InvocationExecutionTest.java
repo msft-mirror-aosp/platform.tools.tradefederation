@@ -16,19 +16,17 @@
 package com.android.tradefed.invoker;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.any;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.Configuration;
@@ -66,14 +64,16 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Unit tests for {@link InvocationExecution}. Tests for each individual interface of
@@ -253,7 +253,8 @@ public class InvocationExecutionTest {
         mConfig.setTests(tests);
         mConfig.getRetryDecision().setInvocationContext(mContext);
         LogSaverResultForwarder forwarder =
-                new LogSaverResultForwarder(mConfig.getLogSaver(), Arrays.asList(mMockLogListener));
+                new LogSaverResultForwarder(
+                        mConfig.getLogSaver(), Arrays.asList(mMockLogListener), mConfig);
         mExec.runTests(info, mConfig, forwarder);
 
         verify(mMockLogListener).testRunStarted(eq("runName"), eq(3), eq(0), Mockito.anyLong());

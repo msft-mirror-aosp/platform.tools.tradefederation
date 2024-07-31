@@ -1527,7 +1527,8 @@ public class InvocationExecution implements IInvocationExecution {
         List<ITestInvocationListener> currentTestListeners = new ArrayList<>();
         currentTestListeners.add(mainGranularLevelListener);
         currentTestListeners.add(mainListener);
-        return new RetryLogSaverResultForwarder(config.getLogSaver(), currentTestListeners) {
+        return new RetryLogSaverResultForwarder(
+                config.getLogSaver(), currentTestListeners, config) {
             @Override
             public void testLog(
                     String dataName, LogDataType dataType, InputStreamSource dataStream) {
