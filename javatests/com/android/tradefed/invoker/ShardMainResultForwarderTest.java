@@ -21,7 +21,10 @@ import static org.mockito.Mockito.times;
 
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationDescriptor;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationGroupMetricKey;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -165,8 +168,11 @@ public class ShardMainResultForwarderTest {
         ShardMainResultForwarder reporter =
                 new ShardMainResultForwarder(Arrays.asList(mMockLogListener), 1);
         ShardListener shardListener = new ShardListener(reporter);
+        IConfiguration config = new Configuration("", "");
+        config.setCommandOptions(new CommandOptions());
+
         LogSaverResultForwarder invocationLogger =
-                new LogSaverResultForwarder(mMockLogSaver, Arrays.asList(shardListener));
+                new LogSaverResultForwarder(mMockLogSaver, Arrays.asList(shardListener), config);
         IInvocationContext main = new InvocationContext();
         IBuildInfo mainBuild1 = new BuildInfo();
         main.addAllocatedDevice("device1", Mockito.mock(ITestDevice.class));

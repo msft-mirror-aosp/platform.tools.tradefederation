@@ -237,6 +237,7 @@ java_library_host {
         "test_observatory/**/*.java",
     ],
     static_libs: [
+        "tradefed-avd-util",
         "tradefed-common-util",
         "tradefed-clearcut-client",
         "tradefed-result-interfaces",

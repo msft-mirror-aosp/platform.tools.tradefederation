@@ -21,8 +21,8 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -34,6 +34,7 @@ import com.android.tradefed.util.CommandStatus;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -168,8 +169,8 @@ public class KernelTargetTest extends ExecutableTargetTest {
                 KTapResultParser.applyKTapResultToListener(
                         listener,
                         description.getTestName(),
-                        result.getStdout(),
-                        KTapResultParser.ParseResolution.AGGREGATED_TOP_LEVEL);
+                        List.of(result.getStdout()),
+                        KTapResultParser.ParseResolution.AGGREGATED_SUITE);
             } catch (RuntimeException exception) {
                 CLog.e("KTAP parse error: %s", exception.toString());
                 listener.testStarted(description);

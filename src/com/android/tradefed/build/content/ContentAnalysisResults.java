@@ -87,6 +87,10 @@ public class ContentAnalysisResults {
         return deviceImageChanges > 0;
     }
 
+    public Set<String> getUnchangedModules() {
+        return unchangedModules;
+    }
+
     @Override
     public String toString() {
         return "ContentAnalysisResults [unchangedFiles="

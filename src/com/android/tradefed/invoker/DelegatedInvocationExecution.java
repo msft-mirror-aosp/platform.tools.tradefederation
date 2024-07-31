@@ -146,6 +146,8 @@ public class DelegatedInvocationExecution extends InvocationExecution {
         commandLine.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
         mTmpDelegatedDir =
                 FileUtil.createTempDir("delegated-invocation", CurrentInvocation.getWorkFolder());
+        commandLine.add(
+                String.format("-Doriginal.tf.tmpdir=%s", System.getProperty("java.io.tmpdir")));
         commandLine.add(String.format("-Djava.io.tmpdir=%s", mTmpDelegatedDir.getAbsolutePath()));
         commandLine.add("-cp");
         // Add classpath
