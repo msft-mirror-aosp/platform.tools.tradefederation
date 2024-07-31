@@ -1353,13 +1353,14 @@ public class ModuleDefinitionTest {
     public void testModule_LogSaverResultForwarder() throws Exception {
         List<IRemoteTest> testList = new ArrayList<>();
         testList.add(new TestLogClass());
+        IConfiguration moduleConfig = new Configuration("", "");
         mModule =
                 new ModuleDefinition(
                         MODULE_NAME,
                         testList,
                         mMapDeviceTargetPreparer,
                         mMultiTargetPrepList,
-                        new Configuration("", ""));
+                        moduleConfig);
         mModule.setRetryDecision(mDecision);
         mModule.setLogSaver(mMockLogSaver);
         mModule.getModuleInvocationContext().addAllocatedDevice(DEFAULT_DEVICE_NAME, mMockDevice);
@@ -1382,7 +1383,8 @@ public class ModuleDefinitionTest {
 
         // Simulate how the invoker actually put the log saver
         LogSaverResultForwarder forwarder =
-                new LogSaverResultForwarder(mMockLogSaver, Arrays.asList(mMockLogSaverListener));
+                new LogSaverResultForwarder(
+                        mMockLogSaver, Arrays.asList(mMockLogSaverListener), moduleConfig);
         mModule.run(mModuleInfo, forwarder);
         InOrder inOrder = Mockito.inOrder(mMockLogSaverListener);
         inOrder.verify(mMockLogSaverListener).setLogSaver(mMockLogSaver);
@@ -1496,13 +1498,14 @@ public class ModuleDefinitionTest {
         final int testCount = 5;
         List<IRemoteTest> testList = new ArrayList<>();
         testList.add(new TestObject("run1", testCount, false));
+        IConfiguration moduleConfig = new Configuration("", "");
         mModule =
                 new ModuleDefinition(
                         MODULE_NAME,
                         testList,
                         mMapDeviceTargetPreparer,
                         mMultiTargetPrepList,
-                        new Configuration("", ""));
+                        moduleConfig);
         mModule.setRetryDecision(mDecision);
         mModule.setLogSaver(mMockLogSaver);
         mModule.getModuleInvocationContext().addAllocatedDevice(DEFAULT_DEVICE_NAME, mMockDevice);
@@ -1521,7 +1524,8 @@ public class ModuleDefinitionTest {
         // Simulate how the invoker actually put the log saver
 
         LogSaverResultForwarder forwarder =
-                new LogSaverResultForwarder(mMockLogSaver, Arrays.asList(mMockLogSaverListener));
+                new LogSaverResultForwarder(
+                        mMockLogSaver, Arrays.asList(mMockLogSaverListener), moduleConfig);
         mModule.run(mModuleInfo, forwarder, Arrays.asList(mMockListener));
         InOrder inOrder = Mockito.inOrder(mMockLogSaverListener, mMockListener);
         inOrder.verify(mMockLogSaverListener).setLogSaver(mMockLogSaver);
