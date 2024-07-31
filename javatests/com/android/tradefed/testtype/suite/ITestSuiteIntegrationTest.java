@@ -270,7 +270,8 @@ public class ITestSuiteIntegrationTest {
             setter.setOptionValue("log-file-path", logSaverTmpDir.getAbsolutePath());
             mStubMainConfiguration.setLogSaver(logSaver);
             LogSaverResultForwarder mainInvocationForwarder =
-                    new LogSaverResultForwarder(logSaver, Arrays.asList(mListener));
+                    new LogSaverResultForwarder(
+                            logSaver, Arrays.asList(mListener), mStubMainConfiguration);
 
             createConfig(
                     mTestConfigFolder, "module1", TEST_STUB, true, true, false, false, false, true);

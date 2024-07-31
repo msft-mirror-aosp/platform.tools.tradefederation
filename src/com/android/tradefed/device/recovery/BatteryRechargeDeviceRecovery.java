@@ -18,6 +18,7 @@ package com.android.tradefed.device.recovery;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.IManagedTestDevice;
+import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.device.TestDeviceState;
 
 /** Allow to trigger a command when the battery level of the device goes under a given threshold. */
@@ -34,6 +35,10 @@ public class BatteryRechargeDeviceRecovery extends RunConfigDeviceRecovery {
     @Override
     public boolean shouldSkip(IManagedTestDevice device) {
         if (mMinBattery == null) {
+            return true;
+        }
+        if (ManagedTestDeviceFactory.isTcpDeviceSerial(device.getSerialNumber())) {
+            // Skip battery check on tcp connected device
             return true;
         }
         TestDeviceState state = device.getDeviceState();
