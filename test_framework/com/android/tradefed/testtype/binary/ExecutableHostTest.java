@@ -41,7 +41,6 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
-import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TestRunnerUtil;
 
 import com.google.common.base.Strings;
@@ -77,13 +76,6 @@ public class ExecutableHostTest extends ExecutableBaseTest {
             name = "enable-cache",
             description = "Used to enable/disable caching for specific modules.")
     private boolean mEnableCache = false;
-
-    @Option(
-            name = "inherit-env-vars",
-            description =
-                    "Whether the subprocess should inherit environment variables from the main"
-                            + " process.")
-    private boolean mInheritEnvVars = true;
 
     @Override
     public String findBinary(String binary) {
@@ -146,12 +138,6 @@ public class ExecutableHostTest extends ExecutableBaseTest {
             ldLibraryPath = workingDir.getAbsolutePath();
         }
         runUtil.setEnvVariable(LD_LIBRARY_PATH, ldLibraryPath);
-
-        runUtil.setEnvVariable(
-                "PATH",
-                String.format(
-                        ".:%s:/usr/bin",
-                        SystemUtil.getRunningJavaBinaryPath().getParentFile().getAbsolutePath()));
 
         // Set Tradefed adb on $PATH of binary
         AdbUtils.updateAdb(getTestInfo(), runUtil, getAdbPath());
@@ -230,7 +216,7 @@ public class ExecutableHostTest extends ExecutableBaseTest {
 
     @VisibleForTesting
     IRunUtil createRunUtil() {
-        return new RunUtil(mInheritEnvVars);
+        return new RunUtil();
     }
 
     @VisibleForTesting

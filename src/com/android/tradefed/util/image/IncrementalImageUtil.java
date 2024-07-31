@@ -21,6 +21,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceDisconnectedException;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.SnapuserdWaitPhase;
@@ -691,27 +692,35 @@ public class IncrementalImageUtil {
         if (!CommandStatus.SUCCESS.equals(fastbootResult.getStatus())) {
             return false;
         }
-        // TODO: Make the fallback faster
+        RecoveryMode recoveryMode = mDevice.getRecoveryMode();
         try {
-            mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
-        } catch (DeviceNotAvailableException e) {
-            if (mApplySnapshot) {
-                if (TestDeviceState.RECOVERY.equals(mDevice.getDeviceState())) {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.INCREMENTAL_RECOVERY_FALLBACK, 1);
-                    // Go back to bootloader for fallback flashing
-                    mDevice.rebootIntoBootloader();
-                    CommandResult result = mDevice.executeFastbootCommand("-w");
-                    CLog.d("wipe status: %s", result.getStatus());
-                    CLog.d("wipe stdout: %s", result.getStdout());
-                    CLog.d("wipe stderr: %s", result.getStderr());
-                    throw new TargetSetupError(
-                            "Device went to recovery unexpectedly",
-                            e,
-                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            mDevice.setRecoveryMode(RecoveryMode.NONE);
+            ((IManagedTestDevice) mDevice).getMonitor().attachFinalState(TestDeviceState.RECOVERY);
+            boolean available = mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
+            if (!available) {
+                if (mApplySnapshot) {
+                    if (TestDeviceState.RECOVERY.equals(mDevice.getDeviceState())) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.INCREMENTAL_RECOVERY_FALLBACK, 1);
+                        // Go back to bootloader for fallback flashing
+                        mDevice.rebootIntoBootloader();
+                        CommandResult result = mDevice.executeFastbootCommand("-w");
+                        CLog.d("wipe status: %s", result.getStatus());
+                        CLog.d("wipe stdout: %s", result.getStdout());
+                        CLog.d("wipe stderr: %s", result.getStderr());
+                        throw new TargetSetupError(
+                                "Device went to recovery unexpectedly",
+                                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                    }
+                } else {
+                    throw new DeviceNotAvailableException(
+                            "device did not become available after flashing.",
+                            mDevice.getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
                 }
             }
-            throw e;
+        } finally {
+            mDevice.setRecoveryMode(recoveryMode);
         }
         return true;
     }
