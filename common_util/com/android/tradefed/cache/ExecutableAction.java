@@ -22,8 +22,10 @@ import build.bazel.remote.execution.v2.Command.EnvironmentVariable;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Platform;
 import build.bazel.remote.execution.v2.Platform.Property;
+
 import com.google.auto.value.AutoValue;
 import com.google.protobuf.Duration;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -49,7 +51,13 @@ public abstract class ExecutableAction {
                                 Platform.newBuilder()
                                         .addProperties(
                                                 Property.newBuilder()
-                                                        .setName(System.getProperty("os.name"))
+                                                        .setName(
+                                                                String.format(
+                                                                        "%s(%s)",
+                                                                        System.getProperty(
+                                                                                "os.name"),
+                                                                        System.getProperty(
+                                                                                "os.version")))
                                                         .build())
                                         .build())
                         .addAllEnvironmentVariables(
