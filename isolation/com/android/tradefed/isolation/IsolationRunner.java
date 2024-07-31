@@ -148,6 +148,12 @@ public final class IsolationRunner {
                                 String.format(
                                         "Found ErrorRunner when trying to run class: %s", klass));
                         runnerCore.run(req.getRunner());
+                    } else {
+                        System.err.println(
+                                String.format(
+                                        "ERROR: Encountered ErrorReportingRunner when trying to"
+                                                + " run: %s",
+                                        klass));
                     }
                 } else if (req.getRunner() instanceof IgnoredClassRunner) {
                     // Do nothing since class was ignored
