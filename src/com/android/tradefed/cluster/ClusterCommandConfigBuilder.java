@@ -303,6 +303,9 @@ public class ClusterCommandConfigBuilder {
         for (String excludedFile : mTestEnvironment.getExcludedFilesInJavaClasspath()) {
             config.injectOptionValue("cluster:exclude-file-in-java-classpath", excludedFile);
         }
+        for (Map.Entry<String, String> entry : mTestEnvironment.getBuildAttributes().entrySet()) {
+            config.injectOptionValue("cluster:build-attribute", entry.getKey(), entry.getValue());
+        }
 
         List<TestResource> testResources = new ArrayList<>();
         testResources.addAll(mTestResources);

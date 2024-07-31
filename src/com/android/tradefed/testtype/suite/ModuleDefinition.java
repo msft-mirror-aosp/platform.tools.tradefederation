@@ -135,6 +135,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_ISOLATED = "module-isolated";
     /** This property is set to true if the test module results were cached. */
     public static final String MODULE_CACHED = "module-cached";
+
+    /** This property is set to true if the test module was skipped */
+    public static final String MODULE_SKIPPED = "module-skipped";
+
     /** This property is set to true if only module level events are reported. */
     public static final String SPARSE_MODULE = "sparse-module";
 
@@ -420,7 +424,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      * @param moduleInfo the {@link TestInformation} for the module.
      * @param listener the {@link ITestInvocationListener} where to report results.
      * @param moduleLevelListeners The list of listeners at the module level.
-     * @param failureListener a particular listener to collect logs on testFail. Can be null.
      * @param maxRunLimit the max number of runs for each testcase.
      * @throws DeviceNotAvailableException in case of device going offline.
      */
@@ -448,6 +451,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         }
 
         CLog.logAndDisplay(LogLevel.DEBUG, "Running module %s", getId());
+        // set the module context so it's available widely during the module run period.
+        CurrentInvocation.setModuleContext(mModuleInvocationContext);
         // Exception generated during setUp or run of the tests
         Throwable preparationException;
         DeviceNotAvailableException runException = null;
@@ -475,6 +480,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         } catch (ConfigurationException e) {
                             // Shouldn't happen;
                             throw new RuntimeException(e);
+                        } finally {
+                            // unset the module context since module run is ending.
+                            CurrentInvocation.setModuleContext(null);
                         }
                     }
                 }
@@ -505,6 +513,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     mTargetPreparerRetryCount,
                     shouldFailRun);
             if (shouldFailRun) {
+                // unset the module context since module run is ending.
+                CurrentInvocation.setModuleContext(null);
                 return;
             }
             mTargetPreparerRetryCount++;
@@ -744,6 +754,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         }
                     }
                 }
+                // unset the module context since module run is ending.
+                CurrentInvocation.setModuleContext(null);
             }
         }
     }
