@@ -19,6 +19,7 @@ import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.GceRemoteCmdFormatter;
 import com.android.tradefed.util.IRunUtil;
 
 import java.io.OutputStream;
