@@ -66,6 +66,7 @@ import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
+import com.android.tradefed.result.skipped.SkipFeature;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -846,6 +847,7 @@ public abstract class ITestSuite
                     mRunModules);
         }
 
+        Set<String> unchangedModulesNames = SkipFeature.getUnchangedModules();
         /** Run all the module, make sure to reduce the list to release resources as we go. */
         try {
             while (!mRunModules.isEmpty()) {
@@ -925,8 +927,28 @@ public abstract class ITestSuite
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
                     logModuleConfig(listener, module);
+                    boolean moduleRan = true;
                     try {
-                        runSingleModule(module, moduleInfo, listener, moduleListeners);
+                        if (unchangedModulesNames.contains(
+                                module.getModuleInvocationContext()
+                                        .getConfigurationDescriptor()
+                                        .getModuleName())) {
+                            moduleRan = false;
+                            CLog.d(
+                                "Skipping module '%s' due to no changes in artifacts.",
+                                module.getModuleInvocationContext()
+                                    .getConfigurationDescriptor()
+                                    .getModuleName());
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(
+                                            ModuleDefinition.MODULE_SKIPPED,
+                                            "No relevant changes to device image or test artifacts"
+                                                    + " detected.");
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
+                        } else {
+                            runSingleModule(module, moduleInfo, listener, moduleListeners);
+                        }
                     } finally {
                         module.getModuleInvocationContext()
                                 .addInvocationAttribute(
@@ -940,8 +962,10 @@ public abstract class ITestSuite
                         // Following modules will not be isolated if no action is taken
                         CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
                     }
-                    // Module isolation routine
-                    moduleIsolation(mContext, listener);
+                    if (moduleRan) {
+                        // Module isolation routine
+                        moduleIsolation(mContext, listener);
+                    }
                 }
             }
         } catch (DeviceNotAvailableException e) {

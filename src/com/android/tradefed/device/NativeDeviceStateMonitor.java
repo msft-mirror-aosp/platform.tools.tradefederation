@@ -75,6 +75,7 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
     private IDeviceManager mMgr;
     private final boolean mFastbootEnabled;
     private boolean mMountFileSystemCheckEnabled = false;
+    private TestDeviceState mFinalState = null;
 
     protected static final String PERM_DENIED_ERROR_PATTERN = "Permission denied";
 
@@ -86,6 +87,11 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
         mDeviceState = TestDeviceState.getStateByDdms(device.getState());
         mFastbootEnabled = fastbootEnabled;
         mMountFileSystemCheckEnabled = mMgr.isFileSystemMountCheckEnabled();
+    }
+
+    @Override
+    public void attachFinalState(TestDeviceState finalState) {
+        mFinalState = finalState;
     }
 
     /**
@@ -559,30 +565,35 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
     }
 
     private boolean waitForDeviceState(TestDeviceState state, long time) {
-        String deviceSerial = getSerialNumber();
-        TestDeviceState currentStatus = getDeviceState();
-        if (currentStatus.equals(state)) {
-            CLog.i("Device %s is already %s", deviceSerial, state);
-            return true;
-        }
-        CLog.i(
-                "Waiting for device %s to be in %s mode for '%s'; it is currently in %s mode...",
-                deviceSerial, state, TimeUtil.formatElapsedTime(time), currentStatus);
-        DeviceStateListener listener = new DeviceStateListener(state);
-        addDeviceStateListener(listener);
-        synchronized (listener) {
-            try {
-                listener.wait(time);
-            } catch (InterruptedException e) {
-                CLog.w("wait for device state interrupted");
-                CLog.w(e);
-                throw new RunInterruptedException(
-                        e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
-            } finally {
-                removeDeviceStateListener(listener);
+        try {
+            String deviceSerial = getSerialNumber();
+            TestDeviceState currentStatus = getDeviceState();
+            if (currentStatus.equals(state)) {
+                CLog.i("Device %s is already %s", deviceSerial, state);
+                return true;
             }
+            CLog.i(
+                    "Waiting for device %s to be in %s mode for '%s'; it is currently in %s"
+                            + " mode...",
+                    deviceSerial, state, TimeUtil.formatElapsedTime(time), currentStatus);
+            DeviceStateListener listener = new DeviceStateListener(state, mFinalState);
+            addDeviceStateListener(listener);
+            synchronized (listener) {
+                try {
+                    listener.wait(time);
+                } catch (InterruptedException e) {
+                    CLog.w("wait for device state interrupted");
+                    CLog.w(e);
+                    throw new RunInterruptedException(
+                            e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+                } finally {
+                    removeDeviceStateListener(listener);
+                }
+            }
+            return getDeviceState().equals(state);
+        } finally {
+            mFinalState = null;
         }
-        return getDeviceState().equals(state);
     }
 
     /**
@@ -633,14 +644,22 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
 
     private static class DeviceStateListener {
         private final TestDeviceState mExpectedState;
+        private final TestDeviceState mFinalState;
 
-        public DeviceStateListener(TestDeviceState expectedState) {
+        public DeviceStateListener(TestDeviceState expectedState, TestDeviceState finalState) {
             mExpectedState = expectedState;
+            mFinalState = finalState;
         }
 
         public void stateChanged(TestDeviceState newState) {
             if (mExpectedState.equals(newState)) {
                 synchronized (this) {
+                    notify();
+                }
+            }
+            if (mFinalState != null && mFinalState.equals(newState)) {
+                synchronized (this) {
+                    CLog.e("Reached final state: %s", mFinalState);
                     notify();
                 }
             }
