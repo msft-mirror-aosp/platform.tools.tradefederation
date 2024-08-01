@@ -24,6 +24,7 @@ import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracingLogger;
+import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.internal.IRemoteScheduledListenersFeature;
 import com.android.tradefed.testtype.ITestInformationReceiver;
@@ -35,16 +36,16 @@ import com.proto.tradefed.feature.FeatureRequest;
 import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.TradefedInformationGrpc.TradefedInformationImplBase;
 
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.stub.StreamObserver;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.stub.StreamObserver;
 
 /** A server that responds to requests for triggering features. */
 public class TradefedFeatureServer extends TradefedInformationImplBase {
@@ -158,6 +159,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                 CurrentInvocation.setLocalGroup(mRegisteredGroup.get(request.getReferenceId()));
                 InvocationMetricLogger.setLocalGroup(
                         mRegisteredGroup.get(request.getReferenceId()));
+                LogRegistry.setLocalGroup(mRegisteredGroup.get(request.getReferenceId()));
                 if (feature instanceof IConfigurationReceiver) {
                     ((IConfigurationReceiver) feature)
                             .setConfiguration(mRegisteredInvocation.get(request.getReferenceId()));
@@ -184,6 +186,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                                 TracingLogger.getActiveTraceForGroup(
                                         mRegisteredGroup.get(request.getReferenceId())),
                                 feature.getName())) {
+                    CLog.d("Executing %s with [%s]", feature, request);
                     FeatureResponse rep = feature.execute(request);
                     if (rep == null) {
                         return FeatureResponse.newBuilder()
@@ -204,6 +207,7 @@ public class TradefedFeatureServer extends TradefedInformationImplBase {
                     TracingLogger.resetLocalGroup();
                     InvocationMetricLogger.resetLocalGroup();
                     CurrentInvocation.resetLocalGroup();
+                    LogRegistry.resetLocalGroup();
                 }
             }
         }
