@@ -17,7 +17,6 @@ package com.android.tradefed.log;
 
 import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.util.FileUtil;
 
@@ -51,6 +50,18 @@ public class LogRegistry implements ILogRegistry {
     private Map<ThreadGroup, ILeveledLogOutput> mLogTable = new Hashtable<>();
     private FileLogger mGlobalLogger;
     private HistoryLogger mHistoryLogger;
+
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
 
     /**
      * Package-private constructor; callers should use {@link #getLogRegistry} to get an instance of
@@ -161,6 +172,9 @@ public class LogRegistry implements ILogRegistry {
      * @return the ThreadGroup that the current thread belongs to
      */
     ThreadGroup getCurrentThreadGroup() {
+        if (sLocal.get() != null) {
+            return sLocal.get();
+        }
         return Thread.currentThread().getThreadGroup();
     }
 
