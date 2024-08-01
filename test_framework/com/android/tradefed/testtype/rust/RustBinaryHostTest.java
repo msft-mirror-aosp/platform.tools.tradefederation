@@ -71,6 +71,13 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             description = "Used to enable/disable caching for specific modules.")
     private boolean mEnableCache = false;
 
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
+
     private IBuildInfo mBuildInfo;
 
     @Override
@@ -315,6 +322,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
-        return new RunUtil();
+        return new RunUtil(mInheritEnvVars);
     }
 }
