@@ -150,7 +150,7 @@ public class DeviceImageTracker {
         }
         try {
             if (deviceImage.isDirectory()) {
-                CLog.d("Tracking device image as directory.");
+                CLog.d("Tracking device image as directory: %s", copyInCacheDeviceImage);
                 FileUtil.recursiveHardlink(deviceImage, copyInCacheDeviceImage);
             } else {
                 FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
