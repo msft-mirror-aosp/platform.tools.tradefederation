@@ -48,11 +48,16 @@ public class HostOrchestratorUtil {
     public static final String URL_HO_LOG =
             "_journal/entries?_SYSTEMD_UNIT=cuttlefish-host_orchestrator.service";
     private static final long CMD_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
-    private static final String OXYGEN_TUNNEL_PARAM = "-L%s:127.0.0.1:2080";
-    private static final String URL_HO_BASE = "http://%s:%s/%s";
-    private static final String URL_CVD_DEVICE_LOG = "runtimeartifacts/:pull";
-    private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
+    private static final long WAIT_FOR_OPERATION_MS = 5 * 6 * 1000; // 30 sec
+    private static final long WAIT_FOR_OPERATION_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
     private static final String CVD_HOST_LOGZ = "cvd_hostlog_zip";
+    private static final String OXYGEN_TUNNEL_PARAM = "-L%s:127.0.0.1:2080";
+    private static final String URL_CVD_DEVICE_LOG = "cvds/%s/:bugreport";
+    private static final String URL_CVD_BUGREPORTS = "cvdbugreports/%s";
+    private static final String URL_HO_BASE = "http://%s:%s/%s";
+    private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
+    private static final String URL_QUERY_OPERATION = "operations/%s";
+    private static final String URL_QUERY_OPERATION_RESULT = "operations/%s/result";
     private static final String UNSUPPORTED_API_RESPONSE = "404 page not found";
     private boolean mUseOxygenation = false;
     private boolean mUseCvdOxygen = false;
@@ -137,9 +142,12 @@ public class HostOrchestratorUtil {
     /** Pull CF host logs via Host Orchestrator. */
     public File pullCvdHostLogs() {
         // Basically, the rough processes to pull CF host logs are
-        // 1. Portforward the CURL tunnel
-        // 2. Compose CURL command and execute it to pull CF logs.
-        // TODO(easoncylee): Flesh out this section when it's ready.
+        // 1. Portforward CURL tunnel.
+        // 2. Run /cvds API and parse the json to get ${GROUP_NAME}.
+        // 3. Run /cvds/${GROUP_NAME}/:bugreport to get ${OPERATION_ID}
+        // 4. Periodically run /operations/${OPERATION_ID}, parse the json util get "done":true.
+        // 5. Run /operations/${OPERATION_ID}/result to get the ${UUID}.
+        // 6. Run /cvdbugreports/${UUID} to download the artifact.
         String portNumber = Integer.toString(mOxygenClient.createServerSocket());
         Process tunnel = null;
         File cvdLogsDir = null;
@@ -151,22 +159,37 @@ public class HostOrchestratorUtil {
                 CLog.e("Failed portforwarding Host Orchestrator tunnel.");
                 return null;
             }
-            CommandResult commandRes =
+            CommandResult curlRes =
+                    curlCommandExecution(
+                            mGceAvd.hostAndPort().getHost(), portNumber, "GET", "cvds", true);
+            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
+                CLog.e("Failed getting cvd status via Host Orchestrator: %s", curlRes.getStdout());
+                return null;
+            }
+            String cvdGroup = parseListCvdOutput(curlRes.getStdout(), "group");
+            String operationId =
+                    cvdOperationExecution(
+                            portNumber,
+                            String.format(URL_CVD_DEVICE_LOG, cvdGroup),
+                            WAIT_FOR_OPERATION_TIMEOUT_MS);
+            curlRes =
                     curlCommandExecution(
                             mGceAvd.hostAndPort().getHost(),
                             portNumber,
-                            "POST",
-                            URL_CVD_DEVICE_LOG,
+                            "GET",
+                            String.format(URL_CVD_BUGREPORTS, operationId),
                             true,
                             "--output",
                             cvdLogsZip.getAbsolutePath());
-            if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
-                CLog.e("Failed pulling cvd logs via Host Orchestrator: %s", commandRes.getStdout());
+            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
+                CLog.e(
+                        "Failed pulling cvd host logs via Host Orchestrator: %s",
+                        curlRes.getStdout());
                 return null;
             }
             cvdLogsDir = ZipUtil2.extractZipToTemp(cvdLogsZip, "cvd_logs");
         } catch (IOException e) {
-            CLog.e("Failed pulling cvd logs via Host Orchestrator: %s", e);
+            CLog.e("Failed pulling cvd host logs via Host Orchestrator: %s", e);
         } finally {
             mOxygenClient.closeLHPConnection(tunnel);
             cvdLogsZip.delete();
@@ -203,8 +226,8 @@ public class HostOrchestratorUtil {
                 CLog.e("Failed getting cvd status via Host Orchestrator: %s", curlRes.getStdout());
                 return curlRes;
             }
-            String cvdGroup = parseCvdOutput(curlRes.getStdout(), "group");
-            String cvdName = parseCvdOutput(curlRes.getStdout(), "name");
+            String cvdGroup = parseListCvdOutput(curlRes.getStdout(), "group");
+            String cvdName = parseListCvdOutput(curlRes.getStdout(), "name");
             if (cvdGroup == null || cvdGroup.isEmpty() || cvdName == null || cvdName.isEmpty()) {
                 CLog.e("Failed parsing cvd group and cvd name.");
                 curlRes.setStatus(CommandStatus.FAILED);
@@ -327,19 +350,91 @@ public class HostOrchestratorUtil {
         return commandRes;
     }
 
-    /** Return the return by parsing the cvd output with a given keyword. */
-    private String parseCvdOutput(String content, String keyword) {
+    /** Return the value by parsing the output of list cvds with a given keyword. */
+    @VisibleForTesting
+    String parseListCvdOutput(String content, String keyword) {
+        // An example output of the given content is:
+        // {"cvds":
+        //      [{
+        //          "group":"cvd_1",
+        //          "name":"ins-1",
+        //          "build_source":{},
+        //          "status":"Running",
+        //          "displays":["720 x 1280 ( 320 )"],
+        //          "webrtc_device_id":"cvd-1",
+        //          "adb_serial":"0.0.0.0:6520"
+        //      }]
+        // }
         JSONTokener tokener = new JSONTokener(content);
-        String output = null;
+        String output = "";
         try {
             JSONObject root = new JSONObject(tokener);
             JSONArray array = root.getJSONArray("cvds");
-            JSONObject object = array.getJSONObject(0);
-            output = object.getString(keyword);
+            output = parseCvdContent(array.getJSONObject(0).toString(), keyword);
         } catch (JSONException e) {
             CLog.e(e);
         }
         return output;
+    }
+
+    /** Return the value by parsing the simple JSON content with a given keyword. */
+    private String parseCvdContent(String content, String keyword) {
+        String output = "";
+        try {
+            JSONObject object = new JSONObject(content);
+            output = object.get(keyword).toString();
+        } catch (JSONException e) {
+            CLog.e(e);
+        }
+        return output;
+    }
+
+    /**
+     * Execute long-run operations via Host Orchestrator. A certain HO APIs would take longer time
+     * to complete, in order not to execute a long-run operations and wait for the output. This
+     * method calls the operation, get the operation id, periodically do quick check the operation's
+     * status util it's done, and return the result.
+     *
+     * @param portNumber The port number that Host Orchestrator communicates with.
+     * @param request The HTTP request to be executed.
+     * @param maxWaitTime The max timeout expected to execute the HTTP request.
+     * @return A String of operation id.
+     */
+    @VisibleForTesting
+    String cvdOperationExecution(String portNumber, String request, long maxWaitTime) {
+        CommandResult commandRes =
+                curlCommandExecution(
+                        mGceAvd.hostAndPort().getHost(), portNumber, "POST", request, true);
+        if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
+            CLog.e("Failed running %s, error: %s", request, commandRes.getStdout());
+            return null;
+        }
+        String operationId = parseCvdContent(commandRes.getStdout(), "name");
+        long maxEndTime = System.currentTimeMillis() + maxWaitTime;
+        while (System.currentTimeMillis() < maxEndTime) {
+            commandRes =
+                    curlCommandExecution(
+                            mGceAvd.hostAndPort().getHost(),
+                            portNumber,
+                            "GET",
+                            String.format(URL_QUERY_OPERATION, operationId),
+                            true);
+            if (CommandStatus.SUCCESS.equals(commandRes.getStatus())
+                    && parseCvdContent(commandRes.getStdout(), "done").equals("true")) {
+                request = String.format(URL_QUERY_OPERATION_RESULT, operationId);
+                commandRes =
+                        curlCommandExecution(
+                                mGceAvd.hostAndPort().getHost(), portNumber, "GET", request, true);
+                if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
+                    CLog.e("Failed running %s, error: %s", request, commandRes.getStdout());
+                    return null;
+                }
+                return commandRes.getStdout().strip().replaceAll("\"", "");
+            }
+            getRunUtil().sleep(WAIT_FOR_OPERATION_MS);
+        }
+        CLog.e("Running long operation cvd request timedout!");
+        return null;
     }
 
     /** Get {@link IRunUtil} to use. Exposed for unit testing. */
