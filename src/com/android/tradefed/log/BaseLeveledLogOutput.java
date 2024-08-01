@@ -15,9 +15,9 @@
  */
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogUtil.CLog;
 
 import com.google.common.collect.ImmutableMap;
