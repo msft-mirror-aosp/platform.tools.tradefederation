@@ -26,11 +26,15 @@ import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A target preparer that flash the device with android common kernel generic image. Please see
@@ -70,6 +74,10 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
         mPreExistingAdbRootState = device.isAdbRoot();
 
         for (String modulePath : mModulePaths) {
+            removeModule(device, modulePath);
+        }
+
+        for (String modulePath : mModulePaths) {
             installModule(device, modulePath, String.join(" ", mInstallArgs));
         }
     }
@@ -99,7 +107,8 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
      * kunit 20480 0
      * }</pre>
      */
-    private String getDisplayedModuleName(String fullPath) {
+    @VisibleForTesting
+    protected String getDisplayedModuleName(String fullPath) {
 
         // Extract filename from full path
         int sepPos = fullPath.lastIndexOf('/');
@@ -118,30 +127,30 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
         return moduleName.replace('-', '_');
     }
 
+    @VisibleForTesting
+    protected String[] getDependentModules(String modName, String lsmodOutput) {
+
+        Pattern pattern =
+                Pattern.compile(
+                        String.format("^%s\\s+\\d+\\s+\\d+\\s+(\\S*)", modName), Pattern.MULTILINE);
+        Matcher matcher = pattern.matcher(lsmodOutput);
+        if (matcher.find()) {
+            String dependModNames = matcher.group(1);
+            CLog.i("%s has depending modules: %s", modName, dependModNames);
+            return dependModNames.split(",");
+        } else {
+            return new String[0];
+        }
+    }
+
     private void installModule(ITestDevice device, String modulePath, String arg)
             throws TargetSetupError, DeviceNotAvailableException {
 
         String kernelModule = getDisplayedModuleName(modulePath);
-        String command = String.format("rmmod %s", kernelModule);
 
-        // Unload module before hand in case it's already loaded for some reason
-        CommandResult result = device.executeShellV2Command(command);
-
-        if (result == null) {
-            throw new TargetSetupError(
-                    String.format(
-                            "Failed to get return from command '%s' from %s",
-                            command, device.getSerialNumber()),
-                    DeviceErrorIdentifier.KERNEL_MODULE_INSTALLATION_FAILED);
-        }
-
-        if (CommandStatus.SUCCESS.equals(result.getStatus())) {
-            CLog.w("Module '%s' unexpectedly still loaded, it has been unloaded.", kernelModule);
-        }
-
-        command = String.format("insmod %s %s", modulePath, arg);
+        String command = String.format("insmod %s %s", modulePath, arg);
         CLog.i("Installing %s on %s", modulePath, device.getSerialNumber());
-        result =
+        CommandResult result =
                 device.executeShellV2Command(command, mInstallModuleTimeout, TimeUnit.MILLISECONDS);
         if (result == null) {
             throw new TargetSetupError(
@@ -169,22 +178,22 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
             throws DeviceNotAvailableException {
 
         String kernelModule = getDisplayedModuleName(modulePath);
+        String command;
 
         CLog.i("Remove kernel module %s from %s", kernelModule, device.getSerialNumber());
 
-        // Clean up, unload module.
-        CommandResult result =
-                device.executeShellV2Command(String.format("rmmod %s", kernelModule));
-
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-            String errorMessage =
-                    String.format(
-                            "remove module returned non-zero. Exit code: %d, stderr: %s, stdout:"
-                                    + " %s",
-                            result.getExitCode(), result.getStderr(), result.getStdout());
-            CLog.e("Unable to unload module '%s'. %s", kernelModule, errorMessage);
-        } else {
-            CLog.w("Successfully removed module '%s' from device.", kernelModule);
+        String output = device.executeShellCommand("lsmod");
+        CLog.i("lsmod output: %s from %s", output, device.getSerialNumber());
+        for (String modName : getDependentModules(kernelModule, output)) {
+            String trimmedName = modName.trim();
+            command = String.format("rmmod %s", trimmedName);
+            output = device.executeShellCommand(command);
+            CLog.i("'%s' returned %s.", command, output);
         }
+
+        // Clean up, unload module with best effort
+        command = String.format("rmmod %s", kernelModule);
+        output = device.executeShellCommand(command);
+        CLog.i("'%s' returned %s.", command, output);
     }
 }
