@@ -16,8 +16,8 @@
 
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log.ILogOutput;
-import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.log.Log.ILogOutput;
+import com.android.tradefed.log.Log.LogLevel;
 
 import java.util.Map;
 

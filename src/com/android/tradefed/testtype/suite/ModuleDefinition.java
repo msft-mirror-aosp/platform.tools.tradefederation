@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.testtype.suite;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Configuration;
@@ -50,6 +49,7 @@ import com.android.tradefed.invoker.shard.token.TokenProperty;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.ITestLogger;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
