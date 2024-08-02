@@ -61,5 +61,7 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/bazelbuild-remote-apis/build/bazel/remote/execution/v2/remote-execution-java-grpc/linux_glibc_common/javac/remote-execution-java-grpc.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/bazelbuild-remote-apis/build/bazel/remote/execution/v2/remote-execution-java-proto/linux_glibc_common/combined/remote-execution-java-proto.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/auto/value/auto_value_annotations/linux_glibc_common/javac/auto_value_annotations.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/googleapis/google/bytestream/bytestream-java-grpc/linux_glibc_common/javac/bytestream-java-grpc.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/googleapis/google/bytestream/bytestream-java-proto/linux_glibc_common/combined/bytestream-java-proto.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

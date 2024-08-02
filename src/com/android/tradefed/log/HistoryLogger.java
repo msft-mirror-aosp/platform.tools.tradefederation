@@ -15,9 +15,9 @@
  */
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.log.ILogRegistry.EventType;
+import com.android.tradefed.log.Log.LogLevel;
 
 import org.json.JSONObject;
 
