@@ -15,10 +15,10 @@
  */
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.result.InputStreamSource;
 
 import java.io.IOException;
@@ -47,7 +47,7 @@ public class StdoutLogger implements ILeveledLogOutput {
      */
     @Override
     public void printLog(LogLevel logLevel, String tag, String message) {
-        LogUtil.printLog(logLevel, tag, message);
+        Log.printLog(logLevel, tag, message);
     }
 
     /**
