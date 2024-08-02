@@ -132,7 +132,7 @@ public class IsolatedHostTestTest {
         List<String> commandArgs = mHostTest.compileCommandArgs("", null);
         assertTrue(commandArgs.contains("-Drobolectric.offline=true"));
         assertTrue(commandArgs.contains("-Drobolectric.logging=stdout"));
-        assertTrue(commandArgs.contains("-Drobolectric.resourcesMode=binary"));
+        assertTrue(commandArgs.contains("-Drobolectric.resourcesMode=BINARY"));
         assertTrue(
                 commandArgs.stream()
                         .anyMatch(
@@ -191,7 +191,7 @@ public class IsolatedHostTestTest {
         List<String> commandArgs = mHostTest.compileCommandArgs("", null);
         assertFalse(commandArgs.contains("-Drobolectric.offline=true"));
         assertFalse(commandArgs.contains("-Drobolectric.logging=stdout"));
-        assertFalse(commandArgs.contains("-Drobolectric.resourcesMode=binary"));
+        assertFalse(commandArgs.contains("-Drobolectric.resourcesMode=BINARY"));
         assertFalse(
                 commandArgs.stream().anyMatch(s -> s.contains("-Drobolectric.dependency.dir=")));
     }
