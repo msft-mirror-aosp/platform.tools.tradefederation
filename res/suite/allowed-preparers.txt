@@ -1,6 +1,7 @@
 com.android.tradefed.targetprep.AoaTargetPreparer
 com.android.tradefed.targetprep.DeviceCleaner
 com.android.tradefed.targetprep.FeatureFlagTargetPreparer
+com.android.tradefed.targetprep.InstallApexModuleTargetPreparer
 com.android.tradefed.targetprep.RootTargetPreparer
 com.android.tradefed.targetprep.RunCommandTargetPreparer
 com.android.tradefed.targetprep.WifiPreparer
