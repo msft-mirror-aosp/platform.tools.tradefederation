@@ -125,4 +125,7 @@ message DeviceStatus {
   }
   string device_id = 1;
   ReservationStatus reservation_status = 2;
+  // the run target of the device used for scheduling purpose, default to product board
+  // but can be customized via TF global host config files
+  string run_target = 3;
 }

@@ -242,7 +242,9 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             currentTestListener.add(mRemoteTestTimeOutEnforcer);
         }
 
-        mRetryAttemptForwarder = new RetryLogSaverResultForwarder(mLogSaver, currentTestListener);
+        mRetryAttemptForwarder =
+                new RetryLogSaverResultForwarder(
+                        mLogSaver, currentTestListener, mModuleConfiguration);
         ITestInvocationListener runListener = mRetryAttemptForwarder;
 
         // The module collectors itself are added: this list will be very limited.

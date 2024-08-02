@@ -18,8 +18,6 @@ package com.android.tradefed.observatory;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.DdmPreferences;
-import com.android.ddmlib.Log;
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
@@ -28,6 +26,8 @@ import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.invoker.tracing.ActiveTrace;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracingLogger;
+import com.android.tradefed.log.Log;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.log.StdoutLogger;
