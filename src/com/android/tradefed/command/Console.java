@@ -16,7 +16,6 @@
 
 package com.android.tradefed.command;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.clearcut.ClearcutClient;
 import com.android.tradefed.clearcut.TerminateClearcutClient;
 import com.android.tradefed.command.CommandRunner.ExitCode;
@@ -32,6 +31,7 @@ import com.android.tradefed.config.proxy.AutomatedReporters;
 import com.android.tradefed.device.IDeviceManager;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInvocation;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FailureDescription;
@@ -61,6 +61,9 @@ import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.TerminalBuilder;
 
+import sun.misc.Signal;
+import sun.misc.SignalHandler;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -76,9 +79,6 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
-
-import sun.misc.Signal;
-import sun.misc.SignalHandler;
 
 /**
  * Main TradeFederation console providing user with the interface to interact
