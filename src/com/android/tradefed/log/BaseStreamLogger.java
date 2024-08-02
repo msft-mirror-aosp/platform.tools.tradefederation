@@ -15,9 +15,9 @@
  */
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.util.StreamUtil;
 
 import java.io.IOException;
@@ -55,6 +55,11 @@ public abstract class BaseStreamLogger<OS extends OutputStream> extends BaseLeve
         mLogLevelDisplay = logLevel;
     }
 
+    /** For compatibility */
+    public void setLogLevelDisplay(com.android.ddmlib.Log.LogLevel logLevel) {
+        mLogLevelDisplay = LogLevel.convertFromDdmlib(logLevel);
+    }
+
     /** @return current minimum {@link LogLevel} to display on stdout. */
     public LogLevel getLogLevelDisplay() {
         return mLogLevelDisplay;
@@ -82,7 +87,7 @@ public abstract class BaseStreamLogger<OS extends OutputStream> extends BaseLeve
      */
     private void internalPrintLog(
             LogLevel logLevel, String tag, String message, boolean forceStdout) {
-        String outMessage = LogUtil.getLogFormatString(logLevel, tag, message);
+        String outMessage = Log.getLogFormatString(logLevel, tag, message);
         if (shouldDisplay(forceStdout, mLogLevelDisplay, logLevel, tag)) {
             System.out.print(outMessage);
         }
