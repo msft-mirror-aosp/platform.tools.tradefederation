@@ -638,7 +638,7 @@ public class IsolatedHostTest
         }
         options.add("-Drobolectric.offline=true");
         options.add("-Drobolectric.logging=stdout");
-        options.add("-Drobolectric.resourcesMode=binary");
+        options.add("-Drobolectric.resourcesMode=BINARY");
         options.add("-Drobolectric.usePreinstrumentedJars=false");
         // TODO(rexhoffman) figure out how to get the local conscrypt working - shared objects and
         // such.

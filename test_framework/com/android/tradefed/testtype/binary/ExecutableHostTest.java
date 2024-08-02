@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype.binary;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IDeviceBuildInfo;
@@ -41,6 +43,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TestRunnerUtil;
 
 import com.google.common.base.Strings;
@@ -49,6 +52,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -139,8 +143,19 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         }
         runUtil.setEnvVariable(LD_LIBRARY_PATH, ldLibraryPath);
 
-        // Set Tradefed adb on $PATH of binary
-        AdbUtils.updateAdb(getTestInfo(), runUtil, getAdbPath());
+        // Update Tradefed adb on $PATH of binary
+        File adbBinary = AdbUtils.getAdbToUpdate(getTestInfo(), getAdbPath());
+        runUtil.setEnvVariable(
+                "PATH",
+                buildPathWithRelativePaths(
+                        workingDir,
+                        Collections.singleton(
+                                adbBinary != null ? adbBinary.getAbsolutePath() : "adb"),
+                        String.format(
+                                "%s:/usr/bin",
+                                SystemUtil.getRunningJavaBinaryPath()
+                                        .getParentFile()
+                                        .getAbsolutePath())));
         // Ensure its executable
         FileUtil.chmodRWXRecursively(new File(binaryPath));
 

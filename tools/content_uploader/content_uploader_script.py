@@ -248,6 +248,11 @@ def _upload(
     if not dump_file_details:
         logging.warning('-dump-file-details is not enabled')
 
+    # `-dump-metrics` only supports on cas uploader V1.3 or later.
+    dump_metrics = cas_info.client_version >= (1, 3)
+    if not dump_metrics:
+        logging.warning('-dump-metrics is not enabled')
+
     with tempfile.NamedTemporaryFile(mode='w+') as digest_file, tempfile.NamedTemporaryFile(
       mode='w+') as content_details_file:
         logging.info(
@@ -262,8 +267,6 @@ def _upload(
             cas_info.cas_service,
             '-dump-digest',
             digest_file.name,
-            '-dump-metrics',
-            metrics_file,
             '-use-adc',
         ]
 
@@ -277,6 +280,9 @@ def _upload(
 
         if dump_file_details:
             cmd = cmd + ['-dump-file-details', content_details_file.name]
+
+        if dump_metrics:
+            cmd = cmd + ['-dump-metrics', metrics_file]
 
         try:
             logging.info('Running command: %s', cmd)
@@ -388,8 +394,9 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
             else:
                 logging.warning('Skip to save the content details of file %s', name)
 
-            _add_artifact_metrics(metrics_file, cas_metrics)
-            os.remove(metrics_file)
+            if os.path.exists(metrics_file):
+                _add_artifact_metrics(metrics_file, cas_metrics)
+                os.remove(metrics_file)
 
             logging.info(
                 'Elapsed time of uploading %s: %d seconds\n\n',
