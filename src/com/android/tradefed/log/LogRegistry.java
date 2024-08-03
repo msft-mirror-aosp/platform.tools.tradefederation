@@ -15,8 +15,7 @@
  */
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log;
-import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.util.FileUtil;
 
@@ -294,7 +293,7 @@ public class LogRegistry implements ILogRegistry {
             FileUtil.writeToFile(logData.createInputStream(), tradefedLog);
             // Align format to our standard logger
             String message =
-                    LogUtil.getLogFormatString(
+                    Log.getLogFormatString(
                             LogLevel.VERBOSE,
                             this.getClass().getSimpleName(),
                             String.format("Saved log to %s", tradefedLog.getAbsolutePath()));
