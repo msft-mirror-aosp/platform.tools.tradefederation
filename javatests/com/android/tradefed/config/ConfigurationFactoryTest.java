@@ -25,7 +25,6 @@ import static org.junit.Assert.fail;
 
 import static java.util.Map.entry;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IBuildProvider;
 import com.android.tradefed.build.IDeviceBuildProvider;
@@ -34,6 +33,7 @@ import com.android.tradefed.config.ConfigurationDef.ConfigObjectDef;
 import com.android.tradefed.config.ConfigurationFactory.ConfigId;
 import com.android.tradefed.config.remote.IRemoteFileResolver.ResolvedFile;
 import com.android.tradefed.log.ILeveledLogOutput;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.DeviceWiper;
 import com.android.tradefed.targetprep.ILabPreparer;
