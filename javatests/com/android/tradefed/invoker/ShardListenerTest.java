@@ -20,6 +20,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
+import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -321,14 +324,22 @@ public class ShardListenerTest {
                 .thenReturn(invocFile);
 
         // Setup of sharding
+        IConfiguration originalConfig = new Configuration("", "");
+        originalConfig.setCommandOptions(new CommandOptions());
         LogSaverResultForwarder originalInvocation =
-                new LogSaverResultForwarder(mMockSaver, Arrays.asList(mockListener));
+                new LogSaverResultForwarder(
+                        mMockSaver, Arrays.asList(mockListener), originalConfig);
         ShardMainResultForwarder mainForwarder =
                 new ShardMainResultForwarder(Arrays.asList(originalInvocation), 1);
         mainForwarder.invocationStarted(mContext);
+
         ShardListener shard1 = new ShardListener(mainForwarder);
+        IConfiguration shardConfig = new Configuration("", "");
+        CommandOptions shardOptions = new CommandOptions();
+        shardOptions.setHostLogSuffix("_shard_index_1");
+        shardConfig.setCommandOptions(shardOptions);
         LogSaverResultForwarder shardedInvocation =
-                new LogSaverResultForwarder(mMockSaver, Arrays.asList(shard1));
+                new LogSaverResultForwarder(mMockSaver, Arrays.asList(shard1), shardConfig);
 
         shardedInvocation.invocationStarted(mContext);
         shardedInvocation.testRunStarted("run1", 1);
@@ -392,5 +403,10 @@ public class ShardListenerTest {
         inOrder.verify(mockListener).getSummary();
         inOrder.verify(mMockSaver).invocationEnded(0L);
         inOrder.verify(mMockSaver).invocationEnded(0L);
+        inOrder.verify(mMockSaver)
+                .saveLogData(
+                        Mockito.eq(TestInvocation.TRADEFED_END_HOST_LOG + "_shard_index_1"),
+                        Mockito.eq(LogDataType.HOST_LOG),
+                        Mockito.any());
     }
 }

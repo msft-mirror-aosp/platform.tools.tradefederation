@@ -82,6 +82,13 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             description = "Used to enable/disable caching for specific modules.")
     private boolean mEnableCache = false;
 
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
+
     /** Whether any incomplete test is found in the current run. */
     private boolean mIncompleteTestFound = false;
 
@@ -124,7 +131,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             long timeoutMs,
             IShellOutputReceiver receiver,
             ITestLogger logger) {
-        RunUtil runUtil = new RunUtil();
+        RunUtil runUtil = new RunUtil(mInheritEnvVars);
         String[] cmds = cmd.split("\\s+");
 
         if (getShardCount() > 0) {

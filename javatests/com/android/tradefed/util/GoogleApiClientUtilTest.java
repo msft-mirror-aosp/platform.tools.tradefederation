@@ -19,6 +19,7 @@ package com.android.tradefed.util;
 import com.android.tradefed.auth.ICredentialFactory;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.OptionSetter;
+
 import com.google.auth.Credentials;
 
 import org.junit.After;
@@ -57,14 +58,15 @@ public class GoogleApiClientUtilTest {
         boolean mDefaultCredentialUsed = false;
 
         @Override
-        Credentials doCreateCredentialFromJsonKeyFile(File file, Collection<String> scopes)
-                throws IOException, GeneralSecurityException {
+        protected Credentials doCreateCredentialFromJsonKeyFile(
+                File file, Collection<String> scopes) throws IOException, GeneralSecurityException {
             mKeyFiles.add(file);
             return Mockito.mock(Credentials.class);
         }
 
         @Override
-        Credentials doCreateDefaultCredential(Collection<String> scopes) throws IOException {
+        protected Credentials doCreateDefaultCredential(Collection<String> scopes)
+                throws IOException {
             mDefaultCredentialUsed = true;
             return Mockito.mock(Credentials.class);
         }

@@ -46,6 +46,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -67,9 +68,10 @@ public class ExecutableHostTestTest {
     private ITestDevice mMockDevice;
     private IRunUtil mMockRunUtil;
     private TestInformation mTestInfo;
+    private File mModuleDir;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         mMockListener = Mockito.mock(ITestInvocationListener.class);
         mMockDevice = Mockito.mock(ITestDevice.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
@@ -87,6 +89,12 @@ public class ExecutableHostTestTest {
         InvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
+        mModuleDir = FileUtil.createTempDir("test-module");
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        FileUtil.recursiveDelete(mModuleDir);
     }
 
     @Test
@@ -118,7 +126,7 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
@@ -146,7 +154,7 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_relativePath() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
@@ -175,7 +183,7 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_dnae() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
@@ -289,7 +297,7 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_failure() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
@@ -335,7 +343,7 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_timeout() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());

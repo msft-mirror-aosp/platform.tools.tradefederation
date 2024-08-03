@@ -17,6 +17,7 @@
 package com.android.tradefed.result;
 
 import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -35,11 +36,13 @@ import java.util.List;
 public class LogSaverResultForwarder extends ResultForwarder implements ILogSaverListener {
 
     ILogSaver mLogSaver;
+    IConfiguration mConfig;
 
-    public LogSaverResultForwarder(ILogSaver logSaver,
-            List<ITestInvocationListener> listeners) {
+    public LogSaverResultForwarder(
+            ILogSaver logSaver, List<ITestInvocationListener> listeners, IConfiguration config) {
         super(listeners);
         mLogSaver = logSaver;
+        mConfig = config;
         for (ITestInvocationListener listener : listeners) {
             if (listener instanceof ILogSaverListener) {
                 ((ILogSaverListener) listener).setLogSaver(mLogSaver);
@@ -75,7 +78,11 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
             CLog.e("Caught runtime exception from log saver: %s", mLogSaver.getClass().getName());
             CLog.e(e);
         }
-        reportEndHostLog(getListeners(), mLogSaver, TestInvocation.TRADEFED_END_HOST_LOG);
+        String endHostLogName = TestInvocation.TRADEFED_END_HOST_LOG;
+        if (mConfig.getCommandOptions().getHostLogSuffix() != null) {
+            endHostLogName += mConfig.getCommandOptions().getHostLogSuffix();
+        }
+        reportEndHostLog(getListeners(), mLogSaver, endHostLogName);
     }
 
     /** Log a final file before completion */
