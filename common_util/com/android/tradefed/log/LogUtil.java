@@ -16,7 +16,6 @@
 
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
 
 import java.io.PrintWriter;
@@ -206,6 +205,15 @@ public class LogUtil {
          */
         public static void logAndDisplay(LogLevel logLevel, String message) {
             // frame 2: skip frames 0 (#getClassName) and 1 (this method)
+            Log.logAndDisplay(
+                    com.android.tradefed.log.Log.LogLevel.convertFromDdmlib(logLevel),
+                    getClassName(2),
+                    message);
+        }
+
+        public static void logAndDisplay(
+                com.android.tradefed.log.Log.LogLevel logLevel, String message) {
+            // frame 2: skip frames 0 (#getClassName) and 1 (this method)
             Log.logAndDisplay(logLevel, getClassName(2), message);
         }
 
@@ -217,6 +225,22 @@ public class LogUtil {
          * @param args The format string arguments
          */
         public static void logAndDisplay(LogLevel logLevel, String format, Object... args) {
+            // frame 2: skip frames 0 (#getClassName) and 1 (this method)
+            Log.logAndDisplay(
+                    com.android.tradefed.log.Log.LogLevel.convertFromDdmlib(logLevel),
+                    getClassName(2),
+                    String.format(format, args));
+        }
+
+        /**
+         * The shim version of {@link Log#logAndDisplay(LogLevel, String, String)}.
+         *
+         * @param logLevel the {@link LogLevel}
+         * @param format A format string for the message to log
+         * @param args The format string arguments
+         */
+        public static void logAndDisplay(
+                com.android.tradefed.log.Log.LogLevel logLevel, String format, Object... args) {
             // frame 2: skip frames 0 (#getClassName) and 1 (this method)
             Log.logAndDisplay(logLevel, getClassName(2), String.format(format, args));
         }
@@ -268,7 +292,10 @@ public class LogUtil {
                logMessage += "\n" + stackTrace;
             }
 
-            Log.logAndDisplay(LogLevel.ASSERT, tag, logMessage);
+            Log.logAndDisplay(
+                    com.android.tradefed.log.Log.LogLevel.convertFromDdmlib(LogLevel.ASSERT),
+                    tag,
+                    logMessage);
         }
 
         /**

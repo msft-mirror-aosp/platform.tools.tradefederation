@@ -21,7 +21,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
@@ -36,6 +35,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.log.ILogRegistry;
 import com.android.tradefed.log.ILogRegistry.EventType;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
