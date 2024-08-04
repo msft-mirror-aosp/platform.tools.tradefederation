@@ -653,6 +653,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         String cmd =
                 String.format(
                         "%s add_hashtree_footer --do_not_generate_fec "
+                                + "--hash_algorithm sha256 "
                                 + "--image %s "
                                 + "--partition_name system_dlkm",
                         avbtool.getAbsolutePath(), mSystemDlkmImg.getAbsolutePath());

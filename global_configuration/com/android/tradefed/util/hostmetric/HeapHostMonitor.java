@@ -15,15 +15,14 @@
  */
 package com.android.tradefed.util.hostmetric;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.log.ILogRegistry.EventType;
+import com.android.tradefed.log.Log.LogLevel;
+import com.android.tradefed.log.LogRegistry;
 
 import com.google.common.annotations.VisibleForTesting;
 
 import java.util.HashMap;
 import java.util.Map;
-
-import com.android.tradefed.log.LogRegistry;
 
 /**
  * {@link AbstractHostMonitor} implementation that monitors the heap memory on the host and log it
