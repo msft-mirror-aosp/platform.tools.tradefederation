@@ -302,6 +302,12 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
             try {
                 String realSerial = idevice.getProperty("ro.serialno");
                 if (!Strings.isNullOrEmpty(realSerial)) {
+                    // If the device happen to already exists, re-check it to ensure we update
+                    // tracking.
+                    IManagedTestDevice d = find(serial);
+                    if (d != null) {
+                        d.setTrackingSerial(realSerial);
+                    }
                     serial = realSerial.trim();
                     setTracking = true;
                 }

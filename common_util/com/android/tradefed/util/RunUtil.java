@@ -78,6 +78,7 @@ public class RunUtil implements IRunUtil {
     private static final String PROGRESS_MONITOR_TIMEOUT_ENV = "RUN_PROGRESS_MONITOR_TIMEOUT";
 
     private final CommandInterrupter mInterrupter;
+    private final boolean mInheritEnvVars;
 
     /**
      * Create a new {@link RunUtil} object to use.
@@ -86,9 +87,18 @@ public class RunUtil implements IRunUtil {
         this(CommandInterrupter.INSTANCE);
     }
 
+    public RunUtil(boolean inheritEnvVars) {
+        this(CommandInterrupter.INSTANCE, inheritEnvVars);
+    }
+
     @VisibleForTesting
     RunUtil(@Nonnull CommandInterrupter interrupter) {
+        this(interrupter, true);
+    }
+
+    private RunUtil(@Nonnull CommandInterrupter interrupter, boolean inheritEnvVars) {
         mInterrupter = interrupter;
+        mInheritEnvVars = inheritEnvVars;
     }
 
     /**
@@ -383,6 +393,10 @@ public class RunUtil implements IRunUtil {
     private synchronized ProcessBuilder createProcessBuilder(
             Redirect redirect, List<String> commandList, boolean enableCache) {
         ProcessBuilder processBuilder = new ProcessBuilder();
+        if (!mInheritEnvVars) {
+            processBuilder.environment().clear();
+        }
+
         if (mWorkingDir != null) {
             processBuilder.directory(mWorkingDir);
         }

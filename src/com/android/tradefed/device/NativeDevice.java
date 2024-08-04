@@ -5474,7 +5474,9 @@ public class NativeDevice
             }
             return new DeviceDescriptor(
                     idevice.getSerialNumber(),
-                    null,
+                    (mTrackingSerialNumber != null)
+                            ? idevice.getSerialNumber() + "[" + mTrackingSerialNumber + "]"
+                            : null,
                     idevice instanceof StubDevice,
                     idevice.getState(),
                     getAllocationState(),

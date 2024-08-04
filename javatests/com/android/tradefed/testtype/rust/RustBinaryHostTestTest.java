@@ -40,6 +40,7 @@ import com.android.tradefed.util.IRunUtil;
 
 import com.google.common.truth.Truth;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -57,6 +58,7 @@ import java.util.List;
 public class RustBinaryHostTestTest {
     private RustBinaryHostTest mTest;
     private TestInformation mTestInfo;
+    private File mModuleDir;
     @Mock IRunUtil mMockRunUtil;
     @Mock IBuildInfo mMockBuildInfo;
     @Mock ITestInvocationListener mMockListener;
@@ -76,6 +78,12 @@ public class RustBinaryHostTestTest {
         InvocationContext context = new InvocationContext();
         context.addDeviceBuildInfo("device", mMockBuildInfo);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
+        mModuleDir = FileUtil.createTempDir("rust-module");
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        FileUtil.recursiveDelete(mModuleDir);
     }
 
     private CommandResult newCommandResult(CommandStatus status, String stderr, String stdout) {
@@ -198,7 +206,7 @@ public class RustBinaryHostTestTest {
     /** Test that when running a rust binary the output is parsed to obtain results. */
     @Test
     public void testRun() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -232,7 +240,7 @@ public class RustBinaryHostTestTest {
         mMockBuildInfo = mock(IBuildInfo.class);
         mTest.setBuild(mMockBuildInfo);
 
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -259,7 +267,7 @@ public class RustBinaryHostTestTest {
     /** If the binary returns an exception status, it is treated as a failed test. */
     @Test
     public void testRunFail_exception() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -292,7 +300,7 @@ public class RustBinaryHostTestTest {
      */
     @Test
     public void testRunFail_list() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -319,7 +327,7 @@ public class RustBinaryHostTestTest {
     /** If the binary reports a FAILED status, it is treated as a failed test. */
     @Test
     public void testRunFail_failureOnly() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -347,7 +355,7 @@ public class RustBinaryHostTestTest {
     /** Test the exclude filtering of test methods. */
     @Test
     public void testExcludeFilter() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -398,7 +406,7 @@ public class RustBinaryHostTestTest {
     /** Test both include and exclude filters. */
     @Test
     public void testIncludeExcludeFilter() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -453,7 +461,7 @@ public class RustBinaryHostTestTest {
     /** Test multiple include and exclude filters. */
     @Test
     public void testMultipleIncludeExcludeFilter() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -543,7 +551,7 @@ public class RustBinaryHostTestTest {
     /** Test benchmark run */
     @Test
     public void testRun_benchmark() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -583,7 +591,7 @@ public class RustBinaryHostTestTest {
 
     @Test
     public void testRun_benchmarkDoubleStart() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -622,7 +630,7 @@ public class RustBinaryHostTestTest {
 
     @Test
     public void testRun_benchmarkNotFinished() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
