@@ -180,6 +180,13 @@ public class IsolatedHostTest
                             + "the Java command line.")
     private boolean mRavenwoodResources = false;
 
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
+
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
     private IBuildInfo mBuildInfo;
     private Set<String> mIncludeFilters = new HashSet<>();
@@ -221,7 +228,7 @@ public class IsolatedHostTest
             String classpath = this.compileClassPath();
             List<String> cmdArgs = this.compileCommandArgs(classpath, artifactsDir);
             CLog.v(String.join(" ", cmdArgs));
-            RunUtil runner = new RunUtil();
+            RunUtil runner = new RunUtil(mInheritEnvVars);
 
             String ldLibraryPath = this.compileLdLibraryPath();
             if (ldLibraryPath != null) {
