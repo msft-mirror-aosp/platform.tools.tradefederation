@@ -281,7 +281,7 @@ public final class Log {
      * @param message
      */
     public static String getLogFormatString(LogLevel logLevel, String tag, String message) {
-        SimpleDateFormat formatter = new SimpleDateFormat("hh:mm:ss", Locale.getDefault());
+        SimpleDateFormat formatter = new SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault());
         return String.format(
                 "%s %c/%s: %s\n",
                 formatter.format(new Date()), logLevel.getPriorityLetter(), tag, message);
