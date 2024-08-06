@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype.rust;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -48,6 +50,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -67,6 +70,13 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             name = "enable-cache",
             description = "Used to enable/disable caching for specific modules.")
     private boolean mEnableCache = false;
+
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
 
     private IBuildInfo mBuildInfo;
 
@@ -240,6 +250,10 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
         }
+        runUtil.setEnvVariable(
+                "PATH",
+                buildPathWithRelativePaths(
+                        invocation.workingDir, Collections.singleton("adb"), "/usr/bin"));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
         String instanceName =
@@ -308,6 +322,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
-        return new RunUtil();
+        return new RunUtil(mInheritEnvVars);
     }
 }
