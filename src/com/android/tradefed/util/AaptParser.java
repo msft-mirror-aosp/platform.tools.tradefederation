@@ -172,7 +172,7 @@ public class AaptParser {
      * @return the {@link AaptParser} or <code>null</code> if failed to extract the information
      */
     public static AaptParser parse(File apkFile) {
-        return parse(apkFile, AaptVersion.AAPT2);
+        return parse(apkFile, AaptVersion.AAPT);
     }
 
     /**
