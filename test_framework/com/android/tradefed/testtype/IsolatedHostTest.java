@@ -54,6 +54,7 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.ProcessBuilder.Redirect;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -188,6 +189,7 @@ public class IsolatedHostTest
     private boolean mInheritEnvVars = true;
 
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
+    private static final String ISOLATED_JAVA_LOG = "isolated-java-logs";
     private IBuildInfo mBuildInfo;
     private Set<String> mIncludeFilters = new HashSet<>();
     private Set<String> mExcludeFilters = new HashSet<>();
@@ -676,164 +678,151 @@ public class IsolatedHostTest
                 .build()
                 .writeDelimitedTo(socket.getOutputStream());
 
-        TestDescription currentTest = null;
         Instant start = Instant.now();
-        CloseableTraceScope methodScope = null;
-        CloseableTraceScope runScope = null;
-        boolean runStarted = false;
         try {
-            mainLoop:
-            while (true) {
-                try {
-                    RunnerReply reply = RunnerReply.parseDelimitedFrom(socket.getInputStream());
-                    if (reply == null) {
-                        if (currentTest != null) {
-                            // Subprocess has hard crashed
-                            listener.testFailed(currentTest, "Subprocess died unexpectedly.");
-                            listener.testEnded(
-                                    currentTest,
-                                    System.currentTimeMillis(),
-                                    new HashMap<String, Metric>());
-                        }
-                        // Try collecting the hs_err logs that the JVM dumps when it segfaults.
-                        List<File> logFiles =
-                                Arrays.stream(mWorkDir.listFiles())
-                                        .filter(
-                                                f ->
-                                                        f.getName().startsWith("hs_err")
-                                                                && f.getName().endsWith(".log"))
-                                        .collect(Collectors.toList());
-
-                        if (!runStarted) {
-                            listener.testRunStarted(this.getClass().getCanonicalName(), 0);
-                        }
-                        for (File f : logFiles) {
-                            try (FileInputStreamSource source =
-                                    new FileInputStreamSource(f, true)) {
-                                listener.testLog("hs_err_log-VM-crash", LogDataType.TEXT, source);
-                            }
-                        }
-                        mReportedFailure = true;
-                        FailureDescription failure =
-                                FailureDescription.create(
-                                                "The subprocess died unexpectedly.",
-                                                FailureStatus.TEST_FAILURE)
-                                        .setFullRerun(false);
-                        listener.testRunFailed(failure);
-                        listener.testRunEnded(0L, new HashMap<String, Metric>());
-                        break mainLoop;
-                    }
-                    switch (reply.getRunnerStatus()) {
-                        case RUNNER_STATUS_FINISHED_OK:
-                            CLog.v("Received message that runner finished successfully");
-                            break mainLoop;
-                        case RUNNER_STATUS_FINISHED_ERROR:
-                            CLog.e("Received message that runner errored");
-                            CLog.e("From Runner: " + reply.getMessage());
-                            if (!runStarted) {
-                                listener.testRunStarted(this.getClass().getCanonicalName(), 0);
-                            }
-                            FailureDescription failure =
-                                    FailureDescription.create(
-                                            reply.getMessage(), FailureStatus.INFRA_FAILURE);
-                            listener.testRunFailed(failure);
-                            listener.testRunEnded(0L, new HashMap<String, Metric>());
-                            break mainLoop;
-                        case RUNNER_STATUS_STARTING:
-                            CLog.v("Received message that runner is starting");
-                            break;
-                        default:
-                            if (reply.hasTestEvent()) {
-                                JUnitEvent event = reply.getTestEvent();
-                                TestDescription desc;
-                                switch (event.getTopic()) {
-                                    case TOPIC_FAILURE:
-                                        desc =
-                                                new TestDescription(
-                                                        event.getClassName(),
-                                                        event.getMethodName());
-                                        listener.testFailed(desc, event.getMessage());
-                                        break;
-                                    case TOPIC_ASSUMPTION_FAILURE:
-                                        desc =
-                                                new TestDescription(
-                                                        event.getClassName(),
-                                                        event.getMethodName());
-                                        listener.testAssumptionFailure(desc, reply.getMessage());
-                                        break;
-                                    case TOPIC_STARTED:
-                                        desc =
-                                                new TestDescription(
-                                                        event.getClassName(),
-                                                        event.getMethodName());
-                                        listener.testStarted(desc, event.getStartTime());
-                                        currentTest = desc;
-                                        methodScope = new CloseableTraceScope(desc.toString());
-                                        break;
-                                    case TOPIC_FINISHED:
-                                        desc =
-                                                new TestDescription(
-                                                        event.getClassName(),
-                                                        event.getMethodName());
-                                        listener.testEnded(
-                                                desc,
-                                                event.getEndTime(),
-                                                new HashMap<String, Metric>());
-                                        currentTest = null;
-                                        if (methodScope != null) {
-                                            methodScope.close();
-                                            methodScope = null;
-                                        }
-                                        break;
-                                    case TOPIC_IGNORED:
-                                        desc =
-                                                new TestDescription(
-                                                        event.getClassName(),
-                                                        event.getMethodName());
-                                        // Use endTime for both events since
-                                        // ignored test do not really run.
-                                        listener.testStarted(desc, event.getEndTime());
-                                        listener.testIgnored(desc);
-                                        listener.testEnded(
-                                                desc,
-                                                event.getEndTime(),
-                                                new HashMap<String, Metric>());
-                                        break;
-                                    case TOPIC_RUN_STARTED:
-                                        runStarted = true;
-                                        listener.testRunStarted(
-                                                event.getClassName(), event.getTestCount());
-                                        runScope = new CloseableTraceScope(event.getClassName());
-                                        break;
-                                    case TOPIC_RUN_FINISHED:
-                                        listener.testRunEnded(
-                                                event.getElapsedTime(),
-                                                new HashMap<String, Metric>());
-                                        if (runScope != null) {
-                                            runScope.close();
-                                            runScope = null;
-                                        }
-                                        break;
-                                    default:
-                                }
-                            }
-                    }
-                } catch (SocketTimeoutException e) {
-                    mReportedFailure = true;
-                    FailureDescription failure =
-                            FailureDescription.create(
-                                    StreamUtil.getStackTrace(e), FailureStatus.INFRA_FAILURE);
-                    listener.testRunFailed(failure);
-                    listener.testRunEnded(
-                            Duration.between(start, Instant.now()).toMillis(),
-                            new HashMap<String, Metric>());
-                    break mainLoop;
-                }
-            }
+            processRunnerReply(socket.getInputStream(), listener);
+        } catch (SocketTimeoutException e) {
+            mReportedFailure = true;
+            FailureDescription failure =
+                    FailureDescription.create(
+                            StreamUtil.getStackTrace(e), FailureStatus.INFRA_FAILURE);
+            listener.testRunFailed(failure);
+            listener.testRunEnded(
+                    Duration.between(start, Instant.now()).toMillis(),
+                    new HashMap<String, Metric>());
         } finally {
             // This will get associated with the module since it can contains several test runs
             try (FileInputStreamSource source = new FileInputStreamSource(mSubprocessLog, true)) {
-                listener.testLog("isolated-java-logs", LogDataType.TEXT, source);
+                listener.testLog(ISOLATED_JAVA_LOG, LogDataType.TEXT, source);
+            }
+        }
+    }
+
+    private void processRunnerReply(InputStream input, ITestInvocationListener listener)
+            throws IOException {
+        TestDescription currentTest = null;
+        CloseableTraceScope methodScope = null;
+        CloseableTraceScope runScope = null;
+        boolean runStarted = false;
+        while (true) {
+            RunnerReply reply = RunnerReply.parseDelimitedFrom(input);
+            if (reply == null) {
+                if (currentTest != null) {
+                    // Subprocess has hard crashed
+                    listener.testFailed(currentTest, "Subprocess died unexpectedly.");
+                    listener.testEnded(
+                            currentTest, System.currentTimeMillis(), new HashMap<String, Metric>());
+                }
+                // Try collecting the hs_err logs that the JVM dumps when it segfaults.
+                List<File> logFiles =
+                        Arrays.stream(mWorkDir.listFiles())
+                                .filter(
+                                        f ->
+                                                f.getName().startsWith("hs_err")
+                                                        && f.getName().endsWith(".log"))
+                                .collect(Collectors.toList());
+
+                if (!runStarted) {
+                    listener.testRunStarted(this.getClass().getCanonicalName(), 0);
+                }
+                for (File f : logFiles) {
+                    try (FileInputStreamSource source = new FileInputStreamSource(f, true)) {
+                        listener.testLog("hs_err_log-VM-crash", LogDataType.TEXT, source);
+                    }
+                }
+                mReportedFailure = true;
+                FailureDescription failure =
+                        FailureDescription.create(
+                                        "The subprocess died unexpectedly.",
+                                        FailureStatus.TEST_FAILURE)
+                                .setFullRerun(false);
+                listener.testRunFailed(failure);
+                listener.testRunEnded(0L, new HashMap<String, Metric>());
+                return;
+            }
+            switch (reply.getRunnerStatus()) {
+                case RUNNER_STATUS_FINISHED_OK:
+                    CLog.v("Received message that runner finished successfully");
+                    return;
+                case RUNNER_STATUS_FINISHED_ERROR:
+                    CLog.e("Received message that runner errored");
+                    CLog.e("From Runner: " + reply.getMessage());
+                    if (!runStarted) {
+                        listener.testRunStarted(this.getClass().getCanonicalName(), 0);
+                    }
+                    FailureDescription failure =
+                            FailureDescription.create(
+                                    reply.getMessage(), FailureStatus.INFRA_FAILURE);
+                    listener.testRunFailed(failure);
+                    listener.testRunEnded(0L, new HashMap<String, Metric>());
+                    return;
+                case RUNNER_STATUS_STARTING:
+                    CLog.v("Received message that runner is starting");
+                    break;
+                default:
+                    if (reply.hasTestEvent()) {
+                        JUnitEvent event = reply.getTestEvent();
+                        TestDescription desc;
+                        switch (event.getTopic()) {
+                            case TOPIC_FAILURE:
+                                desc =
+                                        new TestDescription(
+                                                event.getClassName(), event.getMethodName());
+                                listener.testFailed(desc, event.getMessage());
+                                break;
+                            case TOPIC_ASSUMPTION_FAILURE:
+                                desc =
+                                        new TestDescription(
+                                                event.getClassName(), event.getMethodName());
+                                listener.testAssumptionFailure(desc, reply.getMessage());
+                                break;
+                            case TOPIC_STARTED:
+                                desc =
+                                        new TestDescription(
+                                                event.getClassName(), event.getMethodName());
+                                listener.testStarted(desc, event.getStartTime());
+                                currentTest = desc;
+                                methodScope = new CloseableTraceScope(desc.toString());
+                                break;
+                            case TOPIC_FINISHED:
+                                desc =
+                                        new TestDescription(
+                                                event.getClassName(), event.getMethodName());
+                                listener.testEnded(
+                                        desc, event.getEndTime(), new HashMap<String, Metric>());
+                                currentTest = null;
+                                if (methodScope != null) {
+                                    methodScope.close();
+                                    methodScope = null;
+                                }
+                                break;
+                            case TOPIC_IGNORED:
+                                desc =
+                                        new TestDescription(
+                                                event.getClassName(), event.getMethodName());
+                                // Use endTime for both events since
+                                // ignored test do not really run.
+                                listener.testStarted(desc, event.getEndTime());
+                                listener.testIgnored(desc);
+                                listener.testEnded(
+                                        desc, event.getEndTime(), new HashMap<String, Metric>());
+                                break;
+                            case TOPIC_RUN_STARTED:
+                                runStarted = true;
+                                listener.testRunStarted(event.getClassName(), event.getTestCount());
+                                runScope = new CloseableTraceScope(event.getClassName());
+                                break;
+                            case TOPIC_RUN_FINISHED:
+                                listener.testRunEnded(
+                                        event.getElapsedTime(), new HashMap<String, Metric>());
+                                if (runScope != null) {
+                                    runScope.close();
+                                    runScope = null;
+                                }
+                                break;
+                            default:
+                        }
+                    }
             }
         }
     }
