@@ -434,6 +434,17 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
+        if (getDevice().getOptions().useCvdCF()) {
+            CLog.i("Creating host orchestrator utility...");
+            mHOUtil =
+                    new HostOrchestratorUtil(
+                            getDevice().getOptions().useOxygenationDevice(),
+                            getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
+                            getDevice().getOptions().getSshPrivateKeyPath(),
+                            getDevice().getOptions().getInstanceUser(),
+                            mGceAvd,
+                            getDevice().getOptions().getAvdDriverBinary());
+        }
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
@@ -444,14 +455,6 @@ public class AdbSshConnection extends AdbTcpConnection {
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
             mGceTunnelMonitor = new GceLHPTunnelMonitor();
-            mHOUtil =
-                    new HostOrchestratorUtil(
-                            deviceOptions.useOxygenationDevice(),
-                            deviceOptions.getExtraOxygenArgs().containsKey("use_cvd"),
-                            deviceOptions.getSshPrivateKeyPath(),
-                            deviceOptions.getInstanceUser(),
-                            gceAvdInfo,
-                            deviceOptions.getAvdDriverBinary());
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
@@ -502,6 +505,14 @@ public class AdbSshConnection extends AdbTcpConnection {
     @VisibleForTesting
     GceManager getGceHandler() {
         return mGceHandler;
+    }
+
+    /**
+     * Returns the instance of the {@link com.android.tradefed.device.cloud.HostOrchestratorUtil}.
+     */
+    @VisibleForTesting
+    HostOrchestratorUtil getHostOrchestratorUtil() {
+        return mHOUtil;
     }
 
     /** Capture a remote bugreport by ssh-ing into the device directly. */
