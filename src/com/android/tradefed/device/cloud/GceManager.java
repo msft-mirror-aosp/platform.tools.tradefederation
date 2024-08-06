@@ -41,6 +41,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.avd.AcloudUtil;
+import com.android.tradefed.util.avd.LogCollector;
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpRequestInitializer;
@@ -986,7 +987,7 @@ public class GceManager {
                     && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
-                    List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
+                    List<String> signatures = LogCollector.collectErrorSignatures(remoteFile);
                     if (signatures.size() > 0) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.DEVICE_ERROR_SIGNATURES,
@@ -997,7 +998,7 @@ public class GceManager {
             if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectDeviceLaunchMetrics")) {
-                    long[] launchMetrics = OxygenUtil.collectDeviceLaunchMetrics(remoteFile);
+                    long[] launchMetrics = LogCollector.collectDeviceLaunchMetrics(remoteFile);
                     if (launchMetrics[0] > 0) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.CF_FETCH_ARTIFACT_TIME, launchMetrics[0]);
@@ -1007,7 +1008,7 @@ public class GceManager {
                 }
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectOxygenVersion")) {
-                    String oxygenVersion = OxygenUtil.collectOxygenVersion(remoteFile);
+                    String oxygenVersion = LogCollector.collectOxygenVersion(remoteFile);
                     if (!Strings.isNullOrEmpty(oxygenVersion)) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
