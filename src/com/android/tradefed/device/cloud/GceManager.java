@@ -342,34 +342,60 @@ public class GceManager {
                                 + getTestDeviceOptions().getGceCmdTimeout()
                                 - System.currentTimeMillis();
                 startTime = System.currentTimeMillis();
-                final String remoteFile =
-                        CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR + "3/emulator_stderr.txt";
-                // Continuously scan cf boot status and exit immediately when the magic string
-                // VIRTUAL_DEVICE_BOOT_COMPLETED is found
-                String cfBootStatusSshCmd =
-                        "tail -F -n +1 "
-                                + remoteFile
-                                + " | grep -m 1 VIRTUAL_DEVICE_BOOT_COMPLETED";
-                String[] cfBootStatusSshCommand = cfBootStatusSshCmd.split(" ");
+                HostOrchestratorUtil hOUtil = null;
+                if (getTestDeviceOptions().useCvdCF()) {
+                    hOUtil =
+                            new HostOrchestratorUtil(
+                                    getTestDeviceOptions().useOxygenationDevice(),
+                                    getTestDeviceOptions()
+                                            .getExtraOxygenArgs()
+                                            .containsKey("use_cvd"),
+                                    getTestDeviceOptions().getSshPrivateKeyPath(),
+                                    getTestDeviceOptions().getInstanceUser(),
+                                    mGceAvdInfo,
+                                    getTestDeviceOptions().getAvdDriverBinary());
+                    bootSuccess = hOUtil.deviceBootCompleted(timeout);
+                } else {
+                    final String remoteFile =
+                            CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR
+                                    + "3/emulator_stderr.txt";
+                    // Continuously scan cf boot status and exit immediately when the magic string
+                    // VIRTUAL_DEVICE_BOOT_COMPLETED is found
+                    String cfBootStatusSshCmd =
+                            "tail -F -n +1 "
+                                    + remoteFile
+                                    + " | grep -m 1 VIRTUAL_DEVICE_BOOT_COMPLETED";
+                    String[] cfBootStatusSshCommand = cfBootStatusSshCmd.split(" ");
 
-                res =
-                        remoteSshCommandExecution(
-                                mGceAvdInfo,
-                                getTestDeviceOptions(),
-                                RunUtil.getDefault(),
-                                timeout,
-                                cfBootStatusSshCommand);
-                if (CommandStatus.SUCCESS.equals(res.getStatus())) {
-                    bootSuccess = true;
-                    CLog.d(
-                            "Device boot completed after %sms, flag located: %s",
-                            System.currentTimeMillis() - startTime, res.getStdout().trim());
+                    res =
+                            remoteSshCommandExecution(
+                                    mGceAvdInfo,
+                                    getTestDeviceOptions(),
+                                    RunUtil.getDefault(),
+                                    timeout,
+                                    cfBootStatusSshCommand);
+                    if (CommandStatus.SUCCESS.equals(res.getStatus())) {
+                        bootSuccess = true;
+                        CLog.d(
+                                "Device boot completed after %sms, flag located: %s",
+                                System.currentTimeMillis() - startTime, res.getStdout().trim());
+                    }
                 }
 
                 if (!bootSuccess) {
                     if (logger != null) {
-                        CommonLogRemoteFileUtil.fetchCommonFiles(
-                                logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
+                        if (hOUtil != null) {
+                            hOUtil.pullCvdHostLogs();
+                            hOUtil.collectLogByCommand(
+                                    logger,
+                                    "host_kernel",
+                                    HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                            hOUtil.collectLogByCommand(
+                                    logger, "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                        } else {
+                            CommonLogRemoteFileUtil.fetchCommonFiles(
+                                    logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
+                        }
                     }
                     mGceAvdInfo.setErrorType(InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT);
                     mGceAvdInfo.setStatus(GceStatus.BOOT_FAIL);
