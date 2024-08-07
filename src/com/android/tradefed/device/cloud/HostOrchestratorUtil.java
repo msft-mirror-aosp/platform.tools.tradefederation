@@ -198,6 +198,40 @@ public class HostOrchestratorUtil {
     }
 
     /**
+     * Get CF running status via Host Orchestrator.
+     *
+     * @param maxWaitTime The max timeout expected to getting the CF running status.
+     * @return True if device boot complete, false otherwise.
+     */
+    public boolean deviceBootCompleted(long maxWaitTime) {
+        String portNumber = Integer.toString(mOxygenClient.createServerSocket());
+        Process tunnel = null;
+        try {
+            tunnel = createHostOrchestratorTunnel(portNumber);
+            if (tunnel == null || !tunnel.isAlive()) {
+                CLog.e("Failed portforwarding Host Orchestrator tunnel.");
+                return false;
+            }
+            long maxEndTime = System.currentTimeMillis() + maxWaitTime;
+            while (System.currentTimeMillis() < maxEndTime) {
+                CommandResult curlRes =
+                        curlCommandExecution(
+                                mGceAvd.hostAndPort().getHost(), portNumber, "GET", "cvds", true);
+                if (CommandStatus.SUCCESS.equals(curlRes.getStatus())
+                        && parseListCvdOutput(curlRes.getStdout(), "status").equals("Running")) {
+                    return true;
+                }
+                getRunUtil().sleep(WAIT_FOR_OPERATION_MS);
+            }
+        } catch (IOException e) {
+            CLog.e("Failed getting gce status via Host Orchestrator: %s", e);
+        } finally {
+            mOxygenClient.closeLHPConnection(tunnel);
+        }
+        return false;
+    }
+
+    /**
      * Attempt to powerwash a GCE instance via Host Orchestrator.
      *
      * @return A {@link CommandResult} containing the status and logs.

@@ -53,6 +53,10 @@ public class HostOrchestratorUtilTest {
             "{\"cvds\":[{\"group\":\"cvd_1\",\"name\":\"ins-1\",\"build_source\":{},"
                     + "\"status\":\"Running\",\"displays\":[\"720 x 1280 ( 320 )\"],"
                     + "\"webrtc_device_id\":\"cvd-1\"}]}";
+    private static final String LIST_CVD_STARTING_RES =
+            "{\"cvds\":[{\"group\":\"cvd_1\",\"name\":\"ins-1\",\"build_source\":{},"
+                    + "\"status\":\"Starting\",\"displays\":[\"720 x 1280 ( 320 )\"],"
+                    + "\"webrtc_device_id\":\"cvd-1\"}]}";
     private static final String OPERATION_RES = "{\"name\":\"some_id\"}";
     private static final String OPERATION_TIMEOUT_RES = "{\"name\":\"some_id\", \"done\":false}";
     private static final String OPERATION_DONE_RES = "{\"name\":\"some_id\", \"done\":true}";
@@ -869,5 +873,100 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true, false, mMockFile, "some_user", mMockGceAvd, mMockClient);
         Assert.assertEquals("", mHOUtil.parseListCvdOutput(LIST_CVD_BADRES, "group"));
+    }
+
+    @Test
+    public void testDeviceBootCompleted_success() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(HostAndPort.fromString("host:2080")).when(mMockGceAvd).hostAndPort();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
+        cvdCommandRes.setStdout(LIST_CVD_RES);
+        Mockito.doReturn(cvdCommandRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://host:1111/cvds"));
+        Assert.assertTrue(mHOUtil.deviceBootCompleted(10));
+        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
+    }
+
+    @Test
+    public void testDeviceBootCompleted_failed() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(HostAndPort.fromString("host:2080")).when(mMockGceAvd).hostAndPort();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
+        cvdCommandRes.setStdout(LIST_CVD_STARTING_RES);
+        Mockito.doReturn(cvdCommandRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://host:1111/cvds"));
+        Assert.assertFalse(mHOUtil.deviceBootCompleted(10));
+        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
+        // Mockito.verify(mMockClient, times(1)).closeLHPConnection(null);
+    }
+
+    @Test
+    public void testDeviceBootCompleted_CreateHOFailed() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(HostAndPort.fromString("host:2080")).when(mMockGceAvd).hostAndPort();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return null;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        Assert.assertFalse(mHOUtil.deviceBootCompleted(10));
+        Mockito.verify(mMockClient, times(1)).closeLHPConnection(null);
     }
 }
