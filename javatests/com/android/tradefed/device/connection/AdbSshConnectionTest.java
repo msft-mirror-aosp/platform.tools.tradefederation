@@ -62,7 +62,6 @@ import org.mockito.MockitoAnnotations;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.List;
 
 /** Unit tests for {@link AdbSshConnection}. */
@@ -387,24 +386,13 @@ public class AdbSshConnectionTest {
                                 mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
                     @Override
                     GceManager getGceHandler() {
+                        TestDeviceOptions deviceOptions = new TestDeviceOptions();
+                        // Make the command line a no-op.
+                        deviceOptions.setAvdDriverBinary(new File("/usr/bin/echo"));
                         return new GceManager(
                                 getDevice().getDeviceDescriptor(),
-                                new TestDeviceOptions(),
-                                mMockBuildInfo) {
-                            @Override
-                            protected List<String> buildGceCmd(
-                                    File reportFile,
-                                    IBuildInfo b,
-                                    String ipDevice,
-                                    String user,
-                                    Integer offset,
-                                    MultiMap<String, String> attributes) {
-                                FileUtil.deleteFile(reportFile);
-                                List<String> tmp = new ArrayList<String>();
-                                tmp.add("");
-                                return tmp;
-                            }
-                        };
+                                deviceOptions,
+                                mMockBuildInfo) {};
                     }
                 };
 

@@ -32,12 +32,12 @@ $(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(HOST_OUT)/tradefed/loganalysis.jar
 tradefed-core: tradefed tradefed-test-framework atest_tradefed.sh tradefed-contrib script_help.sh tradefed.sh
 
 .PHONY: tradefed-all
-tradefed-all: tradefed-core tradefed-tests tradefed_win compatibility-host-util compatibility-tradefed casuploader
+tradefed-all: tradefed-core tradefed-tests tradefed_win compatibility-host-util compatibility-tradefed casuploader tradefed-avd-util-tests
 
 ########################################################
 # Zip up the built files and dist it as tradefed.zip
 
-tradefed_dist_host_jars := tradefed tradefed-tests loganalysis tradefed-contrib compatibility-tradefed compatibility-host-util
+tradefed_dist_host_jars := tradefed tradefed-tests loganalysis tradefed-contrib compatibility-tradefed compatibility-host-util tradefed-avd-util-tests
 tradefed_dist_host_exes := tradefed.sh script_help.sh atest_tradefed.sh casuploader content_uploader
 tradefed_dist_test_apks := TradeFedUiTestApp TradeFedTestApp
 
