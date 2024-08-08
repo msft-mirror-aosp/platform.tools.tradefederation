@@ -21,11 +21,12 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -46,6 +47,7 @@ public final class LockSettingsBaselineSetterTest {
     private static final String GET_LOCK_SCREEN_COMMAND = "locksettings get-disabled";
     private static final String LOCK_SCREEN_OFF_COMMAND = "locksettings set-disabled true";
     private static final String CLEAR_PWD_COMMAND = "locksettings clear --old %s";
+    private static final String KEYCODE_MENU_COMMAND = "input keyevent KEYCODE_MENU";
 
     @Before
     public void setup() throws Exception {
@@ -66,29 +68,56 @@ public final class LockSettingsBaselineSetterTest {
     /** Test that the setter skips removing passwords when lock-screen is turned off. */
     @Test
     public void setBaseline_lockScreenOff_skipRemovingPasswords() throws Exception {
-        when(mMockDevice.executeShellCommand(GET_LOCK_SCREEN_COMMAND)).thenReturn("true");
+        when(mMockDevice.executeShellV2Command(GET_LOCK_SCREEN_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, "true"));
+        when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
         assertTrue(mSetter.setBaseline(mMockDevice));
-        verify(mMockDevice).executeShellCommand(GET_LOCK_SCREEN_COMMAND);
-        verify(mMockDevice, never()).executeShellCommand(LOCK_SCREEN_OFF_COMMAND);
-        verify(mMockDevice, never()).executeShellCommand(String.format(CLEAR_PWD_COMMAND, "0000"));
-        verify(mMockDevice, never()).executeShellCommand(String.format(CLEAR_PWD_COMMAND, "1234"));
+        verify(mMockDevice, never()).executeShellV2Command(LOCK_SCREEN_OFF_COMMAND);
+        verify(mMockDevice, never())
+                .executeShellV2Command(String.format(CLEAR_PWD_COMMAND, "0000"));
+        verify(mMockDevice, never())
+                .executeShellV2Command(String.format(CLEAR_PWD_COMMAND, "1234"));
     }
 
     /** Test that the setter removes passwords successfully. */
     @Test
     public void setBaseline_setSucceeds_passwordsRemoved() throws Exception {
-        when(mMockDevice.executeShellCommand(GET_LOCK_SCREEN_COMMAND)).thenReturn("false", "true");
+        when(mMockDevice.executeShellV2Command(GET_LOCK_SCREEN_COMMAND))
+                .thenReturn(
+                        getMockCommandResult(CommandStatus.SUCCESS, "false"),
+                        getMockCommandResult(CommandStatus.SUCCESS, "true"));
+        when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
         assertTrue(mSetter.setBaseline(mMockDevice));
-        verify(mMockDevice, times(2)).executeShellCommand(GET_LOCK_SCREEN_COMMAND);
-        verify(mMockDevice).executeShellCommand(LOCK_SCREEN_OFF_COMMAND);
-        verify(mMockDevice).executeShellCommand(String.format(CLEAR_PWD_COMMAND, "0000"));
-        verify(mMockDevice).executeShellCommand(String.format(CLEAR_PWD_COMMAND, "1234"));
+        verify(mMockDevice).executeShellV2Command(LOCK_SCREEN_OFF_COMMAND);
+        verify(mMockDevice).executeShellV2Command(String.format(CLEAR_PWD_COMMAND, "0000"));
+        verify(mMockDevice).executeShellV2Command(String.format(CLEAR_PWD_COMMAND, "1234"));
     }
 
-    /** Test that the setter returns false when the baseline is failed to set. */
+    /** Test that the setter returns false when the baseline is failed to remove lock screen. */
     @Test
-    public void setBaseline_setFails_returnFalse() throws Exception {
-        when(mMockDevice.executeShellCommand(GET_LOCK_SCREEN_COMMAND)).thenReturn("false");
+    public void setBaseline_removeLockScreenFails_returnFalse() throws Exception {
+        when(mMockDevice.executeShellV2Command(GET_LOCK_SCREEN_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, "false"));
+        when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
         assertFalse(mSetter.setBaseline(mMockDevice));
+    }
+
+    /** Test that the setter returns false when the baseline is failed to input KEYCODE_MENU. */
+    @Test
+    public void setBaseline_inputKeycodeMenuFails_returnFalse() throws Exception {
+        when(mMockDevice.executeShellV2Command(GET_LOCK_SCREEN_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, "true"));
+        when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.FAILED, null));
+        assertFalse(mSetter.setBaseline(mMockDevice));
+    }
+
+    private CommandResult getMockCommandResult(CommandStatus status, String stdout) {
+        CommandResult mockResult = new CommandResult(status);
+        mockResult.setStdout(stdout);
+        return mockResult;
     }
 }
