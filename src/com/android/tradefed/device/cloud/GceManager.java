@@ -385,7 +385,16 @@ public class GceManager {
                 if (!bootSuccess) {
                     if (logger != null) {
                         if (hOUtil != null) {
-                            hOUtil.pullCvdHostLogs();
+                            File cvdLogsDir = hOUtil.pullCvdHostLogs();
+                            if (cvdLogsDir != null) {
+                                GceManager.logDirectory(
+                                        cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
+                                FileUtil.recursiveDelete(cvdLogsDir);
+                            } else {
+                                CLog.i(
+                                        "CVD Logs is null, no logs collected from host"
+                                                + " orchestrator.");
+                            }
                             hOUtil.collectLogByCommand(
                                     logger,
                                     "host_kernel",

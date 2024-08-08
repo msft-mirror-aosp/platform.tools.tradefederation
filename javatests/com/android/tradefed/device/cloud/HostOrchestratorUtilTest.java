@@ -343,6 +343,19 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("GET"),
                         Mockito.eq("http://host:1111/cvds"));
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://host:1111/cvdbugreports/operation_id"),
+                        Mockito.eq("--output"),
+                        Mockito.any());
     }
 
     @Test
@@ -376,6 +389,19 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("GET"),
                         Mockito.eq("http://host:1111/cvds"));
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://host:1111/cvdbugreports/operation_id"),
+                        Mockito.eq("--output"),
+                        Mockito.any());
     }
 
     @Test
@@ -469,6 +495,30 @@ public class HostOrchestratorUtilTest {
                         (String[]) Mockito.any());
         Assert.assertNull(mHOUtil.pullCvdHostLogs());
         Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
+        Mockito.verify(mMockRunUtil, times(1))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://host:1111/cvds"));
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://host:1111/cvdbugreports/operation_id"),
+                        Mockito.eq("--output"),
+                        Mockito.any());
     }
 
     @Test

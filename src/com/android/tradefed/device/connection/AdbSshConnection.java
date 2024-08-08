@@ -287,7 +287,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                                 cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
                         FileUtil.recursiveDelete(cvdLogsDir);
                     } else {
-                        CLog.i("CVD Logs is null, skip logging cvd logs.");
+                        CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
                     }
                     mHOUtil.collectLogByCommand(
                             getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
