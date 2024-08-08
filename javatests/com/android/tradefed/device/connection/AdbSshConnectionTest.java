@@ -16,6 +16,8 @@
 package com.android.tradefed.device.connection;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
@@ -774,5 +776,144 @@ public class AdbSshConnectionTest {
         setter.setOptionValue("use-oxygenation-device", "false");
         mConnection.createGceTunnelMonitor(mMockTestDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
         assertTrue(mConnection.getGceTunnelMonitor() instanceof GceSshTunnelMonitor);
+    }
+
+    /** Test host orchestrator will be initialized when use-oxygenation-device is True. */
+    @Test
+    public void testCreateHOForOxygenation() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    void createGceTunnelMonitor(
+                            ITestDevice device,
+                            IBuildInfo buildInfo,
+                            GceAvdInfo gceAvdInfo,
+                            TestDeviceOptions deviceOptions) {
+                        // Ignore
+                    }
+                };
+        mOptions = new TestDeviceOptions();
+        mOptions.setAvdDriverBinary(mMockFile);
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("use-oxygenation-device", "true");
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        GceAvdInfo gceAvd =
+                new GceAvdInfo(
+                        "user", HostAndPort.fromHost("127.0.0.1"), null, null, GceStatus.SUCCESS);
+        doReturn(gceAvd)
+                .when(mGceHandler)
+                .startGce(
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(0),
+                        Mockito.any(),
+                        Mockito.eq(mMockLogger));
+        when(mMockMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
+        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
+        mConnection.initializeConnection();
+        assertNotNull(mConnection.getHostOrchestratorUtil());
+    }
+
+    /** Test host orchestrator will be initialized when use_cvd is specified. */
+    @Test
+    public void testCreateHOForOxygen() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    void createGceTunnelMonitor(
+                            ITestDevice device,
+                            IBuildInfo buildInfo,
+                            GceAvdInfo gceAvdInfo,
+                            TestDeviceOptions deviceOptions) {
+                        // Ignore
+                    }
+                };
+        mOptions = new TestDeviceOptions();
+        mOptions.setAvdDriverBinary(mMockFile);
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("use-oxygenation-device", "false");
+        setter.setOptionValue("extra-oxygen-args", "use_cvd", "");
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        GceAvdInfo gceAvd =
+                new GceAvdInfo(
+                        "user", HostAndPort.fromHost("127.0.0.1"), null, null, GceStatus.SUCCESS);
+        doReturn(gceAvd)
+                .when(mGceHandler)
+                .startGce(
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(0),
+                        Mockito.any(),
+                        Mockito.eq(mMockLogger));
+        when(mMockMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
+        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
+        mConnection.initializeConnection();
+        assertNotNull(mConnection.getHostOrchestratorUtil());
+    }
+
+    /** Test host orchestrator will not be initialized for neither Oxygenation nor Oxygen. */
+    @Test
+    public void testNoHOCreated() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    void createGceTunnelMonitor(
+                            ITestDevice device,
+                            IBuildInfo buildInfo,
+                            GceAvdInfo gceAvdInfo,
+                            TestDeviceOptions deviceOptions) {
+                        // Ignore
+                    }
+                };
+        mOptions = new TestDeviceOptions();
+        mOptions.setAvdDriverBinary(mMockFile);
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
+        setter.setOptionValue("use-oxygenation-device", "false");
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        GceAvdInfo gceAvd =
+                new GceAvdInfo(
+                        "user", HostAndPort.fromHost("127.0.0.1"), null, null, GceStatus.SUCCESS);
+        doReturn(gceAvd)
+                .when(mGceHandler)
+                .startGce(
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(0),
+                        Mockito.any(),
+                        Mockito.eq(mMockLogger));
+        when(mMockMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
+        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
+        mConnection.initializeConnection();
+        assertNull(mConnection.getHostOrchestratorUtil());
     }
 }
