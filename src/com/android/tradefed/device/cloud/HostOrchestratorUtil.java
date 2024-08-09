@@ -54,7 +54,7 @@ public class HostOrchestratorUtil {
     private static final String OXYGEN_TUNNEL_PARAM = "-L%s:127.0.0.1:2080";
     private static final String URL_CVD_DEVICE_LOG = "cvds/%s/:bugreport";
     private static final String URL_CVD_BUGREPORTS = "cvdbugreports/%s";
-    private static final String URL_HO_BASE = "http://%s:%s/%s";
+    private static final String URL_HO_BASE = "http://127.0.0.1:%s/%s";
     private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
     private static final String URL_QUERY_OPERATION = "operations/%s";
     private static final String URL_QUERY_OPERATION_RESULT = "operations/%s/result";
@@ -117,7 +117,6 @@ public class HostOrchestratorUtil {
             }
             CommandResult commandRes =
                     curlCommandExecution(
-                            mGceAvd.hostAndPort().getHost(),
                             portNumber,
                             "GET",
                             url,
@@ -159,9 +158,7 @@ public class HostOrchestratorUtil {
                 CLog.e("Failed portforwarding Host Orchestrator CURL tunnel.");
                 return null;
             }
-            CommandResult curlRes =
-                    curlCommandExecution(
-                            mGceAvd.hostAndPort().getHost(), portNumber, "GET", "cvds", true);
+            CommandResult curlRes = curlCommandExecution(portNumber, "GET", "cvds", true);
             if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
                 CLog.e("Failed getting cvd status via Host Orchestrator: %s", curlRes.getStdout());
                 return null;
@@ -181,7 +178,6 @@ public class HostOrchestratorUtil {
             String operationId = curlRes.getStdout().strip().replaceAll("\"", "");
             curlRes =
                     curlCommandExecution(
-                            mGceAvd.hostAndPort().getHost(),
                             portNumber,
                             "GET",
                             String.format(URL_CVD_BUGREPORTS, operationId),
@@ -221,9 +217,7 @@ public class HostOrchestratorUtil {
             }
             long maxEndTime = System.currentTimeMillis() + maxWaitTime;
             while (System.currentTimeMillis() < maxEndTime) {
-                CommandResult curlRes =
-                        curlCommandExecution(
-                                mGceAvd.hostAndPort().getHost(), portNumber, "GET", "cvds", true);
+                CommandResult curlRes = curlCommandExecution(portNumber, "GET", "cvds", true);
                 if (CommandStatus.SUCCESS.equals(curlRes.getStatus())
                         && parseListCvdOutput(curlRes.getStdout(), "status").equals("Running")) {
                     return true;
@@ -260,9 +254,7 @@ public class HostOrchestratorUtil {
                 curlRes.setStderr(msg);
                 return curlRes;
             }
-            curlRes =
-                    curlCommandExecution(
-                            mGceAvd.hostAndPort().getHost(), portNumber, "GET", "cvds", true);
+            curlRes = curlCommandExecution(portNumber, "GET", "cvds", true);
             if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
                 CLog.e("Failed getting cvd status via Host Orchestrator: %s", curlRes.getStdout());
                 return curlRes;
@@ -321,14 +313,14 @@ public class HostOrchestratorUtil {
         // if `use_cvd` is set -> portforward the CURL tunnel via SSH.
         // TODO(easoncylee): Flesh out this section when it's ready.
         if (mUseOxygenation) {
-            CLog.d("Portforwarding Host Orchestrator service via LHP for Oxygenation CF.");
+            CLog.d("Portforwarding Host Orchestrator via LHP for Oxygenation CF.");
             return mOxygenClient.createTunnelViaLHP(
                     LHPTunnelMode.CURL,
                     portNumber,
                     mGceAvd.instanceName(),
                     mGceAvd.getOxygenationDeviceId());
         } else if (mUseCvdOxygen) {
-            CLog.d("Portforarding Host Orchestrator service via SSH tunnel for Oxygen CF.");
+            CLog.d("Portforarding Host Orchestrator via SSH tunnel for Oxygen CF.");
             List<String> tunnelParam = new ArrayList<>();
             tunnelParam.add(String.format(OXYGEN_TUNNEL_PARAM, portNumber));
             tunnelParam.add("-N");
@@ -339,16 +331,19 @@ public class HostOrchestratorUtil {
                             mInstanceUser,
                             mGceAvd.hostAndPort().getHost(),
                             "" /* no command */);
-            return getRunUtil().runCmdInBackground(cmd);
+            Process res = getRunUtil().runCmdInBackground(cmd.toArray(new String[0]));
+            // TODO(b/358494412): Try to find a better way to check when the tunnel is ready.
+            CLog.i("Wait 5s for host orchestrator SSH tunnel to be ready.");
+            getRunUtil().sleep(5 * 1000);
+            return res;
         }
-        CLog.d("Skip portforwarding Host Orchestrator service for neither Oxygen nor Oxygenation.");
+        CLog.d("Skip portforwarding Host Orchestrator for neither Oxygen nor Oxygenation.");
         return null;
     }
 
     /**
      * Execute a curl command via Host Orchestrator.
      *
-     * @param hostName The name of the host.
      * @param portNumber The port number that Host Orchestrator communicates with.
      * @param method The HTTP Request containing GET, POST, PUT, DELETE, PATCH, etc...
      * @param api The API that Host Orchestrator supports.
@@ -357,7 +352,6 @@ public class HostOrchestratorUtil {
      */
     @VisibleForTesting
     CommandResult curlCommandExecution(
-            String hostName,
             String portNumber,
             String method,
             String api,
@@ -369,7 +363,7 @@ public class HostOrchestratorUtil {
         cmd.add("-v");
         cmd.add("-X");
         cmd.add(method);
-        cmd.add(String.format(URL_HO_BASE, hostName, portNumber, api));
+        cmd.add(String.format(URL_HO_BASE, portNumber, api));
         for (String cmdOption : commands) {
             cmd.add(cmdOption);
         }
@@ -441,9 +435,7 @@ public class HostOrchestratorUtil {
      */
     @VisibleForTesting
     CommandResult cvdOperationExecution(String portNumber, String request, long maxWaitTime) {
-        CommandResult commandRes =
-                curlCommandExecution(
-                        mGceAvd.hostAndPort().getHost(), portNumber, "POST", request, true);
+        CommandResult commandRes = curlCommandExecution(portNumber, "POST", request, true);
         if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
             CLog.e("Failed running %s, error: %s", request, commandRes.getStdout());
             return commandRes;
@@ -454,7 +446,6 @@ public class HostOrchestratorUtil {
         while (System.currentTimeMillis() < maxEndTime) {
             commandRes =
                     curlCommandExecution(
-                            mGceAvd.hostAndPort().getHost(),
                             portNumber,
                             "GET",
                             String.format(URL_QUERY_OPERATION, operationId),
@@ -462,8 +453,7 @@ public class HostOrchestratorUtil {
             if (CommandStatus.SUCCESS.equals(commandRes.getStatus())
                     && parseCvdContent(commandRes.getStdout(), "done").equals("true")) {
                 request = String.format(URL_QUERY_OPERATION_RESULT, operationId);
-                return curlCommandExecution(
-                        mGceAvd.hostAndPort().getHost(), portNumber, "GET", request, true);
+                return curlCommandExecution(portNumber, "GET", request, true);
             }
             getRunUtil().sleep(WAIT_FOR_OPERATION_MS);
         }
