@@ -156,7 +156,7 @@ public class HostOrchestratorUtil {
             cvdLogsZip = Files.createTempFile(CVD_HOST_LOGZ, ".zip").toFile();
             tunnel = createHostOrchestratorTunnel(portNumber);
             if (tunnel == null || !tunnel.isAlive()) {
-                CLog.e("Failed portforwarding Host Orchestrator tunnel.");
+                CLog.e("Failed portforwarding Host Orchestrator CURL tunnel.");
                 return null;
             }
             CommandResult curlRes =
@@ -167,7 +167,6 @@ public class HostOrchestratorUtil {
                 return null;
             }
             String cvdGroup = parseListCvdOutput(curlRes.getStdout(), "group");
-
             curlRes =
                     cvdOperationExecution(
                             portNumber,
@@ -175,7 +174,7 @@ public class HostOrchestratorUtil {
                             WAIT_FOR_OPERATION_TIMEOUT_MS);
             if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
                 CLog.e(
-                        "Failed pulling cvd host logs via Host Orchestrator: %s",
+                        "Failed running cvd operation via Host Orchestrator: %s",
                         curlRes.getStdout());
                 return null;
             }
@@ -191,7 +190,7 @@ public class HostOrchestratorUtil {
                             cvdLogsZip.getAbsolutePath());
             if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
                 CLog.e(
-                        "Failed pulling cvd host logs via Host Orchestrator: %s",
+                        "Failed downloading cvd host logs via Host Orchestrator: %s",
                         curlRes.getStdout());
                 return null;
             }
