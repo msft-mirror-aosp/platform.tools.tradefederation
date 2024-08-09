@@ -26,29 +26,15 @@ import org.junit.runners.JUnit4;
 /** Unit tests for {@link DeviceFeatureFlag}. */
 @RunWith(JUnit4.class)
 public class DeviceFeatureFlagTest {
-
-    private static final String NAMESPACE = "namespace";
-    private static final String FLAG_NAME = "package.flag";
-    private static final String FLAG_VALUE = "value";
-    private static final String VALID_FLAG =
-            String.format("%s/%s=%s", NAMESPACE, FLAG_NAME, FLAG_VALUE);
+    private static final String VALID_FLAG = "namespace/package.flag=value";
     private static final String INVALID_FLAG = "invalid flag";
 
     @Test
-    public void testConstructor_validFlagString_setsFlagAttributes() {
+    public void testConstructor_validFlag_setsFlagAttributes() {
         DeviceFeatureFlag deviceFeatureFlag = new DeviceFeatureFlag(VALID_FLAG);
-        assertEquals(NAMESPACE, deviceFeatureFlag.getNamespace());
-        assertEquals(FLAG_NAME, deviceFeatureFlag.getFlagName());
-        assertEquals(FLAG_VALUE, deviceFeatureFlag.getFlagValue());
-    }
-
-    @Test
-    public void testConstructor_validFlagAttributes_setsFlagAttributes() {
-        DeviceFeatureFlag deviceFeatureFlag =
-                new DeviceFeatureFlag(NAMESPACE, FLAG_NAME, FLAG_VALUE);
-        assertEquals(NAMESPACE, deviceFeatureFlag.getNamespace());
-        assertEquals(FLAG_NAME, deviceFeatureFlag.getFlagName());
-        assertEquals(FLAG_VALUE, deviceFeatureFlag.getFlagValue());
+        assertEquals("namespace", deviceFeatureFlag.getNamespace());
+        assertEquals("package.flag", deviceFeatureFlag.getFlagName());
+        assertEquals("value", deviceFeatureFlag.getFlagValue());
     }
 
     @Test
