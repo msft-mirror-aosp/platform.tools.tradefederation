@@ -22,6 +22,8 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /** Test for {@link AcloudUtil} */
+@RunWith(JUnit4.class)
 public class AcloudUtilTest {
     /** Test {@link AcloudUtil#buildGceCmd}. */
     @Test
