@@ -22,8 +22,8 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceUnresponsiveException;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.host.IHostOptions.PermitLimitType;
@@ -53,10 +53,14 @@ import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -177,8 +181,16 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
             description = "Whether to wipe device after GKI boot image flash.")
     private boolean mShouldWipeDevice = true;
 
+    @Option(name = "disable-verity", description = "Whether to disable-verity.")
+    private boolean mShouldDisableVerity = false;
+
     @Option(name = "oem-disable-verity", description = "Whether to run oem disable-verity.")
     private boolean mShouldDisableOemVerity = false;
+
+    @Option(
+            name = "fastboot-flash-option",
+            description = "additional options to pass with fastboot flash command.")
+    private Collection<String> mFastbootFlashOptions = new ArrayList<>();
 
     @Option(
             name = "boot-header-version",
@@ -194,6 +206,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
 
     private File mBootImg = null;
     private File mSystemDlkmImg = null;
+    private Collection<String> mFlashOptions = new ArrayList<>();
 
     /** {@inheritDoc} */
     @Override
@@ -205,6 +218,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         ITestDevice device = testInfo.getDevice();
         IBuildInfo buildInfo = testInfo.getBuildInfo();
 
+        mFlashOptions =
+                mFastbootFlashOptions.stream().map(String::trim).collect(Collectors.toList());
         File tmpDir = null;
         try {
             tmpDir = FileUtil.createTempDir("gki_preparer");
@@ -275,6 +290,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
      */
     private void flashGki(ITestDevice device, IBuildInfo buildInfo, File tmpDir)
             throws TargetSetupError, DeviceNotAvailableException {
+        if (mShouldDisableVerity) {
+            device.enableAdbRoot();
+            device.executeAdbCommand("disable-verity");
+            device.reboot();
+        }
         device.rebootIntoBootloader();
         if (mShouldDisableOemVerity) {
             executeFastbootCmd(device, "oem disable-verity");
@@ -833,10 +853,17 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
      */
     private String executeFastbootCmd(ITestDevice device, String... cmdArgs)
             throws DeviceNotAvailableException, TargetSetupError {
+        List<String> fastbootCmdArgs = new ArrayList<>();
+        if ("flash".equals(cmdArgs[0])) {
+            fastbootCmdArgs.addAll(mFlashOptions);
+        }
+        fastbootCmdArgs.addAll(Arrays.asList(cmdArgs));
         CLog.i(
-                "Execute fastboot command %s on %s",
-                Arrays.toString(cmdArgs), device.getSerialNumber());
-        CommandResult result = device.executeLongFastbootCommand(cmdArgs);
+                "Execute fastboot command '%s' on %s",
+                String.join(" ", fastbootCmdArgs), device.getSerialNumber());
+        CommandResult result =
+                device.executeLongFastbootCommand(
+                        fastbootCmdArgs.toArray(new String[fastbootCmdArgs.size()]));
         CLog.v("fastboot stdout: " + result.getStdout());
         CLog.v("fastboot stderr: " + result.getStderr());
         CommandStatus cmdStatus = result.getStatus();
@@ -848,8 +875,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         if (cmdStatus != CommandStatus.SUCCESS) {
             throw new TargetSetupError(
                     String.format(
-                            "fastboot command %s failed in device %s. stdout: %s, stderr: %s",
-                            Arrays.toString(cmdArgs),
+                            "fastboot command '%s' failed in device %s. stdout: %s, stderr: %s",
+                            String.join(" ", fastbootCmdArgs),
                             device.getSerialNumber(),
                             result.getStdout(),
                             result.getStderr()),
