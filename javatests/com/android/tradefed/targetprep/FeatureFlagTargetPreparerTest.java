@@ -58,7 +58,6 @@ public class FeatureFlagTargetPreparerTest {
     @Mock private TestInformation mTestInfo;
     @Mock private ITestDevice mDevice;
     @Mock private IInvocationContext mContext;
-    @Mock private IInvocationContext mModuleContext;
     @Mock private IBuildInfo mBuildInfo;
 
     private static final String DEFAULT_CONFIG = "namespace/f=v\n";
@@ -92,7 +91,6 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f1' 'v1'"));
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
-        verify(mContext, never()).getModuleInvocationContext();
         verify(mBuildInfo)
                 .addBuildAttribute(
                         eq(FeatureFlagTargetPreparer.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
@@ -122,7 +120,6 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f' 'v'"));
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
-        verify(mContext, never()).getModuleInvocationContext();
         verify(mBuildInfo)
                 .addBuildAttribute(
                         eq(FeatureFlagTargetPreparer.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
@@ -273,7 +270,6 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f2' 'v3'"));
         verify(mDevice, times(1)).reboot();
         verifyNoMoreInteractions(mDevice);
-        verify(mContext, never()).getModuleInvocationContext();
         verify(mBuildInfo)
                 .addBuildAttribute(
                         eq(FeatureFlagTargetPreparer.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
@@ -359,11 +355,10 @@ public class FeatureFlagTargetPreparerTest {
     }
 
     @Test
-    public void testSetUp_moduleNameExists_updatesModuleLevelContext() throws Exception {
-        // Set module name in invocation context.
+    public void testSetUp_moduleNameExists_updatesInvocationAttribute() throws Exception {
+        // Set module name and context in invocation context.
         when(mContext.getAttribute(ModuleDefinition.MODULE_NAME)).thenReturn("moduleName");
-        when(mContext.getModuleInvocationContext()).thenReturn(mModuleContext);
-        doNothing().when(mModuleContext).addInvocationAttribute(anyString(), anyString());
+        doNothing().when(mContext).addInvocationAttribute(anyString(), anyString());
         // Set command to update the flag value from v1 to v2.
         mCommandResult.setStdout("namespace/f1=v1\n");
         new OptionSetter(mPreparer).setOptionValue("flag-value", "namespace/f1=v2");
@@ -371,15 +366,16 @@ public class FeatureFlagTargetPreparerTest {
         // Run the setUp() method.
         mPreparer.setUp(mTestInfo);
 
-        // Updated flag value should be stored in module level context.
+        // Updated flag value should be stored in context.
         verify(mContext, never()).getBuildInfo(eq(mDevice));
-        verify(mModuleContext)
+        verify(mContext).getAttribute(eq(ModuleDefinition.MODULE_NAME));
+        verify(mContext)
                 .addInvocationAttribute(
                         eq(
                                 FeatureFlagTargetPreparer
                                         .MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY),
                         eq("namespace/f1=v2"));
-        verifyNoMoreInteractions(mBuildInfo);
+        verifyNoMoreInteractions(mContext);
     }
 
     private File addFlagFile(String content) throws Exception {

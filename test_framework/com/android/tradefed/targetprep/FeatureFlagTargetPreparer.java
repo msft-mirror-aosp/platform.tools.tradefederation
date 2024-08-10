@@ -95,7 +95,7 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
-        IInvocationContext invocationContext = testInformation.getContext();
+        IInvocationContext context = testInformation.getContext();
         if (mFlagFiles.isEmpty() && mFlagValues.isEmpty()) {
             CLog.i("No flag-file or flag-value option provided, skipping");
             return;
@@ -142,7 +142,7 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
                 continue; // No flags to update.
             }
             updateFlags(device, targetFlags);
-            updateContext(invocationContext, device);
+            updateContext(context, device);
             flagsUpdated = true;
             if (mRebootBetweenFlagFiles) {
                 device.reboot();
@@ -255,22 +255,19 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
         }
     }
 
-    private void updateContext(IInvocationContext invocationContext, ITestDevice device) {
+    private void updateContext(IInvocationContext context, ITestDevice device) {
         if (mFlagsOverridden.isEmpty()) {
             return;
         }
         String flagsOverriddenString =
                 mFlagsOverridden.stream().map(f -> f.toString()).collect(Collectors.joining(" "));
-        if (!Strings.isNullOrEmpty(invocationContext.getAttribute(ModuleDefinition.MODULE_NAME))) {
+        if (!Strings.isNullOrEmpty(context.getAttribute(ModuleDefinition.MODULE_NAME))) {
             // Add flags overridden to module invocation attribute, if module exists.
-            invocationContext
-                    .getModuleInvocationContext()
-                    .addInvocationAttribute(
-                            MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY, flagsOverriddenString);
+            context.addInvocationAttribute(
+                    MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY, flagsOverriddenString);
         } else {
             // Add flags overridden to build info by default.
-            invocationContext
-                    .getBuildInfo(device)
+            context.getBuildInfo(device)
                     .addBuildAttribute(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY, flagsOverriddenString);
         }
     }
