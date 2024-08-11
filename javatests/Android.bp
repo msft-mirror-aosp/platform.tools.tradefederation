@@ -64,6 +64,7 @@ tradefed_java_library_host {
     ],
     libs: [
         "tradefed",
+        "tradefed-avd-util-tests",
         "libprotobuf-java-full",
         "truth",
         "loganalysis",

@@ -39,6 +39,7 @@ import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.skipped.SkipFeature;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.testtype.IBuildReceiver;
@@ -55,6 +56,7 @@ import com.android.tradefed.util.TimeUtil;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -115,6 +117,7 @@ public final class TestsPoolPoller
                 }
                 listenerWithCollectors = collector.init(info.getContext(), listenerWithCollectors);
             }
+            Set<String> unchangedModules = SkipFeature.getUnchangedModules();
             while (true) {
                 IRemoteTest test = poll();
                 if (test == null) {
@@ -138,6 +141,7 @@ public final class TestsPoolPoller
                 } else if (test instanceof BaseTestSuite) {
                     CLog.d("Applying global filters to BaseTestSuite");
                     mConfig.getGlobalFilters().applyFiltersToTest((BaseTestSuite) test);
+                    ((BaseTestSuite) test).setUnchangedModules(unchangedModules);
                 }
                 IConfiguration validationConfig = new Configuration("validation", "validation");
                 try {

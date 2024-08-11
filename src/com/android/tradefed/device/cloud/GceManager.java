@@ -40,6 +40,8 @@ import com.android.tradefed.util.GoogleApiClientUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.avd.AcloudUtil;
+import com.android.tradefed.util.avd.LogCollector;
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpRequestInitializer;
@@ -64,7 +66,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -341,34 +342,69 @@ public class GceManager {
                                 + getTestDeviceOptions().getGceCmdTimeout()
                                 - System.currentTimeMillis();
                 startTime = System.currentTimeMillis();
-                final String remoteFile =
-                        CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR + "3/emulator_stderr.txt";
-                // Continuously scan cf boot status and exit immediately when the magic string
-                // VIRTUAL_DEVICE_BOOT_COMPLETED is found
-                String cfBootStatusSshCmd =
-                        "tail -F -n +1 "
-                                + remoteFile
-                                + " | grep -m 1 VIRTUAL_DEVICE_BOOT_COMPLETED";
-                String[] cfBootStatusSshCommand = cfBootStatusSshCmd.split(" ");
+                HostOrchestratorUtil hOUtil = null;
+                if (getTestDeviceOptions().useCvdCF()) {
+                    hOUtil =
+                            new HostOrchestratorUtil(
+                                    getTestDeviceOptions().useOxygenationDevice(),
+                                    getTestDeviceOptions()
+                                            .getExtraOxygenArgs()
+                                            .containsKey("use_cvd"),
+                                    getTestDeviceOptions().getSshPrivateKeyPath(),
+                                    getTestDeviceOptions().getInstanceUser(),
+                                    mGceAvdInfo,
+                                    getTestDeviceOptions().getAvdDriverBinary());
+                    bootSuccess = hOUtil.deviceBootCompleted(timeout);
+                } else {
+                    final String remoteFile =
+                            CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR
+                                    + "3/emulator_stderr.txt";
+                    // Continuously scan cf boot status and exit immediately when the magic string
+                    // VIRTUAL_DEVICE_BOOT_COMPLETED is found
+                    String cfBootStatusSshCmd =
+                            "tail -F -n +1 "
+                                    + remoteFile
+                                    + " | grep -m 1 VIRTUAL_DEVICE_BOOT_COMPLETED";
+                    String[] cfBootStatusSshCommand = cfBootStatusSshCmd.split(" ");
 
-                res =
-                        remoteSshCommandExecution(
-                                mGceAvdInfo,
-                                getTestDeviceOptions(),
-                                RunUtil.getDefault(),
-                                timeout,
-                                cfBootStatusSshCommand);
-                if (CommandStatus.SUCCESS.equals(res.getStatus())) {
-                    bootSuccess = true;
-                    CLog.d(
-                            "Device boot completed after %sms, flag located: %s",
-                            System.currentTimeMillis() - startTime, res.getStdout().trim());
+                    res =
+                            remoteSshCommandExecution(
+                                    mGceAvdInfo,
+                                    getTestDeviceOptions(),
+                                    RunUtil.getDefault(),
+                                    timeout,
+                                    cfBootStatusSshCommand);
+                    if (CommandStatus.SUCCESS.equals(res.getStatus())) {
+                        bootSuccess = true;
+                        CLog.d(
+                                "Device boot completed after %sms, flag located: %s",
+                                System.currentTimeMillis() - startTime, res.getStdout().trim());
+                    }
                 }
 
                 if (!bootSuccess) {
                     if (logger != null) {
-                        CommonLogRemoteFileUtil.fetchCommonFiles(
-                                logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
+                        if (hOUtil != null) {
+                            File cvdLogsDir = hOUtil.pullCvdHostLogs();
+                            if (cvdLogsDir != null) {
+                                GceManager.logDirectory(
+                                        cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
+                                FileUtil.recursiveDelete(cvdLogsDir);
+                            } else {
+                                CLog.i(
+                                        "CVD Logs is null, no logs collected from host"
+                                                + " orchestrator.");
+                            }
+                            hOUtil.collectLogByCommand(
+                                    logger,
+                                    "host_kernel",
+                                    HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                            hOUtil.collectLogByCommand(
+                                    logger, "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                        } else {
+                            CommonLogRemoteFileUtil.fetchCommonFiles(
+                                    logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
+                        }
                     }
                     mGceAvdInfo.setErrorType(InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT);
                     mGceAvdInfo.setStatus(GceStatus.BOOT_FAIL);
@@ -434,8 +470,96 @@ public class GceManager {
             if (user != null) {
                 getTestDeviceOptions().setInstanceUser(user);
             }
+
+            List<String> extraArgs = Lists.newArrayList();
+
+            if (TestDeviceOptions.InstanceType.CHEEPS.equals(
+                    getTestDeviceOptions().getInstanceType())) {
+                extraArgs.add("--avd-type");
+                extraArgs.add("cheeps");
+
+                if (getTestDeviceOptions().getCrosUser() != null
+                        && getTestDeviceOptions().getCrosPassword() != null) {
+                    extraArgs.add("--user");
+                    extraArgs.add(getTestDeviceOptions().getCrosUser());
+                    extraArgs.add("--password");
+                    extraArgs.add(getTestDeviceOptions().getCrosPassword());
+                }
+            }
+
+            String debugOption = null;
+            switch (getTestDeviceOptions().getGceDriverLogLevel()) {
+                case DEBUG:
+                    debugOption = "-v";
+                    break;
+                case VERBOSE:
+                    debugOption = "-vv";
+                    break;
+                default:
+                    break;
+            }
+            if (debugOption != null) {
+                extraArgs.add(debugOption);
+            }
+
+            String buildTarget = mBuildInfo.getBuildFlavor();
+            if (mBuildInfo.getBuildAttributes().containsKey("build_target")) {
+                // If BuildInfo contains the attribute for a build target, use that.
+                buildTarget = mBuildInfo.getBuildAttributes().get("build_target");
+            }
+
+            MultiMap<File, String> extraFiles = getTestDeviceOptions().getExtraFiles();
+            List<String> extraParamsByInstanceType =
+                    TestDeviceOptions.getExtraParamsByInstanceType(
+                            getTestDeviceOptions().getInstanceType(),
+                            getTestDeviceOptions().getBaseImage());
+
+            String hostUser = user != null ? user : getTestDeviceOptions().getInstanceUser();
+            if (offset != null) {
+                getTestDeviceOptions().setRemoteAdbPort(6520 + offset);
+            }
+            String serviceAccountKeyPath = null;
+            if (getTestDeviceOptions().getServiceAccountJsonKeyFile() != null) {
+                serviceAccountKeyPath =
+                        getTestDeviceOptions().getServiceAccountJsonKeyFile().getAbsolutePath();
+            }
+
+            // process any info in the invocation context that should be passed onto GCE driver
+            // as meta data to be associated with the VM instance
+            if (attributes != null) {
+                for (String key : getTestDeviceOptions().getInvocationAttributeToMetadata()) {
+                    for (String value : attributes.get(key)) {
+                        extraArgs.add("--gce-metadata");
+                        extraArgs.add(String.format("%s:%s", key, value));
+                    }
+                }
+            }
+            // Get extra params by instance type
+            extraArgs.addAll(extraParamsByInstanceType);
+            if (getAvdConfigFile() != null) {
+                extraArgs.add("--config_file");
+                extraArgs.add(getAvdConfigFile().getAbsolutePath());
+            }
+
             List<String> gceArgs =
-                    buildGceCmd(reportFile, mBuildInfo, ipDevice, user, offset, attributes);
+                    AcloudUtil.buildGceCmd(
+                            getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath(),
+                            TestDeviceOptions.getCreateCommandByInstanceType(
+                                    getTestDeviceOptions().getInstanceType()),
+                            reportFile,
+                            buildTarget,
+                            mBuildInfo.getBuildBranch(),
+                            mBuildInfo.getBuildId(),
+                            ipDevice,
+                            hostUser,
+                            getTestDeviceOptions().getSshPrivateKeyPath().getAbsolutePath(),
+                            extraArgs,
+                            serviceAccountKeyPath,
+                            offset,
+                            getTestDeviceOptions().getGceAccount(),
+                            getTestDeviceOptions().getGceDriverParams(),
+                            getTestDeviceOptions().getGceDriverFileParams(),
+                            extraFiles);
 
             long driverTimeoutMs = getTestDeviceOptions().getGceCmdTimeout();
             if (!getTestDeviceOptions().allowGceCmdTimeoutOverride()) {
@@ -542,143 +666,6 @@ public class GceManager {
             }
         }
         return null;
-    }
-
-    /** Build and return the command to launch GCE. Exposed for testing. */
-    protected List<String> buildGceCmd(
-            File reportFile,
-            IBuildInfo b,
-            String ipDevice,
-            String user,
-            Integer offset,
-            MultiMap<String, String> attributes) {
-        List<String> gceArgs =
-                Lists.newArrayList(getTestDeviceOptions().getAvdDriverBinary().getAbsolutePath());
-        gceArgs.add(
-                TestDeviceOptions.getCreateCommandByInstanceType(
-                        getTestDeviceOptions().getInstanceType()));
-
-        if (TestDeviceOptions.InstanceType.CHEEPS.equals(
-                getTestDeviceOptions().getInstanceType())) {
-            gceArgs.add("--avd-type");
-            gceArgs.add("cheeps");
-
-            if (getTestDeviceOptions().getCrosUser() != null
-                    && getTestDeviceOptions().getCrosPassword() != null) {
-                gceArgs.add("--user");
-                gceArgs.add(getTestDeviceOptions().getCrosUser());
-                gceArgs.add("--password");
-                gceArgs.add(getTestDeviceOptions().getCrosPassword());
-            }
-        }
-
-        /* If args passed by gce-driver-param contain build-target or build_target, or
-        test device options include local-image and cvd-host-package to side load prebuilt virtual
-        device images, there is no need to pass the build info from device BuildInfo to gce
-        arguments. Otherwise, generate gce args from device BuildInfo. Please refer to acloud
-        arguments for the supported format:
-        https://android.googlesource.com/platform/tools/acloud/+/refs/heads/master/create/create_args.py  */
-        List<String> gceDriverParams = getTestDeviceOptions().getGceDriverParams();
-        MultiMap<String, File> gceDriverFileParams =
-                getTestDeviceOptions().getGceDriverFileParams();
-        if (!gceDriverParams.contains("--build-target")
-                && !gceDriverParams.contains("--build_target")
-                && !(gceDriverFileParams.containsKey("local-image")
-                        && gceDriverFileParams.containsKey("cvd-host-package"))) {
-            gceArgs.add("--build-target");
-            if (b.getBuildAttributes().containsKey("build_target")) {
-                // If BuildInfo contains the attribute for a build target, use that.
-                gceArgs.add(b.getBuildAttributes().get("build_target"));
-            } else {
-                gceArgs.add(b.getBuildFlavor());
-            }
-            gceArgs.add("--branch");
-            gceArgs.add(b.getBuildBranch());
-            gceArgs.add("--build-id");
-            gceArgs.add(b.getBuildId());
-        }
-
-        for (Map.Entry<String, File> entry : gceDriverFileParams.entries()) {
-            gceArgs.add("--" + entry.getKey());
-            gceArgs.add(entry.getValue().getAbsolutePath());
-        }
-
-        // process any info in the invocation context that should be passed onto GCE driver
-        // as meta data to be associated with the VM instance
-        if (attributes != null) {
-            for (String key : getTestDeviceOptions().getInvocationAttributeToMetadata()) {
-                for (String value : attributes.get(key)) {
-                    gceArgs.add("--gce-metadata");
-                    gceArgs.add(String.format("%s:%s", key, value));
-                }
-            }
-        }
-
-        MultiMap<File, String> extraFiles = getTestDeviceOptions().getExtraFiles();
-        if (!extraFiles.isEmpty()) {
-            gceArgs.add("--extra-files");
-            for (File local : extraFiles.keySet()) {
-                for (String remoteDestination : extraFiles.get(local)) {
-                    gceArgs.add(local.getAbsolutePath() + "," + remoteDestination);
-                }
-            }
-        }
-
-        // Add additional args passed by gce-driver-param.
-        gceArgs.addAll(gceDriverParams);
-        // Get extra params by instance type
-        gceArgs.addAll(
-                TestDeviceOptions.getExtraParamsByInstanceType(
-                        getTestDeviceOptions().getInstanceType(),
-                        getTestDeviceOptions().getBaseImage()));
-        if (getAvdConfigFile() != null) {
-            gceArgs.add("--config_file");
-            gceArgs.add(getAvdConfigFile().getAbsolutePath());
-        }
-        if (getTestDeviceOptions().getServiceAccountJsonKeyFile() != null) {
-            gceArgs.add("--service-account-json-private-key-path");
-            gceArgs.add(getTestDeviceOptions().getServiceAccountJsonKeyFile().getAbsolutePath());
-        }
-
-        if (ipDevice != null) {
-            gceArgs.add("--host");
-            gceArgs.add(ipDevice);
-            gceArgs.add("--host-user");
-            if (user != null) {
-                gceArgs.add(user);
-            } else {
-                gceArgs.add(getTestDeviceOptions().getInstanceUser());
-            }
-            gceArgs.add("--host-ssh-private-key-path");
-            gceArgs.add(getTestDeviceOptions().getSshPrivateKeyPath().getAbsolutePath());
-        }
-        gceArgs.add("--report_file");
-        gceArgs.add(reportFile.getAbsolutePath());
-
-        // Add base-instance-num args with offset, and override the remote adb port.
-        // When offset is 1, base-instance-num=2 and virtual device adb forward port is 6521.
-        if (offset != null) {
-            getTestDeviceOptions().setRemoteAdbPort(6520 + offset);
-            gceArgs.add("--base-instance-num");
-            gceArgs.add(String.valueOf(offset + 1));
-        }
-        switch (getTestDeviceOptions().getGceDriverLogLevel()) {
-            case DEBUG:
-                gceArgs.add("-v");
-                break;
-            case VERBOSE:
-                gceArgs.add("-vv");
-                break;
-            default:
-                break;
-        }
-        if (getTestDeviceOptions().getGceAccount() != null) {
-            gceArgs.add("--email");
-            gceArgs.add(getTestDeviceOptions().getGceAccount());
-        }
-        // Do not pass flags --logcat_file and --serial_log_file to collect logcat and serial logs.
-
-        return gceArgs;
     }
 
     /**
@@ -1035,7 +1022,7 @@ public class GceManager {
                     && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
-                    List<String> signatures = OxygenUtil.collectErrorSignatures(remoteFile);
+                    List<String> signatures = LogCollector.collectErrorSignatures(remoteFile);
                     if (signatures.size() > 0) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.DEVICE_ERROR_SIGNATURES,
@@ -1046,7 +1033,7 @@ public class GceManager {
             if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectDeviceLaunchMetrics")) {
-                    long[] launchMetrics = OxygenUtil.collectDeviceLaunchMetrics(remoteFile);
+                    long[] launchMetrics = LogCollector.collectDeviceLaunchMetrics(remoteFile);
                     if (launchMetrics[0] > 0) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.CF_FETCH_ARTIFACT_TIME, launchMetrics[0]);
@@ -1056,7 +1043,7 @@ public class GceManager {
                 }
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectOxygenVersion")) {
-                    String oxygenVersion = OxygenUtil.collectOxygenVersion(remoteFile);
+                    String oxygenVersion = LogCollector.collectOxygenVersion(remoteFile);
                     if (!Strings.isNullOrEmpty(oxygenVersion)) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
