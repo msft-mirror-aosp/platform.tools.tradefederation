@@ -16,8 +16,8 @@
 
 package com.android.tradefed.util;
 
-import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 
 import java.io.File;
@@ -36,22 +36,7 @@ public class AdbUtils {
      * @param adbPath The path to the adb binary.
      */
     public static void updateAdb(TestInformation testInfo, IRunUtil runUtil, String adbPath) {
-        File updatedAdb = testInfo.executionFiles().get(FilesKey.ADB_BINARY);
-        if (updatedAdb == null) {
-            // Don't check if it's the adb on the $PATH
-            if (!adbPath.equals("adb")) {
-                updatedAdb = new File(adbPath);
-                if (!updatedAdb.exists()) {
-                    CLog.w(
-                            String.format(
-                                    "adb path %s doesn't exist. Fall back on the abd in $PATH",
-                                    adbPath));
-                    updatedAdb = null;
-                }
-            } else {
-                CLog.d("Use the adb in the $PATH.");
-            }
-        }
+        File updatedAdb = getAdbToUpdate(testInfo, adbPath);
         if (updatedAdb == null) {
             return;
         }
@@ -79,5 +64,32 @@ public class AdbUtils {
         CommandResult versionRes = runUtil.runTimedCmd(PATH_TIMEOUT_MS, "adb", "version");
         CLog.d("%s", versionRes.getStdout());
         CLog.d("%s", versionRes.getStderr());
+    }
+
+    /**
+     * Gets the special adb set in test information that should be set in PATH.
+     *
+     * @param testInfo A {@link TestInformation} object.
+     * @param adbPath The path to the adb binary.
+     * @return The adb that should be set in PATH.
+     */
+    public static File getAdbToUpdate(TestInformation testInfo, String adbPath) {
+        File updatedAdb = testInfo.executionFiles().get(FilesKey.ADB_BINARY);
+        if (updatedAdb == null) {
+            // Don't check if it's the adb on the $PATH
+            if (!adbPath.equals("adb")) {
+                updatedAdb = new File(adbPath);
+                if (!updatedAdb.exists()) {
+                    CLog.w(
+                            String.format(
+                                    "adb path %s doesn't exist. Fall back on the abd in $PATH",
+                                    adbPath));
+                    updatedAdb = null;
+                }
+            } else {
+                CLog.d("Use the adb in the $PATH.");
+            }
+        }
+        return updatedAdb;
     }
 }
