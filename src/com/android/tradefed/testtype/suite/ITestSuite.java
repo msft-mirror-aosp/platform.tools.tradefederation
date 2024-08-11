@@ -413,6 +413,7 @@ public abstract class ITestSuite
     // Current modules to run, null if not started to run yet.
     private List<ModuleDefinition> mRunModules = null;
     private ModuleDefinition mModuleInProgress = null;
+    private Set<String> mUnchangedModules = null;
     // Logger to be used to files.
     private ITestLogger mCurrentLogger = null;
     // Whether or not we are currently in split
@@ -847,7 +848,10 @@ public abstract class ITestSuite
                     mRunModules);
         }
 
-        Set<String> unchangedModulesNames = SkipFeature.getUnchangedModules();
+        if (mUnchangedModules == null) {
+            mUnchangedModules = SkipFeature.getUnchangedModules();
+        }
+        Set<String> unchangedModulesNames = mUnchangedModules;
         /** Run all the module, make sure to reduce the list to release resources as we go. */
         try {
             while (!mRunModules.isEmpty()) {
@@ -1841,5 +1845,9 @@ public abstract class ITestSuite
 
     public boolean getIntraModuleSharding() {
         return mIntraModuleSharding;
+    }
+
+    public void setUnchangedModules(Set<String> unchangedModules) {
+        mUnchangedModules = unchangedModules;
     }
 }
