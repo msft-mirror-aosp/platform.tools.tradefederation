@@ -15,25 +15,28 @@
  */
 package com.android.tradefed.testtype.binary;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.NativeDevice;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /** Test runner for running KUnit test modules on device. */
 @OptionClass(alias = "kunit-module-test")
@@ -217,6 +220,153 @@ public class KUnitModuleTest extends ExecutableTargetTest {
             if (debugfsAlreadyMounted) {
                 // If debugfs was already mounted before this test, then keep it mounted.
                 getDevice().unmountDebugfs();
+            }
+        }
+    }
+
+    @Override
+    public void run(TestInformation testInfo, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+
+        if (mKTapResultParserResolution == KTapResultParser.ParseResolution.AGGREGATED_MODULE) {
+            super.run(testInfo, listener);
+            return;
+        }
+
+        // KUnit does not support querying for number of test cases.
+        // This listener delays all events and counts the number of testStarted calls.
+        // After the tests end, it calls testRunStarted with the correct number.
+        List<Runnable> testEvents = new ArrayList<Runnable>();
+        int[] testCount = {0};
+        ITestInvocationListener delayListener =
+                new ITestInvocationListener() {
+                    @Override
+                    public void testRunStarted(String runName, int ignoredTestCount) {
+                        testEvents.add(() -> listener.testRunStarted(runName, testCount[0]));
+                    }
+
+                    @Override
+                    public void testRunStarted(
+                            String runName, int ignoredTestCount, int attemptNumber) {
+                        testEvents.add(
+                                () ->
+                                        listener.testRunStarted(
+                                                runName, testCount[0], attemptNumber));
+                    }
+
+                    @Override
+                    public void testRunStarted(
+                            String runName,
+                            int ignoredTestCount,
+                            int attemptNumber,
+                            long startTime) {
+                        testEvents.add(
+                                () ->
+                                        listener.testRunStarted(
+                                                runName, testCount[0], attemptNumber, startTime));
+                    }
+
+                    @Override
+                    public void testRunFailed(String errorMessage) {
+                        testEvents.add(() -> listener.testRunFailed(errorMessage));
+                    }
+
+                    @Override
+                    public void testRunFailed(FailureDescription failure) {
+                        testEvents.add(() -> listener.testRunFailed(failure));
+                    }
+
+                    @Override
+                    public void testRunEnded(
+                            long elapsedTimeMillis, Map<String, String> runMetrics) {
+                        testEvents.add(() -> listener.testRunEnded(elapsedTimeMillis, runMetrics));
+                    }
+
+                    @Override
+                    public void testRunEnded(
+                            long elapsedTimeMillis, HashMap<String, Metric> runMetrics) {
+                        testEvents.add(() -> listener.testRunEnded(elapsedTimeMillis, runMetrics));
+                    }
+
+                    @Override
+                    public void testRunStopped(long elapsedTime) {
+                        testEvents.add(() -> listener.testRunStopped(elapsedTime));
+                    }
+
+                    @Override
+                    public void testStarted(TestDescription test) {
+                        testEvents.add(() -> listener.testStarted(test));
+                        testCount[0]++;
+                    }
+
+                    @Override
+                    public void testStarted(TestDescription test, long startTime) {
+                        testEvents.add(() -> listener.testStarted(test, startTime));
+                        testCount[0]++;
+                    }
+
+                    @Override
+                    public void testFailed(TestDescription test, String trace) {
+                        testEvents.add(() -> listener.testFailed(test, trace));
+                    }
+
+                    @Override
+                    public void testFailed(TestDescription test, FailureDescription failure) {
+                        testEvents.add(() -> listener.testFailed(test, failure));
+                    }
+
+                    @Override
+                    public void testAssumptionFailure(TestDescription test, String trace) {
+                        testEvents.add(() -> listener.testAssumptionFailure(test, trace));
+                    }
+
+                    @Override
+                    public void testAssumptionFailure(
+                            TestDescription test, FailureDescription failure) {
+                        testEvents.add(() -> listener.testAssumptionFailure(test, failure));
+                    }
+
+                    @Override
+                    public void testIgnored(TestDescription test) {
+                        testEvents.add(() -> listener.testIgnored(test));
+                    }
+
+                    @Override
+                    public void testSkipped(TestDescription test, SkipReason reason) {
+                        testEvents.add(() -> listener.testSkipped(test, reason));
+                    }
+
+                    @Override
+                    public void testEnded(TestDescription test, Map<String, String> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, testMetrics));
+                    }
+
+                    @Override
+                    public void testEnded(
+                            TestDescription test, HashMap<String, Metric> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, testMetrics));
+                    }
+
+                    @Override
+                    public void testEnded(
+                            TestDescription test, long endTime, Map<String, String> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, endTime, testMetrics));
+                    }
+
+                    @Override
+                    public void testEnded(
+                            TestDescription test,
+                            long endTime,
+                            HashMap<String, Metric> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, endTime, testMetrics));
+                    }
+                };
+
+        try {
+            super.run(testInfo, delayListener);
+        } finally {
+            for (Runnable testEvent : testEvents) {
+                testEvent.run();
             }
         }
     }
