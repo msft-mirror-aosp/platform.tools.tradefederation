@@ -1,9 +1,13 @@
 package com.android.tradefed.service.management;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.cluster.ClusterHostUtil;
+import com.android.tradefed.cluster.ClusterOptions;
+import com.android.tradefed.cluster.IClusterOptions;
 import com.android.tradefed.command.CommandScheduler;
 import com.android.tradefed.command.ICommandScheduler;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.DeviceSelectionOptions;
 import com.android.tradefed.device.FreeDeviceState;
@@ -25,16 +29,16 @@ import com.proto.tradefed.device.ReserveDeviceResponse.Result;
 import com.proto.tradefed.device.StopLeasingRequest;
 import com.proto.tradefed.device.StopLeasingResponse;
 
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.stub.ServerCallStreamObserver;
+import io.grpc.stub.StreamObserver;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.stub.ServerCallStreamObserver;
-import io.grpc.stub.StreamObserver;
 
 /** GRPC server allowing to reserve a device from Tradefed. */
 public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
@@ -45,12 +49,25 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     private final ICommandScheduler mCommandScheduler;
     private final Map<String, ReservationInformation> mSerialToReservation =
             new ConcurrentHashMap<>();
+    private String mRunTargetFormat = null;
+    private Map<String, String> mDeviceTags = null;
 
     /** Returns the port used by the server. */
     public static Integer getPort() {
         return System.getenv(TF_DEVICE_MANAGEMENT_PORT) != null
                 ? Integer.parseInt(System.getenv(TF_DEVICE_MANAGEMENT_PORT))
                 : null;
+    }
+
+    private void initRunTargetInfo() {
+        final IClusterOptions clusterOptions =
+                (IClusterOptions)
+                        GlobalConfiguration.getInstance()
+                                .getConfigurationObject(ClusterOptions.TYPE_NAME);
+        if (clusterOptions != null) {
+            mRunTargetFormat = clusterOptions.getRunTargetFormat();
+            mDeviceTags = clusterOptions.getDeviceTag();
+        }
     }
 
     public DeviceManagementGrpcServer(
@@ -66,6 +83,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
         mServer = serverBuilder.addService(this).build();
         mDeviceManager = deviceManager;
         mCommandScheduler = scheduler;
+        initRunTargetInfo();
     }
 
     @VisibleForTesting
@@ -74,6 +92,7 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
         mServer = server;
         mDeviceManager = deviceManager;
         mCommandScheduler = scheduler;
+        initRunTargetInfo();
     }
 
     /** Start the grpc server. */
@@ -101,7 +120,8 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             StreamObserver<GetDevicesStatusResponse> responseObserver) {
         GetDevicesStatusResponse.Builder responseBuilder = GetDevicesStatusResponse.newBuilder();
         if (request.getDeviceIdList().isEmpty()) {
-            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices(true)) {
+            // query device manager for full device descriptor to ensure we get all device props
+            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices(false)) {
                 responseBuilder.addDeviceStatus(descriptorToStatus(descriptor));
             }
         } else {
@@ -261,6 +281,8 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     private DeviceStatus descriptorToStatus(DeviceDescriptor descriptor) {
         DeviceStatus.Builder deviceStatusBuilder = DeviceStatus.newBuilder();
         deviceStatusBuilder.setDeviceId(descriptor.getSerial());
+        deviceStatusBuilder.setRunTarget(
+                ClusterHostUtil.getRunTarget(descriptor, mRunTargetFormat, mDeviceTags));
         deviceStatusBuilder.setReservationStatus(
                 allocationStateToReservation(descriptor.getState(), descriptor.getSerial()));
         return deviceStatusBuilder.build();
