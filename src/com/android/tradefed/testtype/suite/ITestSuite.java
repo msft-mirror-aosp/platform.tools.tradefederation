@@ -163,6 +163,7 @@ public abstract class ITestSuite
 
     public static final String TEST_TYPE_KEY = "test-type";
     public static final String TEST_TYPE_VALUE_PERFORMANCE = "performance";
+    public static final String BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY = "flag-overrides";
 
     private static final Set<String> ALLOWED_PREPARERS_CONFIGS =
             ImmutableSet.of("/suite/allowed-preparers.txt", "/suite/google-allowed-preparers.txt");
