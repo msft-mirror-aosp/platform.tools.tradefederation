@@ -281,6 +281,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (getDevice().getOptions().useCvdCF()) {
+                    createHostOrchestratorUtil(mGceAvd);
                     File cvdLogsDir = mHOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
@@ -434,17 +435,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
-        if (getDevice().getOptions().useCvdCF()) {
-            CLog.i("Creating host orchestrator utility...");
-            mHOUtil =
-                    new HostOrchestratorUtil(
-                            getDevice().getOptions().useOxygenationDevice(),
-                            getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
-                            getDevice().getOptions().getSshPrivateKeyPath(),
-                            getDevice().getOptions().getInstanceUser(),
-                            mGceAvd,
-                            getDevice().getOptions().getAvdDriverBinary());
-        }
+        createHostOrchestratorUtil(mGceAvd);
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
@@ -950,6 +941,25 @@ public class AdbSshConnection extends AdbTcpConnection {
             } else {
                 CLog.w("Failed to get kernel information by `uname -r` from device");
             }
+        }
+    }
+
+    /** Helper to create host orchestrator utility. */
+    private void createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+        if (mHOUtil != null) {
+            CLog.i("Host Orchestrator Util has been initialized...");
+            return;
+        }
+        if (getDevice().getOptions().useCvdCF()) {
+            CLog.i("Creating host orchestrator utility...");
+            mHOUtil =
+                    new HostOrchestratorUtil(
+                            getDevice().getOptions().useOxygenationDevice(),
+                            getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
+                            getDevice().getOptions().getSshPrivateKeyPath(),
+                            getDevice().getOptions().getInstanceUser(),
+                            gceAvdInfo,
+                            getDevice().getOptions().getAvdDriverBinary());
         }
     }
 }
