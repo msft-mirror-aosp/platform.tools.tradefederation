@@ -87,6 +87,10 @@ public class ContentAnalysisResults {
         return deviceImageChanges > 0;
     }
 
+    public boolean hasSharedFolderChanges() {
+        return sharedFolderChanges > 0;
+    }
+
     public Set<String> getUnchangedModules() {
         return unchangedModules;
     }
