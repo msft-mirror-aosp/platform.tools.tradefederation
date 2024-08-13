@@ -24,6 +24,8 @@ import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.cache.ICacheClient;
+import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
@@ -37,6 +39,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ResourceUtil;
+import com.android.tradefed.util.RunUtilTest;
 
 import org.junit.After;
 import org.junit.Before;
@@ -65,6 +68,8 @@ public class IsolatedHostTestTest {
     private IBuildInfo mMockBuildInfo;
     private ServerSocket mMockServer;
     private File mMockTestDir;
+    private File mWorkFolder;
+    private final ICacheClient mFakeCacheClient = new RunUtilTest.FakeCacheClient();
 
     /**
      * (copied and altered from JarHostTestTest) Helper to read a file from the res/testtype
@@ -76,7 +81,11 @@ public class IsolatedHostTestTest {
      * @return the extracted jar file.
      */
     protected File getJarResource(String filename, File parentDir, String name) throws IOException {
-        File jarFile = FileUtil.createTempFile("tradefed-isolation", ".jar", parentDir);
+        File jarFile = new File(parentDir, name);
+        if (jarFile.exists()) {
+            FileUtil.deleteFile(jarFile);
+        }
+        jarFile.createNewFile();
         boolean res =
                 ResourceUtil.extractResourceWithAltAsFile(filename, PACKAGE + filename, jarFile);
         if (!res) {
@@ -110,12 +119,14 @@ public class IsolatedHostTestTest {
         context.addDeviceBuildInfo("device", mMockBuildInfo);
         mHostTest.setBuild(mMockBuildInfo);
         mHostTest.setServer(mMockServer);
-        mMockTestDir = FileUtil.createTempDir("isolatedhosttesttest");
+        mWorkFolder = FileUtil.createTempDir("workfolder");
+        mMockTestDir = FileUtil.createTempDir("isolatedhosttesttest", mWorkFolder);
+        mHostTest.setWorkDir(mMockTestDir);
     }
 
     @After
     public void tearDown() throws Exception {
-        FileUtil.recursiveDelete(mMockTestDir);
+        FileUtil.recursiveDelete(mWorkFolder);
         mHostTest.deleteTempFiles();
     }
 
@@ -162,8 +173,9 @@ public class IsolatedHostTestTest {
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
         assertTrue(mHostTest.compileClassPath().contains("ravenwood-runtime"));
 
-        String expectedLdLibraryPath = String.join(java.io.File.pathSeparator, ldLibraryPath);
-        assertEquals(expectedLdLibraryPath, mHostTest.compileLdLibraryPathInner(null));
+        assertEquals(
+                "ravenwood-runtime/lib:ravenwood-runtime/lib64",
+                mHostTest.compileLdLibraryPathInner(null));
 
         List<String> commandArgs = mHostTest.compileCommandArgs("", null);
         assertTrue(commandArgs.contains("-Dandroid.junit.runner=org.junit.runners.JUnit4"));
@@ -287,6 +299,69 @@ public class IsolatedHostTestTest {
         verify(mListener)
                 .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
         verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
+    @Test
+    public void testCacheWorks() throws Exception {
+        final String jarName = "SimplePassingTest.jar";
+        final String className = "com.android.tradefed.referencetests.SimplePassingTest";
+        InvocationContext context = new InvocationContext();
+        TestInformation testInfo =
+                TestInformation.newBuilder().setInvocationContext(context).build();
+        TestDescription test = new TestDescription(className, "test2Plus2");
+        ITestInvocationListener firstListener = Mockito.mock(ITestInvocationListener.class);
+        ITestInvocationListener secondListener = Mockito.mock(ITestInvocationListener.class);
+        File testDir1 = FileUtil.createTempDir("isolatedhosttesttest", mWorkFolder);
+        IsolatedHostTest runner1 = createTestRunnerForCaching(testDir1);
+        OptionSetter setter = new OptionSetter(runner1);
+        File jar1 = getJarResource("/" + jarName, testDir1, jarName);
+        setter.setOptionValue("jar", jar1.getName());
+        setter.setOptionValue("exclude-paths", "org/junit");
+        setter.setOptionValue("exclude-paths", "junit");
+        File testDir2 = FileUtil.createTempDir("isolatedhosttesttest", mWorkFolder);
+        IsolatedHostTest runner2 = createTestRunnerForCaching(testDir2);
+        setter = new OptionSetter(runner2);
+        File jar2 = getJarResource("/" + jarName, testDir2, jarName);
+        setter.setOptionValue("jar", jar2.getName());
+        // Test that the different order of option values won't affect caching.
+        setter.setOptionValue("exclude-paths", "junit");
+        setter.setOptionValue("exclude-paths", "org/junit");
+
+        doReturn(testDir1).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        doReturn(testDir1).when(mMockBuildInfo).getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        runner1.run(testInfo, firstListener);
+        boolean isFirstRunCached = runner1.isCached();
+        doReturn(testDir2).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
+        doReturn(testDir2).when(mMockBuildInfo).getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        runner2.run(testInfo, secondListener);
+        boolean isSecondRunCached = runner2.isCached();
+
+        assertFalse(isFirstRunCached);
+        verify(firstListener).testRunStarted((String) Mockito.any(), Mockito.eq(1));
+        verify(firstListener).testStarted(Mockito.eq(test), Mockito.anyLong());
+        verify(firstListener)
+                .testEnded(
+                        Mockito.eq(test),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(firstListener)
+                .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
+        verify(firstListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        assertTrue(isSecondRunCached);
+        verify(secondListener)
+                .testRunStarted(
+                        (String) Mockito.any(), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
+        verify(secondListener).testStarted(Mockito.eq(test), Mockito.anyLong());
+        verify(secondListener)
+                .testEnded(
+                        Mockito.eq(test),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(secondListener)
+                .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
+        verify(secondListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -565,10 +640,9 @@ public class IsolatedHostTestTest {
         makeDirAndAddToList(androidHostOut, "lib", paths);
         makeDirAndAddToList(androidHostOut, "lib64", paths);
 
-        final String expectedLdLibraryPath = String.join(java.io.File.pathSeparator, paths);
         final String ldLibraryPath =
                 mHostTest.compileLdLibraryPathInner(androidHostOut.getAbsolutePath());
-        assertEquals(expectedLdLibraryPath, ldLibraryPath);
+        assertEquals("ANDROID_HOST_OUT/lib:ANDROID_HOST_OUT/lib64:lib:lib64", ldLibraryPath);
     }
 
     @Test
@@ -608,5 +682,33 @@ public class IsolatedHostTestTest {
         verify(mListener)
                 .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
         verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
+    private IsolatedHostTest createTestRunnerForCaching(File testDir) throws Exception {
+        IsolatedHostTest hostTest =
+                new IsolatedHostTest() {
+                    @Override
+                    String getEnvironment(String key) {
+                        return null;
+                    }
+
+                    @Override
+                    ICacheClient getCacheClient(File workFolder, String instanceName) {
+                        return mFakeCacheClient;
+                    }
+                };
+        hostTest.setBuild(mMockBuildInfo);
+        hostTest.setServer(mMockServer);
+        hostTest.setWorkDir(testDir);
+        OptionSetter runnerSetter = new OptionSetter(hostTest);
+        runnerSetter.setOptionValue("enable-cache", "true");
+        runnerSetter.setOptionValue("inherit-env-vars", "false");
+        CommandOptions commandOptions = new CommandOptions();
+        OptionSetter commandOptionsSetter = new OptionSetter(commandOptions);
+        commandOptionsSetter.setOptionValue("remote-cache-instance-name", "test_instance");
+        IConfiguration config = new Configuration("config", "Test config");
+        config.setCommandOptions(commandOptions);
+        hostTest.setConfiguration(config);
+        return hostTest;
     }
 }

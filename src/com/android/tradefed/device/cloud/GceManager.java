@@ -42,6 +42,7 @@ import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.avd.AcloudUtil;
 import com.android.tradefed.util.avd.LogCollector;
+import com.android.tradefed.util.avd.OxygenClient;
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpRequestInitializer;
@@ -235,6 +236,27 @@ public class GceManager {
                         || getTestDeviceOptions().useOxygen()
                         || getTestDeviceOptions().useCvdCF());
         if (getTestDeviceOptions().useOxygen() || getTestDeviceOptions().useCvdCF()) {
+            // Validate binary
+            File clientBinary = getTestDeviceOptions().getAvdDriverBinary();
+            String error = null;
+            if (clientBinary == null) {
+                error = "the Oxygen client binary reference is null";
+            } else if (!clientBinary.exists()) {
+                error =
+                        String.format(
+                                "the Oxygen client binary file does not exist at %s",
+                                clientBinary.getAbsolutePath());
+            } else if (!clientBinary.canExecute()) {
+                error =
+                        String.format(
+                                "the Oxygen client binary file at %s is not executable",
+                                clientBinary.getAbsolutePath());
+            }
+            if (!Strings.isNullOrEmpty(error)) {
+                throw new HarnessRuntimeException(
+                        String.format("Error in instantiating OxygenClient class: %s", error),
+                        InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+            }
             // Leasing an oxygenation device will still depend on the existing oxygen client tool
             // with more parameters passed in.
             return startGceWithOxygenClient(logger, attributes);
@@ -267,9 +289,32 @@ public class GceManager {
         try (CloseableTraceScope ignore = new CloseableTraceScope("startMultiDevicesGce")) {
             OxygenClient oxygenClient =
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+            List<String> buildTargets = new ArrayList<>();
+            List<String> buildBranches = new ArrayList<>();
+            List<String> buildIds = new ArrayList<>();
+
+            for (IBuildInfo b : buildInfos) {
+                if (b.getBuildAttributes().containsKey("build_target")) {
+                    // If BuildInfo contains the attribute for a build target, use that.
+                    buildTargets.add(b.getBuildAttributes().get("build_target"));
+                } else {
+                    buildTargets.add(b.getBuildFlavor());
+                }
+                buildBranches.add(b.getBuildBranch());
+                buildIds.add(b.getBuildId());
+            }
+
             CommandResult res =
                     oxygenClient.leaseMultipleDevices(
-                            buildInfos, getTestDeviceOptions(), attributes);
+                            buildTargets,
+                            buildBranches,
+                            buildIds,
+                            OxygenUtil.getTargetRegion(getTestDeviceOptions()),
+                            getTestDeviceOptions().getOxygenAccountingUser(),
+                            getTestDeviceOptions().getOxygenLeaseLength(),
+                            getTestDeviceOptions().getExtraOxygenArgs(),
+                            attributes,
+                            getTestDeviceOptions().getGceCmdTimeout());
             gceAvdInfos =
                     GceAvdInfo.parseGceInfoFromOxygenClientOutput(
                             res, mDeviceOptions.getRemoteAdbPort());
@@ -292,13 +337,35 @@ public class GceManager {
      */
     private GceAvdInfo startGceWithOxygenClient(
             ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
+        if (getTestDeviceOptions().useOxygenationDevice()) {
+            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
+            // Lease an oxygenation device with additional options passed in when
+            // use-oxygenation-device is set.
+            // For now, return failure with exceptions first.
+            throw new TargetSetupError(
+                    "OxygenClient: Leasing an oxygenation device is not supported for now.");
+        }
         long startTime = System.currentTimeMillis();
         long fetchTime = 0;
         try {
             OxygenClient oxygenClient =
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+            String buildTarget =
+                    mBuildInfo.getBuildAttributes().containsKey("build_target")
+                            ? mBuildInfo.getBuildAttributes().get("build_target")
+                            : mBuildInfo.getBuildFlavor();
             CommandResult res =
-                    oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
+                    oxygenClient.leaseDevice(
+                            buildTarget,
+                            mBuildInfo.getBuildBranch(),
+                            mBuildInfo.getBuildId(),
+                            OxygenUtil.getTargetRegion(getTestDeviceOptions()),
+                            getTestDeviceOptions().getOxygenAccountingUser(),
+                            getTestDeviceOptions().getOxygenLeaseLength(),
+                            getTestDeviceOptions().getGceDriverParams(),
+                            getTestDeviceOptions().getExtraOxygenArgs(),
+                            attributes,
+                            getTestDeviceOptions().getGceCmdTimeout());
 
             // Retry lease up to 2x if error code is in list of error codes
             int iteration = 1;
@@ -308,7 +375,18 @@ public class GceManager {
                     break;
                 }
                 CLog.d("Retrying lease call due to earlier failure of %s", identifier);
-                res = oxygenClient.leaseDevice(mBuildInfo, getTestDeviceOptions(), attributes);
+                res =
+                        oxygenClient.leaseDevice(
+                                buildTarget,
+                                mBuildInfo.getBuildBranch(),
+                                mBuildInfo.getBuildId(),
+                                OxygenUtil.getTargetRegion(getTestDeviceOptions()),
+                                getTestDeviceOptions().getOxygenAccountingUser(),
+                                getTestDeviceOptions().getOxygenLeaseLength(),
+                                getTestDeviceOptions().getGceDriverParams(),
+                                getTestDeviceOptions().getExtraOxygenArgs(),
+                                attributes,
+                                getTestDeviceOptions().getGceCmdTimeout());
                 // Update Oxygen lease attempt metrics
                 if (res.getStatus() == CommandStatus.SUCCESS) {
                     InvocationMetricLogger.addInvocationMetrics(
@@ -329,7 +407,7 @@ public class GceManager {
                 CLog.w("Failed to lease a device: %s", mGceAvdInfo);
                 return mGceAvdInfo;
             }
-            if (oxygenClient.noWaitForBootSpecified(getTestDeviceOptions())) {
+            if (getTestDeviceOptions().getExtraOxygenArgs().containsKey("no_wait_for_boot")) {
                 CLog.d(
                         "Device leased without waiting for boot to finish. Poll emulator_stderr.txt"
                                 + " for flag `VIRTUAL_DEVICE_BOOT_COMPLETED`");
@@ -385,7 +463,16 @@ public class GceManager {
                 if (!bootSuccess) {
                     if (logger != null) {
                         if (hOUtil != null) {
-                            hOUtil.pullCvdHostLogs();
+                            File cvdLogsDir = hOUtil.pullCvdHostLogs();
+                            if (cvdLogsDir != null) {
+                                GceManager.logDirectory(
+                                        cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
+                                FileUtil.recursiveDelete(cvdLogsDir);
+                            } else {
+                                CLog.i(
+                                        "CVD Logs is null, no logs collected from host"
+                                                + " orchestrator.");
+                            }
                             hOUtil.collectLogByCommand(
                                     logger,
                                     "host_kernel",
@@ -679,9 +766,45 @@ public class GceManager {
      */
     private boolean shutdownGceWithOxygen() {
         try {
+            if (getTestDeviceOptions().useOxygenationDevice()) {
+                // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
+                // Release an oxygenation device with additional options passed in when
+                // use-oxygenation-device is set.
+                // For now, return false first.
+                return false;
+            }
+            // If gceAvdInfo is missing info, then it means the device wasn't get leased
+            // successfully.
+            // In such case, there is no need to release the device.
+            if (mGceAvdInfo == null
+                    || mGceAvdInfo.instanceName() == null
+                    || mGceAvdInfo.hostAndPort() == null
+                    || mGceAvdInfo.hostAndPort().getHost() == null) {
+                return true;
+            }
             OxygenClient oxygenClient =
                     new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
-            return oxygenClient.release(mGceAvdInfo, getTestDeviceOptions());
+            CommandResult res =
+                    oxygenClient.release(
+                            mGceAvdInfo.instanceName(),
+                            mGceAvdInfo.hostAndPort().getHost(),
+                            OxygenUtil.getTargetRegion(getTestDeviceOptions()),
+                            getTestDeviceOptions().getOxygenAccountingUser(),
+                            getTestDeviceOptions().getExtraOxygenArgs(),
+                            getTestDeviceOptions().getGceCmdTimeout());
+            if (!res.getStatus().equals(CommandStatus.SUCCESS)) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_COUNT, 1);
+                if (res.getStderr() != null) {
+                    String error = "Unknown";
+                    if (res.getStderr().contains("context deadline exceeded")) {
+                        error = "SERVER_CALL_TIMEOUT";
+                    }
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE, error);
+                }
+            }
+            return res.getStatus().equals(CommandStatus.SUCCESS);
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.OXYGEN_DEVICE_DIRECT_RELEASE_COUNT, 1);
