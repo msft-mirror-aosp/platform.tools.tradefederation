@@ -67,7 +67,6 @@ public class GceManagerTest {
     private IBuildInfo mMockBuildInfo;
     @Mock IRunUtil mMockRunUtil;
     private File mAvdBinary;
-    @Mock OxygenClient mMockOxygenClient;
 
     @Before
     public void setUp() throws Exception {
