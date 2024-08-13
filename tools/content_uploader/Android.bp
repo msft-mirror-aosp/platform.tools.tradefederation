@@ -24,7 +24,6 @@ python_binary_host {
     ],
     libs: [
         "cas_metrics_proto",
-        "py-six",
     ],
     version: {
         py3: {
