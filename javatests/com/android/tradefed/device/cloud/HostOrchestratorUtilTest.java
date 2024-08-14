@@ -18,12 +18,13 @@ package com.android.tradefed.device.cloud;
 
 import static org.mockito.Mockito.times;
 
-import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.avd.OxygenClient;
+import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
 
 import com.google.common.net.HostAndPort;
 
