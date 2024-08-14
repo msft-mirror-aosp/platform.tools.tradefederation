@@ -104,7 +104,9 @@ public class ArtifactsAnalyzer {
                     } else {
                         CLog.d("%s", analysisResults.toString());
                         finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
-                        finalReport.addUnchangedModules(analysisResults.getUnchangedModules());
+                        if (!analysisResults.hasSharedFolderChanges()) {
+                            finalReport.addUnchangedModules(analysisResults.getUnchangedModules());
+                        }
                     }
                 } catch (RuntimeException e) {
                     CLog.e(e);
