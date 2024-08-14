@@ -253,7 +253,7 @@ public class HostOrchestratorUtilTest {
 
                     @Override
                     CommandResult cvdOperationExecution(
-                            String portNumber, String request, long maxWaitTime) {
+                            String portNumber, String method, String request, long maxWaitTime) {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("operation_id");
                         return res;
@@ -436,7 +436,7 @@ public class HostOrchestratorUtilTest {
 
                     @Override
                     CommandResult cvdOperationExecution(
-                            String portNumber, String request, long maxWaitTime) {
+                            String portNumber, String method, String request, long maxWaitTime) {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("operation_id");
                         return res;
@@ -808,6 +808,281 @@ public class HostOrchestratorUtilTest {
     }
 
     @Test
+    public void testStopGce() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
+        cvdRes.setStdout(LIST_CVD_RES);
+        Mockito.doReturn(cvdRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        CommandResult stopRes = new CommandResult(CommandStatus.SUCCESS);
+        stopRes.setStdout(OPERATION_RES);
+        Mockito.doReturn(stopRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("DELETE"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+        CommandResult operationRes = new CommandResult(CommandStatus.SUCCESS);
+        operationRes.setStdout(OPERATION_DONE_RES);
+        Mockito.doReturn(operationRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/operations/some_id"));
+        CommandResult successRes = new CommandResult(CommandStatus.SUCCESS);
+        successRes.setStdout("operation_id");
+        Mockito.doReturn(successRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/operations/some_id/result"));
+        Assert.assertNotNull(mHOUtil.stopGce());
+        Mockito.verify(mMockRunUtil, times(1))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Mockito.verify(mMockRunUtil, times(1))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("DELETE"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+    }
+
+    @Test
+    public void testStopGce_CreateHOFailed() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return null;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        Assert.assertEquals(CommandStatus.EXCEPTION, mHOUtil.powerwashGce().getStatus());
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("DELETE"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+    }
+
+    @Test
+    public void testStopGce_ListCvdFailed() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdRes = new CommandResult(CommandStatus.FAILED);
+        cvdRes.setStdout("output");
+        Mockito.doReturn(cvdRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("DELETE"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+    }
+
+    @Test
+    public void testStopGce_ListCvd404() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
+        cvdRes.setStdout(mHOUtil.getUnsupportedHoResponse());
+        Mockito.doReturn(cvdRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("DELETE"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+    }
+
+    @Test
+    public void testStopGce_NoCvdOutput() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                    @Override
+                    Process createHostOrchestratorTunnel(String portNumber) {
+                        return mMockProcess;
+                    }
+
+                    @Override
+                    IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
+        cvdRes.setStdout(LIST_CVD_BADRES);
+        Mockito.doReturn(cvdRes)
+                .when(mMockRunUtil)
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("GET"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
+        Mockito.verify(mMockRunUtil, times(0))
+                .runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq((OutputStream) null),
+                        Mockito.eq("curl"),
+                        Mockito.eq("-0"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("-X"),
+                        Mockito.eq("DELETE"),
+                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+    }
+
+    @Test
     public void testCvdOperationExecution_Failed() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
@@ -834,7 +1109,7 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("http://127.0.0.1:1111/request"));
         Assert.assertEquals(
                 CommandStatus.FAILED,
-                mHOUtil.cvdOperationExecution("1111", "request", 5).getStatus());
+                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStatus());
     }
 
     @Test
@@ -891,7 +1166,7 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("http://127.0.0.1:1111/operations/some_id/result"));
         Assert.assertEquals(
                 CommandStatus.FAILED,
-                mHOUtil.cvdOperationExecution("1111", "request", 5).getStatus());
+                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStatus());
     }
 
     @Test
@@ -947,7 +1222,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("GET"),
                         Mockito.eq("http://127.0.0.1:1111/operations/some_id/result"));
         Assert.assertEquals(
-                "operation_id", mHOUtil.cvdOperationExecution("1111", "request", 5).getStdout());
+                "operation_id",
+                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStdout());
     }
 
     @Test
@@ -990,7 +1266,7 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("http://127.0.0.1:1111/operations/some_id"));
         Assert.assertEquals(
                 CommandStatus.TIMED_OUT,
-                mHOUtil.cvdOperationExecution("1111", "request", 5).getStatus());
+                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStatus());
     }
 
     @Test
