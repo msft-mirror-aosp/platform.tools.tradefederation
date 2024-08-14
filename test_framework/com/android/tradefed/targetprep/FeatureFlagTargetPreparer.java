@@ -15,6 +15,9 @@
  */
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.testtype.suite.ITestSuite.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+import static com.android.tradefed.testtype.suite.ModuleDefinition.MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -70,10 +73,6 @@ import java.util.stream.Collectors;
  */
 @OptionClass(alias = "feature-flags")
 public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
-
-    protected static final String BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY = "flag-overrides";
-    protected static final String MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY =
-            "module-flag-overrides";
 
     @Option(
             name = "flag-file",

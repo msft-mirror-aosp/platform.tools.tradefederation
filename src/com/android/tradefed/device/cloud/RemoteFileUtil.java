@@ -16,7 +16,6 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -24,6 +23,8 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GceRemoteCmdFormatter;
 import com.android.tradefed.util.GceRemoteCmdFormatter.ScpMode;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.avd.OxygenClient;
+import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
 
 import java.io.File;
 import java.io.IOException;

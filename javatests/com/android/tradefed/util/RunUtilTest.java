@@ -139,10 +139,10 @@ public class RunUtilTest {
     }
 
     /** Test class implementing {@link ICacheClient} to mock the cache client. */
-    class FakeCacheClient implements ICacheClient {
+    public static class FakeCacheClient implements ICacheClient {
         private final Map<Digest, ExecutableActionResult> mCache = new HashMap<>();
 
-        FakeCacheClient() {}
+        public FakeCacheClient() {}
 
         @Override
         public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult) {
