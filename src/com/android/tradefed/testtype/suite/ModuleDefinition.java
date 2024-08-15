@@ -480,11 +480,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                     .getDeviceConfigByName(device)
                                     .addSpecificConfig(preparer);
                         } catch (ConfigurationException e) {
-                            // Shouldn't happen;
-                            throw new RuntimeException(e);
-                        } finally {
                             // unset the module context since module run is ending.
                             CurrentInvocation.setModuleContext(null);
+                            // Shouldn't happen;
+                            throw new RuntimeException(e);
                         }
                     }
                 }
