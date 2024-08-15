@@ -16,8 +16,8 @@
 
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log.ILogOutput;
-import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.log.Log.ILogOutput;
+import com.android.tradefed.log.Log.LogLevel;
 
 import java.util.Map;
 
@@ -29,6 +29,7 @@ public interface ILogRegistry extends ILogOutput {
 
     /** Events that are useful to be logged */
     public enum EventType {
+        TRADEFED_STARTED,
         DEVICE_CONNECTED,
         DEVICE_CONNECTED_OFFLINE,
         DEVICE_DISCONNECTED,

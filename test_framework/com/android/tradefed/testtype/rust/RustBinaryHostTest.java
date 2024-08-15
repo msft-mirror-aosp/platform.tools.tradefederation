@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype.rust;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -37,7 +39,6 @@ import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.DeviceActionUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
@@ -49,6 +50,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -248,17 +250,10 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
         }
-        String runtimeDepsFolderName = "runtime_deps";
-        try {
-            RunUtil.linkFile(
-                    invocation.workingDir,
-                    runtimeDepsFolderName,
-                    DeviceActionUtil.findExecutableOnPath("adb"));
-        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-            CLog.e("Failed to link adb to working dir %s", invocation.workingDir);
-            CLog.e(e);
-        }
-        runUtil.setEnvVariable("PATH", String.format(".:%s:/usr/bin", runtimeDepsFolderName));
+        runUtil.setEnvVariable(
+                "PATH",
+                buildPathWithRelativePaths(
+                        invocation.workingDir, Collections.singleton("adb"), "/usr/bin"));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
         String instanceName =

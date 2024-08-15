@@ -1444,7 +1444,7 @@ public class NativeDevice
     @Override
     public boolean pullFile(final String remoteFilePath, final File localFile)
             throws DeviceNotAvailableException {
-        return pullFile(remoteFilePath, localFile, getCurrentUserCompatible());
+        return pullFile(remoteFilePath, localFile, getCurrentUserCompatible(remoteFilePath));
     }
 
     /** {@inheritDoc} */
@@ -1472,7 +1472,7 @@ public class NativeDevice
     /** {@inheritDoc} */
     @Override
     public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
-        return pullFile(remoteFilePath, getCurrentUserCompatible());
+        return pullFile(remoteFilePath, getCurrentUserCompatible(remoteFilePath));
     }
 
     /**
@@ -1564,7 +1564,7 @@ public class NativeDevice
     @Override
     public boolean pushFile(final File localFile, final String remoteFilePath)
             throws DeviceNotAvailableException {
-        return pushFile(localFile, remoteFilePath, getCurrentUserCompatible());
+        return pushFile(localFile, remoteFilePath, getCurrentUserCompatible(remoteFilePath));
     }
 
     @Override
@@ -1580,7 +1580,7 @@ public class NativeDevice
             boolean evaluateContentProviderNeeded)
             throws DeviceNotAvailableException {
         boolean skipContentProvider = false;
-        int userId = getCurrentUserCompatible();
+        int userId = getCurrentUserCompatible(remoteFilePath);
         if (evaluateContentProviderNeeded) {
             skipContentProvider = userId == 0;
         }
@@ -1681,7 +1681,7 @@ public class NativeDevice
     /** {@inheritDoc} */
     @Override
     public boolean doesFileExist(String deviceFilePath) throws DeviceNotAvailableException {
-        return doesFileExist(deviceFilePath, getCurrentUserCompatible());
+        return doesFileExist(deviceFilePath, getCurrentUserCompatible(deviceFilePath));
     }
 
     /** {@inheritDoc} */
@@ -1723,7 +1723,7 @@ public class NativeDevice
     /** {@inheritDoc} */
     @Override
     public void deleteFile(String deviceFilePath) throws DeviceNotAvailableException {
-        deleteFile(deviceFilePath, getCurrentUserCompatible());
+        deleteFile(deviceFilePath, getCurrentUserCompatible(deviceFilePath));
     }
 
     /** {@inheritDoc} */
@@ -2051,7 +2051,10 @@ public class NativeDevice
             File localFileDir, String deviceFilePath, Set<String> excludedDirectories)
             throws DeviceNotAvailableException {
         return pushDir(
-                localFileDir, deviceFilePath, excludedDirectories, getCurrentUserCompatible());
+                localFileDir,
+                deviceFilePath,
+                excludedDirectories,
+                getCurrentUserCompatible(deviceFilePath));
     }
 
     private boolean pushDir(
@@ -2117,7 +2120,7 @@ public class NativeDevice
     @Override
     public boolean pullDir(String deviceFilePath, File localDir)
             throws DeviceNotAvailableException {
-        return pullDir(deviceFilePath, localDir, getCurrentUserCompatible());
+        return pullDir(deviceFilePath, localDir, getCurrentUserCompatible(deviceFilePath));
     }
 
     /** {@inheritDoc} */
@@ -5093,7 +5096,10 @@ public class NativeDevice
     }
 
     /** Used internally to fallback to non-user logic */
-    private int getCurrentUserCompatible() throws DeviceNotAvailableException {
+    private int getCurrentUserCompatible(String devicePath) throws DeviceNotAvailableException {
+        if (!isSdcardOrEmulated(devicePath)) {
+            return 0;
+        }
         try {
             return getCurrentUser();
         } catch (RuntimeException e) {
@@ -5474,7 +5480,9 @@ public class NativeDevice
             }
             return new DeviceDescriptor(
                     idevice.getSerialNumber(),
-                    null,
+                    (mTrackingSerialNumber != null)
+                            ? idevice.getSerialNumber() + "[" + mTrackingSerialNumber + "]"
+                            : null,
                     idevice instanceof StubDevice,
                     idevice.getState(),
                     getAllocationState(),
