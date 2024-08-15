@@ -973,7 +973,9 @@ public class AdbSshConnection extends AdbTcpConnection {
                             getDevice().getOptions().getSshPrivateKeyPath(),
                             getDevice().getOptions().getInstanceUser(),
                             gceAvdInfo.instanceName(),
-                            gceAvdInfo.hostAndPort().getHost(),
+                            gceAvdInfo.hostAndPort() != null
+                                    ? gceAvdInfo.hostAndPort().getHost()
+                                    : null,
                             gceAvdInfo.getOxygenationDeviceId(),
                             getDevice().getOptions().getAvdDriverBinary());
         }

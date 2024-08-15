@@ -432,7 +432,9 @@ public class GceManager {
                                     getTestDeviceOptions().getSshPrivateKeyPath(),
                                     getTestDeviceOptions().getInstanceUser(),
                                     mGceAvdInfo.instanceName(),
-                                    mGceAvdInfo.hostAndPort().getHost(),
+                                    mGceAvdInfo.hostAndPort() != null
+                                            ? mGceAvdInfo.hostAndPort().getHost()
+                                            : null,
                                     mGceAvdInfo.getOxygenationDeviceId(),
                                     getTestDeviceOptions().getAvdDriverBinary());
                     bootSuccess = hOUtil.deviceBootCompleted(timeout);
