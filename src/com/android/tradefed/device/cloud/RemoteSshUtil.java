@@ -16,9 +16,8 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
 import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.GceRemoteCmdFormatter;
 import com.android.tradefed.util.IRunUtil;
 
 import java.io.OutputStream;
@@ -48,47 +47,14 @@ public class RemoteSshUtil {
             OutputStream stdout,
             OutputStream stderr,
             String... command) {
-        Process sshTunnel = null;
-        CommandResult resSsh = null;
-        OxygenClient oxygenClient = null;
-        try {
-            // In Oxygenation, the existing ssh/scp way would not work since the remote instance
-            // can't be connected by passing $HOST_IP, thus the ssh/scp command would be a bit
-            // different, so we need to differentiate if it's an oxygenation device and compile it.
-            // TODO(easoncylee/haoch): Flesh out this section when it's ready.
-            if (remoteInstance.isOxygenationDevice()) {
-                oxygenClient = new OxygenClient(options.getAvdDriverBinary());
-                // To execute ssh/scp on a remote instance, create the ssh tunnel first.
-                Integer portNumber = oxygenClient.createServerSocket();
-                sshTunnel =
-                        oxygenClient.createTunnelViaLHP(
-                                LHPTunnelMode.SSH,
-                                Integer.toString(portNumber),
-                                remoteInstance.instanceName(),
-                                remoteInstance.getOxygenationDeviceId());
-                if (sshTunnel == null || !sshTunnel.isAlive()) {
-                    resSsh = new CommandResult(CommandStatus.EXCEPTION);
-                    resSsh.setStderr("Failed to establish an ssh tunnel via LHP.");
-                    resSsh.setExitCode(-1);
-                    return resSsh;
-                }
-                // TODO(b/330197325): Flesh out the extra ssh parameters when the oxygenation CF
-                // instance launched by cvd is supported.
-            }
-            List<String> sshCmd =
-                    GceRemoteCmdFormatter.getSshCommand(
-                            options.getSshPrivateKeyPath(),
-                            null,
-                            options.getInstanceUser(),
-                            remoteInstance.hostAndPort().getHost(),
-                            command);
-            return runUtil.runTimedCmd(timeoutMs, stdout, stderr, sshCmd.toArray(new String[0]));
-        } finally {
-            if (remoteInstance.isOxygenationDevice()) {
-                // Once the ssh/scp is executed successfully, close the ssh tunnel.
-                oxygenClient.closeLHPConnection(sshTunnel);
-            }
-        }
+        List<String> sshCmd =
+                GceRemoteCmdFormatter.getSshCommand(
+                        options.getSshPrivateKeyPath(),
+                        null,
+                        options.getInstanceUser(),
+                        remoteInstance.hostAndPort().getHost(),
+                        command);
+        return runUtil.runTimedCmd(timeoutMs, stdout, stderr, sshCmd.toArray(new String[0]));
     }
 
     /**

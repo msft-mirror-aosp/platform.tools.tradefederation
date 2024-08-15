@@ -35,14 +35,14 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.Pair;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 
 /** Unit tests for {@link com.android.tradefed.testtype.binary.KernelTargetTest}. */
 @RunWith(JUnit4.class)
@@ -264,12 +264,9 @@ public class KernelTargetTestTest {
         Mockito.when(mMockITestDevice.executeShellV2Command(eq(TEST_CMD_1), anyLong(), any()))
                 .thenReturn(mCommandResult);
 
-        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
-                new ArrayList<>() {
-                    {
-                        add(Pair.create(new TestDescription(TEST_NAME_1, "main_test_01"), true));
-                    }
-                };
+        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults = new ArrayList<>();
+        expectedTestResults.add(
+                Pair.create(new TestDescription(TEST_NAME_1, "main_test_01"), true));
 
         mKernelTargetTest = new KernelTargetTest();
         mKernelTargetTest.setDevice(mMockITestDevice);

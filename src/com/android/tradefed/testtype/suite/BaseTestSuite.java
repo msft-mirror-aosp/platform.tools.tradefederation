@@ -371,6 +371,7 @@ public class BaseTestSuite extends ITestSuite {
             testsDirectories.add(testsDir);
             // Actual loading of the configurations.
             long start = System.currentTimeMillis();
+            CLog.d("Loading tests from %s", testsDirectories);
             LinkedHashMap<String, IConfiguration> loadedTests =
                     loadingStrategy(mAbis, testsDirectories, mSuitePrefix, mSuiteTag);
             long duration = System.currentTimeMillis() - start;

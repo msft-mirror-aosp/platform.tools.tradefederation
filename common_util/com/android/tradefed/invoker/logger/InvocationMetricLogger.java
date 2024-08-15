@@ -275,6 +275,10 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_NFS_LOCAL_CACHE_CONCURRENCY("cas_download_nfs_local_cache_concurrency", false),
         CAS_DOWNLOAD_ACQUIRE_LOCAL_CACHE_LOCK_TIME(
                 "cas_download_acquire_local_cache_lock_time_ms", true),
+        CAS_DOWNLOAD_DIR_RETRIEVE_TIME("cas_download_dir_retrieve_time_ms", true),
+        CAS_DOWNLOAD_DIR_PREPARE_TIME("cas_download_dir_prepare_time_ms", true),
+        CAS_DOWNLOAD_FILE_DOWNLOAD_TIME("cas_download_file_download_time_ms", true),
+        CAS_DOWNLOAD_CHUNK_RESTORE_TIME("cas_download_chunk_restore_time_ms", true),
 
         // Download Cache
         CACHE_HIT_COUNT("cache_hit_count", true),
@@ -319,6 +323,7 @@ public class InvocationMetricLogger {
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
+        PARTIAL_SKIP_MODULE_UNCHANGED_COUNT("partial_skip_module_unchanged_count", true),
         WORKDIR_DIFFS_IN_COMMON("workdir_diffs_in_common", true),
         WOKRDIR_MODULE_WITH_DIFFS("workdir_module_with_diffs", true),
         WORKDIR_UNCHANGED_MODULES("workdir_unchanged_modules", true),
@@ -351,6 +356,7 @@ public class InvocationMetricLogger {
         INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME(
                 "incremental_snapuserd_write_blocking_time", true),
         INCREMENTAL_FALLBACK_REASON("incremental_fallback_reason", true),
+        INCREMENTAL_RECOVERY_FALLBACK("incremental_recovery_fallback", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
@@ -361,6 +367,8 @@ public class InvocationMetricLogger {
         SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
         DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
         DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
+        SEARCH_ARTIFACT_FAILURE_COUNT("search_artifact_failure_count", true),
+        RESOLVE_SYMLINK_COUNT("resolve_symlink_count", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),

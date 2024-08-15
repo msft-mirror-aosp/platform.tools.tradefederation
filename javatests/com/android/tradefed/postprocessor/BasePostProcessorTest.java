@@ -22,6 +22,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.metric.BaseDeviceMetricCollector;
 import com.android.tradefed.device.metric.DeviceMetricData;
 import com.android.tradefed.invoker.InvocationContext;
@@ -234,6 +235,7 @@ public class BasePostProcessorTest {
     @Mock ILogSaver mMockLogSaver;
 
     @Rule public TemporaryFolder folder = new TemporaryFolder();
+    @Mock IConfiguration mMockConfig;
 
     @Before
     public void setUp() throws IOException {
@@ -309,7 +311,7 @@ public class BasePostProcessorTest {
         // callbacks.
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         listener.testRunStarted("test-run", 0, 0, 0L);
         listener.testLog(
                 RUN_DATA_NAME_1,
@@ -342,7 +344,7 @@ public class BasePostProcessorTest {
         // callbacks.
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         // Simulate two tests that log one file each, with run-level logs in-between and after.
         listener.testRunStarted("test-run", 2, 0, 0L);
         listener.testStarted(test1);
@@ -412,7 +414,7 @@ public class BasePostProcessorTest {
         // callbacks.
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         // Simulate a run with two test logs.
         listener.testStarted(test);
         listener.testLog(
@@ -455,7 +457,7 @@ public class BasePostProcessorTest {
         // callbacks.
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         // Simulate a run with one test log and one run log.
         listener.testStarted(test);
         listener.testLog(
@@ -490,7 +492,7 @@ public class BasePostProcessorTest {
         // Two calls are expected since there are two tests.
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         // Simulate two tests that log one file each.
         listener.testStarted(test1);
         listener.testLog(
@@ -587,7 +589,7 @@ public class BasePostProcessorTest {
 
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         // Simulate a run with two tests that log one file each.
         listener.testRunStarted("test-run", 2, 0, 0L);
         listener.testStarted(test1);
@@ -641,7 +643,7 @@ public class BasePostProcessorTest {
         // Two sets of expected captures for two test runs.
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         // Simulate a test run with two runs and one test each.
         // Run 1.
         listener.testRunStarted(runName, 1, 0, 0L);
@@ -736,7 +738,7 @@ public class BasePostProcessorTest {
 
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         listener.testRunStarted(RUN_NAME, 1);
         listener.testStarted(TEST_DESCRIPTION);
         listener.testEnded(TEST_DESCRIPTION, new HashMap<String, Metric>());
@@ -770,7 +772,7 @@ public class BasePostProcessorTest {
         // files saved from the metric collector will only be saved once.
         LogSaverResultForwarder forwarder =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         FileLoggingMetricCollector listener = new FileLoggingMetricCollector();
         listener.init(new InvocationContext(), forwarder);
         listener.testRunStarted(RUN_NAME, 1);
@@ -827,7 +829,8 @@ public class BasePostProcessorTest {
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
                         mMockLogSaver,
-                        Arrays.asList(mProcessor.init(innerProcessor.init(mMockListener))));
+                        Arrays.asList(mProcessor.init(innerProcessor.init(mMockListener))),
+                        mMockConfig);
         listener.testRunStarted(RUN_NAME, 1);
         listener.testStarted(TEST_DESCRIPTION);
         listener.testEnded(TEST_DESCRIPTION, new HashMap<String, Metric>());
@@ -860,7 +863,7 @@ public class BasePostProcessorTest {
 
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         listener.testRunStarted(RUN_NAME, 1);
         listener.testStarted(TEST_DESCRIPTION);
         listener.testEnded(TEST_DESCRIPTION, new HashMap<String, Metric>());
@@ -881,7 +884,7 @@ public class BasePostProcessorTest {
 
         LogSaverResultForwarder listener =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         listener.testRunStarted(RUN_NAME, 1);
         listener.testStarted(TEST_DESCRIPTION);
         listener.testEnded(TEST_DESCRIPTION, new HashMap<String, Metric>());
@@ -938,7 +941,7 @@ public class BasePostProcessorTest {
         // files saved from the metric collector will only be saved once.
         LogSaverResultForwarder forwarder =
                 new LogSaverResultForwarder(
-                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)));
+                        mMockLogSaver, Arrays.asList(mProcessor.init(mMockListener)), mMockConfig);
         FileLoggingMetricCollector listener = new FileLoggingMetricCollector();
         listener.init(new InvocationContext(), forwarder);
         listener.testRunStarted(RUN_NAME, 1);

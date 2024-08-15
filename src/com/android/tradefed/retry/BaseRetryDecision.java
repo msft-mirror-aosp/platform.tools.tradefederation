@@ -731,18 +731,9 @@ public class BaseRetryDecision
                 }
             }
         } else {
-            DeviceSnapshotHandler handler = new DeviceSnapshotHandler();
             for (ITestDevice device : devices) {
-                boolean restoreSuccess =
-                        handler.restoreSnapshotDevice(device, mContext.getInvocationId());
-                if (!restoreSuccess) {
-                    throw new DeviceNotAvailableException(
-                            String.format(
-                                    "Failed to restore device: %s with snapshot ID: %s",
-                                    device.getSerialNumber(), mContext.getInvocationId()),
-                            device.getSerialNumber(),
-                            DeviceErrorIdentifier.DEVICE_FAILED_TO_RESET);
-                }
+                new DeviceSnapshotHandler()
+                        .restoreSnapshotDevice(device, mContext.getInvocationId());
             }
         }
     }

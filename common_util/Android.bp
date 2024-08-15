@@ -21,6 +21,7 @@ java_library_host {
     // Restrict visibility to only those targets that need to access it.
     visibility: [
         "//tools/tradefederation/core",
+        "//tools/tradefederation/core/avd_util",
         "//tools/tradefederation/core/clearcut_client",
         "//tools/tradefederation/core/device_build_interfaces",
         "//tools/tradefederation/core/invocation_interfaces",
@@ -39,6 +40,14 @@ java_library_host {
         "grpc-java-api",
         "grpc-java-stub",
         "remote-execution-java-grpc",
+        "bytestream-java-proto",
+        "bytestream-java-grpc",
+        "google-api-java-client-assembly",
+        "google-api-services-compute",
+        "google-api-services-storage",
+        "google-auth-library-credentials-1.23.0",
+        "google-auth-library-oauth2-http-1.23.0",
+        "google-http-client-jackson2-1.28.0",
     ],
     libs: [
         "ddmlib-prebuilt",

@@ -28,6 +28,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.TestInvocation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -37,6 +38,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -45,6 +47,8 @@ import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ShellOutputReceiverStream;
 import com.android.tradefed.util.TestRunnerUtil;
+
+import com.google.common.base.Strings;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -72,6 +76,18 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             name = "use-updated-shard-retry",
             description = "Whether to use the updated logic for retry with sharding.")
     private boolean mUseUpdatedShardRetry = true;
+
+    @Option(
+            name = "enable-cache",
+            description = "Used to enable/disable caching for specific modules.")
+    private boolean mEnableCache = false;
+
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
 
     /** Whether any incomplete test is found in the current run. */
     private boolean mIncompleteTestFound = false;
@@ -115,7 +131,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
             long timeoutMs,
             IShellOutputReceiver receiver,
             ITestLogger logger) {
-        RunUtil runUtil = new RunUtil();
+        RunUtil runUtil = new RunUtil(mInheritEnvVars);
         String[] cmds = cmd.split("\\s+");
 
         if (getShardCount() > 0) {
@@ -133,10 +149,16 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         // Set the working dir to the folder containing the binary to execute from the same path.
         runUtil.setWorkingDir(gtestFile.getParentFile());
 
+        String instanceName =
+                mEnableCache
+                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
+                        : null;
+
         String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
-        paths.add(System.getenv("PATH"));
-        paths.add(gtestFile.getParentFile().getAbsolutePath());
+        paths.add("/usr/bin");
+        paths.add("/usr/sbin");
+        paths.add(".");
         String path = paths.stream().distinct().collect(Collectors.joining(separator));
         CLog.d("Using updated $PATH: %s", path);
         runUtil.setEnvVariablePriority(EnvPriority.SET);
@@ -171,7 +193,17 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                             String.format("%s-output", gtestFile.getName()), ".txt");
             try (ShellOutputReceiverStream stream =
                     new ShellOutputReceiverStream(receiver, new FileOutputStream(stdout))) {
-                result = runUtil.runTimedCmd(timeoutMs, stream, null, cmds);
+                result =
+                        runUtil.runTimedCmdWithOutputMonitor(
+                                timeoutMs,
+                                0,
+                                stream,
+                                null,
+                                Strings.isNullOrEmpty(instanceName)
+                                        ? null
+                                        : CacheClientFactory.createCacheClient(
+                                                CurrentInvocation.getWorkFolder(), instanceName),
+                                cmds);
             } catch (IOException e) {
                 throw new RuntimeException(
                         "Should never happen, ShellOutputReceiverStream.close is a no-op", e);

@@ -177,6 +177,11 @@ public class NoisyDryRunTest implements IRemoteTest {
             try {
                 TradefedDelegator delegator = CommandScheduler.checkDelegation(args);
                 if (delegator.shouldUseDelegation()) {
+                    if (delegator.getTfRootDir().getPath().isEmpty()) {
+                        listener.testFailed(
+                                parseCmdTest,
+                                "Delegation option was set, but path was empty string");
+                    }
                     // TODO: Add some validation of delegated config.
                     return;
                 }
