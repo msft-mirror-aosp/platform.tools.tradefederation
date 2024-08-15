@@ -41,6 +41,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.avd.AcloudUtil;
+import com.android.tradefed.util.avd.HostOrchestratorUtil;
 import com.android.tradefed.util.avd.LogCollector;
 import com.android.tradefed.util.avd.OxygenClient;
 
@@ -430,7 +431,9 @@ public class GceManager {
                                             .containsKey("use_cvd"),
                                     getTestDeviceOptions().getSshPrivateKeyPath(),
                                     getTestDeviceOptions().getInstanceUser(),
-                                    mGceAvdInfo,
+                                    mGceAvdInfo.instanceName(),
+                                    mGceAvdInfo.hostAndPort().getHost(),
+                                    mGceAvdInfo.getOxygenationDeviceId(),
                                     getTestDeviceOptions().getAvdDriverBinary());
                     bootSuccess = hOUtil.deviceBootCompleted(timeout);
                 } else {
@@ -473,12 +476,22 @@ public class GceManager {
                                         "CVD Logs is null, no logs collected from host"
                                                 + " orchestrator.");
                             }
-                            hOUtil.collectLogByCommand(
-                                    logger,
+                            File tempFile =
+                                    hOUtil.collectLogByCommand(
+                                            "host_kernel",
+                                            HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                            logger.testLog(
                                     "host_kernel",
-                                    HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                            hOUtil.collectLogByCommand(
-                                    logger, "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                            FileUtil.deleteFile(tempFile);
+                            tempFile =
+                                    hOUtil.collectLogByCommand(
+                                            "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                            logger.testLog(
+                                    "host_orchestrator",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
