@@ -18,7 +18,18 @@ package com.android.tradefed.cache;
 
 import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.Command;
+import build.bazel.remote.execution.v2.Command.EnvironmentVariable;
+import build.bazel.remote.execution.v2.Digest;
+import build.bazel.remote.execution.v2.Platform;
+import build.bazel.remote.execution.v2.Platform.Property;
+
 import com.google.auto.value.AutoValue;
+import com.google.protobuf.Duration;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * A value class representing an action which can be executed.
@@ -27,11 +38,64 @@ import com.google.auto.value.AutoValue;
  */
 @AutoValue
 public abstract class ExecutableAction {
-    public static ExecutableAction create(Action action, Command command) {
-        return new AutoValue_ExecutableAction(action, command);
+
+    /** Builds an {@link ExecutableAction}. */
+    public static ExecutableAction create(
+            File input, Iterable<String> args, Map<String, String> envVariables, long timeout)
+            throws IOException {
+
+        Command command =
+                Command.newBuilder()
+                        .addAllArguments(args)
+                        .setPlatform(
+                                Platform.newBuilder()
+                                        .addProperties(
+                                                Property.newBuilder()
+                                                        .setName(
+                                                                String.format(
+                                                                        "%s(%s)",
+                                                                        System.getProperty(
+                                                                                "os.name"),
+                                                                        System.getProperty(
+                                                                                "os.version")))
+                                                        .build())
+                                        .build())
+                        .addAllEnvironmentVariables(
+                                envVariables.entrySet().stream()
+                                        .map(
+                                                entry ->
+                                                        EnvironmentVariable.newBuilder()
+                                                                .setName(entry.getKey())
+                                                                .setValue(entry.getValue())
+                                                                .build())
+                                        .collect(Collectors.toList()))
+                        .build();
+
+        MerkleTree inputMerkleTree = MerkleTree.buildFromDir(input);
+        Action.Builder actionBuilder =
+                Action.newBuilder()
+                        .setInputRootDigest(inputMerkleTree.rootDigest())
+                        .setCommandDigest(DigestCalculator.compute(command));
+        if (timeout > 0L) {
+            actionBuilder.setTimeout(Duration.newBuilder().setSeconds(timeout).build());
+        }
+
+        Action action = actionBuilder.build();
+        return new AutoValue_ExecutableAction(
+                action,
+                DigestCalculator.compute(action),
+                command,
+                DigestCalculator.compute(command),
+                inputMerkleTree);
     }
 
     public abstract Action action();
 
+    public abstract Digest actionDigest();
+
     public abstract Command command();
+
+    public abstract Digest commandDigest();
+
+    public abstract MerkleTree input();
 }

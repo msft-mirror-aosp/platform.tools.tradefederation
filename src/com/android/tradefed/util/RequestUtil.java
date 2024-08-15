@@ -25,6 +25,8 @@ import io.grpc.StatusRuntimeException;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 
+import javax.annotation.Nullable;
+
 /** Utilities to allow generic retry of network requests with error handling. */
 public class RequestUtil {
     /**
@@ -34,10 +36,17 @@ public class RequestUtil {
      * @param minWaitMSec the shortest period to wait between requests
      * @param maxWaitMSec the longest period to wait between requests
      * @param scalingFactor the multiple to apply to the waiting period on a failed request
+     * @param runUtil the sleeping utility to use
      */
     public static <T> T requestWithBackoff(
-            Callable<T> requestMethod, int minWaitMSec, int maxWaitMSec, int scalingFactor) {
-        IRunUtil runUtil = RunUtil.getDefault();
+            Callable<T> requestMethod,
+            int minWaitMSec,
+            int maxWaitMSec,
+            int scalingFactor,
+            @Nullable IRunUtil runUtil) {
+        if (runUtil == null) {
+            runUtil = RunUtil.getDefault();
+        }
         int timeToWait = minWaitMSec;
         while (timeToWait <= maxWaitMSec) {
             try {
@@ -71,11 +80,24 @@ public class RequestUtil {
     /**
      * Call the specified request with backoff parameters.
      *
+     * @param requestMethod the method to call to make the request
+     * @param minWaitMSec the shortest period to wait between requests
+     * @param maxWaitMSec the longest period to wait between requests
+     * @param scalingFactor the multiple to apply to the waiting period on a failed request
+     */
+    public static <T> T requestWithBackoff(
+            Callable<T> requestMethod, int minWaitMSec, int maxWaitMSec, int scalingFactor) {
+        return requestWithBackoff(requestMethod, minWaitMSec, maxWaitMSec, scalingFactor, null);
+    }
+
+    /**
+     * Call the specified request with backoff parameters.
+     *
      * <p>Uses some default timing parameters.
      *
      * @param requestMethod the method to call to make the request
      */
     public static <T> T requestWithBackoff(Callable<T> requestMethod) {
-        return requestWithBackoff(requestMethod, 100, 100 * 64, 4);
+        return requestWithBackoff(requestMethod, 100, 100 * 64, 4, null);
     }
 }

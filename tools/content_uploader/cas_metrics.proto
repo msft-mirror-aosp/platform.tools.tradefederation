@@ -1,0 +1,35 @@
+// Copyright 2024 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package cas_metrics_proto;
+
+// Contains metrics pertaining to one artifact.
+message ArtifactMetrics {
+  string digest = 1;            // CAS root digest of the artifact ("hash/size").
+  int64 time_ms = 2;            // End to end time to upload the artifact.
+  int64 unzip_time_ms = 3;      // Time to unzip the artifact if it is a zip file.
+  int64 chunk_time_ms = 4;      // Time to chunk files if chunking is enabled.
+  int64 size_bytes = 5;         // Size of the artifact in bytes.
+  int64 uploaded_size_bytes = 6;// Size of uploaded entries in bytes.
+  int32 entries = 7;            // Number of entries.
+  int32 uploaded_entries = 8;   // Number of uploaded entries.
+}
+
+// Contains metrics for a CAS upload session.
+message CasMetrics {
+  int64 time_ms = 1;    // End to end time for the upload session.
+  repeated ArtifactMetrics artifacts = 2;
+}

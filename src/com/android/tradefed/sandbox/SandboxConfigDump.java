@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.sandbox;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
@@ -26,6 +25,7 @@ import com.android.tradefed.config.SandboxConfigurationFactory;
 import com.android.tradefed.device.IDeviceSelection;
 import com.android.tradefed.log.FileLogger;
 import com.android.tradefed.log.ILeveledLogOutput;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.result.FileSystemLogSaver;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
@@ -219,7 +219,7 @@ public class SandboxConfigDump {
             if (m.matches() && m.groupCount() > 0) {
                 String key = m.group(2);
                 String keyValue = keyClient.fetchKey(key);
-                String newValue = argList.get(i).replaceAll("USE_KEYSTORE@" + key, keyValue);
+                String newValue = argList.get(i).replace("USE_KEYSTORE@" + key, keyValue);
                 argList.set(i, newValue);
             }
         }
@@ -234,9 +234,8 @@ public class SandboxConfigDump {
         for (IDeviceConfiguration deviceConfig : config.getDeviceConfig()) {
             IDeviceSelection requirements = deviceConfig.getDeviceRequirements();
             if (requirements.nullDeviceRequested()
-                    || requirements.tcpDeviceRequested()
                     || requirements.gceDeviceRequested()) {
-                // Reset serials, ensure any null/tcp/gce-device can be selected.
+                // Reset serials, ensure any null/gce-device can be selected.
                 requirements.setSerial();
             }
             // Reset device requested type, we don't need it in the sandbox

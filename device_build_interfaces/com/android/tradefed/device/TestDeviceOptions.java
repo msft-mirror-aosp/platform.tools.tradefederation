@@ -402,7 +402,10 @@ public class TestDeviceOptions {
     @Option(
             name = "use-cmd-wifi",
             description = "Feature flag to switch the wifi connection to using cmd commands.")
-    private boolean mUseCmdWidi = false;
+    private boolean mUseCmdWifi = false;
+
+    @Option(name = "cmd-wifi-virtual", description = "Whether to use cmd wifi for virtual devices.")
+    private boolean mCmdWifiVirtual = true;
 
     @Option(
             name = "use-oxygenation-device",
@@ -918,7 +921,15 @@ public class TestDeviceOptions {
 
     /** Returns whether or not to use cmd wifi commands instead of apk. */
     public boolean useCmdWifiCommands() {
-        return mUseCmdWidi;
+        return mUseCmdWifi;
+    }
+
+    public void setUseCmdWifi(boolean useCmdWifi) {
+        mUseCmdWifi = useCmdWifi;
+    }
+
+    public boolean isCmdWifiVirtual() {
+        return mCmdWifiVirtual;
     }
 
     public static String getCreateCommandByInstanceType(InstanceType type) {
@@ -1018,6 +1029,14 @@ public class TestDeviceOptions {
     /** Returns true if it's to lease oxygenation devices in OmniLab's infra. False otherwise. */
     public boolean useOxygenationDevice() {
         return mUseOxygenationDevice;
+    }
+
+    /** Helper to return true if the device is launched by cvd, false otherwise. */
+    public boolean useCvdCF() {
+        if (mUseOxygenationDevice || getExtraOxygenArgs().containsKey("use_cvd")) {
+            return true;
+        }
+        return false;
     }
 }
 

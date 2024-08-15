@@ -612,4 +612,24 @@ public class AndroidJUnitTestTest {
         assertNull(((AndroidJUnitTest) res.get(0)).split(2));
         assertNull(((AndroidJUnitTest) res.get(0)).split());
     }
+
+    /** Test runner raises exception if filters mixing regex and class/method are used. */
+    @Test
+    public void testRun_includeFilterMixRegex() throws Exception {
+        setRunTestExpectations();
+
+        // regex filter
+        mAndroidJUnitTest.addIncludeFilter("some.*testName");
+        mAndroidJUnitTest.addIncludeFilter("justtestName");
+        try {
+            mAndroidJUnitTest.run(mTestInfo, mMockListener);
+        } catch (IllegalArgumentException expected) {
+            // expected.
+            // don't verify test run either since it should fail out
+            return;
+        }
+        fail(
+                "IllegalArgumentException not raised for filters with mixing regex and class/method"
+                        + " name.");
+    }
 }

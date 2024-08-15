@@ -16,17 +16,21 @@
 package com.android.tradefed.cluster;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.build.BuildInfoKey;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IBuildProvider;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.invoker.ExecutionFiles;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationLocal;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.FuseUtil;
 import com.android.tradefed.util.TarUtil;
 import com.android.tradefed.util.ZipUtil2;
+
 import org.apache.commons.compress.archivers.zip.ZipFile;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -35,7 +39,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** A {@link IBuildProvider} to download TFC test resources. */
@@ -58,6 +64,9 @@ public class ClusterBuildProvider implements IBuildProvider {
 
     @Option(name = "build-target", description = "Build target name")
     private String mBuildTarget = "stub";
+
+    @Option(name = "build-attribute", description = "Build attributes to supply")
+    private Map<String, String> mBuildAttributes = new HashMap<String, String>();
 
     // The keys are the URLs; the values are the downloaded files shared among all build providers
     // in the invocation.
@@ -135,6 +144,12 @@ public class ClusterBuildProvider implements IBuildProvider {
                 throw new BuildRetrievalError("failed to get test resources", e);
             }
             buildInfo.setFile(resource.getName(), file, DEFAULT_FILE_VERSION);
+        }
+        buildInfo.addBuildAttributes(mBuildAttributes);
+        File testsDir = buildInfo.getFile(BuildInfoKey.BuildInfoFileKey.TESTDIR_IMAGE);
+        if (testsDir != null && CurrentInvocation.getInvocationFiles() != null) {
+            CurrentInvocation.getInvocationFiles()
+                    .put(ExecutionFiles.FilesKey.TESTS_DIRECTORY, testsDir);
         }
         return buildInfo;
     }

@@ -20,7 +20,6 @@ import com.android.ddmlib.AndroidDebugBridge.IDeviceChangeListener;
 import com.android.ddmlib.DdmPreferences;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.IDevice.DeviceState;
-import com.android.ddmlib.Log.LogLevel;
 import com.android.ddmlib.PropertyFetcher;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
@@ -33,6 +32,7 @@ import com.android.tradefed.device.cloud.VmRemoteDevice;
 import com.android.tradefed.host.IHostOptions;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILogRegistry.EventType;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -326,7 +326,6 @@ public class DeviceManager implements IDeviceManager {
         try (CloseableTraceScope add = new CloseableTraceScope("add_devices")) {
             addEmulators();
             addNullDevices();
-            addTcpDevices();
             addGceDevices();
             addRemoteDevices();
             addLocalVirtualDevices();
@@ -515,15 +514,6 @@ public class DeviceManager implements IDeviceManager {
         }
     }
 
-    /**
-     * Add placeholder objects for the max number of tcp devices that can be connected
-     */
-    private void addTcpDevices() {
-        for (int i = 0; i < mNumTcpDevicesSupported; i++) {
-            addAvailableDevice(new TcpDevice(String.format("%s-%d", TCP_DEVICE_SERIAL_PREFIX, i)));
-        }
-    }
-
     /** Add placeholder objects for the max number of gce devices that can be connected */
     private void addGceDevices() {
         for (int i = 0; i < mNumGceDevicesSupported; i++) {
@@ -541,11 +531,6 @@ public class DeviceManager implements IDeviceManager {
     }
 
     private void addNetworkDevices() {
-        for (String ip : getGlobalConfig().getHostOptions().getKnownTcpDeviceIpPool()) {
-            addAvailableDevice(
-                    new TcpDevice(String.format("%s-%s", TCP_DEVICE_SERIAL_PREFIX, ip), ip));
-        }
-
         for (String ip : getGlobalConfig().getHostOptions().getKnownGceDeviceIpPool()) {
             addAvailableDevice(
                     new RemoteAvdIDevice(
@@ -753,7 +738,7 @@ public class DeviceManager implements IDeviceManager {
                 deviceState = FreeDeviceState.UNAVAILABLE;
             }
         }
-        if (ideviceToReturn instanceof TcpDevice
+        if (ideviceToReturn instanceof RemoteAvdIDevice
                 || ideviceToReturn instanceof VmRemoteDevice
                 || ideviceToReturn instanceof StubLocalAndroidVirtualDevice) {
             // Make sure the device goes back to the original state.
@@ -1582,11 +1567,6 @@ public class DeviceManager implements IDeviceManager {
     @VisibleForTesting
     void setMaxNullDevices(int nullDevices) {
         mNumNullDevicesSupported = nullDevices;
-    }
-
-    @VisibleForTesting
-    void setMaxTcpDevices(int tcpDevices) {
-        mNumTcpDevicesSupported = tcpDevices;
     }
 
     @VisibleForTesting

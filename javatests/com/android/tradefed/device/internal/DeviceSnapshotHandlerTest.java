@@ -16,7 +16,6 @@
 package com.android.tradefed.device.internal;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,7 +61,7 @@ public class DeviceSnapshotHandlerTest {
         FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
-        assertTrue(mHandler.snapshotDevice(mMockDevice, "random_id"));
+        mHandler.snapshotDevice(mMockDevice, "random_id");
     }
 
     @Test
@@ -71,7 +70,13 @@ public class DeviceSnapshotHandlerTest {
         responseBuilder.setErrorInfo(ErrorInfo.newBuilder().setErrorTrace("random error"));
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
-        assertFalse(mHandler.snapshotDevice(mMockDevice, "random_id"));
+        try {
+            mHandler.snapshotDevice(mMockDevice, "random_id");
+            fail("Should have thrown an exception");
+        } catch (HarnessRuntimeException expected) {
+            // Expected
+            assertTrue(expected.getMessage().contains("random error"));
+        }
     }
 
     @Test
@@ -115,8 +120,8 @@ public class DeviceSnapshotHandlerTest {
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
         InvocationMetricLogger.clearInvocationMetrics();
-        assertTrue(mHandler.snapshotDevice(mMockDevice, "random_id"));
-        assertTrue(mHandler.snapshotDevice(mMockDevice, "random_id2"));
+        mHandler.snapshotDevice(mMockDevice, "random_id");
+        mHandler.snapshotDevice(mMockDevice, "random_id2");
         String durations =
                 InvocationMetricLogger.getInvocationMetrics()
                         .getOrDefault(
@@ -131,7 +136,7 @@ public class DeviceSnapshotHandlerTest {
         FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
-        assertTrue(mHandler.restoreSnapshotDevice(mMockDevice, "random_id"));
+        mHandler.restoreSnapshotDevice(mMockDevice, "random_id");
     }
 
     @Test
@@ -140,7 +145,13 @@ public class DeviceSnapshotHandlerTest {
         responseBuilder.setErrorInfo(ErrorInfo.newBuilder().setErrorTrace("random error"));
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
-        assertFalse(mHandler.restoreSnapshotDevice(mMockDevice, "random_id"));
+        try {
+            mHandler.restoreSnapshotDevice(mMockDevice, "random_id");
+            fail("Should have thrown an exception");
+        } catch (HarnessRuntimeException expected) {
+            // Expected
+            assertTrue(expected.getMessage().contains("random error"));
+        }
     }
 
     @Test
@@ -185,8 +196,8 @@ public class DeviceSnapshotHandlerTest {
         when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
 
         InvocationMetricLogger.clearInvocationMetrics();
-        assertTrue(mHandler.restoreSnapshotDevice(mMockDevice, "random_id"));
-        assertTrue(mHandler.restoreSnapshotDevice(mMockDevice, "random_id"));
+        mHandler.restoreSnapshotDevice(mMockDevice, "random_id");
+        mHandler.restoreSnapshotDevice(mMockDevice, "random_id");
         String durations =
                 InvocationMetricLogger.getInvocationMetrics()
                         .getOrDefault(

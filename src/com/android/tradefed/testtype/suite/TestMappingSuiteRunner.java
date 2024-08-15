@@ -165,6 +165,13 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
             description = "Whether or not to report import paths into AnTS.")
     private boolean mReportImportPaths = false;
 
+    @Option(
+            name = "skip-option-check-in-child-proc",
+            description =
+                    "Whether or not to skip @Options validations only in the subprocess"
+                            + "Note that this shouldn't be set True by default or GCL.")
+    private boolean mSkipOptionCheckInChildProc = false;
+
     /** Special definition in the test mapping structure. */
     private static final String TEST_MAPPING_INCLUDE_FILTER = "include-filter";
 
@@ -178,57 +185,11 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
 
     public Set<TestInfo> loadTestInfos() {
         try (CloseableTraceScope ignored = new CloseableTraceScope("loadTestInfos")) {
-            Set<String> includeFilter = getIncludeFilter();
             // Name of the tests
             Set<String> testNames = new LinkedHashSet<>();
             Set<TestInfo> testInfosToRun = new LinkedHashSet<>();
             mBuildInfo = getBuildInfo();
-            if (mTestGroup == null && includeFilter.isEmpty()) {
-                throw new HarnessRuntimeException(
-                        "At least one of the options, --test-mapping-test-group or"
-                                + " --include-filter, should be set.",
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            }
-            if (mTestGroup == null && !mKeywords.isEmpty()) {
-                throw new HarnessRuntimeException(
-                        "Must specify --test-mapping-test-group when applying"
-                                + " --test-mapping-keyword.",
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            }
-            if (!mIgnoreKeywords.isEmpty() && !mKeywords.isEmpty()) {
-                for (String keyword : mKeywords) {
-                    if (mIgnoreKeywords.contains(keyword)) {
-                        throw new HarnessRuntimeException(
-                                "Keyword cannot be in both required and ignored.",
-                                InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-                    }
-                }
-            }
-            if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
-                throw new HarnessRuntimeException(
-                        "Must specify --test-mapping-test-group when applying "
-                                + "--force-test-mapping-module.",
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            }
-            if (mTestGroup != null && !includeFilter.isEmpty()) {
-                throw new HarnessRuntimeException(
-                        "If options --test-mapping-test-group is set, option --include-filter"
-                                + " should not be set.",
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            }
-            if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
-                throw new HarnessRuntimeException(
-                        "If option --include-filter is set, option --test-mapping-path should "
-                                + "not be set.",
-                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
-            }
-            if (mReportImportPaths && !mIgnoreTestMappingImports) {
-                CLog.i(
-                        "Option \"no-ignore-test-mapping-imports\" and \"report-import-paths\" are"
-                                + " enabled, TestMapping will report tests with sources and import"
-                                + " paths to AnTS");
-            }
-
+            checkTestMappingOptions();
             if (mTestGroup != null) {
                 if (mForceFullRun) {
                     CLog.d(
@@ -270,11 +231,6 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
                     testNames.add(testInfo.getName());
                 }
                 setIncludeFilter(testNames);
-                // With include filters being set, the test no longer needs group and path settings.
-                // Clear the settings to avoid conflict when the test is running in a shard.
-                mTestGroup = null;
-                mTestMappingPaths.clear();
-                mUseTestMappingPath = false;
             }
             return testInfosToRun;
         }
@@ -307,53 +263,39 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         // load all the configurations with include-filter injected.
         LinkedHashMap<String, IConfiguration> testConfigs = super.loadTests();
 
-        // Create and inject individual tests by calling super.loadTests() with each test info.
-        for (Map.Entry<String, IConfiguration> entry : testConfigs.entrySet()) {
-            List<IRemoteTest> allTests = new ArrayList<>();
-            IConfiguration moduleConfig = entry.getValue();
-            ConfigurationDescriptor configDescriptor =
-                    moduleConfig.getConfigurationDescription();
-            IAbi abi = configDescriptor.getAbi();
-            // Get the parameterized module name by striping the abi information out.
-            String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
-            Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
-            // Only keep the same matching abi runner
-            allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
-            if (!allTests.isEmpty()) {
-                // Set back to IConfiguration only if IRemoteTests are created.
-                moduleConfig.setTests(allTests);
-                // Set test sources to ConfigurationDescriptor.
-                List<String> testSources = getTestSources(testInfos);
-                configDescriptor.addMetadata(TestMapping.TEST_SOURCES, testSources);
-            }
-            if (mRemoteTestTimeOut != null) {
-                // Add the timeout to metadata so that it can be used in the ModuleDefinition.
-                configDescriptor.addMetadata(
-                        RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION,
-                        mRemoteTestTimeOut.toString()
-                );
+        try (CloseableTraceScope ignored = new CloseableTraceScope("testmapping:loadTests")) {
+            // Create and inject individual tests by calling super.loadTests() with each test info.
+            for (Map.Entry<String, IConfiguration> entry : testConfigs.entrySet()) {
+                List<IRemoteTest> allTests = new ArrayList<>();
+                IConfiguration moduleConfig = entry.getValue();
+                ConfigurationDescriptor configDescriptor =
+                        moduleConfig.getConfigurationDescription();
+                IAbi abi = configDescriptor.getAbi();
+                // Get the parameterized module name by striping the abi information out.
+                String moduleName = entry.getKey().replace(String.format("%s ", abi.getName()), "");
+                Set<TestInfo> testInfos = getTestInfos(testInfosToRun, moduleName);
+                // Only keep the same matching abi runner
+                allTests.addAll(createIndividualTests(testInfos, moduleConfig, abi));
+                if (!allTests.isEmpty()) {
+                    // Set back to IConfiguration only if IRemoteTests are created.
+                    moduleConfig.setTests(allTests);
+                    // Set test sources to ConfigurationDescriptor.
+                    List<String> testSources = getTestSources(testInfos);
+                    configDescriptor.addMetadata(TestMapping.TEST_SOURCES, testSources);
+                }
+                if (mRemoteTestTimeOut != null) {
+                    // Add the timeout to metadata so that it can be used in the ModuleDefinition.
+                    configDescriptor.addMetadata(
+                            RemoteTestTimeOutEnforcer.REMOTE_TEST_TIMEOUT_OPTION,
+                            mRemoteTestTimeOut.toString());
+                }
             }
         }
         return testConfigs;
     }
 
-    @VisibleForTesting
-    String getTestGroup() {
-        return mTestGroup;
-    }
-
     public void clearTestGroup() {
         mTestGroup = null;
-    }
-
-    @VisibleForTesting
-    List<String> getTestMappingPaths() {
-        return mTestMappingPaths;
-    }
-
-    @VisibleForTesting
-    boolean getUseTestMappingPath() {
-        return mUseTestMappingPath;
     }
 
     /**
@@ -642,5 +584,61 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         return testInfos.stream()
                 .filter(testInfo -> allowedTests.contains(testInfo.getName()))
                 .collect(Collectors.toSet());
+    }
+
+    @VisibleForTesting
+    void checkTestMappingOptions() {
+        if (mSkipOptionCheckInChildProc) {
+            CLog.i("Skip checking options because they are already validated.");
+            return;
+        }
+        Set<String> includeFilter = getIncludeFilter();
+        if (mTestGroup == null && includeFilter.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "At least one of the options, --test-mapping-test-group or"
+                            + " --include-filter, should be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (mTestGroup == null && !mKeywords.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "Must specify --test-mapping-test-group when applying"
+                            + " --test-mapping-keyword.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (!mIgnoreKeywords.isEmpty() && !mKeywords.isEmpty()) {
+            for (String keyword : mKeywords) {
+                if (mIgnoreKeywords.contains(keyword)) {
+                    throw new HarnessRuntimeException(
+                            "Keyword cannot be in both required and ignored.",
+                            InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+                }
+            }
+        }
+        if (mTestGroup == null && !mTestModulesForced.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "Must specify --test-mapping-test-group when applying "
+                            + "--force-test-mapping-module.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (mTestGroup != null && !includeFilter.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "If options --test-mapping-test-group is set, option --include-filter"
+                            + " should not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (!includeFilter.isEmpty() && !mTestMappingPaths.isEmpty()) {
+            throw new HarnessRuntimeException(
+                    "If option --include-filter is set, option --test-mapping-path should "
+                            + "not be set.",
+                    InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
+        }
+        if (mReportImportPaths && !mIgnoreTestMappingImports) {
+            CLog.i(
+                    "Option \"no-ignore-test-mapping-imports\" and \"report-import-paths\" are"
+                            + " enabled, TestMapping will report tests with sources and import"
+                            + " paths to AnTS");
+        }
+        CLog.i("Options check is done, set skip-option-check-in-child-proc to true.");
+        mSkipOptionCheckInChildProc = true;
     }
 }

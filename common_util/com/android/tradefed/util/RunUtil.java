@@ -16,22 +16,32 @@
 
 package com.android.tradefed.util;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.android.annotations.Nullable;
+import com.android.tradefed.cache.ExecutableAction;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.command.CommandInterrupter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -41,6 +51,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import javax.annotation.Nonnull;
 
@@ -67,6 +78,7 @@ public class RunUtil implements IRunUtil {
     private static final String PROGRESS_MONITOR_TIMEOUT_ENV = "RUN_PROGRESS_MONITOR_TIMEOUT";
 
     private final CommandInterrupter mInterrupter;
+    private final boolean mInheritEnvVars;
 
     /**
      * Create a new {@link RunUtil} object to use.
@@ -75,9 +87,18 @@ public class RunUtil implements IRunUtil {
         this(CommandInterrupter.INSTANCE);
     }
 
+    public RunUtil(boolean inheritEnvVars) {
+        this(CommandInterrupter.INSTANCE, inheritEnvVars);
+    }
+
     @VisibleForTesting
     RunUtil(@Nonnull CommandInterrupter interrupter) {
+        this(interrupter, true);
+    }
+
+    private RunUtil(@Nonnull CommandInterrupter interrupter, boolean inheritEnvVars) {
         mInterrupter = interrupter;
+        mInheritEnvVars = inheritEnvVars;
     }
 
     /**
@@ -192,11 +213,119 @@ public class RunUtil implements IRunUtil {
             final OutputStream stdout,
             OutputStream stderr,
             final String... command) {
-        RunnableResult osRunnable = createRunnableResult(stdout, stderr, command);
+        return runTimedCmdWithOutputMonitor(
+                timeout, idleOutputTimeout, stdout, stderr, null, command);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CommandResult runTimedCmdWithOutputMonitor(
+            final long timeout,
+            final long idleOutputTimeout,
+            OutputStream stdout,
+            OutputStream stderr,
+            ICacheClient cacheClient,
+            final String... command) {
+        ProcessBuilder processBuilder = createProcessBuilder(cacheClient != null, command);
+        ExecutableAction action = null;
+        if (cacheClient != null) {
+            try {
+                action =
+                        ExecutableAction.create(
+                                processBuilder.directory(),
+                                processBuilder.command(),
+                                processBuilder.environment(),
+                                timeout);
+            } catch (IOException e) {
+                CLog.e("Exception occurred when building executable action! Disabling cache...");
+                CLog.e(e);
+                // Disable caching.
+                cacheClient = null;
+            }
+        }
+
+        ExecutableActionResult cachedResult = null;
+        try {
+            cachedResult =
+                    action != null && cacheClient != null ? cacheClient.lookupCache(action) : null;
+        } catch (IOException e) {
+            CLog.e("Failed to lookup cache!");
+            CLog.e(e);
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+        }
+        if (cachedResult != null) {
+            try {
+                CLog.d("Cache is hit with action: %s", action.action());
+                return handleCachedResult(cachedResult, stdout, stderr);
+            } catch (IOException e) {
+                CLog.e("Exception occurred when handling cached result!");
+                CLog.e(e);
+            }
+        }
+
+        File stdoutBuffer = null;
+        File stderrBuffer = null;
+        if (cacheClient != null) {
+            try {
+                stdoutBuffer = FileUtil.createTempFile("stdout-to-upload", ".txt");
+                stdoutBuffer.deleteOnExit();
+                if (stdout != null) {
+                    stdout = new ForkedOutputStream(stdout, new FileOutputStream(stdoutBuffer));
+                }
+                stderrBuffer = FileUtil.createTempFile("stderr-to-upload", ".txt");
+                stderrBuffer.deleteOnExit();
+                if (stderr != null) {
+                    stderr = new ForkedOutputStream(stderr, new FileOutputStream(stderrBuffer));
+                }
+            } catch (IOException e) {
+                CLog.e("Failed to catch command execution output! Skipping the cache upload...");
+                CLog.e(e);
+                // Disable cache upload.
+                cacheClient = null;
+            }
+            CLog.d(
+                    "Caching command [%s] running in [%s] with environment variables:\n%s",
+                    processBuilder.command(),
+                    processBuilder.directory(),
+                    processBuilder.environment());
+        }
+        RunnableResult osRunnable = createRunnableResult(stdout, stderr, processBuilder);
+
         CommandStatus status =
                 runTimedWithOutputMonitor(timeout, idleOutputTimeout, osRunnable, true);
         CommandResult result = osRunnable.getResult();
         result.setStatus(status);
+
+        try {
+            if (action != null
+                    && cacheClient != null
+                    && succeed(status, (ForkedOutputStream) stdout, (ForkedOutputStream) stderr)) {
+                CLog.d("Uploading cache for action: %s", action.action());
+                if (stdout == null) {
+                    FileUtil.writeToFile(
+                            new ByteArrayInputStream(result.getStdout().getBytes(UTF_8)),
+                            stdoutBuffer);
+                }
+                if (stderr == null) {
+                    FileUtil.writeToFile(
+                            new ByteArrayInputStream(result.getStderr().getBytes(UTF_8)),
+                            stderrBuffer);
+                }
+                cacheClient.uploadCache(
+                        action,
+                        ExecutableActionResult.create(
+                                result.getExitCode(), stdoutBuffer, stderrBuffer));
+            }
+        } catch (IOException e) {
+            CLog.e("Failed to upload cache!");
+            CLog.e(e);
+        } catch (InterruptedException e) {
+            throw new RunInterruptedException(e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+        } finally {
+            FileUtil.deleteFile(stdoutBuffer);
+            FileUtil.deleteFile(stderrBuffer);
+        }
         return result;
     }
 
@@ -206,10 +335,10 @@ public class RunUtil implements IRunUtil {
      */
     @VisibleForTesting
     RunnableResult createRunnableResult(
-            OutputStream stdout, OutputStream stderr, String... command) {
+            OutputStream stdout, OutputStream stderr, ProcessBuilder processBuilder) {
         return new RunnableResult(
                 /* input= */ null,
-                createProcessBuilder(command),
+                processBuilder,
                 stdout,
                 stderr,
                 /* inputRedirect= */ null,
@@ -248,25 +377,56 @@ public class RunUtil implements IRunUtil {
         return createProcessBuilder(Arrays.asList(command));
     }
 
+    private synchronized ProcessBuilder createProcessBuilder(
+            boolean enableCache, String... command) {
+        return createProcessBuilder(null, Arrays.asList(command), enableCache);
+    }
+
     private synchronized ProcessBuilder createProcessBuilder(Redirect redirect, String... command) {
-        return createProcessBuilder(redirect, Arrays.asList(command));
+        return createProcessBuilder(redirect, Arrays.asList(command), false);
     }
 
     private synchronized ProcessBuilder createProcessBuilder(List<String> commandList) {
-        return createProcessBuilder(null, commandList);
+        return createProcessBuilder(null, commandList, false);
     }
 
-    private synchronized ProcessBuilder createProcessBuilder(
-            Redirect redirect, List<String> commandList) {
+    public synchronized ProcessBuilder createProcessBuilder(
+            Redirect redirect, List<String> commandList, boolean enableCache) {
         ProcessBuilder processBuilder = new ProcessBuilder();
+        if (!mInheritEnvVars) {
+            processBuilder.environment().clear();
+        }
+
         if (mWorkingDir != null) {
             processBuilder.directory(mWorkingDir);
+        }
+        Map<String, String> env = mEnvVariables;
+        if (enableCache) {
+            File workingDir =
+                    processBuilder.directory() != null
+                            ? processBuilder.directory()
+                            : new File(System.getProperty("user.dir"));
+            for (int i = 0; i < commandList.size(); i++) {
+                String prefix = i < 1 ? "./" : "";
+                commandList.set(i, prefix + toRelative(workingDir, commandList.get(i)));
+            }
+            for (Map.Entry<String, String> entry : env.entrySet()) {
+                String key = entry.getKey();
+                if (key.equals("LD_LIBRARY_PATH")) {
+                    env.put(
+                            key,
+                            Arrays.asList(entry.getValue().split(pathSeparator())).stream()
+                                    .map(p -> toRelative(workingDir, p))
+                                    .sorted()
+                                    .collect(Collectors.joining(pathSeparator())));
+                }
+            }
         }
         // By default unset an env. for process has higher priority, but in some case we might want
         // the 'set' to have priority.
         if (EnvPriority.UNSET.equals(mEnvVariablePriority)) {
-            if (!mEnvVariables.isEmpty()) {
-                processBuilder.environment().putAll(mEnvVariables);
+            if (!env.isEmpty()) {
+                processBuilder.environment().putAll(env);
             }
             if (!mUnsetEnvVariables.isEmpty()) {
                 // in this implementation, the unsetEnv's priority is higher than set.
@@ -276,9 +436,9 @@ public class RunUtil implements IRunUtil {
             if (!mUnsetEnvVariables.isEmpty()) {
                 processBuilder.environment().keySet().removeAll(mUnsetEnvVariables);
             }
-            if (!mEnvVariables.isEmpty()) {
+            if (!env.isEmpty()) {
                 // in this implementation, the setEnv's priority is higher than set.
-                processBuilder.environment().putAll(mEnvVariables);
+                processBuilder.environment().putAll(env);
             }
         }
         processBuilder.redirectErrorStream(mRedirectStderr);
@@ -351,9 +511,7 @@ public class RunUtil implements IRunUtil {
         return result;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    /** {@inheritDoc} */
     @Override
     public CommandResult runTimedCmdSilently(final long timeout, final String... command) {
         RunnableResult osRunnable = new RunnableResult(null, createProcessBuilder(command), false);
@@ -412,7 +570,7 @@ public class RunUtil implements IRunUtil {
     public Process runCmdInBackground(Redirect redirect, final List<String> command)
             throws IOException {
         CLog.v("Running in background: %s", command);
-        return createProcessBuilder(redirect, command).start();
+        return createProcessBuilder(redirect, command, false).start();
     }
 
     /**
@@ -776,10 +934,7 @@ public class RunUtil implements IRunUtil {
                 mProcessBuilder.redirectInput(mInputRedirect);
             }
 
-            mCommandResult = new CommandResult();
-            // Ensure the outputs are never null
-            mCommandResult.setStdout("");
-            mCommandResult.setStderr("");
+            mCommandResult = newCommandResult();
             mCountDown = new CountDownLatch(1);
 
             // Redirect IO, so that the outputstream for the spawn process does not fill up
@@ -1090,5 +1245,186 @@ public class RunUtil implements IRunUtil {
                     "Cannot setLinuxInterruptProcess on default RunUtil");
         }
         mLinuxInterruptProcess = interrupt;
+    }
+
+    private static CommandResult newCommandResult() {
+        CommandResult commandResult = new CommandResult();
+        // Ensure the outputs are never null
+        commandResult.setStdout("");
+        commandResult.setStderr("");
+        return commandResult;
+    }
+
+    private static CommandResult handleCachedResult(
+            ExecutableActionResult result, OutputStream stdout, OutputStream stderr)
+            throws IOException {
+
+        CommandResult commandResult = newCommandResult();
+        commandResult.setExitCode(result.exitCode());
+        // Only success run will be cached.
+        commandResult.setStatus(CommandStatus.SUCCESS);
+        commandResult.setCached(true);
+        if (result.stdOut() != null) {
+            if (stdout != null) {
+                FileInputStream stdoutStream = new FileInputStream(result.stdOut());
+                try {
+                    StreamUtil.copyStreams(stdoutStream, stdout);
+                } finally {
+                    stdoutStream.close();
+                    FileUtil.deleteFile(result.stdOut());
+                }
+            } else {
+                try {
+                    commandResult.setStdout(FileUtil.readStringFromFile(result.stdOut()));
+                } finally {
+                    FileUtil.deleteFile(result.stdOut());
+                }
+            }
+        }
+        if (result.stdErr() != null) {
+            if (stderr != null) {
+                FileInputStream stderrStream = new FileInputStream(result.stdErr());
+                try {
+                    StreamUtil.copyStreams(stderrStream, stderr);
+                } finally {
+                    stderrStream.close();
+                    FileUtil.deleteFile(result.stdErr());
+                }
+            } else {
+                try {
+                    commandResult.setStderr(FileUtil.readStringFromFile(result.stdErr()));
+                } finally {
+                    FileUtil.deleteFile(result.stdErr());
+                }
+            }
+        }
+        return commandResult;
+    }
+
+    /**
+     * Utility subclass of OutputStream that forwards the data to both underlying {@link
+     * OutputStream} and {@link FileOutputStream}.
+     */
+    private static class ForkedOutputStream extends OutputStream {
+        private final FileOutputStream mFileOutputStream;
+        private final OutputStream mOut;
+        private boolean mSuccess = true;
+
+        public ForkedOutputStream(OutputStream out, FileOutputStream fileOutputStream) {
+            mOut = out;
+            mFileOutputStream = fileOutputStream;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            mOut.write(b);
+            try {
+                mFileOutputStream.write(b);
+            } catch (IOException e) {
+                CLog.e("Failed to write to the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void write(byte[] b) throws IOException {
+            mOut.write(b);
+            try {
+                mFileOutputStream.write(b);
+            } catch (IOException e) {
+                CLog.e("Failed to write to the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            mOut.write(b, off, len);
+            try {
+                mFileOutputStream.write(b, off, len);
+            } catch (IOException e) {
+                CLog.e("Failed to write to the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void flush() throws IOException {
+            mOut.flush();
+            try {
+                mFileOutputStream.flush();
+            } catch (IOException e) {
+                CLog.e("Failed to flush the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        @Override
+        public void close() throws IOException {
+            mOut.close();
+            try {
+                mFileOutputStream.close();
+            } catch (IOException e) {
+                CLog.e("Failed to close the file output stream!");
+                CLog.e(e);
+                mSuccess = false;
+            }
+        }
+
+        public boolean isSuccess() {
+            return mSuccess;
+        }
+    }
+
+    public static String toRelative(File start, String target) {
+        File targetFile = new File(target);
+        return targetFile.exists() ? toRelative(start, targetFile) : target;
+    }
+
+    public static String toRelative(File start, File target) {
+        String relPath = start.toPath().relativize(target.toPath()).toString();
+        return relPath.length() != 0 ? relPath : ".";
+    }
+
+    private static String pathSeparator() {
+        return System.getProperty("path.separator");
+    }
+
+    private static boolean succeed(
+            CommandStatus status, ForkedOutputStream stdout, ForkedOutputStream stderr) {
+        if (!CommandStatus.SUCCESS.equals(status)) {
+            return false;
+        }
+        return (stdout == null || stdout.isSuccess()) && (stderr == null || stderr.isSuccess());
+    }
+
+    /**
+     * Links the {@code target} to a place under {@code destRoot}.
+     *
+     * <p>If the target file or the symlink is already existed under the {@code destRoot}, the file
+     * won't be linked.
+     *
+     * @param destRoot The root of the destination.
+     * @param relToRoot The relative path from the destination dir to root.
+     * @param target The target file to be linked.
+     * @return the symlink
+     * @throws IOException if the target file fails to be linked.
+     */
+    public static File linkFile(File destRoot, String relToRoot, File target) throws IOException {
+        if (target.getAbsolutePath().startsWith(destRoot.getAbsolutePath())) {
+            return target;
+        }
+        String relPath = Paths.get(relToRoot, target.getName()).toString();
+        File symlink = new File(destRoot, relPath);
+        if (symlink.exists()) {
+            FileUtil.deleteFile(symlink);
+        }
+        symlink.getParentFile().mkdirs();
+        FileUtil.symlinkFile(target, symlink);
+        return symlink;
     }
 }
