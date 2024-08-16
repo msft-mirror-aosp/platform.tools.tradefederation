@@ -245,6 +245,7 @@ public class SearchArtifactUtil {
             try {
                 File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
                 if (moduleDir != null) {
+                    CLog.d("Searching the module dir: %s", moduleDir);
                     // search with abi filtering on first
                     retFile = FileUtil.findFile(filename, abi, moduleDir);
                     if (fileExists(retFile)) {
@@ -255,6 +256,8 @@ public class SearchArtifactUtil {
                     if (fileExists(retFile)) {
                         return retFile;
                     }
+                } else {
+                    CLog.w("we have a module name: %s but no directory found.", moduleName);
                 }
             } catch (IOException e) {
                 CLog.w(

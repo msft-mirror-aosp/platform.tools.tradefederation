@@ -112,7 +112,7 @@ public class GCSFileDownloaderBase extends GCSCommon {
      * @param filename the filename
      * @return {@link InputStream} with the file content.
      */
-    public InputStream downloadFile(String bucketName, String filename) throws Exception {
+    public InputStream downloadFile(String bucketName, String filename) throws IOException {
         InputStream remoteInput = null;
         ByteArrayOutputStream tmpStream = null;
         try {

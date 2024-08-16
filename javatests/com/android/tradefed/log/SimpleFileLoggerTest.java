@@ -15,15 +15,14 @@
  */
 package com.android.tradefed.log;
 
+import static org.hamcrest.CoreMatchers.endsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
-
-import static org.hamcrest.CoreMatchers.endsWith;
 import static org.junit.Assert.assertTrue;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.After;

@@ -1167,9 +1167,10 @@ public class TestInvocation implements ITestInvocation {
                     }
                 }
                 listener =
-                        new LogSaverResultForwarder(config.getLogSaver(), Arrays.asList(forwarder));
+                        new LogSaverResultForwarder(
+                                config.getLogSaver(), Arrays.asList(forwarder), config);
             } else {
-                listener = new LogSaverResultForwarder(config.getLogSaver(), allListeners);
+                listener = new LogSaverResultForwarder(config.getLogSaver(), allListeners, config);
             }
             if (reportPass != null) {
                 reportPass.setLogger(listener);

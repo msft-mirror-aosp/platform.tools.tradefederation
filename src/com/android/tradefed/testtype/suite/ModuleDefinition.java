@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.testtype.suite;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Configuration;
@@ -50,6 +49,7 @@ import com.android.tradefed.invoker.shard.token.TokenProperty;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.ITestLogger;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -152,6 +152,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String ISOLATION_COST = "ISOLATION_COST";
     public static final String RETRY_SUCCESS_COUNT = "MODULE_RETRY_SUCCESS";
     public static final String RETRY_FAIL_COUNT = "MODULE_RETRY_FAILED";
+    public static final String MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY =
+            "module-flag-overrides";
 
     private final IInvocationContext mModuleInvocationContext;
     private final IConfiguration mModuleConfiguration;
@@ -478,11 +480,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                     .getDeviceConfigByName(device)
                                     .addSpecificConfig(preparer);
                         } catch (ConfigurationException e) {
-                            // Shouldn't happen;
-                            throw new RuntimeException(e);
-                        } finally {
                             // unset the module context since module run is ending.
                             CurrentInvocation.setModuleContext(null);
+                            // Shouldn't happen;
+                            throw new RuntimeException(e);
                         }
                     }
                 }

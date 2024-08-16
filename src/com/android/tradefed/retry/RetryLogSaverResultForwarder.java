@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.retry;
 
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogSaverResultForwarder;
@@ -25,10 +26,11 @@ import java.util.List;
 public class RetryLogSaverResultForwarder extends LogSaverResultForwarder {
 
     private int mAttemptNumber = 0;
+    private IConfiguration mConfig;
 
     public RetryLogSaverResultForwarder(
-            ILogSaver logSaver, List<ITestInvocationListener> listeners) {
-        super(logSaver, listeners);
+            ILogSaver logSaver, List<ITestInvocationListener> listeners, IConfiguration config) {
+        super(logSaver, listeners, config);
     }
 
     @Override

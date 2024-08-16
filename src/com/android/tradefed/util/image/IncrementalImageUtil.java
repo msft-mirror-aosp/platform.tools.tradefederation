@@ -19,10 +19,13 @@ import static org.junit.Assert.assertTrue;
 
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.device.DeviceDisconnectedException;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.SnapuserdWaitPhase;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -31,6 +34,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracePropagatingExecutorService;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.FastbootDeviceFlasher;
 import com.android.tradefed.targetprep.FlashingResourcesParser;
@@ -112,11 +116,11 @@ public class IncrementalImageUtil {
             CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
             return null;
         }
+        String serialNumber = device.getSerialNumber();
         FileCacheTracker tracker =
-                DeviceImageTracker.getDefaultCache()
-                        .getBaselineDeviceImage(device.getSerialNumber());
+                DeviceImageTracker.getDefaultCache().getBaselineDeviceImage(serialNumber);
         if (tracker == null) {
-            CLog.d("Not tracking current baseline image.");
+            CLog.d("Not tracking current baseline image for %s", serialNumber);
             return null;
         }
         String deviceBuildId = device.getBuildId();
@@ -541,7 +545,13 @@ public class IncrementalImageUtil {
                 if (mSourceDirectory != null) {
                     // flash all static partition in bootloader
                     mDevice.rebootIntoBootloader();
-                    flashStaticPartition(mSourceDirectory);
+                    try {
+                        flashStaticPartition(mSourceDirectory);
+                    } catch (TargetSetupError e) {
+                        CLog.e(e);
+                        throw new DeviceDisconnectedException(
+                                e.getMessage(), e, mDevice.getSerialNumber());
+                    }
                 }
                 if (mSourceDirectory != null && mAllowUnzipBaseline) {
                     DeviceImageTracker.getDefaultCache()
@@ -666,7 +676,8 @@ public class IncrementalImageUtil {
         }
     }
 
-    private boolean flashStaticPartition(File imageDirectory) throws DeviceNotAvailableException {
+    private boolean flashStaticPartition(File imageDirectory)
+            throws DeviceNotAvailableException, TargetSetupError {
         Map<String, String> envMap = new HashMap<>();
         envMap.put("ANDROID_PRODUCT_OUT", imageDirectory.getAbsolutePath());
         CommandResult fastbootResult =
@@ -681,7 +692,36 @@ public class IncrementalImageUtil {
         if (!CommandStatus.SUCCESS.equals(fastbootResult.getStatus())) {
             return false;
         }
-        mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
+        RecoveryMode recoveryMode = mDevice.getRecoveryMode();
+        try {
+            mDevice.setRecoveryMode(RecoveryMode.NONE);
+            ((IManagedTestDevice) mDevice).getMonitor().attachFinalState(TestDeviceState.RECOVERY);
+            boolean available = mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
+            if (!available) {
+                if (mApplySnapshot) {
+                    if (TestDeviceState.RECOVERY.equals(mDevice.getDeviceState())) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.INCREMENTAL_RECOVERY_FALLBACK, 1);
+                        // Go back to bootloader for fallback flashing
+                        mDevice.rebootIntoBootloader();
+                        CommandResult result = mDevice.executeFastbootCommand("-w");
+                        CLog.d("wipe status: %s", result.getStatus());
+                        CLog.d("wipe stdout: %s", result.getStdout());
+                        CLog.d("wipe stderr: %s", result.getStderr());
+                        throw new TargetSetupError(
+                                "Device went to recovery unexpectedly",
+                                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                    }
+                } else {
+                    throw new DeviceNotAvailableException(
+                            "device did not become available after flashing.",
+                            mDevice.getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                }
+            }
+        } finally {
+            mDevice.setRecoveryMode(recoveryMode);
+        }
         return true;
     }
 

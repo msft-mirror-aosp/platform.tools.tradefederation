@@ -122,11 +122,27 @@ public class RunUtilTest {
         }
     }
 
+    /** Test class on {@link RunUtil} in order to monitor the real process. */
+    class MonitoredRunUtil extends RunUtil {
+        public ProcessBuilder processBuilder;
+
+        public MonitoredRunUtil(boolean inheritEnvVars) {
+            super(inheritEnvVars);
+        }
+
+        @Override
+        RunnableResult createRunnableResult(
+                OutputStream stdout, OutputStream stderr, ProcessBuilder processBuilder) {
+            this.processBuilder = processBuilder;
+            return super.createRunnableResult(stdout, stderr, processBuilder);
+        }
+    }
+
     /** Test class implementing {@link ICacheClient} to mock the cache client. */
-    class FakeCacheClient implements ICacheClient {
+    public static class FakeCacheClient implements ICacheClient {
         private final Map<Digest, ExecutableActionResult> mCache = new HashMap<>();
 
-        FakeCacheClient() {}
+        public FakeCacheClient() {}
 
         @Override
         public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult) {
@@ -249,12 +265,12 @@ public class RunUtilTest {
         FileUtil.ensureGroupRWX(secondBinary);
         File secondStdout = FileUtil.createTempFile("stdout_subprocess_2_", ".txt", mWorkingDir);
         File secondStderr = FileUtil.createTempFile("stderr_subprocess_2_", ".txt", mWorkingDir);
-        RunUtil firstRunUtil = new RunUtil();
+        MonitoredRunUtil firstRunUtil = new MonitoredRunUtil(false);
         firstRunUtil.setWorkingDir(firstWorkingDir);
         firstRunUtil.setEnvVariable(
                 "LD_LIBRARY_PATH",
                 sharedLibA.getAbsolutePath() + ":" + sharedLibB.getAbsolutePath());
-        RunUtil secondRunUtil = new RunUtil();
+        MonitoredRunUtil secondRunUtil = new MonitoredRunUtil(false);
         secondRunUtil.setWorkingDir(secondWorkingDir);
         secondRunUtil.setEnvVariable(
                 "LD_LIBRARY_PATH",
@@ -294,6 +310,8 @@ public class RunUtilTest {
         assertEquals(
                 FileUtil.readStringFromFile(firstStderr),
                 FileUtil.readStringFromFile(secondStderr));
+        assertEquals(
+                firstRunUtil.processBuilder.environment(), Map.of("LD_LIBRARY_PATH", "lib1:lib2"));
     }
 
     /** Test cache works when the stdout stream and stderr stream are not specified. */
