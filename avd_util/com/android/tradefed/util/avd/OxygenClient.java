@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,16 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util.avd;
 
-import com.android.annotations.VisibleForTesting;
-import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.error.HarnessRuntimeException;
-import com.android.tradefed.invoker.logger.InvocationMetricLogger;
-import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
 import java.io.File;
@@ -39,14 +33,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Set;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import com.google.common.base.Strings;
 
 /** A class that manages the use of Oxygen client binary to lease or release Oxygen device. */
 public class OxygenClient {
@@ -103,12 +95,10 @@ public class OxygenClient {
                                     Collectors.toMap(data -> data[0], data -> data[1]),
                                     Collections::<String, String>unmodifiableMap));
 
-    @VisibleForTesting
-    IRunUtil getRunUtil() {
+    protected IRunUtil getRunUtil() {
         return mRunUtil;
     }
 
-    @VisibleForTesting
     public OxygenClient(File clientBinary, IRunUtil runUtil) {
         this(clientBinary);
         mRunUtil = runUtil;
@@ -121,50 +111,7 @@ public class OxygenClient {
      */
     public OxygenClient(File clientBinary) {
         mRunUtil = RunUtil.getDefault();
-        String error = null;
-        if (clientBinary == null) {
-            error = "the Oxygen client binary reference is null";
-        } else if (!clientBinary.exists()) {
-            error =
-                    String.format(
-                            "the Oxygen client binary file does not exist at %s",
-                            clientBinary.getAbsolutePath());
-        } else if (!clientBinary.canExecute()) {
-            error =
-                    String.format(
-                            "the Oxygen client binary file at %s is not executable",
-                            clientBinary.getAbsolutePath());
-        }
-        if (clientBinary == null || !clientBinary.exists()) {
-            throw new HarnessRuntimeException(
-                    String.format("Error in instantiating OxygenClient class: %s", error),
-                    InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
-        }
         mClientBinary = clientBinary;
-    }
-
-    /**
-     * Check if no_wait_for_boot is specified in Oxygen lease request
-     *
-     * @param deviceOptions {@link TestDeviceOptions}
-     * @return true if no_wait_for_boot is specified
-     */
-    public Boolean noWaitForBootSpecified(TestDeviceOptions deviceOptions) {
-        return deviceOptions.getExtraOxygenArgs().containsKey("no_wait_for_boot");
-    }
-
-    /**
-     * Returns the value of the 'override_cvd_path' argument in the given TestDeviceOptions.
-     *
-     * @param deviceOptions {@link TestDeviceOptions}
-     * @return the value of 'override_cvd_path', or null if it is not present
-     */
-    public String getOverrideCvdPath(TestDeviceOptions deviceOptions) {
-        if (!deviceOptions.getExtraOxygenArgs().containsKey("override_cvd_path")) {
-            return null;
-        }
-
-        return deviceOptions.getExtraOxygenArgs().get("override_cvd_path");
     }
 
     /**
@@ -192,24 +139,30 @@ public class OxygenClient {
     /**
      * Attempt to lease a device by calling Oxygen client binary.
      *
-     * @param b {@link IBuildInfo}
-     * @param deviceOptions {@link TestDeviceOptions}
+     * @param buildTarget build target
+     * @param buildBranch build branch
+     * @param buildId build ID
+     * @param targetRegion target region for Oxygen instance
+     * @param accountingUser Oxygen accounting user email
+     * @param leaseLength number of ms for the lease duration
+     * @param gceDriverParams {@link List<String>} of gce driver params
+     * @param extraOxygenArgs {@link Map<String, String>} of extra Oxygen lease args
      * @param attributes attributes associated with current invocation
+     * @param gceCmdTimeout number of ms for the command line timeout
      * @return a {@link CommandResult} that Oxygen binary returned.
      */
     public CommandResult leaseDevice(
-            IBuildInfo b, TestDeviceOptions deviceOptions, MultiMap<String, String> attributes) {
-        if (deviceOptions.useOxygenationDevice()) {
-            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
-            // Lease an oxygenation device with additional options passed in when
-            // use-oxygenation-device is set.
-            // For now, return failure with exceptions first.
-            CommandResult ret = new CommandResult(CommandStatus.EXCEPTION);
-            ret.setStderr("OxygenClient: Leasing an oxygenation device is not supported for now.");
-            return ret;
-        }
+            String buildTarget,
+            String buildBranch,
+            String buildId,
+            String targetRegion,
+            String accountingUser,
+            long leaseLength,
+            List<String> gceDriverParams,
+            Map<String, String> extraOxygenArgs,
+            MultiMap<String, String> attributes,
+            long gceCmdTimeout) {
         List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
-        List<String> gceDriverParams = deviceOptions.getGceDriverParams();
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
         int i = 0;
@@ -243,34 +196,28 @@ public class OxygenClient {
         // check if build info exists after added from GceDriverParams
         if (!oxygenClientArgs.contains("-build_target")) {
             oxygenClientArgs.add("-build_target");
-            if (b.getBuildAttributes().containsKey("build_target")) {
-                // If BuildInfo contains the attribute for a build target, use that.
-                oxygenClientArgs.add(b.getBuildAttributes().get("build_target"));
-            } else {
-                oxygenClientArgs.add(b.getBuildFlavor());
-            }
+            oxygenClientArgs.add(buildTarget);
             oxygenClientArgs.add("-build_branch");
-            oxygenClientArgs.add(b.getBuildBranch());
+            oxygenClientArgs.add(buildBranch);
             oxygenClientArgs.add("-build_id");
-            oxygenClientArgs.add(b.getBuildId());
+            oxygenClientArgs.add(buildId);
         }
 
         // add oxygen side lease options
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
+        oxygenClientArgs.add(targetRegion);
         oxygenClientArgs.add("-accounting_user");
-        oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
+        oxygenClientArgs.add(accountingUser);
         oxygenClientArgs.add("-lease_length_secs");
-        oxygenClientArgs.add(Long.toString(deviceOptions.getOxygenLeaseLength() / 1000));
+        oxygenClientArgs.add(Long.toString(leaseLength / 1000));
 
         // Check if there is a new CVD path to override
-        String override_cvd_path = getOverrideCvdPath(deviceOptions);
-        if (override_cvd_path != null) {
+        if (extraOxygenArgs.containsKey("override_cvd_path")) {
             oxygenClientArgs.add("-override_cvd_path");
-            oxygenClientArgs.add(override_cvd_path);
+            oxygenClientArgs.add(extraOxygenArgs.get("override_cvd_path"));
         }
 
-        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+        for (Map.Entry<String, String> arg : extraOxygenArgs.entrySet()) {
             oxygenClientArgs.add("-" + arg.getKey());
             if (!Strings.isNullOrEmpty(arg.getValue())) {
                 oxygenClientArgs.add(arg.getValue());
@@ -281,39 +228,36 @@ public class OxygenClient {
 
         CLog.i("Leasing device from oxygen client with %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(
-                oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
-                deviceOptions.getGceCmdTimeout());
+                oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]), gceCmdTimeout);
     }
 
     /**
      * Attempt to lease multiple devices by calling Oxygen client binary.
      *
-     * @param buildInfos {@link List<IBuildInfo>}
-     * @param deviceOptions {@link TestDeviceOptions}
+     * @param buildTargets a {@link List<String>} of build targets
+     * @param buildBranches a {@link List<String>} of build branches
+     * @param buildIds a {@link List<String>} of build IDs
+     * @param targetRegion target region for Oxygen instance
+     * @param accountingUser Oxygen accounting user email
+     * @param leaseLength number of ms for the lease duration
+     * @param gceDriverParams {@link List<String>} of gce driver params
+     * @param extraOxygenArgs {@link Map<String, String>} of extra Oxygen lease args
      * @param attributes attributes associated with current invocation
+     * @param gceCmdTimeout number of ms for the command line timeout
      * @return {@link CommandResult} that Oxygen binary returned.
      */
     public CommandResult leaseMultipleDevices(
-            List<IBuildInfo> buildInfos,
-            TestDeviceOptions deviceOptions,
-            MultiMap<String, String> attributes) {
+            List<String> buildTargets,
+            List<String> buildBranches,
+            List<String> buildIds,
+            String targetRegion,
+            String accountingUser,
+            long leaseLength,
+            Map<String, String> extraOxygenArgs,
+            MultiMap<String, String> attributes,
+            long gceCmdTimeout) {
         List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
         oxygenClientArgs.add("-lease");
-
-        List<String> buildTargets = new ArrayList<>();
-        List<String> buildBranches = new ArrayList<>();
-        List<String> buildIds = new ArrayList<>();
-
-        for (IBuildInfo b : buildInfos) {
-            if (b.getBuildAttributes().containsKey("build_target")) {
-                // If BuildInfo contains the attribute for a build target, use that.
-                buildTargets.add(b.getBuildAttributes().get("build_target"));
-            } else {
-                buildTargets.add(b.getBuildFlavor());
-            }
-            buildBranches.add(b.getBuildBranch());
-            buildIds.add(b.getBuildId());
-        }
 
         if (buildTargets.size() > 0) {
             oxygenClientArgs.add("-build_target");
@@ -329,15 +273,15 @@ public class OxygenClient {
             oxygenClientArgs.add(String.join(",", buildIds));
         }
         oxygenClientArgs.add("-multidevice_size");
-        oxygenClientArgs.add(String.valueOf(buildInfos.size()));
+        oxygenClientArgs.add(String.valueOf(buildTargets.size()));
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
+        oxygenClientArgs.add(targetRegion);
         oxygenClientArgs.add("-accounting_user");
-        oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
+        oxygenClientArgs.add(accountingUser);
         oxygenClientArgs.add("-lease_length_secs");
-        oxygenClientArgs.add(Long.toString(deviceOptions.getOxygenLeaseLength() / 1000));
+        oxygenClientArgs.add(Long.toString(leaseLength / 1000));
 
-        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
+        for (Map.Entry<String, String> arg : extraOxygenArgs.entrySet()) {
             oxygenClientArgs.add("-" + arg.getKey());
             if (!Strings.isNullOrEmpty(arg.getValue())) {
                 oxygenClientArgs.add(arg.getValue());
@@ -348,69 +292,57 @@ public class OxygenClient {
 
         CLog.i("Leasing multiple devices from oxygen client with %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(
-                oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
-                deviceOptions.getGceCmdTimeout());
+                oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]), gceCmdTimeout);
     }
 
     /**
      * Attempt to release a device by using Oxygen client binary.
      *
-     * @param gceAvdInfo {@link GceAvdInfo}
-     * @param deviceOptions {@link TestDeviceOptions}
+     * @param instanceName name of the Oxygen instance
+     * @param host hostname of the Oxygen instance
+     * @param targetRegion target region
+     * @param accountingUser name of accounting user email
+     * @param extraOxygenArgs {@link Map<String, String>} of extra Oxygen args
      * @return a boolean which indicate whether the device release is successful.
      */
-    public boolean release(GceAvdInfo gceAvdInfo, TestDeviceOptions deviceOptions) {
-        // If gceAvdInfo is missing info, then it means the device wasn't get leased successfully.
-        // In such case, there is no need to release the device.
-        if (gceAvdInfo == null
-                || gceAvdInfo.instanceName() == null
-                || gceAvdInfo.hostAndPort() == null
-                || gceAvdInfo.hostAndPort().getHost() == null) {
-            return true;
-        }
-        if (deviceOptions.useOxygenationDevice()) {
-            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
-            // Release an oxygenation device with additional options passed in when
-            // use-oxygenation-device is set.
-            // For now, return false first.
-            return false;
-        }
+    public CommandResult release(
+            String instanceName,
+            String host,
+            String targetRegion,
+            String accountingUser,
+            Map<String, String> extraOxygenArgs,
+            long gceCmdTimeout) {
         List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
 
-        for (Map.Entry<String, String> arg : deviceOptions.getExtraOxygenArgs().entrySet()) {
-            oxygenClientArgs.add("-" + arg.getKey());
-            if (!Strings.isNullOrEmpty(arg.getValue())) {
-                oxygenClientArgs.add(arg.getValue());
+        // If gceAvdInfo is missing info, then it means the device wasn't get leased successfully.
+        // In such case, there is no need to release the device.
+        if (instanceName == null || host == null) {
+            CommandResult res = new CommandResult();
+            res.setStatus(CommandStatus.SUCCESS);
+            return res;
+        }
+
+        if (extraOxygenArgs != null) {
+            for (Map.Entry<String, String> arg : extraOxygenArgs.entrySet()) {
+                oxygenClientArgs.add("-" + arg.getKey());
+                if (!Strings.isNullOrEmpty(arg.getValue())) {
+                    oxygenClientArgs.add(arg.getValue());
+                }
             }
         }
 
         oxygenClientArgs.add("-release");
         oxygenClientArgs.add("-target_region");
-        oxygenClientArgs.add(OxygenUtil.getTargetRegion(deviceOptions));
+        oxygenClientArgs.add(targetRegion);
         oxygenClientArgs.add("-server_url");
-        oxygenClientArgs.add(gceAvdInfo.hostAndPort().getHost());
+        oxygenClientArgs.add(host);
         oxygenClientArgs.add("-session_id");
-        oxygenClientArgs.add(gceAvdInfo.instanceName());
+        oxygenClientArgs.add(instanceName);
         oxygenClientArgs.add("-accounting_user");
-        oxygenClientArgs.add(deviceOptions.getOxygenAccountingUser());
+        oxygenClientArgs.add(accountingUser);
         CLog.i("Releasing device from oxygen client with command %s", oxygenClientArgs.toString());
-        CommandResult res =
-                runOxygenTimedCmd(
-                        oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]),
-                        deviceOptions.getGceCmdTimeout());
-        if (!res.getStatus().equals(CommandStatus.SUCCESS)) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_COUNT, 1);
-            if (res.getStderr() != null) {
-                String error = "Unknown";
-                if (res.getStderr().contains("context deadline exceeded")) {
-                    error = "SERVER_CALL_TIMEOUT";
-                }
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE, error);
-            }
-        }
-        return res.getStatus().equals(CommandStatus.SUCCESS);
+        return runOxygenTimedCmd(
+                oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]), gceCmdTimeout);
     }
 
     /**

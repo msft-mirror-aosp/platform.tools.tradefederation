@@ -655,11 +655,6 @@ public class DeviceSelectionOptions implements IDeviceSelection {
                         deviceSerial, "device is null-device while requested type was not");
                 return false;
             }
-            if (TcpDevice.class.equals(device.getClass())) {
-                // We only match an exact TcpDevice here, no child class.
-                addNoMatchReason(deviceSerial, "device is tcp-device while requested type was not");
-                return false;
-            }
             if (gceDeviceRequested() != RemoteAvdIDevice.class.equals(device.getClass())) {
                 // We only match an exact RemoteAvdIDevice here, no child class.
                 addNoMatchReason(deviceSerial, "device is gce-device while requested type was not");

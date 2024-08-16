@@ -166,6 +166,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mAllowIncrementalCrossRelease = false;
 
     @Option(
+            name = "ignore-incremental-host-options",
+            description =
+                    "Ignore the HostOptions to disable incremental flashing. This can be useful for"
+                            + " boot tests in various environments.")
+    private boolean mIgnoreHostOptions = false;
+
+    @Option(
             name = "apply-snapshot",
             description =
                     "Whether to apply the snapshot after mounting it. "
@@ -282,11 +289,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         long flashingTime = -1;
         long start = -1;
         // HostOptions can force the incremental flashing to true.
-        if (getHostOptions().isIncrementalFlashingEnabled()) {
-            mUseIncrementalFlashing = true;
-        }
-        if (getHostOptions().isOptOutOfIncrementalFlashing()) {
-            mUseIncrementalFlashing = false;
+        if (!mIgnoreHostOptions) {
+            if (getHostOptions().isIncrementalFlashingEnabled()) {
+                mUseIncrementalFlashing = true;
+            }
+            if (getHostOptions().isOptOutOfIncrementalFlashing()) {
+                mUseIncrementalFlashing = false;
+            }
         }
         if (mConfig != null) {
             for (IDeviceConfiguration deviceConfig : mConfig.getDeviceConfig()) {
@@ -664,5 +673,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
         mAllowUnzippedBaseline = allowUnzipBaseline;
+    }
+
+    public void setIgnoreHostOptions(boolean ignoreHostOptions) {
+        mIgnoreHostOptions = ignoreHostOptions;
     }
 }

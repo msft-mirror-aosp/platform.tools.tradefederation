@@ -66,6 +66,7 @@ import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
+import com.android.tradefed.result.skipped.SkipFeature;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -90,6 +91,7 @@ import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.proto.tradefed.feature.FeatureResponse;
 
@@ -155,11 +157,13 @@ public abstract class ITestSuite
     public static final String RANDOM_SEED = "random-seed";
     public static final String SKIP_STAGING_ARTIFACTS = "skip-staging-artifacts";
     public static final String STAGE_MODULE_ARTIFACTS = "stage-module-artifacts";
+    public static final String ENABLE_RESOLVE_SYM_LINKS = "enable-resolve-sym-links";
 
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
 
     public static final String TEST_TYPE_KEY = "test-type";
     public static final String TEST_TYPE_VALUE_PERFORMANCE = "performance";
+    public static final String BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY = "flag-overrides";
 
     private static final Set<String> ALLOWED_PREPARERS_CONFIGS =
             ImmutableSet.of("/suite/allowed-preparers.txt", "/suite/google-allowed-preparers.txt");
@@ -216,6 +220,9 @@ public abstract class ITestSuite
                         + "run."
     )
     private Set<String> mSystemStatusCheckBlacklist = new HashSet<>();
+
+    @Option(name = ENABLE_RESOLVE_SYM_LINKS, description = "Enable symlinks resolving")
+    protected boolean mEnableResolveSymlinks = false;
 
     @Option(
         name = "report-system-checkers",
@@ -407,6 +414,7 @@ public abstract class ITestSuite
     // Current modules to run, null if not started to run yet.
     private List<ModuleDefinition> mRunModules = null;
     private ModuleDefinition mModuleInProgress = null;
+    private Set<String> mUnchangedModules = null;
     // Logger to be used to files.
     private ITestLogger mCurrentLogger = null;
     // Whether or not we are currently in split
@@ -504,9 +512,11 @@ public abstract class ITestSuite
             }
             filterPreparers(config.getValue(), mAllowedPreparers);
 
-            // Copy the CoverageOptions from the main configuration to the module configuration.
             if (mMainConfiguration != null) {
+                // Copy the CoverageOptions from the main configuration to the module configuration.
                 config.getValue().setCoverageOptions(mMainConfiguration.getCoverageOptions());
+                // Copy the CommandOptions from the main configuration to the module configuration.
+                config.getValue().setCommandOptions(mMainConfiguration.getCommandOptions());
             }
 
             filteredConfig.put(config.getKey(), config.getValue());
@@ -570,8 +580,9 @@ public abstract class ITestSuite
                         destination = mBuildInfo.getBuildAttributes().get("ROOT_DIR");
                     }
                     CLog.d(
-                            "downloading to destination: %s the following include_filters: %s",
-                            destination, includeFilters);
+                            "resolve symlinks:[%s] downloading to destination: %s the following"
+                                    + " include_filters: %s",
+                            mEnableResolveSymlinks, destination, includeFilters);
                     args.put(ResolvePartialDownload.DESTINATION_DIR, destination);
                     args.put(
                             ResolvePartialDownload.INCLUDE_FILTERS,
@@ -585,6 +596,7 @@ public abstract class ITestSuite
                                     .map(p -> p.toString())
                                     .collect(Collectors.joining(";"));
                     args.put(ResolvePartialDownload.REMOTE_PATHS, remotePaths);
+                    args.put(ENABLE_RESOLVE_SYM_LINKS, String.valueOf(mEnableResolveSymlinks));
                     FeatureResponse rep =
                             client.triggerFeature(
                                     ResolvePartialDownload.RESOLVE_PARTIAL_DOWNLOAD_FEATURE_NAME,
@@ -599,9 +611,13 @@ public abstract class ITestSuite
                             e.getMessage(), e, InfraErrorIdentifier.ARTIFACT_DOWNLOAD_ERROR);
                 }
             } else {
+                CLog.d("Not using feature server to download %s remoteFile", mDynamicResolver);
                 mDynamicResolver.setDevice(device);
                 mDynamicResolver.addExtraArgs(
                         mMainConfiguration.getCommandOptions().getDynamicDownloadArgs());
+                mDynamicResolver.addExtraArgs(
+                        ImmutableMap.of(
+                                ENABLE_RESOLVE_SYM_LINKS, String.valueOf(mEnableResolveSymlinks)));
                 for (File remoteFile : mBuildInfo.getRemoteFiles()) {
                     try {
                         mDynamicResolver.resolvePartialDownloadZip(
@@ -645,7 +661,10 @@ public abstract class ITestSuite
             return runModules;
         }
         try (CloseableTraceScope ignore = new CloseableTraceScope("suite:createExecutionList")) {
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> runConfig = loadAndFilter();
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEST_SETUP_PAIR, start, System.currentTimeMillis());
             if (runConfig.isEmpty()) {
                 CLog.i("No config were loaded. Nothing to run.");
                 return runModules;
@@ -809,16 +828,13 @@ public abstract class ITestSuite
                 if (((AdbTcpConnection) connection).getSuiteSnapshots().containsKey(mDevice)) {
                     CLog.d("Suite snapshot already taken for '%s'", mDevice.getSerialNumber());
                 } else {
-                    ((AdbTcpConnection) connection)
-                            .snapshotDevice(mDevice, mContext.getInvocationId());
-                    ((AdbTcpConnection) connection)
-                            .getSuiteSnapshots()
-                            .put(mDevice, mContext.getInvocationId());
-                }
-                if (mUseSnapshotBeforeFirstModule) {
-                    String snapshot =
-                            ((AdbTcpConnection) connection).getSuiteSnapshots().get(mDevice);
-                    ((AdbTcpConnection) connection).recoverVirtualDevice(mDevice, snapshot, null);
+                    String snapshotId = mContext.getInvocationId();
+                    ((AdbTcpConnection) connection).snapshotDevice(mDevice, snapshotId);
+                    ((AdbTcpConnection) connection).getSuiteSnapshots().put(mDevice, snapshotId);
+                    if (mUseSnapshotBeforeFirstModule) {
+                        ((AdbTcpConnection) connection)
+                                .recoverVirtualDevice(mDevice, snapshotId, null);
+                    }
                 }
             }
         }
@@ -833,6 +849,10 @@ public abstract class ITestSuite
                     mRunModules);
         }
 
+        if (mUnchangedModules == null) {
+            mUnchangedModules = SkipFeature.getUnchangedModules();
+        }
+        Set<String> unchangedModulesNames = mUnchangedModules;
         /** Run all the module, make sure to reduce the list to release resources as we go. */
         try {
             while (!mRunModules.isEmpty()) {
@@ -912,8 +932,28 @@ public abstract class ITestSuite
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
                     logModuleConfig(listener, module);
+                    boolean moduleRan = true;
                     try {
-                        runSingleModule(module, moduleInfo, listener, moduleListeners);
+                        if (unchangedModulesNames.contains(
+                                module.getModuleInvocationContext()
+                                        .getConfigurationDescriptor()
+                                        .getModuleName())) {
+                            moduleRan = false;
+                            CLog.d(
+                                "Skipping module '%s' due to no changes in artifacts.",
+                                module.getModuleInvocationContext()
+                                    .getConfigurationDescriptor()
+                                    .getModuleName());
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(
+                                            ModuleDefinition.MODULE_SKIPPED,
+                                            "No relevant changes to device image or test artifacts"
+                                                    + " detected.");
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
+                        } else {
+                            runSingleModule(module, moduleInfo, listener, moduleListeners);
+                        }
                     } finally {
                         module.getModuleInvocationContext()
                                 .addInvocationAttribute(
@@ -927,8 +967,10 @@ public abstract class ITestSuite
                         // Following modules will not be isolated if no action is taken
                         CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
                     }
-                    // Module isolation routine
-                    moduleIsolation(mContext, listener);
+                    if (moduleRan) {
+                        // Module isolation routine
+                        moduleIsolation(mContext, listener);
+                    }
                 }
             }
         } catch (DeviceNotAvailableException e) {
@@ -1294,7 +1336,10 @@ public abstract class ITestSuite
 
         mIsSplitting = true;
         try {
+            long start = System.currentTimeMillis();
             LinkedHashMap<String, IConfiguration> runConfig = loadAndFilter();
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.TEST_SETUP_PAIR, start, System.currentTimeMillis());
             if (runConfig.isEmpty()) {
                 CLog.i("No config were loaded. Nothing to run.");
                 return null;
@@ -1801,5 +1846,9 @@ public abstract class ITestSuite
 
     public boolean getIntraModuleSharding() {
         return mIntraModuleSharding;
+    }
+
+    public void setUnchangedModules(Set<String> unchangedModules) {
+        mUnchangedModules = unchangedModules;
     }
 }

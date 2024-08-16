@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype.rust;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -24,6 +26,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
@@ -33,6 +36,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
+import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -40,10 +44,13 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TestRunnerUtil;
 
+import com.google.common.base.Strings;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -58,6 +65,18 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     @Option(name = "test-file", description = "The test file name or file path.")
     private Set<String> mBinaryNames = new HashSet<>();
+
+    @Option(
+            name = "enable-cache",
+            description = "Used to enable/disable caching for specific modules.")
+    private boolean mEnableCache = false;
+
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
 
     private IBuildInfo mBuildInfo;
 
@@ -193,7 +212,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     }
 
     private boolean countTests(Invocation invocation, Set<String> foundTests) {
-        CommandResult listResult = runInvocation(invocation, "--list");
+        CommandResult listResult = runInvocation(invocation, false, "--list");
         // TODO: Do we want to handle non-standard test harnesses without a
         // --list param? Currently we will report 0 tests, which will cause an
         // overall failure, but we don't know how to parse arbitrary test
@@ -211,7 +230,8 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         }
     }
 
-    private CommandResult runInvocation(final Invocation invocation, final String... extraArgs) {
+    private CommandResult runInvocation(
+            final Invocation invocation, boolean enableCache, final String... extraArgs) {
         IRunUtil runUtil = getRunUtil();
         runUtil.setWorkingDir(invocation.workingDir);
         runUtil.unsetEnvVariable(
@@ -230,16 +250,33 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
         }
+        runUtil.setEnvVariable(
+                "PATH",
+                buildPathWithRelativePaths(
+                        invocation.workingDir, Collections.singleton("adb"), "/usr/bin"));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
-        return runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]));
+        String instanceName =
+                enableCache
+                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
+                        : null;
+        return Strings.isNullOrEmpty(instanceName)
+                ? runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]))
+                : runUtil.runTimedCmdWithOutputMonitor(
+                        mTestTimeout,
+                        0,
+                        null,
+                        null,
+                        CacheClientFactory.createCacheClient(
+                                CurrentInvocation.getWorkFolder(), instanceName),
+                        command.toArray(new String[0]));
     }
 
     private void runTest(
             ITestInvocationListener listener, final Invocation invocation, final String runName)
             throws IOException {
 
-        CommandResult result = runInvocation(invocation);
+        CommandResult result = runInvocation(invocation, mEnableCache);
 
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             String message =
@@ -285,6 +322,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
-        return new RunUtil();
+        return new RunUtil(mInheritEnvVars);
     }
 }
