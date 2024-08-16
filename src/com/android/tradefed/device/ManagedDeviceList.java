@@ -146,7 +146,10 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
                 new IMatcher<IManagedTestDevice>() {
                     @Override
                     public boolean matches(IManagedTestDevice element) {
-                        return serialNumber.equals(element.getTrackingSerial());
+                        // For TCP devices if we find their tracking serial or serial, allow the
+                        // match
+                        return serialNumber.equals(element.getTrackingSerial())
+                                || serialNumber.equals(element.getSerialNumber());
                     }
                 });
     }
@@ -299,6 +302,12 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
             try {
                 String realSerial = idevice.getProperty("ro.serialno");
                 if (!Strings.isNullOrEmpty(realSerial)) {
+                    // If the device happen to already exists, re-check it to ensure we update
+                    // tracking.
+                    IManagedTestDevice d = find(serial);
+                    if (d != null) {
+                        d.setTrackingSerial(realSerial);
+                    }
                     serial = realSerial.trim();
                     setTracking = true;
                 }

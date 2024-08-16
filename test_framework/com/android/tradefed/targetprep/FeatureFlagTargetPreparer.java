@@ -15,17 +15,22 @@
  */
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.testtype.suite.ITestSuite.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+import static com.android.tradefed.testtype.suite.ModuleDefinition.MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
-import com.android.tradefed.util.flag.DeviceFeatureFlag;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.flag.DeviceFeatureFlag;
 
 import com.google.common.base.Strings;
 
@@ -37,9 +42,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -81,11 +88,13 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
     private boolean mRebootBetweenFlagFiles = false;
 
     private final Map<String, Map<String, String>> mFlagsToRestore = new HashMap<>();
+    private final Set<DeviceFeatureFlag> mFlagsOverridden = new HashSet<>();
 
     @Override
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         ITestDevice device = testInformation.getDevice();
+        IInvocationContext context = testInformation.getContext();
         if (mFlagFiles.isEmpty() && mFlagValues.isEmpty()) {
             CLog.i("No flag-file or flag-value option provided, skipping");
             return;
@@ -132,6 +141,7 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
                 continue; // No flags to update.
             }
             updateFlags(device, targetFlags);
+            updateContext(context, device);
             flagsUpdated = true;
             if (mRebootBetweenFlagFiles) {
                 device.reboot();
@@ -244,6 +254,23 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
         }
     }
 
+    private void updateContext(IInvocationContext context, ITestDevice device) {
+        if (mFlagsOverridden.isEmpty()) {
+            return;
+        }
+        String flagsOverriddenString =
+                mFlagsOverridden.stream().map(f -> f.toString()).collect(Collectors.joining(" "));
+        if (!Strings.isNullOrEmpty(context.getAttribute(ModuleDefinition.MODULE_NAME))) {
+            // Add flags overridden to module invocation attribute, if module exists.
+            context.addInvocationAttribute(
+                    MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY, flagsOverriddenString);
+        } else {
+            // Add flags overridden to build info by default.
+            context.getBuildInfo(device)
+                    .addBuildAttribute(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY, flagsOverriddenString);
+        }
+    }
+
     private void updateFlag(ITestDevice device, String namespace, String name, String value)
             throws DeviceNotAvailableException, TargetSetupError {
         if (Strings.isNullOrEmpty(value)) { // `device_config put` does not support empty values.
@@ -252,6 +279,7 @@ public class FeatureFlagTargetPreparer extends BaseTargetPreparer {
             runCommand(
                     device,
                     String.format("device_config put '%s' '%s' '%s'", namespace, name, value));
+            mFlagsOverridden.add(new DeviceFeatureFlag(namespace, name, value));
         }
     }
 

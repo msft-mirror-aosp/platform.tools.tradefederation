@@ -207,13 +207,9 @@ public class KUnitModuleTestTest {
         // Run test
         mKUnitModuleTest.run(mTestInfo, mListener);
 
-        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
-                new ArrayList<>() {
-                    {
-                        add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
-                        add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
-                    }
-                };
+        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults = new ArrayList<>();
+        expectedTestResults.add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
+        expectedTestResults.add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
 
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         for (Pair<TestDescription, Boolean> testResult : expectedTestResults) {
@@ -245,13 +241,10 @@ public class KUnitModuleTestTest {
         // Run test
         mKUnitModuleTest.run(mTestInfo, mListener);
 
-        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
-                new ArrayList<>() {
-                    {
-                        add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
-                        add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
-                    }
-                };
+        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults = new ArrayList<>();
+        expectedTestResults.add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
+        expectedTestResults.add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
+
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         for (Pair<TestDescription, Boolean> testResult : expectedTestResults) {
             Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testResult.first));
@@ -285,13 +278,10 @@ public class KUnitModuleTestTest {
         // Run test
         mKUnitModuleTest.run(mTestInfo, mListener);
 
-        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults =
-                new ArrayList<>() {
-                    {
-                        add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
-                        add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
-                    }
-                };
+        ArrayList<Pair<TestDescription, Boolean>> expectedTestResults = new ArrayList<>();
+        expectedTestResults.add(Pair.create(new TestDescription(MODULE_01, "main_test_01"), true));
+        expectedTestResults.add(Pair.create(new TestDescription(MODULE_02, MODULE_02), false));
+
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         for (Pair<TestDescription, Boolean> testResult : expectedTestResults) {
             Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testResult.first));

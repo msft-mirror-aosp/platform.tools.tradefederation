@@ -28,8 +28,8 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.AltDirBehavior;
+import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
-import com.android.tradefed.testtype.suite.ModuleDefinition;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -44,7 +44,9 @@ import java.util.Set;
 /** A utility class that can be used to search for test artifacts. */
 public class SearchArtifactUtil {
     // The singleton is used for mocking the non-static methods during testing..
-    @VisibleForTesting static SearchArtifactUtil singleton = new SearchArtifactUtil();
+    @VisibleForTesting public static SearchArtifactUtil singleton = new SearchArtifactUtil();
+    private static final String MODULE_NAME = "module-name";
+    private static final String MODULE_ABI = "module-abi";
 
     /**
      * Searches for a test artifact/dependency file from the test directory.
@@ -232,6 +234,10 @@ public class SearchArtifactUtil {
         if (filename == null || searchDirectory == null || !searchDirectory.exists()) {
             return null;
         }
+        // Try looking for abi if not provided.
+        if (abi == null) {
+            abi = findModuleAbi();
+        }
         File retFile;
         String moduleName = singleton.findModuleName();
         // Check under module subdirectory first if it is present.
@@ -239,6 +245,7 @@ public class SearchArtifactUtil {
             try {
                 File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
                 if (moduleDir != null) {
+                    CLog.d("Searching the module dir: %s", moduleDir);
                     // search with abi filtering on first
                     retFile = FileUtil.findFile(filename, abi, moduleDir);
                     if (fileExists(retFile)) {
@@ -249,6 +256,8 @@ public class SearchArtifactUtil {
                     if (fileExists(retFile)) {
                         return retFile;
                     }
+                } else {
+                    CLog.w("we have a module name: %s but no directory found.", moduleName);
                 }
             } catch (IOException e) {
                 CLog.w(
@@ -297,12 +306,22 @@ public class SearchArtifactUtil {
     /** returns the module name for the current test invocation if present. */
     @VisibleForTesting
     String findModuleName() {
-        IInvocationContext context = CurrentInvocation.getInvocationContext();
-        if (context != null && context.getAttributes().get(ModuleDefinition.MODULE_NAME) != null) {
-            return context.getAttributes().get(ModuleDefinition.MODULE_NAME).get(0);
-        } else if (context != null
-                && context.getConfigurationDescriptor().getModuleName() != null) {
-            return context.getConfigurationDescriptor().getModuleName();
+        IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
+        if (moduleContext != null && moduleContext.getAttributes().get(MODULE_NAME) != null) {
+            return moduleContext.getAttributes().get(MODULE_NAME).get(0);
+        } else if (moduleContext != null
+                && moduleContext.getConfigurationDescriptor().getModuleName() != null) {
+            return moduleContext.getConfigurationDescriptor().getModuleName();
+        }
+        return null;
+    }
+
+    /** returns the abi for the current module if present. */
+    private static IAbi findModuleAbi() {
+        IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
+        if (moduleContext != null && moduleContext.getAttributes().get(MODULE_ABI) != null) {
+            String abiName = moduleContext.getAttributes().get(MODULE_ABI).get(0);
+            return new Abi(abiName, AbiUtils.getBitness(abiName));
         }
         return null;
     }

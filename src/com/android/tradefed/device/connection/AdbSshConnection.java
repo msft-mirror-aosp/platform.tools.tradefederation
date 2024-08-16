@@ -35,7 +35,6 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceLHPTunnelMonitor;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
-import com.android.tradefed.device.cloud.HostOrchestratorUtil;
 import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.cloud.RemoteFileUtil;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
@@ -55,6 +54,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.avd.HostOrchestratorUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -281,18 +281,33 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (getDevice().getOptions().useCvdCF()) {
+                    createHostOrchestratorUtil(mGceAvd);
                     File cvdLogsDir = mHOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
                                 cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
                         FileUtil.recursiveDelete(cvdLogsDir);
                     } else {
-                        CLog.i("CVD Logs is null, skip logging cvd logs.");
+                        CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
                     }
-                    mHOUtil.collectLogByCommand(
-                            getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    mHOUtil.collectLogByCommand(
-                            getLogger(), "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                    File tempFile =
+                            mHOUtil.collectLogByCommand(
+                                    "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                    getLogger()
+                            .testLog(
+                                    "host_kernel",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
+                    tempFile =
+                            mHOUtil.collectLogByCommand(
+                                    "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                    getLogger()
+                            .testLog(
+                                    "host_orchestrator",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -401,8 +416,13 @@ public class AdbSshConnection extends AdbTcpConnection {
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getDevice().getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
-
-                if (getDevice().getOptions().useOxygen()) {
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (getDevice().getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else if (getDevice().getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
                     util.downloadLaunchFailureLogs(tse, getLogger());
                 }
@@ -429,6 +449,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
+        createHostOrchestratorUtil(mGceAvd);
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
@@ -439,7 +460,6 @@ public class AdbSshConnection extends AdbTcpConnection {
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
             mGceTunnelMonitor = new GceLHPTunnelMonitor();
-            mHOUtil = new HostOrchestratorUtil(device, gceAvdInfo);
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
@@ -490,6 +510,14 @@ public class AdbSshConnection extends AdbTcpConnection {
     @VisibleForTesting
     GceManager getGceHandler() {
         return mGceHandler;
+    }
+
+    /**
+     * Returns the instance of the {@link com.android.tradefed.device.cloud.HostOrchestratorUtil}.
+     */
+    @VisibleForTesting
+    HostOrchestratorUtil getHostOrchestratorUtil() {
+        return mHOUtil;
     }
 
     /** Capture a remote bugreport by ssh-ing into the device directly. */
@@ -927,6 +955,29 @@ public class AdbSshConnection extends AdbTcpConnection {
             } else {
                 CLog.w("Failed to get kernel information by `uname -r` from device");
             }
+        }
+    }
+
+    /** Helper to create host orchestrator utility. */
+    private void createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+        if (mHOUtil != null) {
+            CLog.i("Host Orchestrator Util has been initialized...");
+            return;
+        }
+        if (getDevice().getOptions().useCvdCF()) {
+            CLog.i("Creating host orchestrator utility...");
+            mHOUtil =
+                    new HostOrchestratorUtil(
+                            getDevice().getOptions().useOxygenationDevice(),
+                            getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
+                            getDevice().getOptions().getSshPrivateKeyPath(),
+                            getDevice().getOptions().getInstanceUser(),
+                            gceAvdInfo.instanceName(),
+                            gceAvdInfo.hostAndPort() != null
+                                    ? gceAvdInfo.hostAndPort().getHost()
+                                    : null,
+                            gceAvdInfo.getOxygenationDeviceId(),
+                            getDevice().getOptions().getAvdDriverBinary());
         }
     }
 }

@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.ProcessBuilder.Redirect;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -77,6 +78,7 @@ public class RunUtil implements IRunUtil {
     private static final String PROGRESS_MONITOR_TIMEOUT_ENV = "RUN_PROGRESS_MONITOR_TIMEOUT";
 
     private final CommandInterrupter mInterrupter;
+    private final boolean mInheritEnvVars;
 
     /**
      * Create a new {@link RunUtil} object to use.
@@ -85,9 +87,18 @@ public class RunUtil implements IRunUtil {
         this(CommandInterrupter.INSTANCE);
     }
 
+    public RunUtil(boolean inheritEnvVars) {
+        this(CommandInterrupter.INSTANCE, inheritEnvVars);
+    }
+
     @VisibleForTesting
     RunUtil(@Nonnull CommandInterrupter interrupter) {
+        this(interrupter, true);
+    }
+
+    private RunUtil(@Nonnull CommandInterrupter interrupter, boolean inheritEnvVars) {
         mInterrupter = interrupter;
+        mInheritEnvVars = inheritEnvVars;
     }
 
     /**
@@ -379,9 +390,13 @@ public class RunUtil implements IRunUtil {
         return createProcessBuilder(null, commandList, false);
     }
 
-    private synchronized ProcessBuilder createProcessBuilder(
+    public synchronized ProcessBuilder createProcessBuilder(
             Redirect redirect, List<String> commandList, boolean enableCache) {
         ProcessBuilder processBuilder = new ProcessBuilder();
+        if (!mInheritEnvVars) {
+            processBuilder.environment().clear();
+        }
+
         if (mWorkingDir != null) {
             processBuilder.directory(mWorkingDir);
         }
@@ -1365,13 +1380,14 @@ public class RunUtil implements IRunUtil {
         }
     }
 
-    private static String toRelative(File start, String target) {
+    public static String toRelative(File start, String target) {
         File targetFile = new File(target);
         return targetFile.exists() ? toRelative(start, targetFile) : target;
     }
 
-    private static String toRelative(File start, File target) {
-        return start.toPath().relativize(target.toPath()).toString();
+    public static String toRelative(File start, File target) {
+        String relPath = start.toPath().relativize(target.toPath()).toString();
+        return relPath.length() != 0 ? relPath : ".";
     }
 
     private static String pathSeparator() {
@@ -1384,5 +1400,31 @@ public class RunUtil implements IRunUtil {
             return false;
         }
         return (stdout == null || stdout.isSuccess()) && (stderr == null || stderr.isSuccess());
+    }
+
+    /**
+     * Links the {@code target} to a place under {@code destRoot}.
+     *
+     * <p>If the target file or the symlink is already existed under the {@code destRoot}, the file
+     * won't be linked.
+     *
+     * @param destRoot The root of the destination.
+     * @param relToRoot The relative path from the destination dir to root.
+     * @param target The target file to be linked.
+     * @return the symlink
+     * @throws IOException if the target file fails to be linked.
+     */
+    public static File linkFile(File destRoot, String relToRoot, File target) throws IOException {
+        if (target.getAbsolutePath().startsWith(destRoot.getAbsolutePath())) {
+            return target;
+        }
+        String relPath = Paths.get(relToRoot, target.getName()).toString();
+        File symlink = new File(destRoot, relPath);
+        if (symlink.exists()) {
+            FileUtil.deleteFile(symlink);
+        }
+        symlink.getParentFile().mkdirs();
+        FileUtil.symlinkFile(target, symlink);
+        return symlink;
     }
 }

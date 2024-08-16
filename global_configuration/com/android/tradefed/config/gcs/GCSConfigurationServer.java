@@ -26,7 +26,6 @@ import com.android.tradefed.util.GCSFileDownloader;
 import com.google.common.annotations.VisibleForTesting;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -191,7 +190,7 @@ public class GCSConfigurationServer implements IConfigurationServer {
     InputStream downloadFileToInputStream(String name) throws ConfigurationException {
         try {
             return getFileDownloader().downloadFile(mBucketName, name);
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new ConfigurationException("failed to download from GCS", e);
         }
     }

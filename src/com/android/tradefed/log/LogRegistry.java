@@ -15,8 +15,7 @@
  */
 package com.android.tradefed.log;
 
-import com.android.ddmlib.Log;
-import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.util.FileUtil;
 
@@ -26,6 +25,7 @@ import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Map;
@@ -50,6 +50,18 @@ public class LogRegistry implements ILogRegistry {
     private FileLogger mGlobalLogger;
     private HistoryLogger mHistoryLogger;
 
+    private static ThreadLocal<ThreadGroup> sLocal = new ThreadLocal<>();
+
+    /** Tracks a localized context when using the properties inside the gRPC server */
+    public static void setLocalGroup(ThreadGroup tg) {
+        sLocal.set(tg);
+    }
+
+    /** Resets the localized context. */
+    public static void resetLocalGroup() {
+        sLocal.remove();
+    }
+
     /**
      * Package-private constructor; callers should use {@link #getLogRegistry} to get an instance of
      * the {@link LogRegistry}.
@@ -65,6 +77,8 @@ public class LogRegistry implements ILogRegistry {
         try {
             mHistoryLogger = new HistoryLogger();
             mHistoryLogger.init();
+            mHistoryLogger.logEvent(
+                    LogLevel.DEBUG, EventType.TRADEFED_STARTED, new HashMap<String, String>());
         } catch (IOException e) {
             System.err.println("Failed to create history logger");
             throw new IllegalStateException(e);
@@ -157,6 +171,9 @@ public class LogRegistry implements ILogRegistry {
      * @return the ThreadGroup that the current thread belongs to
      */
     ThreadGroup getCurrentThreadGroup() {
+        if (sLocal.get() != null) {
+            return sLocal.get();
+        }
         return Thread.currentThread().getThreadGroup();
     }
 
@@ -276,7 +293,7 @@ public class LogRegistry implements ILogRegistry {
             FileUtil.writeToFile(logData.createInputStream(), tradefedLog);
             // Align format to our standard logger
             String message =
-                    LogUtil.getLogFormatString(
+                    Log.getLogFormatString(
                             LogLevel.VERBOSE,
                             this.getClass().getSimpleName(),
                             String.format("Saved log to %s", tradefedLog.getAbsolutePath()));

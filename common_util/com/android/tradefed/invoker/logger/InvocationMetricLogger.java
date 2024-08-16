@@ -323,6 +323,7 @@ public class InvocationMetricLogger {
         TEST_ARTIFACT_NOT_CHANGED("test_artifact_not_changed", true),
         PURE_DEVICE_IMAGE_UNCHANGED("pure_device_image_unchanged", true),
         TEST_ARTIFACT_CHANGE_ONLY("test_artifact_change_only", true),
+        PARTIAL_SKIP_MODULE_UNCHANGED_COUNT("partial_skip_module_unchanged_count", true),
         WORKDIR_DIFFS_IN_COMMON("workdir_diffs_in_common", true),
         WOKRDIR_MODULE_WITH_DIFFS("workdir_module_with_diffs", true),
         WORKDIR_UNCHANGED_MODULES("workdir_unchanged_modules", true),
@@ -355,6 +356,7 @@ public class InvocationMetricLogger {
         INCREMENTAL_SNAPUSERD_WRITE_BLOCKING_TIME(
                 "incremental_snapuserd_write_blocking_time", true),
         INCREMENTAL_FALLBACK_REASON("incremental_fallback_reason", true),
+        INCREMENTAL_RECOVERY_FALLBACK("incremental_recovery_fallback", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
@@ -366,6 +368,7 @@ public class InvocationMetricLogger {
         DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
         DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
         SEARCH_ARTIFACT_FAILURE_COUNT("search_artifact_failure_count", true),
+        RESOLVE_SYMLINK_COUNT("resolve_symlink_count", true),
 
         // Following are trace events also reporting as metrics
         invocation_warm_up("invocation_warm_up", true),
