@@ -142,12 +142,16 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
      * @return the {@link IManagedTestDevice} or <code>null</code> if not found
      */
     public IManagedTestDevice find(final String serialNumber) {
-        return find(new IMatcher<IManagedTestDevice>() {
-            @Override
-            public boolean matches(IManagedTestDevice element) {
-                return serialNumber.equals(element.getSerialNumber());
-            }
-        });
+        return find(
+                new IMatcher<IManagedTestDevice>() {
+                    @Override
+                    public boolean matches(IManagedTestDevice element) {
+                        // For TCP devices if we find their tracking serial or serial, allow the
+                        // match
+                        return serialNumber.equals(element.getTrackingSerial())
+                                || serialNumber.equals(element.getSerialNumber());
+                    }
+                });
     }
 
     private IManagedTestDevice find(IMatcher<IManagedTestDevice> m) {
@@ -289,12 +293,23 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
         if (!isValidDeviceSerial(serial)) {
             return null;
         }
+        boolean setTracking = false;
+        // We spy for Tcp devices that aren't virtual (physical devices connected via tcp) and track
+        // them via their true serial.
+        // This should not be applied to Cuttlefish devices (virtual)
         if (isTcpDeviceSerial(serial)) {
             // Override serial for tcp devices into their real one
             try {
                 String realSerial = idevice.getProperty("ro.serialno");
                 if (!Strings.isNullOrEmpty(realSerial)) {
+                    // If the device happen to already exists, re-check it to ensure we update
+                    // tracking.
+                    IManagedTestDevice d = find(serial);
+                    if (d != null) {
+                        d.setTrackingSerial(realSerial);
+                    }
                     serial = realSerial.trim();
+                    setTracking = true;
                 }
             } catch (RuntimeException e) {
                 CLog.e(e);
@@ -306,6 +321,9 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
             if (d == null || DeviceAllocationState.Unavailable.equals(d.getAllocationState())) {
                 mList.remove(d);
                 d = mDeviceFactory.createDevice(idevice);
+                if (setTracking) {
+                    d.setTrackingSerial(serial);
+                }
                 mList.add(d);
             }
             return d;
@@ -330,7 +348,6 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
         try {
             IManagedTestDevice d = find(fastboot.getSerialNumber());
             if (d == null) {
-                mList.remove(d);
                 d = mDeviceFactory.createDevice(fastboot);
                 mList.add(d);
             }

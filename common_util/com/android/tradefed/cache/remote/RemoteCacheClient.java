@@ -16,6 +16,17 @@
 
 package com.android.tradefed.cache.remote;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
+import com.android.tradefed.cache.DigestCalculator;
+import com.android.tradefed.cache.ExecutableAction;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
+import com.android.tradefed.cache.MerkleTree;
+import com.android.tradefed.cache.UploadManifest;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.util.FileUtil;
+
 import build.bazel.remote.execution.v2.ActionCacheGrpc;
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheFutureStub;
 import build.bazel.remote.execution.v2.ActionResult;
@@ -26,38 +37,34 @@ import build.bazel.remote.execution.v2.FindMissingBlobsRequest;
 import build.bazel.remote.execution.v2.FindMissingBlobsResponse;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
 import build.bazel.remote.execution.v2.UpdateActionResultRequest;
-import com.android.tradefed.cache.DigestCalculator;
-import com.android.tradefed.cache.ExecutableAction;
-import com.android.tradefed.cache.ExecutableActionResult;
-import com.android.tradefed.cache.ICacheClient;
-import com.android.tradefed.cache.MerkleTree;
-import com.android.tradefed.cache.UploadManifest;
-import com.android.tradefed.invoker.tracing.CloseableTraceScope;
-import com.android.tradefed.util.FileUtil;
+
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+
 import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Status.Code;
 import io.grpc.StatusRuntimeException;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /** A RemoteActionCache implementation that uses gRPC calls to a remote API server. */
 public class RemoteCacheClient implements ICacheClient {
-    private static final Duration REMOTE_TIMEOUT = Duration.ofSeconds(60);
+    public static final Duration REMOTE_TIMEOUT = Duration.ofSeconds(60);
     private final File mWorkFolder;
     private final String mInstanceName;
     private final ManagedChannel mChannel;
@@ -73,6 +80,10 @@ public class RemoteCacheClient implements ICacheClient {
             CallCredentials callCredentials,
             ByteStreamDownloader downloader,
             ByteStreamUploader uploader) {
+        checkArgument(
+                workFolder.exists() && workFolder.isDirectory(),
+                "a work folder must be specified.");
+        checkArgument(!Strings.isNullOrEmpty(instanceName), "instanceName must be specified.");
         mWorkFolder = workFolder;
         mInstanceName = instanceName;
         mChannel = channel;

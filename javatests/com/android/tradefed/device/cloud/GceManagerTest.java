@@ -21,7 +21,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfo;
@@ -37,7 +36,6 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.MultiMap;
 
 import com.google.common.net.HostAndPort;
 
@@ -50,13 +48,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.ProcessBuilder.Redirect;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /** Unit tests for {@link GceManager} */
@@ -69,7 +67,6 @@ public class GceManagerTest {
     private IBuildInfo mMockBuildInfo;
     @Mock IRunUtil mMockRunUtil;
     private File mAvdBinary;
-    @Mock OxygenClient mMockOxygenClient;
 
     @Before
     public void setUp() throws Exception {
@@ -162,383 +159,6 @@ public class GceManagerTest {
         assertNull(result);
     }
 
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
-    @Test
-    public void testBuildGceCommand() throws IOException {
-        IBuildInfo mockBuildInfo = mock(IBuildInfo.class);
-        when(mockBuildInfo.getBuildAttributes()).thenReturn(Collections.<String, String>emptyMap());
-        when(mockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
-        when(mockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        MultiMap<String, String> stubAttributes = new MultiMap<>();
-        stubAttributes.put("foo", "bar");
-        File reportFile = null;
-        try {
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(
-                            reportFile, mockBuildInfo, null, null, null, stubAttributes);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "FLAVOR",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--gce-metadata",
-                            "foo:bar",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-        }
-    }
-
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)} with json key file set. */
-    @Test
-    public void testBuildGceCommand_withServiceAccountJsonKeyFile() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
-        try {
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "FLAVOR",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--service-account-json-private-key-path",
-                            "/path/to/key.json",
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-        }
-    }
-
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)} with IP based device. */
-    @Test
-    public void testBuildGceCommandWithIpDevice() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
-        setter.setOptionValue("gce-private-key-path", "/path/to/id_rsa");
-        setter.setOptionValue("instance-user", "foo");
-        try {
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, "bar", null, null, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "FLAVOR",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--service-account-json-private-key-path",
-                            "/path/to/key.json",
-                            "--host",
-                            "bar",
-                            "--host-user",
-                            "foo",
-                            "--host-ssh-private-key-path",
-                            "/path/to/id_rsa",
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-        }
-    }
-
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
-    @Test
-    public void testBuildGceCommandWithEmulatorBuild() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("TARGET");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-
-        try {
-            OptionSetter setter = new OptionSetter(mOptions);
-            setter.setOptionValue("gce-driver-param", "--emulator-build-id");
-            setter.setOptionValue("gce-driver-param", "EMULATOR_BUILD_ID");
-            mGceManager =
-                    new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo) {
-                        @Override
-                        IRunUtil getRunUtil() {
-                            return mMockRunUtil;
-                        }
-                    };
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "TARGET",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--emulator-build-id",
-                            "EMULATOR_BUILD_ID",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-        }
-    }
-
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
-    @Test
-    public void testBuildGceCommandWithSpecifiedImages() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("TARGET");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-
-        try {
-            OptionSetter setter = new OptionSetter(mOptions);
-            setter.setOptionValue(
-                    "gce-driver-file-param",
-                    "cvd-host-package",
-                    "/path/to/cvd-host-package.tar.gz");
-            setter.setOptionValue(
-                    "gce-driver-file-param",
-                    "local-image",
-                    "/path/to/cvd-cuttlefish-android-os.tar.gz");
-            mGceManager =
-                    new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo) {
-                        @Override
-                        IRunUtil getRunUtil() {
-                            return mMockRunUtil;
-                        }
-                    };
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--cvd-host-package",
-                            "/path/to/cvd-host-package.tar.gz",
-                            "--local-image",
-                            "/path/to/cvd-cuttlefish-android-os.tar.gz",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-        }
-    }
-
-    /**
-     * Test {@link GceManager#buildGceCmd(File, IBuildInfo, String, String, Integer,
-     * MultiMap<String, String>)} with preconfigured virtual device.
-     */
-    @Test
-    public void testBuildGceCommand_withPreconfiguredVirtualDevice() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue("gce-driver-service-account-json-key-path", "/path/to/key.json");
-        setter.setOptionValue("gce-private-key-path", "/path/to/id_rsa");
-
-        try {
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, "bar", "vsoc-1", 2, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "FLAVOR",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--service-account-json-private-key-path",
-                            "/path/to/key.json",
-                            "--host",
-                            "bar",
-                            "--host-user",
-                            "vsoc-1",
-                            "--host-ssh-private-key-path",
-                            "/path/to/id_rsa",
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "--base-instance-num",
-                            "3",
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-        }
-    }
-
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
-    @Test
-    public void testBuildGceCommandWithGceDriverParam() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue("gce-driver-param", "--report-internal-ip");
-        setter.setOptionValue("gce-driver-param", "--no-autoconnect");
-        try {
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "FLAVOR",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--report-internal-ip",
-                            "--no-autoconnect",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-        }
-    }
-
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
-    @Test
-    public void testBuildGceCommandWithExtraFiles() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("TARGET");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-        MultiMap<File, String> extraFiles = new MultiMap<>();
-        File file1 = FileUtil.createTempFile("test_file1", ".txt");
-        File file2 = FileUtil.createTempFile("test_file2", ".txt");
-        extraFiles.put(file1, "/home/vsoc-01/test_file1.txt");
-        extraFiles.put(file2, "/home/vsoc-01/test_file2.txt");
-        try {
-            mOptions.setExtraFiles(extraFiles);
-            mGceManager =
-                    new GceManager(mMockDeviceDesc, mOptions, mMockBuildInfo) {
-                        @Override
-                        IRunUtil getRunUtil() {
-                            return mMockRunUtil;
-                        }
-                    };
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "TARGET",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--extra-files",
-                            file1.getAbsolutePath() + ",/home/vsoc-01/test_file1.txt",
-                            file2.getAbsolutePath() + ",/home/vsoc-01/test_file2.txt",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
-            FileUtil.deleteFile(file1);
-            FileUtil.deleteFile(file2);
-            mOptions.setExtraFiles(new MultiMap<>());
-        }
-    }
-
     /** Ensure exception is thrown after a timeout from the acloud command. */
     @Test
     public void testStartGce_timeout() throws Exception {
@@ -553,27 +173,35 @@ public class GceManagerTest {
                     IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
-
-                    @Override
-                    protected List<String> buildGceCmd(
-                            File reportFile,
-                            IBuildInfo b,
-                            String ipDevice,
-                            String user,
-                            Integer offset,
-                            MultiMap<String, String> attributes) {
-                        List<String> tmp = new ArrayList<String>();
-                        tmp.add("");
-                        return tmp;
-                    }
                 };
         final String expectedException =
                 "acloud errors: timeout after 1620000ms, acloud did not return null";
         CommandResult cmd = new CommandResult();
         cmd.setStatus(CommandStatus.TIMED_OUT);
         cmd.setStdout("output err");
+
+        // 1>/tmp/acloud7406709073430982755.par  ~ 2>create  ~ 3>-v  ~ 4>--config_file  ~
+        // 5>/tmp/acloud7406709073430982755.par  ~ 6>--build-target  ~ 7>null
+        // ~ 8>--branch  ~ 9>null  ~ 10>--build-id  ~ 11>-1  ~ 12>--boot-timeout
+        // ~ 13>900  ~ 14>--report_file  ~ 15>/tmp/gce_avd_driver5779200185926758904.json
+        // ~ 16>--boot-timeout  ~ 17>1620
+
         when(mMockRunUtil.runTimedCmd(
                         Mockito.eq(1800000L),
+                        Mockito.any(),
+                        Mockito.eq("create"),
+                        Mockito.eq("-v"),
+                        Mockito.eq("--config_file"),
+                        Mockito.any(),
+                        Mockito.eq("--build-target"),
+                        Mockito.any(),
+                        Mockito.eq("--branch"),
+                        Mockito.any(),
+                        Mockito.eq("--build-id"),
+                        Mockito.any(),
+                        Mockito.eq("--boot-timeout"),
+                        Mockito.eq("900"),
+                        Mockito.eq("--report_file"),
                         Mockito.any(),
                         Mockito.eq("--boot-timeout"),
                         Mockito.eq("1620")))
@@ -585,47 +213,6 @@ public class GceManagerTest {
             fail("A TargetSetupError should have been thrown");
         } catch (TargetSetupError expected) {
             assertEquals(expectedException, expected.getMessage());
-        }
-    }
-
-    /** Test {@link GceManager#buildGceCmd(File, IBuildInfo, String)}. */
-    @Test
-    public void testBuildGceCommandWithKernelBuild() throws Exception {
-        IBuildInfo mMockBuildInfo = mock(IBuildInfo.class);
-        when(mMockBuildInfo.getBuildAttributes())
-                .thenReturn(Collections.<String, String>emptyMap());
-        when(mMockBuildInfo.getBuildFlavor()).thenReturn("FLAVOR");
-        when(mMockBuildInfo.getBuildBranch()).thenReturn("BRANCH");
-        when(mMockBuildInfo.getBuildId()).thenReturn("BUILDID");
-
-        File reportFile = null;
-        try {
-            OptionSetter setter = new OptionSetter(mOptions);
-            setter.setOptionValue("gce-driver-param", "--kernel-build-id");
-            setter.setOptionValue("gce-driver-param", "KERNELBUILDID");
-            reportFile = FileUtil.createTempFile("test-gce-cmd", "report");
-            List<String> result =
-                    mGceManager.buildGceCmd(reportFile, mMockBuildInfo, null, null, null, null);
-            List<String> expected =
-                    ArrayUtil.list(
-                            mOptions.getAvdDriverBinary().getAbsolutePath(),
-                            "create",
-                            "--build-target",
-                            "FLAVOR",
-                            "--branch",
-                            "BRANCH",
-                            "--build-id",
-                            "BUILDID",
-                            "--kernel-build-id",
-                            "KERNELBUILDID",
-                            "--config_file",
-                            mGceManager.getAvdConfigFile().getAbsolutePath(),
-                            "--report_file",
-                            reportFile.getAbsolutePath(),
-                            "-v");
-            assertEquals(expected, result);
-        } finally {
-            FileUtil.deleteFile(reportFile);
         }
     }
 
@@ -644,14 +231,7 @@ public class GceManagerTest {
                         return mMockRunUtil;
                     }
 
-                    @Override
-                    protected List<String> buildGceCmd(
-                            File reportFile,
-                            IBuildInfo b,
-                            String ipDevice,
-                            String user,
-                            Integer offset,
-                            MultiMap<String, String> attributes) {
+                    public void mockReportFile(File reportFile) {
                         String valid =
                                 " {\n"
                                         + "\"data\": {\n"
@@ -671,15 +251,43 @@ public class GceManagerTest {
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
-                        List<String> tmp = new ArrayList<String>();
-                        tmp.add("");
-                        return tmp;
                     }
                 };
-        CommandResult cmd = new CommandResult();
-        cmd.setStatus(CommandStatus.SUCCESS);
-        cmd.setStdout("output");
-        when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[]) Mockito.any())).thenReturn(cmd);
+
+        when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[]) Mockito.any()))
+                .thenAnswer(
+                        new Answer() {
+                            @Override
+                            public Object answer(InvocationOnMock invocation) {
+                                Object[] args = invocation.getArguments();
+                                File reportFile = new File((String) args[13]);
+
+                                String valid =
+                                        " {\n"
+                                            + "\"data\": {\n"
+                                            + "\"devices\": [\n"
+                                            + "{\n"
+                                            + "\"ip\": \"104.154.62.236\",\n"
+                                            + "\"instance_name\": \"gce-x86-phone-userdebug-22\"\n"
+                                            + "}\n"
+                                            + "]\n"
+                                            + "},\n"
+                                            + "\"errors\": [],\n"
+                                            + "\"command\": \"create\",\n"
+                                            + "\"status\": \"SUCCESS\"\n"
+                                            + "}";
+                                try {
+                                    FileUtil.writeToFile(valid, reportFile);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+
+                                CommandResult cmd = new CommandResult();
+                                cmd.setStatus(CommandStatus.SUCCESS);
+                                cmd.setStdout("output");
+                                return cmd;
+                            }
+                        });
 
         GceAvdInfo res = mGceManager.startGce();
 
@@ -700,21 +308,6 @@ public class GceManagerTest {
                     @Override
                     IRunUtil getRunUtil() {
                         return mMockRunUtil;
-                    }
-
-                    @Override
-                    protected List<String> buildGceCmd(
-                            File reportFile,
-                            IBuildInfo b,
-                            String ipDevice,
-                            String user,
-                            Integer offset,
-                            MultiMap<String, String> attributes) {
-                        // We delete the potential report file to create an issue.
-                        FileUtil.deleteFile(reportFile);
-                        List<String> tmp = new ArrayList<String>();
-                        tmp.add("");
-                        return tmp;
                     }
                 };
         CommandResult cmd = new CommandResult();
@@ -743,43 +336,42 @@ public class GceManagerTest {
                     IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
-
-                    @Override
-                    protected List<String> buildGceCmd(
-                            File reportFile,
-                            IBuildInfo b,
-                            String ipDevice,
-                            String user,
-                            Integer offset,
-                            MultiMap<String, String> attributes) {
-                        String validFail =
-                                " {\n"
-                                        + "\"data\": {\n"
-                                        + "\"devices_failing_boot\": [\n"
-                                        + "{\n"
-                                        + "\"ip\": \"104.154.62.236\",\n"
-                                        + "\"instance_name\": \"ins-x86-phone-userdebug-229\"\n"
-                                        + "}\n"
-                                        + "]\n"
-                                        + "},\n"
-                                        + "\"errors\": [\"device did not boot\"],\n"
-                                        + "\"command\": \"create\",\n"
-                                        + "\"status\": \"BOOT_FAIL\"\n"
-                                        + "}";
-                        try {
-                            FileUtil.writeToFile(validFail, reportFile);
-                        } catch (IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                        List<String> tmp = new ArrayList<String>();
-                        tmp.add("");
-                        return tmp;
-                    }
                 };
-        CommandResult cmd = new CommandResult();
-        cmd.setStatus(CommandStatus.FAILED);
-        cmd.setStdout("output");
-        when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[]) Mockito.any())).thenReturn(cmd);
+
+        when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[]) Mockito.any()))
+                .thenAnswer(
+                        new Answer() {
+                            @Override
+                            public Object answer(InvocationOnMock invocation) {
+                                Object[] args = invocation.getArguments();
+
+                                File reportFile = new File((String) args[13]);
+                                String validFail =
+                                        " {\n"
+                                            + "\"data\": {\n"
+                                            + "\"devices_failing_boot\": [\n"
+                                            + "{\n"
+                                            + "\"ip\": \"104.154.62.236\",\n"
+                                            + "\"instance_name\": \"ins-x86-phone-userdebug-229\"\n"
+                                            + "}\n"
+                                            + "]\n"
+                                            + "},\n"
+                                            + "\"errors\": [\"device did not boot\"],\n"
+                                            + "\"command\": \"create\",\n"
+                                            + "\"status\": \"BOOT_FAIL\"\n"
+                                            + "}";
+                                try {
+                                    FileUtil.writeToFile(validFail, reportFile);
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
+                                }
+
+                                CommandResult cmd = new CommandResult();
+                                cmd.setStatus(CommandStatus.FAILED);
+                                cmd.setStdout("output");
+                                return cmd;
+                            }
+                        });
 
         GceAvdInfo res = mGceManager.startGce();
 
@@ -1100,39 +692,40 @@ public class GceManagerTest {
                     IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
-
-                    @Override
-                    protected List<String> buildGceCmd(
-                            File reportFile,
-                            IBuildInfo b,
-                            String ipDevice,
-                            String user,
-                            Integer offset,
-                            MultiMap<String, String> attributes) {
-                        // We delete the potential report file to create an issue.
-                        FileUtil.deleteFile(reportFile);
-                        List<String> tmp = new ArrayList<String>();
-                        tmp.add("");
-                        return tmp;
-                    }
                 };
-        CommandResult cmd = new CommandResult();
-        cmd.setStatus(CommandStatus.TIMED_OUT);
-        cmd.setStderr(
-                "2016-09-20 08:11:02,287 |INFO| gcompute_client:728| Creating instance: "
-                        + "project android-treehugger, zone us-central1-f, body:{'name': "
-                        + "'ins-fake-instance-linux', "
-                        + "'disks': [{'autoDelete': True, 'boot': True, 'mode': 'READ_WRITE', "
-                        + "'initializeParams': {'diskName': 'gce-x86-phone-userdebug-fastbuild-"
-                        + "linux-3286354-eb1fd2e3', 'sourceImage': u'https://www.googleapis.com"
-                        + "compute/v1/projects/android-treehugger/global/images/image-gce-x86-ph"
-                        + "one-userdebug-fastbuild-linux-3286354-b6b99338'}, 'type': 'PERSISTENT'"
-                        + "}, {'autoDelete': True, 'deviceName': 'gce-x86-phone-userdebug-fastbuil"
-                        + "d-linux-3286354-eb1fd2e3-data', 'interface': 'SCSI', 'mode': 'READ_WRI"
-                        + "TE', 'type': 'PERSISTENT', 'boot': False, 'source': u'projects/andro"
-                        + "id-treehugger/zones/us-c}]}");
-        cmd.setStdout("output");
-        when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[]) Mockito.any())).thenReturn(cmd);
+
+        // when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[])
+        // Mockito.any())).thenReturn(cmd);
+
+        when(mMockRunUtil.runTimedCmd(Mockito.anyLong(), (String[]) Mockito.any()))
+                .thenAnswer(
+                        new Answer() {
+                            @Override
+                            public Object answer(InvocationOnMock invocation) {
+
+                                CommandResult cmd = new CommandResult();
+                                cmd.setStatus(CommandStatus.TIMED_OUT);
+                                cmd.setStderr(
+                                        "2016-09-20 08:11:02,287 |INFO| gcompute_client:728|"
+                                            + " Creating instance: project android-treehugger, zone"
+                                            + " us-central1-f, body:{'name':"
+                                            + " 'ins-fake-instance-linux', 'disks': [{'autoDelete':"
+                                            + " True, 'boot': True, 'mode': 'READ_WRITE',"
+                                            + " 'initializeParams': {'diskName':"
+                                            + " 'gce-x86-phone-userdebug-fastbuild-linux-3286354-eb1fd2e3',"
+                                            + " 'sourceImage': u'https://www.googleapis.com"
+                                            + "compute/v1/projects/android-treehugger/global/images/image-gce-x86-phone-userdebug-fastbuild-linux-3286354-b6b99338'},"
+                                            + " 'type': 'PERSISTENT'}, {'autoDelete': True,"
+                                            + " 'deviceName':"
+                                            + " 'gce-x86-phone-userdebug-fastbuild-linux-3286354-eb1fd2e3-data',"
+                                            + " 'interface': 'SCSI', 'mode': 'READ_WRITE', 'type':"
+                                            + " 'PERSISTENT', 'boot': False, 'source':"
+                                            + " u'projects/android-treehugger/zones/us-c}]}");
+                                cmd.setStdout("output");
+                                return cmd;
+                            }
+                        });
+
         // Ensure that the instance can be shutdown.
         CommandResult shutdownResult = new CommandResult();
         shutdownResult.setStatus(CommandStatus.SUCCESS);

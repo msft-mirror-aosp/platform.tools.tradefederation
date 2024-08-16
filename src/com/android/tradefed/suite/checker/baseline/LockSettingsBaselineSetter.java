@@ -18,6 +18,8 @@ package com.android.tradefed.suite.checker.baseline;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.CommandStatus;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -32,6 +34,7 @@ public class LockSettingsBaselineSetter extends DeviceBaselineSetter {
     private static final String GET_LOCK_SCREEN_COMMAND = "locksettings get-disabled";
     private static final String LOCK_SCREEN_OFF_COMMAND = "locksettings set-disabled true";
     private static final String CLEAR_PWD_COMMAND = "locksettings clear --old %s";
+    private static final String KEYCODE_MENU_COMMAND = "input keyevent KEYCODE_MENU";
 
     public LockSettingsBaselineSetter(JSONObject object, String name) throws JSONException {
         super(object, name);
@@ -45,15 +48,25 @@ public class LockSettingsBaselineSetter extends DeviceBaselineSetter {
 
     @Override
     public boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
-        if ("true".equals(mDevice.executeShellCommand(GET_LOCK_SCREEN_COMMAND).trim())) {
-            return true;
+        if (!isLockScreenDisabled(mDevice)) {
+            // Clear old passwords.
+            for (String command : mClearPwdCommands) {
+                mDevice.executeShellV2Command(command);
+            }
+            // Turn off lock-screen option.
+            mDevice.executeShellV2Command(LOCK_SCREEN_OFF_COMMAND);
         }
-        // Clear old passwords.
-        for (String command : mClearPwdCommands) {
-            mDevice.executeShellCommand(command);
+        if (!isLockScreenDisabled(mDevice)) {
+            return false;
         }
-        // Turn off lock-screen option.
-        mDevice.executeShellCommand(LOCK_SCREEN_OFF_COMMAND);
-        return "true".equals(mDevice.executeShellCommand(GET_LOCK_SCREEN_COMMAND).trim());
+        CommandResult result = mDevice.executeShellV2Command(KEYCODE_MENU_COMMAND);
+        return CommandStatus.SUCCESS.equals(result.getStatus());
+    }
+
+    private boolean isLockScreenDisabled(ITestDevice mDevice) throws DeviceNotAvailableException {
+        CommandResult result = mDevice.executeShellV2Command(GET_LOCK_SCREEN_COMMAND);
+        return CommandStatus.SUCCESS.equals(result.getStatus())
+                && result.getStdout() != null
+                && "true".equals(result.getStdout().trim());
     }
 }
