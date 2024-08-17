@@ -17,9 +17,11 @@ package com.android.tradefed.result.skipped;
 
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.IRemoteFeature;
 import com.android.tradefed.service.TradefedFeatureClient;
+import com.android.tradefed.testtype.ITestInformationReceiver;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
@@ -37,19 +39,32 @@ import java.util.List;
 import java.util.Set;
 
 /** A feature allowing to access some of the {@link SkipManager} information. */
-public class SkipFeature implements IRemoteFeature, IConfigurationReceiver {
+public class SkipFeature
+        implements IRemoteFeature, IConfigurationReceiver, ITestInformationReceiver {
 
     public static final String SKIP_FEATURE = "skipFeature";
     public static final String SKIPPED_MODULES = "skipModules";
+    public static final String PRESUBMIT = "presubmit";
     public static final String DELIMITER_NAME = "delimiter";
     private static final String DELIMITER = "+,";
     private static final String ESCAPED_DELIMITER = "\\+,";
 
     private IConfiguration mConfig;
+    private TestInformation mInfo;
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
         mConfig = configuration;
+    }
+
+    @Override
+    public void setTestInformation(TestInformation testInformation) {
+        mInfo = testInformation;
+    }
+
+    @Override
+    public TestInformation getTestInformation() {
+        return mInfo;
     }
 
     @Override
@@ -61,12 +76,18 @@ public class SkipFeature implements IRemoteFeature, IConfigurationReceiver {
     public FeatureResponse execute(FeatureRequest request) {
         FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
         if (mConfig != null) {
-            if (mConfig.getSkipManager().reportSkippedModule()) {
+            // Currently only support presubmit
+            boolean presubmit = "WORK_NODE".equals(mInfo.getContext().getAttribute("trigger"));
+            if (presubmit && mConfig.getSkipManager().reportSkippedModule()) {
                 MultiPartResponse.Builder multiPartBuilder = MultiPartResponse.newBuilder();
                 multiPartBuilder.addResponsePart(
                         PartResponse.newBuilder()
                                 .setKey(DELIMITER_NAME)
                                 .setValue(ESCAPED_DELIMITER));
+                multiPartBuilder.addResponsePart(
+                        PartResponse.newBuilder()
+                                .setKey(PRESUBMIT)
+                                .setValue(Boolean.toString(presubmit)));
                 multiPartBuilder.addResponsePart(
                         PartResponse.newBuilder()
                                 .setKey(SKIPPED_MODULES)
@@ -106,7 +127,8 @@ public class SkipFeature implements IRemoteFeature, IConfigurationReceiver {
                         unchangedModules.getMultiPartResponse().getResponsePartList()) {
                     if (rep.getKey().equals(SKIPPED_MODULES)) {
                         unchangedModulesSet.addAll(splitStringFilters(delimiter, rep.getValue()));
-                    } else if (rep.getKey().equals(DELIMITER_NAME)) {
+                    } else if (rep.getKey().equals(DELIMITER_NAME)
+                            || rep.getKey().equals(PRESUBMIT)) {
                         // Ignore
                     } else {
                         CLog.w("Unexpected response key '%s' for unchanged modules", rep.getKey());
