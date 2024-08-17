@@ -17,6 +17,9 @@ package com.android.tradefed.testtype;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.cache.ExecutableAction;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
@@ -40,16 +43,24 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.result.proto.FileProtoResultReporter;
+import com.android.tradefed.result.proto.ProtoResultParser;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
+import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ResourceUtil;
+import com.android.tradefed.util.RunInterruptedException;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.SystemUtil;
+import com.android.tradefed.util.proto.TestRecordProtoUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -68,7 +79,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -182,6 +195,11 @@ public class IsolatedHostTest
     private boolean mRavenwoodResources = false;
 
     @Option(
+            name = "enable-cache",
+            description = "Used to enable/disable caching for specific modules.")
+    private boolean mEnableCache = false;
+
+    @Option(
             name = "inherit-env-vars",
             description =
                     "Whether the subprocess should inherit environment variables from the main"
@@ -209,6 +227,8 @@ public class IsolatedHostTest
 
     private File mCoverageExecFile;
 
+    private boolean mCached = false;
+
     public void setDebug(boolean debug) {
         this.debug = debug;
     }
@@ -220,15 +240,44 @@ public class IsolatedHostTest
         mReportedFailure = false;
         Process isolationRunner = null;
         File artifactsDir = null;
+        mCached = false;
 
         try {
+            File workFolder = CurrentInvocation.getWorkFolder();
+            String instanceName =
+                    mEnableCache ? mConfig.getCommandOptions().getRemoteCacheInstanceName() : null;
+            ICacheClient cacheClient =
+                    Strings.isNullOrEmpty(instanceName)
+                            ? null
+                            : getCacheClient(workFolder, instanceName);
+
+            // Note the below chooses a working directory based on the jar that happens to
+            // be first in the list of configured jars.  The baked-in assumption is that
+            // all configured jars are in the same parent directory, otherwise the behavior
+            // here is non-deterministic.
+            mWorkDir = findJarDirectory();
+
             mServer = new ServerSocket(0);
             if (!this.debug) {
                 mServer.setSoTimeout(mSocketTimeout);
             }
             artifactsDir = FileUtil.createTempDir("robolectric-screenshot-artifacts");
-            String classpath = this.compileClassPath();
-            List<String> cmdArgs = this.compileCommandArgs(classpath, artifactsDir);
+            Set<File> classpathFiles = this.getClasspathFiles();
+            if (cacheClient != null) {
+                Map<String, File> nameToSymlink = new HashMap<>();
+                for (File f : classpathFiles) {
+                    if (nameToSymlink.containsKey(f.getName())) {
+                        throw new RuntimeException(
+                                "Jar files with same name have not been supported when caching is"
+                                        + " enabled. Please file a feature request!");
+                    }
+                    nameToSymlink.put(f.getName(), linkFileToWorkingDir("classpath", f));
+                }
+                classpathFiles = new HashSet<>(nameToSymlink.values());
+            }
+            String classpath = this.compileClassPath(classpathFiles);
+            List<String> cmdArgs =
+                    this.compileCommand(classpath, artifactsDir, cacheClient != null);
             CLog.v(String.join(" ", cmdArgs));
             RunUtil runner = new RunUtil(mInheritEnvVars);
 
@@ -237,18 +286,98 @@ public class IsolatedHostTest
                 runner.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
 
-            // Note the below chooses a working directory based on the jar that happens to
-            // be first in the list of configured jars.  The baked-in assumption is that
-            // all configured jars are in the same parent directory, otherwise the behavior
-            // here is non-deterministic.
-            mWorkDir = findJarDirectory();
             runner.setWorkingDir(mWorkDir);
             CLog.v("Using PWD: %s", mWorkDir.getAbsolutePath());
 
             mSubprocessLog = FileUtil.createTempFile("subprocess-logs", "");
             runner.setRedirectStderrToStdout(true);
 
-            isolationRunner = runner.runCmdInBackground(Redirect.to(mSubprocessLog), cmdArgs);
+            List<String> testJarAbsPaths = getJarPaths(mJars, cacheClient != null);
+            TestParameters.Builder paramsBuilder =
+                    TestParameters.newBuilder()
+                            .addAllTestClasses(new TreeSet(mClasses))
+                            .addAllTestJarAbsPaths(testJarAbsPaths)
+                            .addAllExcludePaths(new TreeSet(mExcludePaths))
+                            .setDryRun(mCollectTestsOnly);
+
+            if (!mIncludeFilters.isEmpty()
+                    || !mExcludeFilters.isEmpty()
+                    || !mIncludeAnnotations.isEmpty()
+                    || !mExcludeAnnotations.isEmpty()) {
+                paramsBuilder.setFilter(
+                        FilterSpec.newBuilder()
+                                .addAllIncludeFilters(new TreeSet(mIncludeFilters))
+                                .addAllExcludeFilters(new TreeSet(mExcludeFilters))
+                                .addAllIncludeAnnotations(new TreeSet(mIncludeAnnotations))
+                                .addAllExcludeAnnotations(new TreeSet(mExcludeAnnotations)));
+            }
+
+            RunnerMessage runnerMessage =
+                    RunnerMessage.newBuilder()
+                            .setCommand(RunnerOp.RUNNER_OP_RUN_TEST)
+                            .setParams(paramsBuilder.build())
+                            .build();
+
+            ProcessBuilder processBuilder =
+                    runner.createProcessBuilder(Redirect.to(mSubprocessLog), cmdArgs, false);
+
+            ExecutableAction action = null;
+            ExecutableActionResult actionResult = null;
+            if (cacheClient != null) {
+                try {
+                    action =
+                            ExecutableAction.create(
+                                    processBuilder.directory(),
+                                    Arrays.asList(runnerMessage.toString()),
+                                    processBuilder.environment(),
+                                    mSocketTimeout);
+                    actionResult = cacheClient.lookupCache(action);
+                    if (actionResult != null) {
+                        CLog.d(
+                                "Cache is hit with action:\n"
+                                        + "%s\n"
+                                        + "runner configuration:\n"
+                                        + "%s\n"
+                                        + "environment:\n"
+                                        + "%s",
+                                action.action(),
+                                runnerMessage.toString(),
+                                processBuilder.environment());
+                        ProtoResultParser parser =
+                                new ProtoResultParser(
+                                        listener, testInfo.getContext(), false, "cached-");
+                        parser.setMergeInvocationContext(false);
+                        TestRecord record = TestRecordProtoUtil.readFromFile(actionResult.stdOut());
+                        parser.processFinalizedProto(record);
+                        // TODO(b/357695016): Use output dir for subprocess log instead of the field
+                        // for stderr.
+                        try (FileInputStreamSource source =
+                                new FileInputStreamSource(actionResult.stdErr())) {
+                            listener.testLog(ISOLATED_JAVA_LOG, LogDataType.TEXT, source);
+                        }
+                        mCached = true;
+                        return;
+                    }
+                    CLog.d(
+                            "Caching action:\n%s\nwith runner configuration:\n%s\nenvironment:\n%s",
+                            action.action(),
+                            runnerMessage.toString(),
+                            processBuilder.environment());
+                } catch (IOException e) {
+                    CLog.e("Failed to lookup cache!");
+                    CLog.e(e);
+                } catch (InterruptedException e) {
+                    throw new RunInterruptedException(
+                            e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+                } finally {
+                    if (actionResult != null) {
+                        FileUtil.deleteFile(actionResult.stdOut());
+                        FileUtil.deleteFile(actionResult.stdErr());
+                    }
+                }
+            }
+
+            isolationRunner = processBuilder.start();
             CLog.v("Started subprocess.");
 
             if (this.debug) {
@@ -263,27 +392,39 @@ public class IsolatedHostTest
             }
             CLog.v("Connected to subprocess.");
 
-            List<String> testJarAbsPaths = getJarPaths(mJars);
-
-            TestParameters.Builder paramsBuilder =
-                    TestParameters.newBuilder()
-                            .addAllTestClasses(mClasses)
-                            .addAllTestJarAbsPaths(testJarAbsPaths)
-                            .addAllExcludePaths(mExcludePaths)
-                            .setDryRun(mCollectTestsOnly);
-
-            if (!mIncludeFilters.isEmpty()
-                    || !mExcludeFilters.isEmpty()
-                    || !mIncludeAnnotations.isEmpty()
-                    || !mExcludeAnnotations.isEmpty()) {
-                paramsBuilder.setFilter(
-                        FilterSpec.newBuilder()
-                                .addAllIncludeFilters(mIncludeFilters)
-                                .addAllExcludeFilters(mExcludeFilters)
-                                .addAllIncludeAnnotations(mIncludeAnnotations)
-                                .addAllExcludeAnnotations(mExcludeAnnotations));
+            File cacheResults = null;
+            FileProtoResultReporter protoResultReporter = null;
+            if (cacheClient != null && action != null) {
+                cacheResults =
+                        FileUtil.createTempFile("results-to-upload", ".textproto", workFolder);
+                cacheResults.deleteOnExit();
+                protoResultReporter = new FileProtoResultReporter();
+                protoResultReporter.setFileOutput(cacheResults);
+                // Call invocationStarted since the proto machinery doesn't work well without it.
+                protoResultReporter.invocationStarted(testInfo.getContext());
+                listener = new ResultForwarder(List.of(listener, protoResultReporter));
             }
-            executeTests(socket, listener, paramsBuilder.build());
+
+            boolean runSuccess = executeTests(socket, listener, runnerMessage);
+
+            if (cacheClient != null && action != null && cacheResults != null && runSuccess) {
+                // It should not matter what we provide here since invocation-level reporting is not
+                // being done.
+                protoResultReporter.invocationEnded(1000);
+                try {
+                    CLog.d("Uploading cache for action: %s", action.action());
+                    // TODO(b/357695016): Use output dir for subprocess log instead of the field
+                    // for stderr.
+                    cacheClient.uploadCache(
+                            action, ExecutableActionResult.create(0, cacheResults, mSubprocessLog));
+                } catch (IOException e) {
+                    CLog.e("Failed to upload cache!");
+                    CLog.e(e);
+                } catch (InterruptedException e) {
+                    throw new RunInterruptedException(
+                            e.getMessage(), e, InfraErrorIdentifier.UNDETERMINED);
+                }
+            }
 
             RunnerMessage.newBuilder()
                     .setCommand(RunnerOp.RUNNER_OP_STOP)
@@ -299,6 +440,7 @@ public class IsolatedHostTest
                 listener.testRunEnded(0L, new HashMap<String, Metric>());
             }
         } finally {
+            FileUtil.deleteFile(mSubprocessLog);
             try {
                 // Ensure the subprocess finishes
                 if (isolationRunner != null) {
@@ -343,23 +485,30 @@ public class IsolatedHostTest
 
     /** Assembles the command arguments to execute the subprocess runner. */
     public List<String> compileCommandArgs(String classpath, File artifactsDir) {
+        return compileCommand(classpath, artifactsDir, false);
+    }
+
+    private List<String> compileCommand(String classpath, File artifactsDir, boolean enableCache) {
         List<String> cmdArgs = new ArrayList<>();
 
+        File javaExec;
         if (mJdkFolder == null) {
-            cmdArgs.add(SystemUtil.getRunningJavaBinaryPath().getAbsolutePath());
+            javaExec = SystemUtil.getRunningJavaBinaryPath();
             CLog.v("Using host java version.");
         } else {
-            File javaExec = FileUtil.findFile(mJdkFolder, "java");
+            javaExec = FileUtil.findFile(mJdkFolder, "java");
             if (javaExec == null) {
                 throw new IllegalArgumentException(
                         String.format(
                                 "Couldn't find java executable in given JDK folder: %s",
                                 mJdkFolder.getAbsolutePath()));
             }
-            String javaPath = javaExec.getAbsolutePath();
-            cmdArgs.add(javaPath);
-            CLog.v("Using java executable at %s", javaPath);
+            CLog.v("Using java executable at %s", javaExec.getAbsolutePath());
         }
+        if (enableCache) {
+            javaExec = linkFileToWorkingDir("java_binary", javaExec);
+        }
+        cmdArgs.add(javaExec.getAbsolutePath());
         if (isCoverageEnabled()) {
             if (mConfig.getCoverageOptions().getJaCoCoAgentPath() != null) {
                 try {
@@ -494,21 +643,34 @@ public class IsolatedHostTest
      * @return a string specifying the colon separated classpath.
      */
     public String compileClassPath() {
+        return compileClassPath(getClasspathFiles());
+    }
+
+    private String compileClassPath(Set<File> paths) {
+        return String.join(
+                java.io.File.pathSeparator,
+                getClasspathFiles().stream()
+                        .map(f -> f.getAbsolutePath())
+                        .collect(Collectors.toList()));
+    }
+
+    private Set<File> getClasspathFiles() {
         // Use LinkedHashSet because we don't want duplicates, but we still
         // want to preserve the insertion order. e.g. mIsolationJar should always be the
         // first one.
-        Set<String> paths = new LinkedHashSet<>();
+        Set<File> paths = new LinkedHashSet<>();
         File testDir = findTestDirectory();
 
         try {
             mIsolationJar = getIsolationJar(CurrentInvocation.getWorkFolder());
-            paths.add(mIsolationJar.getAbsolutePath());
+            paths.add(mIsolationJar);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
 
         if (mClasspathOverride != null) {
-            paths.add(mClasspathOverride);
+            Arrays.asList(mClasspathOverride.split(java.io.File.pathSeparator)).stream()
+                    .forEach(p -> paths.add(new File(p)));
         } else {
             if (mRobolectricResources) {
                 // This is contingent on the current android-all version.
@@ -518,7 +680,7 @@ public class IsolatedHostTest
                             "Could not find android-all jar needed for test execution.",
                             InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
                 }
-                paths.add(androidAllJar.getAbsolutePath());
+                paths.add(androidAllJar);
             } else if (mRavenwoodResources) {
                 addAllFilesUnder(paths, getRavenwoodRuntimeDir(testDir));
             }
@@ -526,30 +688,33 @@ public class IsolatedHostTest
             for (String jar : mJars) {
                 File f = FileUtil.findFile(testDir, jar);
                 if (f != null && f.exists()) {
-                    paths.add(f.getAbsolutePath());
+                    paths.add(f);
                     addAllFilesUnder(paths, f.getParentFile());
                 }
             }
         }
 
-        String jarClasspath = String.join(java.io.File.pathSeparator, paths);
-
-        return jarClasspath;
+        return paths;
     }
 
     /** Add all files under {@code File} sorted by filename to {@code paths}. */
-    private static void addAllFilesUnder(Set<String> paths, File parentDirectory) {
+    private static void addAllFilesUnder(Set<File> paths, File parentDirectory) {
         var files = parentDirectory.listFiles((f) -> f.isFile());
         Arrays.sort(files, Comparator.comparing(File::getName));
 
         for (File file : files) {
-            paths.add(file.getAbsolutePath());
+            paths.add(file);
         }
     }
 
     @VisibleForTesting
     String getEnvironment(String key) {
         return System.getenv(key);
+    }
+
+    @VisibleForTesting
+    void setWorkDir(File workDir) {
+        mWorkDir = workDir;
     }
 
     /**
@@ -608,7 +773,7 @@ public class IsolatedHostTest
         // add it to LD_LIBRARY_PATH.
         String libs[] = {"lib", "lib64"};
 
-        Set<String> result = new LinkedHashSet<>();
+        Set<File> result = new LinkedHashSet<>();
 
         for (String dir : dirs) {
             File path = new File(dir);
@@ -620,14 +785,17 @@ public class IsolatedHostTest
                 File libFile = new File(path, lib);
 
                 if (libFile.isDirectory()) {
-                    result.add(libFile.getAbsolutePath());
+                    result.add(libFile);
                 }
             }
         }
         if (result.isEmpty()) {
             return null;
         }
-        return String.join(java.io.File.pathSeparator, result);
+        return result.stream()
+                .map(f -> RunUtil.toRelative(mWorkDir, f))
+                .sorted()
+                .collect(Collectors.joining(java.io.File.pathSeparator));
     }
 
     private List<String> compileRobolectricOptions(File artifactsDir) {
@@ -664,23 +832,20 @@ public class IsolatedHostTest
      *
      * @param socket A socket connected to the subprocess control socket
      * @param listener The TradeFed invocation listener from run()
-     * @param params The tests to run and their options
+     * @param runnerMessage The configuration proto message used by the runner to run the test
+     * @return True if the test execution succeeds, otherwise False
      * @throws IOException
      */
-    private void executeTests(
-            Socket socket, ITestInvocationListener listener, TestParameters params)
+    private boolean executeTests(
+            Socket socket, ITestInvocationListener listener, RunnerMessage runnerMessage)
             throws IOException {
         // If needed apply the wrapping listeners like timeout enforcer.
         listener = wrapListener(listener);
-        RunnerMessage.newBuilder()
-                .setCommand(RunnerOp.RUNNER_OP_RUN_TEST)
-                .setParams(params)
-                .build()
-                .writeDelimitedTo(socket.getOutputStream());
+        runnerMessage.writeDelimitedTo(socket.getOutputStream());
 
         Instant start = Instant.now();
         try {
-            processRunnerReply(socket.getInputStream(), listener);
+            return processRunnerReply(socket.getInputStream(), listener);
         } catch (SocketTimeoutException e) {
             mReportedFailure = true;
             FailureDescription failure =
@@ -690,20 +855,22 @@ public class IsolatedHostTest
             listener.testRunEnded(
                     Duration.between(start, Instant.now()).toMillis(),
                     new HashMap<String, Metric>());
+            return false;
         } finally {
             // This will get associated with the module since it can contains several test runs
-            try (FileInputStreamSource source = new FileInputStreamSource(mSubprocessLog, true)) {
+            try (FileInputStreamSource source = new FileInputStreamSource(mSubprocessLog)) {
                 listener.testLog(ISOLATED_JAVA_LOG, LogDataType.TEXT, source);
             }
         }
     }
 
-    private void processRunnerReply(InputStream input, ITestInvocationListener listener)
+    private boolean processRunnerReply(InputStream input, ITestInvocationListener listener)
             throws IOException {
         TestDescription currentTest = null;
         CloseableTraceScope methodScope = null;
         CloseableTraceScope runScope = null;
         boolean runStarted = false;
+        boolean success = true;
         while (true) {
             RunnerReply reply = RunnerReply.parseDelimitedFrom(input);
             if (reply == null) {
@@ -738,12 +905,12 @@ public class IsolatedHostTest
                                 .setFullRerun(false);
                 listener.testRunFailed(failure);
                 listener.testRunEnded(0L, new HashMap<String, Metric>());
-                return;
+                return false;
             }
             switch (reply.getRunnerStatus()) {
                 case RUNNER_STATUS_FINISHED_OK:
                     CLog.v("Received message that runner finished successfully");
-                    return;
+                    return success;
                 case RUNNER_STATUS_FINISHED_ERROR:
                     CLog.e("Received message that runner errored");
                     CLog.e("From Runner: " + reply.getMessage());
@@ -755,7 +922,7 @@ public class IsolatedHostTest
                                     reply.getMessage(), FailureStatus.INFRA_FAILURE);
                     listener.testRunFailed(failure);
                     listener.testRunEnded(0L, new HashMap<String, Metric>());
-                    return;
+                    return false;
                 case RUNNER_STATUS_STARTING:
                     CLog.v("Received message that runner is starting");
                     break;
@@ -769,6 +936,7 @@ public class IsolatedHostTest
                                         new TestDescription(
                                                 event.getClassName(), event.getMethodName());
                                 listener.testFailed(desc, event.getMessage());
+                                success = false;
                                 break;
                             case TOPIC_ASSUMPTION_FAILURE:
                                 desc =
@@ -832,15 +1000,18 @@ public class IsolatedHostTest
      * implementation, but somewhat difficult to extract well due to the various method calls it
      * uses.
      */
-    private List<String> getJarPaths(Set<String> jars) throws FileNotFoundException {
+    private List<String> getJarPaths(Set<String> jars, boolean enableCache)
+            throws FileNotFoundException {
         Set<String> output = new HashSet<>();
 
         for (String jar : jars) {
-            File jarFile = getJarFile(jar, mBuildInfo);
-            output.add(jarFile.getAbsolutePath());
+            output.add(
+                    enableCache
+                            ? RunUtil.toRelative(mWorkDir, FileUtil.findFile(mWorkDir, jar))
+                            : getJarFile(jar, mBuildInfo).getAbsolutePath());
         }
 
-        return output.stream().collect(Collectors.toList());
+        return output.stream().sorted().collect(Collectors.toList());
     }
 
     /**
@@ -1047,7 +1218,12 @@ public class IsolatedHostTest
     }
 
     private File getIsolationJar(File workDir) throws IOException {
-        File isolationJar = FileUtil.createTempFile("tradefed-isolation", ".jar", workDir);
+        File isolationJar = new File(mWorkDir, "classpath/tradefed-isolation.jar");
+        if (isolationJar.exists()) {
+            return isolationJar;
+        }
+        isolationJar.getParentFile().mkdirs();
+        isolationJar.createNewFile();
         boolean res =
                 ResourceUtil.extractResourceWithAltAsFile(
                         "/tradefed-isolation.jar",
@@ -1063,6 +1239,27 @@ public class IsolatedHostTest
     public void deleteTempFiles() {
         if (mIsolationJar != null) {
             FileUtil.deleteFile(mIsolationJar);
+        }
+    }
+
+    @VisibleForTesting
+    boolean isCached() {
+        return mCached;
+    }
+
+    @VisibleForTesting
+    ICacheClient getCacheClient(File workFolder, String instanceName) {
+        return CacheClientFactory.createCacheClient(workFolder, instanceName);
+    }
+
+    /** Links a target file to another place under {@code mWorkDir}. */
+    private File linkFileToWorkingDir(String relToWorkingDir, File target) {
+        try {
+            return RunUtil.linkFile(mWorkDir, relToWorkingDir, target);
+        } catch (IOException e) {
+            CLog.e("Failed to symlink %s.", target);
+            CLog.e(e);
+            return target;
         }
     }
 }
