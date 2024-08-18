@@ -15,6 +15,9 @@
  */
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.testtype.suite.ITestSuite.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+import static com.android.tradefed.testtype.suite.ModuleDefinition.MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.argThat;
@@ -93,7 +96,7 @@ public class FeatureFlagTargetPreparerTest {
         verifyNoMoreInteractions(mDevice);
         verify(mBuildInfo)
                 .addBuildAttribute(
-                        eq(FeatureFlagTargetPreparer.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
+                        eq(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
                         argThat(
                                 s ->
                                         s.contains("namespace/f=v1")
@@ -121,9 +124,7 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
         verify(mBuildInfo)
-                .addBuildAttribute(
-                        eq(FeatureFlagTargetPreparer.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
-                        eq("namespace/f=v"));
+                .addBuildAttribute(eq(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY), eq("namespace/f=v"));
         verifyNoMoreInteractions(mBuildInfo);
 
         // Reverts to previous flags (revert f) during tearDown and reboots.
@@ -272,7 +273,7 @@ public class FeatureFlagTargetPreparerTest {
         verifyNoMoreInteractions(mDevice);
         verify(mBuildInfo)
                 .addBuildAttribute(
-                        eq(FeatureFlagTargetPreparer.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
+                        eq(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
                         argThat(
                                 s ->
                                         s.contains("namespace/f1=v2")
@@ -371,10 +372,7 @@ public class FeatureFlagTargetPreparerTest {
         verify(mContext).getAttribute(eq(ModuleDefinition.MODULE_NAME));
         verify(mContext)
                 .addInvocationAttribute(
-                        eq(
-                                FeatureFlagTargetPreparer
-                                        .MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY),
-                        eq("namespace/f1=v2"));
+                        eq(MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY), eq("namespace/f1=v2"));
         verifyNoMoreInteractions(mContext);
     }
 
