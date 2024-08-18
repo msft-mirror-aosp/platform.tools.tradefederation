@@ -2891,6 +2891,8 @@ public class TestDevice extends NativeDevice {
                         : "--cpu-topology " + builder.mCpuTopology;
         final String gkiFlag = Strings.isNullOrEmpty(builder.mGki) ? "" : "--gki " + builder.mGki;
         final String hugePagesFlag = builder.mHugePages ? "--hugepages" : "";
+        final String nameFlag =
+                Strings.isNullOrEmpty(builder.mName) ? "" : "--name " + builder.mName;
 
         List<String> args =
                 new ArrayList<>(
@@ -2910,6 +2912,7 @@ public class TestDevice extends NativeDevice {
                                 cpuTopologyFlag,
                                 gkiFlag,
                                 hugePagesFlag,
+                                nameFlag,
                                 builder.mApkPath,
                                 outApkIdsigPath,
                                 builder.mInstanceImg,
@@ -3257,6 +3260,7 @@ public class TestDevice extends NativeDevice {
         private String mInstanceIdFile; // Path to instance_id file
         private String mInstanceImg; // Path to instance_img file
         private boolean mHugePages;
+        private String mName;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3275,6 +3279,7 @@ public class TestDevice extends NativeDevice {
             mAssignedDevices = new ArrayList<>();
             mInstanceIdFile = null;
             mInstanceImg = null;
+            mName = null;
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -3438,6 +3443,16 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder hugePages(boolean hintHugePages) {
             mHugePages = hintHugePages;
+            return this;
+        }
+
+        /**
+         * Sets name for this VM.
+         *
+         * @return the microdroid builder.
+         */
+        public MicrodroidBuilder name(String name) {
+            mName = name;
             return this;
         }
 

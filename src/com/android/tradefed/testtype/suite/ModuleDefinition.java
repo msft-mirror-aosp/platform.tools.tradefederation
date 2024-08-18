@@ -152,6 +152,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String ISOLATION_COST = "ISOLATION_COST";
     public static final String RETRY_SUCCESS_COUNT = "MODULE_RETRY_SUCCESS";
     public static final String RETRY_FAIL_COUNT = "MODULE_RETRY_FAILED";
+    public static final String MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY =
+            "module-flag-overrides";
 
     private final IInvocationContext mModuleInvocationContext;
     private final IConfiguration mModuleConfiguration;
@@ -478,11 +480,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                     .getDeviceConfigByName(device)
                                     .addSpecificConfig(preparer);
                         } catch (ConfigurationException e) {
-                            // Shouldn't happen;
-                            throw new RuntimeException(e);
-                        } finally {
                             // unset the module context since module run is ending.
                             CurrentInvocation.setModuleContext(null);
+                            // Shouldn't happen;
+                            throw new RuntimeException(e);
                         }
                     }
                 }
