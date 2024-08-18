@@ -15,19 +15,27 @@
  */
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.testtype.suite.ITestSuite.BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+import static com.android.tradefed.testtype.suite.ModuleDefinition.MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY;
+
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
@@ -52,6 +60,8 @@ public class FeatureFlagTargetPreparerTest {
 
     @Mock private TestInformation mTestInfo;
     @Mock private ITestDevice mDevice;
+    @Mock private IInvocationContext mContext;
+    @Mock private IBuildInfo mBuildInfo;
 
     private static final String DEFAULT_CONFIG = "namespace/f=v\n";
     private FeatureFlagTargetPreparer mPreparer;
@@ -61,6 +71,10 @@ public class FeatureFlagTargetPreparerTest {
     public void setUp() throws Exception {
         mPreparer = new FeatureFlagTargetPreparer();
         when(mTestInfo.getDevice()).thenReturn(mDevice);
+        when(mTestInfo.getContext()).thenReturn(mContext);
+        when(mContext.getAttribute(ModuleDefinition.MODULE_NAME)).thenReturn(null);
+        when(mContext.getBuildInfo(eq(mDevice))).thenReturn(mBuildInfo);
+        doNothing().when(mBuildInfo).addBuildAttribute(anyString(), anyString());
         // Default to successful command execution.
         mCommandResult = new CommandResult(CommandStatus.SUCCESS);
         when(mDevice.executeShellV2Command(anyString())).thenReturn(mCommandResult);
@@ -80,6 +94,14 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f1' 'v1'"));
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
+        verify(mBuildInfo)
+                .addBuildAttribute(
+                        eq(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
+                        argThat(
+                                s ->
+                                        s.contains("namespace/f=v1")
+                                                && s.contains("namespace/f1=v1")));
+        verifyNoMoreInteractions(mBuildInfo);
 
         // Reverts to previous flags (revert f and delete f2) during tearDown and reboots.
         clearInvocations(mDevice);
@@ -101,6 +123,9 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f' 'v'"));
         verify(mDevice).reboot();
         verifyNoMoreInteractions(mDevice);
+        verify(mBuildInfo)
+                .addBuildAttribute(eq(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY), eq("namespace/f=v"));
+        verifyNoMoreInteractions(mBuildInfo);
 
         // Reverts to previous flags (revert f) during tearDown and reboots.
         clearInvocations(mDevice);
@@ -246,6 +271,14 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice).executeShellV2Command(eq("device_config put 'namespace' 'f2' 'v3'"));
         verify(mDevice, times(1)).reboot();
         verifyNoMoreInteractions(mDevice);
+        verify(mBuildInfo)
+                .addBuildAttribute(
+                        eq(BUILD_ATTRIBUTE_FLAG_OVERRIDES_KEY),
+                        argThat(
+                                s ->
+                                        s.contains("namespace/f1=v2")
+                                                && s.contains("namespace/f2=v3")));
+        verifyNoMoreInteractions(mBuildInfo);
 
         // Reverts to previous flags during tearDown and reboots.
         clearInvocations(mDevice);
@@ -320,6 +353,27 @@ public class FeatureFlagTargetPreparerTest {
         verify(mDevice, never()).executeShellV2Command(startsWith("device_config put"));
         verify(mDevice, never()).executeShellV2Command(eq("device_config delete"));
         verify(mDevice, never()).reboot();
+    }
+
+    @Test
+    public void testSetUp_moduleNameExists_updatesInvocationAttribute() throws Exception {
+        // Set module name and context in invocation context.
+        when(mContext.getAttribute(ModuleDefinition.MODULE_NAME)).thenReturn("moduleName");
+        doNothing().when(mContext).addInvocationAttribute(anyString(), anyString());
+        // Set command to update the flag value from v1 to v2.
+        mCommandResult.setStdout("namespace/f1=v1\n");
+        new OptionSetter(mPreparer).setOptionValue("flag-value", "namespace/f1=v2");
+
+        // Run the setUp() method.
+        mPreparer.setUp(mTestInfo);
+
+        // Updated flag value should be stored in context.
+        verify(mContext, never()).getBuildInfo(eq(mDevice));
+        verify(mContext).getAttribute(eq(ModuleDefinition.MODULE_NAME));
+        verify(mContext)
+                .addInvocationAttribute(
+                        eq(MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY), eq("namespace/f1=v2"));
+        verifyNoMoreInteractions(mContext);
     }
 
     private File addFlagFile(String content) throws Exception {

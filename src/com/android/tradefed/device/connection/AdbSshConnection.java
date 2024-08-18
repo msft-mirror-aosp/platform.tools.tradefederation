@@ -281,13 +281,14 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (getDevice().getOptions().useCvdCF()) {
+                    createHostOrchestratorUtil(mGceAvd);
                     File cvdLogsDir = mHOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
                                 cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
                         FileUtil.recursiveDelete(cvdLogsDir);
                     } else {
-                        CLog.i("CVD Logs is null, skip logging cvd logs.");
+                        CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
                     }
                     mHOUtil.collectLogByCommand(
                             getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
@@ -434,6 +435,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
+        createHostOrchestratorUtil(mGceAvd);
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
@@ -444,14 +446,6 @@ public class AdbSshConnection extends AdbTcpConnection {
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
             mGceTunnelMonitor = new GceLHPTunnelMonitor();
-            mHOUtil =
-                    new HostOrchestratorUtil(
-                            deviceOptions.useOxygenationDevice(),
-                            deviceOptions.getExtraOxygenArgs().containsKey("use_cvd"),
-                            deviceOptions.getSshPrivateKeyPath(),
-                            deviceOptions.getInstanceUser(),
-                            gceAvdInfo,
-                            deviceOptions.getAvdDriverBinary());
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
@@ -502,6 +496,14 @@ public class AdbSshConnection extends AdbTcpConnection {
     @VisibleForTesting
     GceManager getGceHandler() {
         return mGceHandler;
+    }
+
+    /**
+     * Returns the instance of the {@link com.android.tradefed.device.cloud.HostOrchestratorUtil}.
+     */
+    @VisibleForTesting
+    HostOrchestratorUtil getHostOrchestratorUtil() {
+        return mHOUtil;
     }
 
     /** Capture a remote bugreport by ssh-ing into the device directly. */
@@ -939,6 +941,25 @@ public class AdbSshConnection extends AdbTcpConnection {
             } else {
                 CLog.w("Failed to get kernel information by `uname -r` from device");
             }
+        }
+    }
+
+    /** Helper to create host orchestrator utility. */
+    private void createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+        if (mHOUtil != null) {
+            CLog.i("Host Orchestrator Util has been initialized...");
+            return;
+        }
+        if (getDevice().getOptions().useCvdCF()) {
+            CLog.i("Creating host orchestrator utility...");
+            mHOUtil =
+                    new HostOrchestratorUtil(
+                            getDevice().getOptions().useOxygenationDevice(),
+                            getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
+                            getDevice().getOptions().getSshPrivateKeyPath(),
+                            getDevice().getOptions().getInstanceUser(),
+                            gceAvdInfo,
+                            getDevice().getOptions().getAvdDriverBinary());
         }
     }
 }

@@ -32,7 +32,7 @@ public class DeviceFeatureFlag {
     private final String flagValue;
 
     /**
-     * Constructor to create a new DeviceFeatureFlag object.
+     * Constructor to create a new DeviceFeatureFlag object with a flag string.
      *
      * @param flagString A device config flag string in the format of "namespace/flagName=flagValue"
      * @throws IllegalArgumentException if the flagString parameter cannot be parsed
@@ -46,6 +46,19 @@ public class DeviceFeatureFlag {
         namespace = match.group("namespace");
         flagName = match.group("name");
         flagValue = match.group("value");
+    }
+
+    /**
+     * Constructor to create a new DeviceFeatureFlag object with flag attributes.
+     *
+     * @param namespace The namespace of a flag, in String format.
+     * @param flagName The name of a flag, in String format.
+     * @param flagValue The value of a flag, in String format.
+     */
+    public DeviceFeatureFlag(String namespace, String flagName, String flagValue) {
+        this.namespace = namespace;
+        this.flagName = flagName;
+        this.flagValue = flagValue;
     }
 
     /**
