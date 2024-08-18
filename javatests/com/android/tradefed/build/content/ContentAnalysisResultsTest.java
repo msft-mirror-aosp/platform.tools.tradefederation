@@ -18,9 +18,13 @@ package com.android.tradefed.build.content;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.truth.Truth;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
 
 /** Unit tests for {@link ContentAnalysisResults}. */
 @RunWith(JUnit4.class)
@@ -43,8 +47,22 @@ public class ContentAnalysisResultsTest {
 
     @Test
     public void testModifiedModules() {
-        ContentAnalysisResults results = new ContentAnalysisResults().addModifiedModule();
+        ContentAnalysisResults results = new ContentAnalysisResults().addModifiedModule("module1");
 
         assertTrue(results.hasAnyTestsChange());
+    }
+
+    @Test
+    public void testModifiedModulesMerge() {
+        ContentAnalysisResults result1 =
+                new ContentAnalysisResults()
+                        .addUnchangedModule("module1")
+                        .addUnchangedModule("module2");
+        ContentAnalysisResults result2 = new ContentAnalysisResults().addModifiedModule("module1");
+
+        ContentAnalysisResults merge =
+                ContentAnalysisResults.mergeResults(Arrays.asList(result1, result2));
+        assertTrue(merge.hasAnyTestsChange());
+        Truth.assertThat(merge.getUnchangedModules()).containsExactly("module2");
     }
 }

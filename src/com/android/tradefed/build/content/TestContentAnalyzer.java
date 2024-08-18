@@ -227,7 +227,7 @@ public class TestContentAnalyzer {
                     CLog.d("Module %s directory has changed: %s", moduleDir.getName(), moduleDiff);
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.XTS_MODULE_WITH_DIFFS, 1);
-                    results.addModifiedModule();
+                    results.addModifiedModule(moduleDir.getName());
                 }
             } else {
                 String relativeRootFilePath =
@@ -356,7 +356,7 @@ public class TestContentAnalyzer {
                     CLog.d("Module %s directory has changed: %s", module, moduleDiff);
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.WOKRDIR_MODULE_WITH_DIFFS, 1);
-                    results.addModifiedModule();
+                    results.addModifiedModule(module);
                 }
             }
         } else {
@@ -402,7 +402,7 @@ public class TestContentAnalyzer {
                                     moduleDir.getName(), moduleDiff);
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.WOKRDIR_MODULE_WITH_DIFFS, 1);
-                            results.addModifiedModule();
+                            results.addModifiedModule(moduleDir.getName());
                         }
                     }
                 }

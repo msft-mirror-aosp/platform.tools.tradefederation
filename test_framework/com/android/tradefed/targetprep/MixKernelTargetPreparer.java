@@ -209,7 +209,12 @@ public class MixKernelTargetPreparer extends BaseTargetPreparer
         }
         File dstFile = new File(destDir, newFileName);
         CLog.i("Copy %s to %s", srcFile.toString(), dstFile.toString());
-        FileUtil.hardlinkFile(srcFile, dstFile);
+        // The device image can be a zip file or an uncompressed directory.
+        if (srcFile.isDirectory()) {
+            FileUtil.symlinkFile(srcFile, dstFile);
+        } else {
+            FileUtil.hardlinkFile(srcFile, dstFile);
+        }
     }
 
     /**
