@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util.avd;
 
 import static org.mockito.Mockito.times;
 
@@ -22,8 +22,6 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.avd.HostOrchestratorUtil;
-import com.android.tradefed.util.avd.OxygenClient;
 import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
 
 import org.junit.After;
