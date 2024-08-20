@@ -89,7 +89,7 @@ public class LogCollector {
                                                     "Setup failed for cuttlefish::ConfigServer",
                                                     "config_server_failed")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*(launcher|kernel).*"),
+                                            Pattern.compile(".*(launcher|kernel|logcat).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "VIRTUAL_DEVICE_BOOT_FAILED: Dependencies not"
                                                             + " ready after 10 checks: Bluetooth",
