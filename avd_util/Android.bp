@@ -32,6 +32,8 @@ java_library_host {
         "virtual-device-manager-proto",
     ],
     libs: [
+        "ddmlib-prebuilt",
+        "json-prebuilt",
         "guava",
     ],
     plugins: [
@@ -42,6 +44,7 @@ tradefed_java_library_host {
     name: "tradefed-avd-util-tests",
     // Restrict visibility to only those targets that need to access it.
     visibility: [
+        "//tools/tradefederation/core",
         "//tools/tradefederation/core/javatests",
     ],
     defaults: ["tradefed_defaults"],

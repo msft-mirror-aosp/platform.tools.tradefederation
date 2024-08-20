@@ -18,6 +18,7 @@ package com.android.tradefed.suite.checker.baseline;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
@@ -37,6 +38,10 @@ public class CommandBaselineSetter extends DeviceBaselineSetter {
     @Override
     public boolean setBaseline(ITestDevice mDevice) throws DeviceNotAvailableException {
         CommandResult result = mDevice.executeShellV2Command(mCommand);
-        return result != null && CommandStatus.SUCCESS.equals(result.getStatus());
+        if (CommandStatus.SUCCESS.equals(result.getStatus())) {
+            CLog.d("%s returns %s", mCommand, result.getStdout());
+            return true;
+        }
+        return false;
     }
 }

@@ -27,8 +27,8 @@ import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.FreeDeviceState;
 import com.android.tradefed.device.IDeviceManager;
-import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.IManagedTestDevice;
+import com.android.tradefed.device.ITestDevice;
 
 import com.proto.tradefed.device.DeviceStatus.ReservationStatus;
 import com.proto.tradefed.device.GetDevicesStatusRequest;
@@ -37,6 +37,10 @@ import com.proto.tradefed.device.ReleaseReservationRequest;
 import com.proto.tradefed.device.ReleaseReservationResponse;
 import com.proto.tradefed.device.ReserveDeviceRequest;
 import com.proto.tradefed.device.ReserveDeviceResponse;
+
+import io.grpc.Server;
+import io.grpc.stub.ServerCallStreamObserver;
+import io.grpc.stub.StreamObserver;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -52,10 +56,6 @@ import org.mockito.junit.MockitoRule;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import io.grpc.Server;
-import io.grpc.stub.ServerCallStreamObserver;
-import io.grpc.stub.StreamObserver;
 
 /** Unit tests for {@link DeviceManagementGrpcServer}. */
 @RunWith(JUnit4.class)
@@ -86,7 +86,7 @@ public class DeviceManagementGrpcServerTest {
         descriptors.add(createDescriptor("serial2", DeviceAllocationState.Allocated));
         descriptors.add(createDescriptor("serial3", DeviceAllocationState.Unavailable));
         descriptors.add(createDescriptor("serial4", DeviceAllocationState.Unknown));
-        when(mMockDeviceManager.listAllDevices(true)).thenReturn(descriptors);
+        when(mMockDeviceManager.listAllDevices(false)).thenReturn(descriptors);
 
         GetDevicesStatusRequest.Builder requestBuilder = GetDevicesStatusRequest.newBuilder();
         mServer.getDevicesStatus(requestBuilder.build(), mGetDevicesStatusObserver);

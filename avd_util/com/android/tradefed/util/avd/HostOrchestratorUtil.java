@@ -13,13 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util.avd;
 
 import com.android.ddmlib.Log.LogLevel;
-import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.FileInputStreamSource;
-import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -27,10 +24,7 @@ import com.android.tradefed.util.GceRemoteCmdFormatter;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
-import com.android.tradefed.util.avd.OxygenClient;
 import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
-
-import com.google.common.annotations.VisibleForTesting;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -63,9 +57,16 @@ public class HostOrchestratorUtil {
     private static final String UNSUPPORTED_API_RESPONSE = "404 page not found";
     private boolean mUseOxygenation = false;
     private boolean mUseCvdOxygen = false;
+
+    // User name and key file to ssh to the host VM
     private File mSshPrivateKeyPath;
     private String mInstanceUser;
-    private GceAvdInfo mGceAvd;
+
+    // Oxygen instance name, host name and device ID
+    private String mInstanceName;
+    private String mHost;
+    private String mOxygenationDeviceId;
+
     private OxygenClient mOxygenClient;
 
     public HostOrchestratorUtil(
@@ -73,14 +74,18 @@ public class HostOrchestratorUtil {
             boolean useCvdOxygen,
             File sshPrivateKeyPath,
             String instanceUser,
-            GceAvdInfo gceAvd,
+            String instanceName,
+            String host,
+            String oxygenationDeviceId,
             File avdDriverBinary) {
         this(
                 useOxygenation,
                 useCvdOxygen,
                 sshPrivateKeyPath,
                 instanceUser,
-                gceAvd,
+                instanceName,
+                host,
+                oxygenationDeviceId,
                 new OxygenClient(avdDriverBinary));
     }
 
@@ -89,24 +94,27 @@ public class HostOrchestratorUtil {
             boolean useCvdOxygen,
             File sshPrivateKeyPath,
             String instanceUser,
-            GceAvdInfo gceAvd,
+            String instanceName,
+            String host,
+            String oxygenationDeviceId,
             OxygenClient oxygenClient) {
         mUseOxygenation = useOxygenation;
         mUseCvdOxygen = useCvdOxygen;
         mSshPrivateKeyPath = sshPrivateKeyPath;
         mInstanceUser = instanceUser;
-        mGceAvd = gceAvd;
+        mInstanceName = instanceName;
+        mHost = host;
+        mOxygenationDeviceId = oxygenationDeviceId;
         mOxygenClient = oxygenClient;
     }
 
     /**
      * Execute a command via Host Orchestrator and log its output
      *
-     * @param testLogger The {@link ITestLogger} where to log the files.
      * @param logName the log name to use when reporting to the {@link ITestLogger}
      * @param url the Host Orchestrator API to be executed.
      */
-    public void collectLogByCommand(ITestLogger testLogger, String logName, String url) {
+    public File collectLogByCommand(String logName, String url) {
         String portNumber = Integer.toString(mOxygenClient.createServerSocket());
         Process tunnel = null;
         File tempFile = null;
@@ -115,7 +123,8 @@ public class HostOrchestratorUtil {
             tunnel = createHostOrchestratorTunnel(portNumber);
             if (tunnel == null || !tunnel.isAlive()) {
                 CLog.e("Failed portforwarding Host Orchestrator tunnel.");
-                return;
+                FileUtil.deleteFile(tempFile);
+                return null;
             }
             CommandResult commandRes =
                     curlCommandExecution(
@@ -128,14 +137,15 @@ public class HostOrchestratorUtil {
                             tempFile.getAbsolutePath());
             if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
                 CLog.e("Failed logging cvd logs via Host Orchestrator: %s", commandRes.getStdout());
-                return;
+                FileUtil.deleteFile(tempFile);
+                return null;
             }
-            testLogger.testLog(
-                    logName, LogDataType.CUTTLEFISH_LOG, new FileInputStreamSource(tempFile));
+            return tempFile;
         } catch (IOException e) {
             CLog.e("Failed logging cvd logs via Host Orchestrator: %s", e);
-        } finally {
             FileUtil.deleteFile(tempFile);
+            return null;
+        } finally {
             mOxygenClient.closeLHPConnection(tunnel);
         }
     }
@@ -350,8 +360,9 @@ public class HostOrchestratorUtil {
      * @param portNumber The port number that Host Orchestrator communicates with.
      * @return A {@link Process} of the Host Orchestrator connection between CuttleFish and TF.
      */
-    @VisibleForTesting
-    Process createHostOrchestratorTunnel(String portNumber) throws IOException {
+    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
+    // (tradefed-avd-util)
+    public Process createHostOrchestratorTunnel(String portNumber) throws IOException {
         // Basically, to portforwad the CURL tunnel, the rough process would be
         // if it's oxygenation device -> portforward the CURL tunnel via LHP.
         // if `use_cvd` is set -> portforward the CURL tunnel via SSH.
@@ -359,10 +370,7 @@ public class HostOrchestratorUtil {
         if (mUseOxygenation) {
             CLog.i("Portforwarding Host Orchestrator via LHP for Oxygenation CF.");
             return mOxygenClient.createTunnelViaLHP(
-                    LHPTunnelMode.CURL,
-                    portNumber,
-                    mGceAvd.instanceName(),
-                    mGceAvd.getOxygenationDeviceId());
+                    LHPTunnelMode.CURL, portNumber, mInstanceName, mOxygenationDeviceId);
         } else if (mUseCvdOxygen) {
             CLog.i("Portforarding Host Orchestrator via SSH tunnel for Oxygen CF.");
             List<String> tunnelParam = new ArrayList<>();
@@ -373,7 +381,7 @@ public class HostOrchestratorUtil {
                             mSshPrivateKeyPath,
                             tunnelParam,
                             mInstanceUser,
-                            mGceAvd.hostAndPort().getHost(),
+                            mHost,
                             "" /* no command */);
             Process res = getRunUtil().runCmdInBackground(cmd.toArray(new String[0]));
             // TODO(b/358494412): Try to find a better way to check when the tunnel is ready.
@@ -394,8 +402,9 @@ public class HostOrchestratorUtil {
      * @param commands The command to be executed.
      * @return A {@link CommandResult} containing the status and logs.
      */
-    @VisibleForTesting
-    CommandResult curlCommandExecution(
+    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
+    // (tradefed-avd-util)
+    protected CommandResult curlCommandExecution(
             String portNumber,
             String method,
             String api,
@@ -428,8 +437,9 @@ public class HostOrchestratorUtil {
     }
 
     /** Return the value by parsing the output of list cvds with a given keyword. */
-    @VisibleForTesting
-    String parseListCvdOutput(String content, String keyword) {
+    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
+    // (tradefed-avd-util)
+    public String parseListCvdOutput(String content, String keyword) {
         // An example output of the given content is:
         // {"cvds":
         //      [{
@@ -478,8 +488,9 @@ public class HostOrchestratorUtil {
      * @param maxWaitTime The max timeout expected to execute the HTTP request.
      * @return A CommandResult containing the status and logs after running curl command.
      */
-    @VisibleForTesting
-    CommandResult cvdOperationExecution(
+    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
+    // (tradefed-avd-util)
+    public CommandResult cvdOperationExecution(
             String portNumber, String method, String request, long maxWaitTime) {
         CommandResult commandRes = curlCommandExecution(portNumber, method, request, true);
         if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
@@ -510,15 +521,16 @@ public class HostOrchestratorUtil {
     }
 
     /** Get {@link IRunUtil} to use. Exposed for unit testing. */
-    @VisibleForTesting
-    IRunUtil getRunUtil() {
+    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
+    // (tradefed-avd-util)
+    protected IRunUtil getRunUtil() {
         return RunUtil.getDefault();
     }
 
     /** Return the unsupported api response. Exposed for unit testing. */
-    @VisibleForTesting
-    String getUnsupportedHoResponse() {
+    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
+    // (tradefed-avd-util)
+    public String getUnsupportedHoResponse() {
         return UNSUPPORTED_API_RESPONSE;
     }
-
 }

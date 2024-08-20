@@ -101,10 +101,8 @@ import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
 import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
-import com.android.tradefed.device.cloud.HostOrchestratorUtilTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
-import com.android.tradefed.device.cloud.OxygenClientTest;
 import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
@@ -632,10 +630,8 @@ import org.junit.runners.Suite.SuiteClasses;
     GceAvdInfoTest.class,
     GceManagerTest.class,
     GceSshTunnelMonitorTest.class,
-    HostOrchestratorUtilTest.class,
     ManagedRemoteDeviceTest.class,
     NestedRemoteDeviceTest.class,
-    OxygenClientTest.class,
     OxygenUtilTest.class,
     RemoteAndroidVirtualDeviceTest.class,
     RemoteFileUtilTest.class,
