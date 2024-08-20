@@ -383,7 +383,10 @@ public class GceAvdInfo {
             if (devices != null) {
                 if (devices.length() == 1) {
                     JSONObject d = (JSONObject) devices.get(0);
-                    addCfStartTimeMetrics(d);
+                    // Only log CF boot performance metrics if the device launch is successful.
+                    if (GceStatus.SUCCESS.equals(gceStatus)) {
+                        addCfStartTimeMetrics(d);
+                    }
                     String ip = d.getString("ip");
                     String instanceName = d.getString("instance_name");
                     GceAvdInfo avdInfo =
