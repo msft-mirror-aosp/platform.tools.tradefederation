@@ -28,6 +28,7 @@ import static org.mockito.Mockito.when;
 import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceAllocationState;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -67,11 +68,14 @@ import java.util.stream.Stream;
 @RunWith(JUnit4.class)
 public class GkiDeviceFlashPreparerTest {
 
+    private static final String COMMAND_SUCCESS_STDERROR = "OKAY [  0.043s]";
+    private static final String COMMAND_FAILED_STDERROR = "FAILED (remote: 'Partition error')";
     private GkiDeviceFlashPreparer mPreparer;
     @Mock ITestDevice mMockDevice;
     private IDeviceBuildInfo mBuildInfo;
     private File mTmpDir;
     private TestInformation mTestInfo;
+    private OptionSetter mOptionSetter;
     private CommandResult mSuccessResult;
     private CommandResult mFailureResult;
     @Mock IRunUtil mMockRunUtil;
@@ -167,6 +171,7 @@ public class GkiDeviceFlashPreparerTest {
                         return systemDlkmStagingDir;
                     }
                 };
+        mOptionSetter = new OptionSetter(mPreparer);
         // Reset default settings
         mTmpDir = FileUtil.createTempDir("tmp");
         mBuildInfo = new DeviceBuildInfo("0", "");
@@ -176,10 +181,10 @@ public class GkiDeviceFlashPreparerTest {
         context.addDeviceBuildInfo("device", mBuildInfo);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
         mSuccessResult = new CommandResult(CommandStatus.SUCCESS);
-        mSuccessResult.setStderr("OKAY [  0.043s]");
+        mSuccessResult.setStderr(COMMAND_SUCCESS_STDERROR);
         mSuccessResult.setStdout("");
         mFailureResult = new CommandResult(CommandStatus.FAILED);
-        mFailureResult.setStderr("FAILED (remote: 'Partition error')");
+        mFailureResult.setStderr(COMMAND_FAILED_STDERROR);
         mFailureResult.setStdout("");
     }
 
@@ -386,6 +391,76 @@ public class GkiDeviceFlashPreparerTest {
         mPreparer.setUp(mTestInfo);
         mPreparer.tearDown(mTestInfo, null);
 
+        verify(mMockDevice).rebootIntoBootloader();
+        verify(mMockRunUtil).allowInterrupt(false);
+        verify(mMockRunUtil).allowInterrupt(true);
+        verify(mMockRunUtil).sleep(anyLong());
+        verify(mMockDevice).rebootUntilOnline();
+        verify(mMockDevice).setDate(null);
+        verify(mMockDevice).waitForDeviceAvailable(anyLong());
+        verify(mMockDevice).setRecoveryMode(RecoveryMode.AVAILABLE);
+        verify(mMockDevice).postBootSetup();
+    }
+
+    /* Verifies that preparer can flash GKI boot image with fastboot flash options */
+    @Test
+    public void testSetup_Success_with_flash_options() throws Exception {
+        File bootImg = FileUtil.createTempFile("boot", ".img", mTmpDir);
+        bootImg.renameTo(new File(mTmpDir, "boot.img"));
+        FileUtil.writeToFile("ddd", bootImg);
+        mBuildInfo.setFile("gki_boot.img", bootImg, "0");
+        mOptionSetter.setOptionValue("fastboot-flash-option", "--disable-verity");
+
+        when(mMockDevice.executeLongFastbootCommand(
+                        "--disable-verity",
+                        "flash",
+                        "boot",
+                        mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
+
+        when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
+
+        mPreparer.setUp(mTestInfo);
+        mPreparer.tearDown(mTestInfo, null);
+
+        verify(mMockDevice).rebootIntoBootloader();
+        verify(mMockRunUtil).allowInterrupt(false);
+        verify(mMockRunUtil).allowInterrupt(true);
+        verify(mMockRunUtil).sleep(anyLong());
+        verify(mMockDevice).rebootUntilOnline();
+        verify(mMockDevice).setDate(null);
+        verify(mMockDevice).waitForDeviceAvailable(anyLong());
+        verify(mMockDevice).setRecoveryMode(RecoveryMode.AVAILABLE);
+        verify(mMockDevice).postBootSetup();
+    }
+
+    /* Verifies that preparer can flash GKI boot image with disable-verity options */
+    @Test
+    public void testSetup_Success_with_disable_verity() throws Exception {
+        File bootImg = FileUtil.createTempFile("boot", ".img", mTmpDir);
+        bootImg.renameTo(new File(mTmpDir, "boot.img"));
+        FileUtil.writeToFile("ddd", bootImg);
+        mBuildInfo.setFile("gki_boot.img", bootImg, "0");
+        mOptionSetter.setOptionValue("disable-verity", "true");
+        mOptionSetter.setOptionValue("fastboot-flash-option", "--disable-verity");
+
+        when(mMockDevice.isAdbRoot()).thenReturn(true);
+        when(mMockDevice.executeAdbCommand("disable-verity")).thenReturn("disabled");
+        when(mMockDevice.executeLongFastbootCommand(
+                        "--disable-verity",
+                        "flash",
+                        "boot",
+                        mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
+
+        when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
+
+        mPreparer.setUp(mTestInfo);
+        mPreparer.tearDown(mTestInfo, null);
+
+        verify(mMockDevice).reboot();
         verify(mMockDevice).rebootIntoBootloader();
         verify(mMockRunUtil).allowInterrupt(false);
         verify(mMockRunUtil).allowInterrupt(true);
@@ -672,3 +747,4 @@ public class GkiDeviceFlashPreparerTest {
         }
     }
 }
+

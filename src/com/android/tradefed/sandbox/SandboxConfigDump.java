@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.sandbox;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.StubBuildProvider;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
@@ -26,6 +25,7 @@ import com.android.tradefed.config.SandboxConfigurationFactory;
 import com.android.tradefed.device.IDeviceSelection;
 import com.android.tradefed.log.FileLogger;
 import com.android.tradefed.log.ILeveledLogOutput;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.result.FileSystemLogSaver;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;

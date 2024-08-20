@@ -14,25 +14,19 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util.avd;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
-import com.android.tradefed.build.BuildInfo;
-import com.android.tradefed.config.OptionSetter;
-import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.device.cloud.OxygenClient.LHPTunnelMode;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
 
 import com.google.common.base.Joiner;
-import com.google.common.net.HostAndPort;
 
 import org.junit.After;
 import org.junit.Before;
@@ -46,6 +40,7 @@ import org.mockito.stubbing.Answer;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 
 /** Unit tests for {@link OxygenClient} */
@@ -56,11 +51,23 @@ public class OxygenClientTest {
 
     private OxygenClient mOxygenClient;
 
-    private BuildInfo mBuildInfo;
+    // Build info
+    private static final String BUILD_TARGET = "target";
+    private static final String BUILD_BRANCH = "testBranch";
+    private static final String BUILD_ID = "P1234567";
 
-    private GceAvdInfo mGceAvdInfo;
+    // GceAvdInfo: InstanceName and host name
+    private static final String INSTANCE_NAME = "6a6a744e-0653-4926-b7b8-535d121a2fc9";
+    private static final String HOST = "10.0.80.227";
 
-    private TestDeviceOptions mTestDeviceOptions;
+    // TestDeviceOptions
+    private static final String TARGET_REGION = "us-east";
+    private static final long LEASE_LENGTH = 3600000;
+    private static final String OXYGEN_DEVICE_SIZE = "large";
+    private static final String OXYGEN_SERVICE_ADDRESS = "10.1.23.45";
+    private static final long GCE_CMD_TIMEOUT = 900000;
+    private static final String OXYGEN_ACCOUNTING_USER = "random1234@space.com";
+    private HashMap<String, String> mExtraOxygenArgs;
 
     private IRunUtil mRunUtil;
 
@@ -120,28 +127,10 @@ public class OxygenClientTest {
     @Before
     public void setUp() throws Exception {
         mOxygenBinaryFile = FileUtil.createTempFile("oxygen", "binary");
-        mBuildInfo = new BuildInfo("P1234567", "target");
-        mBuildInfo.setBuildBranch("testBranch");
-        mBuildInfo.addBuildAttribute("build_target", "target");
-        mGceAvdInfo =
-                new GceAvdInfo(
-                        "6a6a744e-0653-4926-b7b8-535d121a2fc9",
-                        HostAndPort.fromString("10.0.80.227").withDefaultPort(12345));
-        mTestDeviceOptions =
-                new TestDeviceOptions() {
-                    @Override
-                    public List<String> getGceDriverParams() {
-                        return Arrays.asList(GCE_DEVICE_PARAMS);
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        setter.setOptionValue("oxygen-target-region", "us-east");
-        setter.setOptionValue("oxygen-lease-length", "60m");
-        setter.setOptionValue("oxygen-device-size", "large");
-        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
-        setter.setOptionValue("gce-boot-timeout", "900000");
-        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
-        setter.setOptionValue("extra-oxygen-args", "arg1", "value1");
+
+        mExtraOxygenArgs = new HashMap<>();
+        mExtraOxygenArgs.put("arg1", "value1");
+
         mRunUtil = Mockito.mock(IRunUtil.class);
         mOxygenClient = new OxygenClient(mOxygenBinaryFile, mRunUtil);
     }
@@ -190,7 +179,18 @@ public class OxygenClientTest {
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
         MultiMap<String, String> attributes = new MultiMap<>();
         attributes.put("work_unit_id", "some_id");
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        Arrays.asList(GCE_DEVICE_PARAMS),
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -198,23 +198,8 @@ public class OxygenClientTest {
     /** Test leasing a device with Oxygen client binary without build-id specified. */
     @Test
     public void testLeaseWithoutBuildId() throws Exception {
-        TestDeviceOptions testDeviceOptions =
-                new TestDeviceOptions() {
-                    @Override
-                    public List<String> getGceDriverParams() {
-                        return Arrays.asList(
-                                new String[] {
-                                    "--branch", "testBranch", "--build-target", "target"
-                                });
-                    }
-                };
-        OptionSetter setter = new OptionSetter(testDeviceOptions);
-        setter.setOptionValue("oxygen-target-region", "us-east");
-        setter.setOptionValue("oxygen-lease-length", "60m");
-        setter.setOptionValue("oxygen-device-size", "large");
-        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
-        setter.setOptionValue("gce-boot-timeout", "900000");
-        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
+        List<String> gceDriverParams =
+                Arrays.asList(new String[] {"--branch", "testBranch", "--build-target", "target"});
         Mockito.doAnswer(
                         new Answer<Object>() {
                             @Override
@@ -231,6 +216,7 @@ public class OxygenClientTest {
                                                 + " target -build_id testBranch -target_region"
                                                 + " us-east -accounting_user random1234@space.com"
                                                 + " -lease_length_secs 3600"
+                                                + " -arg1 value1"
                                                 + " -user_debug_info work_unit_id:some_id";
                                 assertEquals(timeout, 900000);
                                 assertEquals(expectedCmdString, cmdString);
@@ -246,7 +232,18 @@ public class OxygenClientTest {
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
         MultiMap<String, String> attributes = new MultiMap<>();
         attributes.put("work_unit_id", "some_id");
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, testDeviceOptions, attributes);
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        gceDriverParams,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -292,7 +289,15 @@ public class OxygenClientTest {
         attributes.put("work_unit_id", "some_id");
         CommandResult res =
                 mOxygenClient.leaseMultipleDevices(
-                        Arrays.asList(mBuildInfo, mBuildInfo), mTestDeviceOptions, attributes);
+                        Arrays.asList(BUILD_TARGET, BUILD_TARGET),
+                        Arrays.asList(BUILD_BRANCH, BUILD_BRANCH),
+                        Arrays.asList(BUILD_ID, BUILD_ID),
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -328,59 +333,35 @@ public class OxygenClientTest {
                         })
                 .when(mRunUtil)
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
-        boolean isReleased = mOxygenClient.release(mGceAvdInfo, mTestDeviceOptions);
-        assertTrue(isReleased);
+        CommandResult res =
+                mOxygenClient.release(
+                        INSTANCE_NAME,
+                        HOST,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        mExtraOxygenArgs,
+                        GCE_CMD_TIMEOUT);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
     }
 
     /** Test releasing an empty GceAvdInfo. */
     @Test
     public void testReleaseEmptyGceAvdInfo() throws Exception {
         // Empty GceAvdInfo happen when the lease was unsuccessful
-        GceAvdInfo emptyGceAvdInfo = new GceAvdInfo(null, null);
-        boolean isReleased = mOxygenClient.release(emptyGceAvdInfo, mTestDeviceOptions);
+        CommandResult res =
+                mOxygenClient.release(
+                        null,
+                        null,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        mExtraOxygenArgs,
+                        GCE_CMD_TIMEOUT);
         // Should return true as there is nothing need to be released
-        assertTrue(isReleased);
-    }
-
-    @Test
-    public void testNoWaitForBootSpecified() throws Exception {
-        assertFalse(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
-
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        setter.setOptionValue("extra-oxygen-args", "no_wait_for_boot", "");
-        assertTrue(mOxygenClient.noWaitForBootSpecified(mTestDeviceOptions));
-    }
-
-    /** Test cvd path override. */
-    @Test
-    public void testCvdOverride() throws Exception {
-        assertNull(mOxygenClient.getOverrideCvdPath(mTestDeviceOptions));
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        setter.setOptionValue("extra-oxygen-args", "override_cvd_path", "gs://abc/cvd");
-        assertEquals(
-                mOxygenClient.getOverrideCvdPath(mTestDeviceOptions), "gs://abc/cvd");
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
     }
 
     @Test
     public void testLeaseWithBootImageAndBootArtifact() throws Exception {
-        mTestDeviceOptions =
-                new TestDeviceOptions() {
-                    @Override
-                    public List<String> getGceDriverParams() {
-                        List<String> paramsList = new ArrayList<>();
-                        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
-                        paramsList.addAll(Arrays.asList(BOOT_IMAGE_PARAMS));
-                        return paramsList;
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        setter.setOptionValue("oxygen-target-region", "us-east");
-        setter.setOptionValue("oxygen-lease-length", "60m");
-        setter.setOptionValue("oxygen-device-size", "large");
-        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
-        setter.setOptionValue("gce-boot-timeout", "900000");
-        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
-        setter.setOptionValue("extra-oxygen-args", "arg1", "value1");
         Mockito.doAnswer(
                         new Answer<Object>() {
                             @Override
@@ -419,31 +400,27 @@ public class OxygenClientTest {
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
         MultiMap<String, String> attributes = new MultiMap<>();
         attributes.put("work_unit_id", "some_id");
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
+        List<String> paramsList = new ArrayList<>();
+        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+        paramsList.addAll(Arrays.asList(BOOT_IMAGE_PARAMS));
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        paramsList,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
 
     @Test
     public void testLeaseWithBootloader() throws Exception {
-        mTestDeviceOptions =
-                new TestDeviceOptions() {
-                    @Override
-                    public List<String> getGceDriverParams() {
-                        List<String> paramsList = new ArrayList<>();
-                        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
-                        paramsList.addAll(Arrays.asList(BOOTLOADER_PARAMS));
-                        return paramsList;
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        setter.setOptionValue("oxygen-target-region", "us-east");
-        setter.setOptionValue("oxygen-lease-length", "60m");
-        setter.setOptionValue("oxygen-device-size", "large");
-        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
-        setter.setOptionValue("gce-boot-timeout", "900000");
-        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
-        setter.setOptionValue("extra-oxygen-args", "arg1", "value1");
         Mockito.doAnswer(
                         new Answer<Object>() {
                             @Override
@@ -481,31 +458,27 @@ public class OxygenClientTest {
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
         MultiMap<String, String> attributes = new MultiMap<>();
         attributes.put("work_unit_id", "some_id");
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
+        List<String> paramsList = new ArrayList<>();
+        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+        paramsList.addAll(Arrays.asList(BOOTLOADER_PARAMS));
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        paramsList,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
 
     @Test
     public void testLeaseWithHostPackage() throws Exception {
-        mTestDeviceOptions =
-                new TestDeviceOptions() {
-                    @Override
-                    public List<String> getGceDriverParams() {
-                        List<String> paramsList = new ArrayList<>();
-                        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
-                        paramsList.addAll(Arrays.asList(HOST_PACKAGE_PARAMS));
-                        return paramsList;
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        setter.setOptionValue("oxygen-target-region", "us-east");
-        setter.setOptionValue("oxygen-lease-length", "60m");
-        setter.setOptionValue("oxygen-device-size", "large");
-        setter.setOptionValue("oxygen-service-address", "10.1.23.45");
-        setter.setOptionValue("gce-boot-timeout", "900000");
-        setter.setOptionValue("oxygen-accounting-user", "random1234@space.com");
-        setter.setOptionValue("extra-oxygen-args", "arg1", "value1");
         Mockito.doAnswer(
                         new Answer<Object>() {
                             @Override
@@ -541,43 +514,23 @@ public class OxygenClientTest {
                 .runTimedCmd(Mockito.anyLong(), Mockito.any());
         MultiMap<String, String> attributes = new MultiMap<>();
         attributes.put("work_unit_id", "some_id");
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
+        List<String> paramsList = new ArrayList<>();
+        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+        paramsList.addAll(Arrays.asList(HOST_PACKAGE_PARAMS));
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        paramsList,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
-    }
-
-    @Test
-    public void testLeaseOxygenationDevice() throws Exception {
-        mTestDeviceOptions =
-                new TestDeviceOptions() {
-                    @Override
-                    public boolean useOxygenationDevice() {
-                        return true;
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        MultiMap<String, String> attributes = new MultiMap<>();
-        attributes.put("work_unit_id", "some_id");
-        CommandResult res = mOxygenClient.leaseDevice(mBuildInfo, mTestDeviceOptions, attributes);
-        assertEquals(res.getStatus(), CommandStatus.EXCEPTION);
-        assertEquals(
-                res.getStderr(),
-                "OxygenClient: Leasing an oxygenation device is not supported for now.");
-    }
-
-    @Test
-    public void testReleaseOxygenationDevice() throws Exception {
-        mTestDeviceOptions =
-                new TestDeviceOptions() {
-                    @Override
-                    public boolean useOxygenationDevice() {
-                        return true;
-                    }
-                };
-        OptionSetter setter = new OptionSetter(mTestDeviceOptions);
-        MultiMap<String, String> attributes = new MultiMap<>();
-        attributes.put("work_unit_id", "some_id");
-        assertFalse(mOxygenClient.release(mGceAvdInfo, mTestDeviceOptions));
     }
 
     @Test
