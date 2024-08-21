@@ -25,6 +25,7 @@ import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 
@@ -813,11 +814,14 @@ public abstract class GTestBase
      * reports duplicate tests if mDisabledDuplicateCheck is false. Otherwise, returns the passed-in
      * listener.
      */
-    protected ITestInvocationListener getGTestListener(ITestInvocationListener listener) {
+    protected ITestInvocationListener getGTestListener(ITestInvocationListener... listeners) {
+        ITestInvocationListener listener = null;
         if (mTestCaseTimeout.toMillis() > 0L) {
             listener =
                     new TestTimeoutEnforcer(
-                            mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, listener);
+                            mTestCaseTimeout.toMillis(), TimeUnit.MILLISECONDS, listeners);
+        } else {
+            listener = new ResultForwarder(listeners);
         }
         if (mDisableDuplicateCheck) {
             return listener;
