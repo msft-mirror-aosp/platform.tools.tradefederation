@@ -373,3 +373,36 @@ sh_binary_host {
     name: "run_tf_cmd.sh",
     src: "run_tf_cmd.sh",
 }
+
+java_genrule_host {
+    name: "tradefed_zip",
+    tools: [
+        "atest_tradefed.sh",
+        "casuploader",
+        "content_uploader",
+        "soong_zip",
+    ],
+    srcs: [
+        ":TradeFedTestApp",
+        ":TradeFedUiTestApp",
+        ":compatibility-host-util",
+        ":compatibility-tradefed",
+        ":loganalysis",
+        ":tradefed",
+        ":tradefed-avd-util-tests",
+        ":tradefed-contrib",
+        ":tradefed-tests",
+        "script_help.sh",
+        "tools/content_uploader.py",
+        "tradefed.sh",
+    ],
+    uses_order_only_build_number_file: true,
+    out: ["tradefed.zip"],
+    dist: {
+        targets: ["tradefed"],
+    },
+    cmd: "mkdir -p $(genDir)/tmp && " +
+        "cp -f $(in) $(location casuploader) $(location atest_tradefed.sh) $(location content_uploader) $(genDir)/tmp && " +
+        "cp $(build_number_file) $(genDir)/tmp/version.txt && " +
+        "$(location soong_zip) -o $(out) -C $(genDir)/tmp -D $(genDir)/tmp",
+}
