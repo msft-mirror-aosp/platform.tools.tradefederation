@@ -20,11 +20,12 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /** Listener that allows to read the final test run status. */
 public final class TestRunResultListener implements ITestInvocationListener {
-    private Set<String> mFailedRuns = new HashSet<>();
+    private Map<String, Set<String>> mFailedRuns = new HashMap<>();
     private String mCurrentTestRun = null;
 
     /** {@inheritDoc} */
@@ -46,36 +47,49 @@ public final class TestRunResultListener implements ITestInvocationListener {
     /** {@inheritDoc} */
     @Override
     public void testRunFailed(String errorMessage) {
-        handleFailure();
+        handleFailure(null);
     }
 
     /** {@inheritDoc} */
     @Override
     public void testRunFailed(FailureDescription failure) {
-        handleFailure();
+        handleFailure(null);
     }
 
     /** {@inheritDoc} */
     @Override
     public void testFailed(TestDescription test, String trace) {
-        handleFailure();
+        handleFailure(test.getTestName());
     }
 
     /** {@inheritDoc} */
     @Override
     public void testFailed(TestDescription test, FailureDescription failure) {
-        handleFailure();
+        handleFailure(test.getTestName());
     }
 
     public boolean isTestRunFailed(String testRunName) {
-        return mFailedRuns.contains(testRunName);
+        return mFailedRuns.containsKey(testRunName);
     }
 
-    private void handleFailure() {
+    public boolean isTestFailed(String testName) {
+        if (!mFailedRuns.containsKey(mCurrentTestRun)) {
+            return false;
+        }
+        Set<String> failedTests = mFailedRuns.get(mCurrentTestRun);
+        return failedTests.isEmpty() || failedTests.contains(testName);
+    }
+
+    private void handleFailure(String testName) {
         if (mCurrentTestRun == null) {
             throw new RuntimeException(
                     "Failed to catch the test run start before the test run failed.");
         }
-        mFailedRuns.add(mCurrentTestRun);
+        Set<String> failedTests = mFailedRuns.getOrDefault(mCurrentTestRun, new HashSet<>());
+        // If the test name is null, the whole test run is failed and the failed test set is empty.
+        if (testName != null) {
+            failedTests.add(testName);
+        }
+        mFailedRuns.put(mCurrentTestRun, failedTests);
     }
 }
