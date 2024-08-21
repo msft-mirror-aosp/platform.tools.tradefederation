@@ -26,7 +26,9 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.GCSFileDownloader;
+import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.avd.LogCollector;
+import com.android.tradefed.util.avd.OxygenClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -37,6 +39,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -219,5 +222,23 @@ public class OxygenUtil {
         String region = zone.substring(lastSlashIndex + 1);
         int lastDashIndex = region.lastIndexOf("-");
         return region.substring(0, lastDashIndex);
+    }
+
+    /**
+     * Helper to create an {@link OxygenClient}.
+     *
+     * @param file the Oxygen client binary file.
+     * @return an {@link OxygenClient} class to create CF devices.
+     */
+    public static OxygenClient createOxygenClient(File file) {
+        if (file.getAbsolutePath().endsWith(".jar")) {
+            List<String> cmdArgs =
+                    Arrays.asList(
+                            SystemUtil.getRunningJavaBinaryPath().getAbsolutePath(),
+                            "-jar",
+                            file.getAbsolutePath());
+            return new OxygenClient(cmdArgs);
+        }
+        return new OxygenClient(Arrays.asList(file.getAbsolutePath()));
     }
 }
