@@ -78,7 +78,7 @@ public class SkipFeature
         if (mConfig != null) {
             // Currently only support presubmit
             boolean presubmit = "WORK_NODE".equals(mInfo.getContext().getAttribute("trigger"));
-            if (presubmit && mConfig.getSkipManager().reportSkippedModule()) {
+            if (mConfig.getSkipManager().reportSkippedModule()) {
                 MultiPartResponse.Builder multiPartBuilder = MultiPartResponse.newBuilder();
                 multiPartBuilder.addResponsePart(
                         PartResponse.newBuilder()
@@ -110,6 +110,7 @@ public class SkipFeature
 
     /** Fetch and populate unchanged modules if needed. */
     public static Set<String> getUnchangedModules() {
+        boolean isPresubmit = false;
         Set<String> unchangedModulesSet = new HashSet<>();
         try (TradefedFeatureClient client = new TradefedFeatureClient()) {
             FeatureResponse unchangedModules =
@@ -127,8 +128,9 @@ public class SkipFeature
                         unchangedModules.getMultiPartResponse().getResponsePartList()) {
                     if (rep.getKey().equals(SKIPPED_MODULES)) {
                         unchangedModulesSet.addAll(splitStringFilters(delimiter, rep.getValue()));
-                    } else if (rep.getKey().equals(DELIMITER_NAME)
-                            || rep.getKey().equals(PRESUBMIT)) {
+                    } else if (rep.getKey().equals(PRESUBMIT)) {
+                        isPresubmit = Boolean.parseBoolean(rep.getValue());
+                    } else if (rep.getKey().equals(DELIMITER_NAME)) {
                         // Ignore
                     } else {
                         CLog.w("Unexpected response key '%s' for unchanged modules", rep.getKey());
@@ -139,6 +141,9 @@ public class SkipFeature
             }
         } catch (Exception e) {
             CLog.e(e);
+        }
+        if (!isPresubmit) {
+            return new HashSet<String>();
         }
         return unchangedModulesSet;
     }

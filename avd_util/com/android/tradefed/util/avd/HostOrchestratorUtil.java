@@ -35,6 +35,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /** Utility to execute commands via Host Orchestrator on remote instances. */
@@ -69,6 +70,7 @@ public class HostOrchestratorUtil {
 
     private OxygenClient mOxygenClient;
 
+    @Deprecated
     public HostOrchestratorUtil(
             boolean useOxygenation,
             boolean useCvdOxygen,
@@ -86,7 +88,7 @@ public class HostOrchestratorUtil {
                 instanceName,
                 host,
                 oxygenationDeviceId,
-                new OxygenClient(avdDriverBinary));
+                new OxygenClient(Arrays.asList(avdDriverBinary.getAbsolutePath())));
     }
 
     public HostOrchestratorUtil(
