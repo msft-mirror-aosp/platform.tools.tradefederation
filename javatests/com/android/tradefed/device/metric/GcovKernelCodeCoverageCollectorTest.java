@@ -19,32 +19,31 @@ package com.android.tradefed.device.metric;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertTrue;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.startsWith;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.IDeviceActionReceiver;
 import com.android.tradefed.device.ITestDevice;
-import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
-import com.android.tradefed.util.proto.TfMetricProtoUtil;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -118,6 +117,7 @@ public class GcovKernelCodeCoverageCollectorTest {
         mCoverageOptionsSetter = new OptionSetter(mCoverageOptions);
 
         doReturn(mCoverageOptions).when(mMockConfiguration).getCoverageOptions();
+        doReturn("mock-serial").when(mMockDevice).getSerialNumber();
         doReturn(ImmutableList.of(mMockDevice)).when(mMockContext).getDevices();
         doReturn(mContextAttributes).when(mMockContext).getAttributes();
 
@@ -142,8 +142,8 @@ public class GcovKernelCodeCoverageCollectorTest {
                         })
                 .when(mMockDevice)
                 .reboot();
-
-        doReturn(true).when(mMockDevice).isDebugfsMounted();
+        // Not mounted initially. Then mounted successfully.
+        doReturn(false, true).when(mMockDevice).isDebugfsMounted();
 
         when(mMockDevice.executeShellV2Command(
                         GcovKernelCodeCoverageCollector.RESET_GCOV_COUNTS_COMMAND))
