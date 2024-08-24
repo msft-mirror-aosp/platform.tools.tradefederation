@@ -47,5 +47,6 @@
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/googleapis/google/bytestream/bytestream-java-grpc/linux_glibc_common/javac/bytestream-java-grpc.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/googleapis/google/bytestream/bytestream-java-proto/linux_glibc_common/combined/bytestream-java-proto.jar"/>
 	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/prebuilts/tools/common/m2/google-auth-library-credentials-1.23.0/linux_glibc_common/combined/google-auth-library-credentials-1.23.0.jar"/>
+	<classpathentry kind="var" path="TRADEFED_ROOT/out/soong/.intermediates/external/mockito/mockito/linux_glibc_common/combined/mockito.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
