@@ -977,7 +977,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                                     ? gceAvdInfo.hostAndPort().getHost()
                                     : null,
                             gceAvdInfo.getOxygenationDeviceId(),
-                            getDevice().getOptions().getAvdDriverBinary());
+                            OxygenUtil.createOxygenClient(
+                                    getDevice().getOptions().getAvdDriverBinary()));
         }
     }
 }

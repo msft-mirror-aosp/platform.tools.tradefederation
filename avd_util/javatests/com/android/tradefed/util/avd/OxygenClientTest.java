@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util.avd;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -24,7 +24,6 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
-import com.android.tradefed.util.avd.OxygenClient;
 import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
 
 import com.google.common.base.Joiner;
@@ -49,6 +48,7 @@ import java.util.List;
 public class OxygenClientTest {
 
     private File mOxygenBinaryFile;
+    private File mOxygenJarFile;
 
     private OxygenClient mOxygenClient;
 
@@ -128,17 +128,20 @@ public class OxygenClientTest {
     @Before
     public void setUp() throws Exception {
         mOxygenBinaryFile = FileUtil.createTempFile("oxygen", "binary");
+        mOxygenJarFile = FileUtil.createTempFile("oxygen", ".jar");
 
         mExtraOxygenArgs = new HashMap<>();
         mExtraOxygenArgs.put("arg1", "value1");
 
         mRunUtil = Mockito.mock(IRunUtil.class);
-        mOxygenClient = new OxygenClient(mOxygenBinaryFile, mRunUtil);
+        mOxygenClient =
+                new OxygenClient(Arrays.asList(mOxygenBinaryFile.getAbsolutePath()), mRunUtil);
     }
 
     @After
     public void tearDown() {
         FileUtil.recursiveDelete(mOxygenBinaryFile);
+        FileUtil.recursiveDelete(mOxygenJarFile);
     }
 
     /** Test leasing a device with Oxygen client binary. */
@@ -191,7 +194,69 @@ public class OxygenClientTest {
                         Arrays.asList(GCE_DEVICE_PARAMS),
                         mExtraOxygenArgs,
                         attributes,
-                        GCE_CMD_TIMEOUT);
+                        GCE_CMD_TIMEOUT,
+                        false);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    /** Test leasing a device from OmniLab's infra with Oxygen client jar file. */
+    @Test
+    public void testLeaseOmniLabDevice() throws Exception {
+        mOxygenClient =
+                new OxygenClient(
+                        Arrays.asList("java", "-jar", mOxygenJarFile.getAbsolutePath()), mRunUtil);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                long timeout = mock.getArgument(0);
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = Joiner.on(" ").join(cmd);
+                                String expectedCmdString =
+                                        "java -jar "
+                                                + mOxygenJarFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id P1234567"
+                                                + " -system_build_target testSystemTarget"
+                                                + " -system_build_id S1234567"
+                                                + " -kernel_build_target testKernelTarget"
+                                                + " -kernel_build_id K1234567 -target_region"
+                                                + " us-east -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id"
+                                                + " -use_omnilab";
+                                assertEquals(timeout, 900000);
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        Arrays.asList(GCE_DEVICE_PARAMS),
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT,
+                        true);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -244,7 +309,70 @@ public class OxygenClientTest {
                         gceDriverParams,
                         mExtraOxygenArgs,
                         attributes,
-                        GCE_CMD_TIMEOUT);
+                        GCE_CMD_TIMEOUT,
+                        false);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    /**
+     * Test leasing a device with Oxygen client binary from OmniLab's infra without build-id
+     * specified.
+     */
+    @Test
+    public void testLeaseOmniLabDeviceWithoutBuildId() throws Exception {
+        mOxygenClient =
+                new OxygenClient(
+                        Arrays.asList("java", "-jar", mOxygenJarFile.getAbsolutePath()), mRunUtil);
+        List<String> gceDriverParams =
+                Arrays.asList(new String[] {"--branch", "testBranch", "--build-target", "target"});
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                long timeout = mock.getArgument(0);
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = Joiner.on(" ").join(cmd);
+                                String expectedCmdString =
+                                        "java -jar "
+                                                + mOxygenJarFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id testBranch -target_region"
+                                                + " us-east -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id"
+                                                + " -use_omnilab";
+                                assertEquals(timeout, 900000);
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        gceDriverParams,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT,
+                        true);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -341,7 +469,56 @@ public class OxygenClientTest {
                         TARGET_REGION,
                         OXYGEN_ACCOUNTING_USER,
                         mExtraOxygenArgs,
-                        GCE_CMD_TIMEOUT);
+                        GCE_CMD_TIMEOUT,
+                        false);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+    }
+
+    /** Test releasing a device from OmniLab's infra with Oxygen client binary. */
+    @Test
+    public void testReleaseOmniLabDevice() throws Exception {
+        mOxygenClient =
+                new OxygenClient(
+                        Arrays.asList("java", "-jar", mOxygenJarFile.getAbsolutePath()), mRunUtil);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                long timeout = mock.getArgument(0);
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = Joiner.on(" ").join(cmd);
+                                String expectedCmdString =
+                                        "java -jar "
+                                                + mOxygenJarFile.getAbsolutePath()
+                                                + " -arg1 value1 -release -target_region us-east"
+                                                + " -server_url 10.0.80.227"
+                                                + " -session_id"
+                                                + " 6a6a744e-0653-4926-b7b8-535d121a2fc9"
+                                                + " -accounting_user"
+                                                + " random1234@space.com"
+                                                + " -use_omnilab";
+                                assertEquals(timeout, 900000);
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        CommandResult res =
+                mOxygenClient.release(
+                        INSTANCE_NAME,
+                        HOST,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        mExtraOxygenArgs,
+                        GCE_CMD_TIMEOUT,
+                        true);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
     }
 
@@ -356,7 +533,25 @@ public class OxygenClientTest {
                         TARGET_REGION,
                         OXYGEN_ACCOUNTING_USER,
                         mExtraOxygenArgs,
-                        GCE_CMD_TIMEOUT);
+                        GCE_CMD_TIMEOUT,
+                        false);
+        // Should return true as there is nothing need to be released
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+    }
+
+    /** Test releasing an empty GceAvdInfo from Omnilab's infra. */
+    @Test
+    public void testReleaseOmniLabDeviceWithEmptyGceAvdInfo() throws Exception {
+        // Empty GceAvdInfo happen when the lease was unsuccessful
+        CommandResult res =
+                mOxygenClient.release(
+                        null,
+                        null,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        mExtraOxygenArgs,
+                        GCE_CMD_TIMEOUT,
+                        true);
         // Should return true as there is nothing need to be released
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
     }
@@ -415,7 +610,73 @@ public class OxygenClientTest {
                         paramsList,
                         mExtraOxygenArgs,
                         attributes,
-                        GCE_CMD_TIMEOUT);
+                        GCE_CMD_TIMEOUT,
+                        false);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    @Test
+    public void testLeaseOmniLabDeviceWithBootImageAndBootArtifact() throws Exception {
+        mOxygenClient =
+                new OxygenClient(
+                        Arrays.asList("java", "-jar", mOxygenJarFile.getAbsolutePath()), mRunUtil);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = String.join(" ", cmd);
+                                String expectedCmdString =
+                                        "java -jar "
+                                                + mOxygenJarFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id P1234567"
+                                                + " -system_build_target testSystemTarget"
+                                                + " -system_build_id S1234567"
+                                                + " -kernel_build_target testKernelTarget"
+                                                + " -kernel_build_id K1234567"
+                                                + " -boot_build_target testBootTarget"
+                                                + " -boot_build_id B1234567"
+                                                + " -boot_artifact boot-5.10.img"
+                                                + " -target_region us-east"
+                                                + " -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id"
+                                                + " -use_omnilab";
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        List<String> paramsList = new ArrayList<>();
+        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+        paramsList.addAll(Arrays.asList(BOOT_IMAGE_PARAMS));
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        paramsList,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT,
+                        true);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -473,7 +734,72 @@ public class OxygenClientTest {
                         paramsList,
                         mExtraOxygenArgs,
                         attributes,
-                        GCE_CMD_TIMEOUT);
+                        GCE_CMD_TIMEOUT,
+                        false);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    @Test
+    public void testLeaseOmniLabDeviceWithBootloader() throws Exception {
+        mOxygenClient =
+                new OxygenClient(
+                        Arrays.asList("java", "-jar", mOxygenJarFile.getAbsolutePath()), mRunUtil);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = String.join(" ", cmd);
+                                String expectedCmdString =
+                                        "java -jar "
+                                                + mOxygenJarFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id P1234567"
+                                                + " -system_build_target testSystemTarget"
+                                                + " -system_build_id S1234567"
+                                                + " -kernel_build_target testKernelTarget"
+                                                + " -kernel_build_id K1234567"
+                                                + " -bootloader_build_target testBootloaderTarget"
+                                                + " -bootloader_build_id BL1234567"
+                                                + " -target_region us-east"
+                                                + " -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600"
+                                                + " -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id"
+                                                + " -use_omnilab";
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        List<String> paramsList = new ArrayList<>();
+        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+        paramsList.addAll(Arrays.asList(BOOTLOADER_PARAMS));
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        paramsList,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT,
+                        true);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }
@@ -529,7 +855,70 @@ public class OxygenClientTest {
                         paramsList,
                         mExtraOxygenArgs,
                         attributes,
-                        GCE_CMD_TIMEOUT);
+                        GCE_CMD_TIMEOUT,
+                        false);
+        assertEquals(res.getStatus(), CommandStatus.SUCCESS);
+        assertEquals(res.getStderr(), EXPECTED_OUTPUT);
+    }
+
+    @Test
+    public void testLeaseOmniLabDeviceWithHostPackage() throws Exception {
+        mOxygenClient =
+                new OxygenClient(
+                        Arrays.asList("java", "-jar", mOxygenJarFile.getAbsolutePath()), mRunUtil);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                List<String> cmd = new ArrayList<>();
+                                for (int i = 1; i < mock.getArguments().length; i++) {
+                                    cmd.add(mock.getArgument(i));
+                                }
+                                String cmdString = String.join(" ", cmd);
+                                String expectedCmdString =
+                                        "java -jar "
+                                                + mOxygenJarFile.getAbsolutePath()
+                                                + " -lease -build_branch testBranch -build_target"
+                                                + " target -build_id P1234567 -system_build_target"
+                                                + " testSystemTarget -system_build_id S1234567"
+                                                + " -kernel_build_target testKernelTarget"
+                                                + " -kernel_build_id K1234567"
+                                                + " -host_package_build_target"
+                                                + " testHostPackageTarget -host_package_build_id"
+                                                + " HP1234567 -target_region us-east"
+                                                + " -accounting_user random1234@space.com"
+                                                + " -lease_length_secs 3600 -arg1 value1"
+                                                + " -user_debug_info work_unit_id:some_id"
+                                                + " -use_omnilab";
+                                assertEquals(expectedCmdString, cmdString);
+
+                                CommandResult res = new CommandResult();
+                                res.setStatus(CommandStatus.SUCCESS);
+                                res.setStdout("");
+                                res.setStderr(EXPECTED_OUTPUT);
+                                return res;
+                            }
+                        })
+                .when(mRunUtil)
+                .runTimedCmd(Mockito.anyLong(), Mockito.any());
+        MultiMap<String, String> attributes = new MultiMap<>();
+        attributes.put("work_unit_id", "some_id");
+        List<String> paramsList = new ArrayList<>();
+        paramsList.addAll(Arrays.asList(GCE_DEVICE_PARAMS));
+        paramsList.addAll(Arrays.asList(HOST_PACKAGE_PARAMS));
+        CommandResult res =
+                mOxygenClient.leaseDevice(
+                        BUILD_TARGET,
+                        BUILD_BRANCH,
+                        BUILD_ID,
+                        TARGET_REGION,
+                        OXYGEN_ACCOUNTING_USER,
+                        LEASE_LENGTH,
+                        paramsList,
+                        mExtraOxygenArgs,
+                        attributes,
+                        GCE_CMD_TIMEOUT,
+                        true);
         assertEquals(res.getStatus(), CommandStatus.SUCCESS);
         assertEquals(res.getStderr(), EXPECTED_OUTPUT);
     }

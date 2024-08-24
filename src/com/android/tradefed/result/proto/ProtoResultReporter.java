@@ -256,6 +256,7 @@ public abstract class ProtoResultReporter
 
     @Override
     public final void testModuleStarted(IInvocationContext moduleContext) {
+        beforeModuleStart();
         if (mModuleInProgress) {
             // If we had a module in progress, and a new module start occurs, complete the call
             testModuleEnded();
@@ -301,6 +302,15 @@ public abstract class ProtoResultReporter
             CLog.e("Failed to process test module end:");
             CLog.e(e);
         }
+        afterModuleEnd();
+    }
+
+    protected void beforeModuleStart() {
+        // Empty on purpose
+    }
+
+    protected void afterModuleEnd() {
+        // Empty on purpose
     }
 
     // Run events

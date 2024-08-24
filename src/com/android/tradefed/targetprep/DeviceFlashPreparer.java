@@ -180,6 +180,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mApplySnapshot = false;
 
     @Option(
+            name = "wipe-after-apply-snapshot",
+            description = "Whether to issue a wipe after applying snapshots.")
+    private boolean mWipeAfterApplySnapshot = false;
+
+    @Option(
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
@@ -340,6 +345,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
                                 mApplySnapshot,
+                                mWipeAfterApplySnapshot,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
@@ -669,6 +675,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     public void setApplySnapshot(boolean applySnapshot) {
         mApplySnapshot = applySnapshot;
+    }
+
+    public void setWipeAfterApplySnapshot(boolean wipeAfterApplySnapshot) {
+        mWipeAfterApplySnapshot = wipeAfterApplySnapshot;
     }
 
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
