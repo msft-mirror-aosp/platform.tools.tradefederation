@@ -59,15 +59,14 @@ public class LogCollector {
                                                     "Unable to connect to vsock server",
                                                     "unable_to_connect_to_vsock_server")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*launcher.*"),
+                                            Pattern.compile(".*(launcher|vdl_stdout).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to initialize fetch system images",
                                                     "fetch_cvd_failure")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*vdl_stdout.*"),
                                             new AbstractMap.SimpleEntry<>(
-                                                    "failed to initialize fetch system images",
-                                                    "fetch_cvd_failure")),
+                                                    "E fetch_cvd:", "fetch_cvd_failure_general")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
