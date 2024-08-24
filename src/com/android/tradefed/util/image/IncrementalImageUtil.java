@@ -89,6 +89,7 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
+    private final boolean mWipeAfterApplySnapshot;
     private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
@@ -109,6 +110,7 @@ public class IncrementalImageUtil {
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
             boolean applySnapshot,
+            boolean wipeAfterApply,
             SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
@@ -194,6 +196,7 @@ public class IncrementalImageUtil {
                 build.getDeviceImageFile(),
                 createSnapshot,
                 applySnapshot,
+                wipeAfterApply,
                 waitPhase);
     }
 
@@ -205,12 +208,14 @@ public class IncrementalImageUtil {
             File targetImage,
             File createSnapshot,
             boolean applySnapshot,
+            boolean wipeAfterApply,
             SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
         mApplySnapshot = applySnapshot;
+        mWipeAfterApplySnapshot = wipeAfterApply;
         mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
@@ -430,8 +435,11 @@ public class IncrementalImageUtil {
             CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
 
             if (mApplySnapshot) {
-                CommandResult mapOutput =
-                        mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
+                String applyCommand = "snapshotctl apply-update /data/ndb/";
+                if (mWipeAfterApplySnapshot) {
+                    applyCommand += " -w";
+                }
+                CommandResult mapOutput = mDevice.executeShellV2Command(applyCommand);
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
                     InvocationMetricLogger.addInvocationMetrics(
@@ -459,6 +467,12 @@ public class IncrementalImageUtil {
             }
             mDevice.rebootIntoBootloader();
             if (mApplySnapshot) {
+                if (mWipeAfterApplySnapshot) {
+                    CommandResult wipeResults = mDevice.executeFastbootCommand("-w");
+                    CLog.d("wipe status: %s", wipeResults.getStatus());
+                    CLog.d("wipe stdout: %s", wipeResults.getStdout());
+                    CLog.d("wipe stderr: %s", wipeResults.getStderr());
+                }
                 updateBootloaderAndBasebandIfNeeded(
                         targetDirectory, currentBootloader, currentRadio);
             }
