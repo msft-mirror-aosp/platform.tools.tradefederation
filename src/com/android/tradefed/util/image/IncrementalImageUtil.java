@@ -468,6 +468,11 @@ public class IncrementalImageUtil {
             mDevice.rebootIntoBootloader();
             if (mApplySnapshot) {
                 if (mWipeAfterApplySnapshot) {
+                    CommandResult cancelResults =
+                            mDevice.executeFastbootCommand("snapshot-update cancel");
+                    CLog.d("Cancel status: %s", cancelResults.getStatus());
+                    CLog.d("Cancel stdout: %s", cancelResults.getStdout());
+                    CLog.d("Cancel stderr: %s", cancelResults.getStderr());
                     CommandResult wipeResults = mDevice.executeFastbootCommand("-w");
                     CLog.d("wipe status: %s", wipeResults.getStatus());
                     CLog.d("wipe stdout: %s", wipeResults.getStdout());
