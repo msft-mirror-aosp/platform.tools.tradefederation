@@ -160,6 +160,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsAppSecurityHostTestCases",
                     "CtsPackageManagerTestCases", // Renamed from CtsAppSecurityHostTestCases
                     "FrameworksServicesTests",
+                    "FrameworksServicesTests_presubmit",
                     "NeuralNetworksTest_static",
                     "CtsNNAPITestCases",
                     "CtsLibcoreTestCases",

@@ -158,7 +158,6 @@ public class GceAvdInfo {
     private String mInstanceUser = null;
     // Skip collecting device log if set to true.
     private boolean mSkipDeviceLogCollection = false;
-    private boolean mIsOxygenationDevice = false;
     private String mOxygenationDeviceId = null;
 
     public static enum GceStatus {
@@ -209,16 +208,10 @@ public class GceAvdInfo {
                 + ", mBuildVars="
                 + ", mOxygenationDeviceId="
                 + mOxygenationDeviceId
-                + ", mIsOxygenationDevice="
-                + mIsOxygenationDevice
                 + mBuildVars.toString()
                 + ", mLogs="
                 + mLogs.toString()
                 + "]";
-    }
-
-    public boolean isOxygenationDevice() {
-        return mIsOxygenationDevice;
     }
 
     public String getOxygenationDeviceId() {
@@ -383,7 +376,10 @@ public class GceAvdInfo {
             if (devices != null) {
                 if (devices.length() == 1) {
                     JSONObject d = (JSONObject) devices.get(0);
-                    addCfStartTimeMetrics(d);
+                    // Only log CF boot performance metrics if the device launch is successful.
+                    if (GceStatus.SUCCESS.equals(gceStatus)) {
+                        addCfStartTimeMetrics(d);
+                    }
                     String ip = d.getString("ip");
                     String instanceName = d.getString("instance_name");
                     GceAvdInfo avdInfo =

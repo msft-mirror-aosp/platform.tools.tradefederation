@@ -17,6 +17,7 @@
 package com.android.tradefed.util;
 
 import com.android.annotations.Nullable;
+import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.result.error.ErrorIdentifier;
 
@@ -537,4 +538,12 @@ public interface IRunUtil {
         SET,
         UNSET
     }
+
+    /**
+     * Uploads the last {@link ExecutableActionResult} ran with a cacheClient.
+     *
+     * @param cacheClient The {@link ICacheClient} used to upload the result.
+     * @param actionResult The {@link ExecutableActionResult} to upload.
+     */
+    public void uploadCache(ICacheClient cacheClient, ExecutableActionResult actionResult);
 }
