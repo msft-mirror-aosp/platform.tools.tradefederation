@@ -535,20 +535,14 @@ public class FileUtil {
             throw new IOException(String.format("Could not create directory %s",
                     destDir.getAbsolutePath()));
         }
-        Arrays.asList(sourceDir.listFiles()).parallelStream()
-                .forEach(
-                        childFile -> {
-                            try {
-                                File destChild = new File(destDir, childFile.getName());
-                                if (childFile.isDirectory()) {
-                                    recursiveHardlink(childFile, destChild, ignoreExistingFile);
-                                } else if (childFile.isFile()) {
-                                    hardlinkFile(childFile, destChild, ignoreExistingFile);
-                                }
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        for (File childFile : sourceDir.listFiles()) {
+            File destChild = new File(destDir, childFile.getName());
+            if (childFile.isDirectory()) {
+                recursiveHardlink(childFile, destChild, ignoreExistingFile);
+            } else if (childFile.isFile()) {
+                hardlinkFile(childFile, destChild, ignoreExistingFile);
+            }
+        }
     }
 
     /**
