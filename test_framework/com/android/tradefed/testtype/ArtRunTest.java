@@ -16,6 +16,8 @@
 
 package com.android.tradefed.testtype;
 
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -30,6 +32,7 @@ import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.CommandResult;
@@ -60,7 +63,12 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /** A test runner to run ART run-tests. */
-public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceiver, ITestCollector {
+public class ArtRunTest
+        implements IRemoteTest,
+                IAbiReceiver,
+                ITestFilterReceiver,
+                ITestCollector,
+                IConfigurationReceiver {
 
     private static final String RUNTEST_TAG = "ArtRunTest";
 
@@ -93,6 +101,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
     private ITestDevice mDevice = null;
     private IAbi mAbi = null;
+    private IConfiguration mConfiguration = null;
     private final Set<String> mIncludeFilters = new LinkedHashSet<>();
     private final Set<String> mExcludeFilters = new LinkedHashSet<>();
 
@@ -118,6 +127,12 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
     @Override
     public void addIncludeFilter(String filter) {
         mIncludeFilters.add(filter);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfiguration = configuration;
     }
 
     /** {@inheritDoc} */
@@ -292,7 +307,7 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
 
             // Check the test's exit code.
             Optional<String> exitCodeError = checkExitCode(exitCode);
-            exitCodeError.ifPresent(e -> errors.add(e));
+            exitCodeError.ifPresent(errors::add);
 
             // Check the test's standard output.
             Optional<String> stdoutError =
@@ -323,9 +338,11 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
             }
 
             // If the test is a Checker test, run Checker and check its output.
-            if (mRunTestName.contains("-checker-")) {
+            // Do not run Checker tests in code coverage runs, as the Checker assumption might fail
+            // because of the added instrumentation code (see b/356852324).
+            if (mRunTestName.contains("-checker-") && !isJavaCoverageEnabled()) {
                 Optional<String> checkerError = executeCheckerTest(testInfo, listener);
-                checkerError.ifPresent(e -> errors.add(e));
+                checkerError.ifPresent(errors::add);
             }
 
             // Process potential errors.
@@ -349,6 +366,16 @@ public class ArtRunTest implements IRemoteTest, IAbiReceiver, ITestFilterReceive
                 mDevice.deleteFile(tmpTestRemoteDirPath);
             }
         }
+    }
+
+    /** Returns whether Java code coverage is enabled */
+    private boolean isJavaCoverageEnabled() {
+        return mConfiguration != null
+                && mConfiguration.getCoverageOptions().isCoverageEnabled()
+                && mConfiguration
+                        .getCoverageOptions()
+                        .getCoverageToolchains()
+                        .contains(CoverageOptions.Toolchain.JACOCO);
     }
 
     /**
