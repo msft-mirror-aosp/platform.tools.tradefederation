@@ -25,7 +25,11 @@ import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfoKey;
 import com.android.tradefed.build.DeviceBuildInfo;
+import com.android.tradefed.cache.ICacheClient;
+import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.TestInformation;
@@ -34,6 +38,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FakeShellOutputReceiver;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.RunUtilTest;
 
 import org.junit.After;
 import org.junit.Before;
@@ -57,6 +62,7 @@ public class HostGTestTest {
     private ITestInvocationListener mMockInvocationListener;
     private FakeShellOutputReceiver mFakeReceiver;
     private OptionSetter mSetter;
+    private RunUtilTest.FakeCacheClient mFakeCacheClient;
 
     /** Helper to initialize the object or folder for unittest need. */
     @Before
@@ -73,11 +79,19 @@ public class HostGTestTest {
         mSetter = new OptionSetter(mHostGTest);
 
         mTestInfo = TestInformation.newBuilder().build();
+
+        mFakeCacheClient = new RunUtilTest.FakeCacheClient();
     }
 
     @After
     public void afterMethod() {
         FileUtil.recursiveDelete(mTestsDir);
+        mFakeCacheClient.getAllCache().values().stream()
+                .forEach(
+                        a -> {
+                            FileUtil.deleteFile(a.stdOut());
+                            FileUtil.deleteFile(a.stdErr());
+                        });
     }
 
     /**
@@ -203,6 +217,66 @@ public class HostGTestTest {
         assertTrue(cmd3.exists());
         assertTrue(cmd4.exists());
         assertNotEquals(0, mFakeReceiver.getReceivedOutput().length);
+    }
+
+    @Test
+    public void testRun_upload_cache_for_success_run() throws Exception {
+        HostGTest hostGTest =
+                createHostGTestWithCache(
+                        "echo \"[==========] Running 1 tests from 1 test suites.\n"
+                                + "[----------] Global test environment set-up.\n"
+                                + "[----------] 1 tests from HelloWorldTest\n"
+                                + "[ RUN      ] HelloWorldTest.Hello \n"
+                                + "[       OK ] HelloWorldTest.Hello (100 ms)\n"
+                                + "[----------] 1 tests from HelloWorldTest (100 ms total)\n"
+                                + "[----------] Global test environment tear-down\n"
+                                + "[==========] 1 tests from 1 test suites ran. (100 ms total)\n"
+                                + "[  PASSED  ] 1 tests.\n"
+                                + "\"");
+
+        hostGTest.run(mTestInfo, mMockInvocationListener);
+
+        assertFalse(mFakeCacheClient.getAllCache().isEmpty());
+    }
+
+    @Test
+    public void testRun_skip_cache_upload_for_timeout_run() throws Exception {
+        HostGTest hostGTest =
+                createHostGTestWithCache(
+                        "echo \"[==========] Running 1 tests from 1 test suites.\n"
+                                + "[----------] Global test environment set-up.\n"
+                                + "[----------] 1 tests from HelloWorldTest\n"
+                                + "[ RUN      ] HelloWorldTest.Hello \n"
+                                + "[       OK ] HelloWorldTest.Hello (10000 ms)\n"
+                                + "[----------] 1 tests from HelloWorldTest (10000 ms total)\n"
+                                + "[----------] Global test environment tear-down\n"
+                                + "[==========] 1 tests from 1 test suites ran. (10000 ms total)\n"
+                                + "[  PASSED  ] 1 tests.\n"
+                                + "\"");
+
+        hostGTest.run(mTestInfo, mMockInvocationListener);
+
+        assertTrue(mFakeCacheClient.getAllCache().isEmpty());
+    }
+
+    @Test
+    public void testRun_skip_cache_upload_for_failed_run() throws Exception {
+        HostGTest hostGTest =
+                createHostGTestWithCache(
+                        "echo \"[==========] Running 1 tests from 1 test suites.\n"
+                                + "[----------] Global test environment set-up.\n"
+                                + "[----------] 1 tests from HelloWorldTest\n"
+                                + "[ RUN      ] HelloWorldTest.Hello \n"
+                                + "[  FAILED  ] HelloWorldTest.Hello (100 ms)\n"
+                                + "[----------] 1 tests from HelloWorldTest (100 ms total)\n"
+                                + "[----------] Global test environment tear-down\n"
+                                + "[==========] 1 tests from 1 test suites ran. (100 ms total)\n"
+                                + "[  FAILED  ] 1 tests.\n"
+                                + "\"");
+
+        hostGTest.run(mTestInfo, mMockInvocationListener);
+
+        assertTrue(mFakeCacheClient.getAllCache().isEmpty());
     }
 
     /** Test the run method for host linked folder is set. */
@@ -395,5 +469,33 @@ public class HostGTestTest {
         mHostGTest.run(mTestInfo, mMockInvocationListener);
 
         assertNotEquals(0, mFakeReceiver.getReceivedOutput().length);
+    }
+
+    private HostGTest createHostGTestWithCache(String scriptContent) throws Exception {
+        HostGTest hostGTest =
+                new HostGTest() {
+                    @Override
+                    ICacheClient getCacheClient(File workFolder, String instanceName) {
+                        return mFakeCacheClient;
+                    }
+                };
+        OptionSetter testSetter = new OptionSetter(hostGTest);
+        String moduleName = "hello_world_test";
+        testSetter.setOptionValue("module-name", moduleName);
+        testSetter.setOptionValue("enable-cache", "true");
+        testSetter.setOptionValue("test-case-timeout", "1s");
+        File hostLinkedFolder = createSubFolder("hosttestcases");
+        createExecutableFile(
+                Paths.get(hostLinkedFolder.getAbsolutePath(), moduleName), scriptContent);
+        DeviceBuildInfo buildInfo = new DeviceBuildInfo();
+        buildInfo.setFile(BuildInfoKey.BuildInfoFileKey.HOST_LINKED_DIR, hostLinkedFolder, "0.0");
+        hostGTest.setBuild(buildInfo);
+        CommandOptions commandOptions = new CommandOptions();
+        OptionSetter commandOptionsSetter = new OptionSetter(commandOptions);
+        commandOptionsSetter.setOptionValue("remote-cache-instance-name", "test_instance");
+        IConfiguration config = new Configuration("config", "Test config");
+        config.setCommandOptions(commandOptions);
+        hostGTest.setConfiguration(config);
+        return hostGTest;
     }
 }
