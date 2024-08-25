@@ -35,7 +35,6 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceLHPTunnelMonitor;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
-import com.android.tradefed.device.cloud.HostOrchestratorUtil;
 import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.cloud.RemoteFileUtil;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
@@ -55,6 +54,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.avd.HostOrchestratorUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -290,10 +290,24 @@ public class AdbSshConnection extends AdbTcpConnection {
                     } else {
                         CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
                     }
-                    mHOUtil.collectLogByCommand(
-                            getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    mHOUtil.collectLogByCommand(
-                            getLogger(), "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                    File tempFile =
+                            mHOUtil.collectLogByCommand(
+                                    "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                    getLogger()
+                            .testLog(
+                                    "host_kernel",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
+                    tempFile =
+                            mHOUtil.collectLogByCommand(
+                                    "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                    getLogger()
+                            .testLog(
+                                    "host_orchestrator",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -958,8 +972,13 @@ public class AdbSshConnection extends AdbTcpConnection {
                             getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
                             getDevice().getOptions().getSshPrivateKeyPath(),
                             getDevice().getOptions().getInstanceUser(),
-                            gceAvdInfo,
-                            getDevice().getOptions().getAvdDriverBinary());
+                            gceAvdInfo.instanceName(),
+                            gceAvdInfo.hostAndPort() != null
+                                    ? gceAvdInfo.hostAndPort().getHost()
+                                    : null,
+                            gceAvdInfo.getOxygenationDeviceId(),
+                            OxygenUtil.createOxygenClient(
+                                    getDevice().getOptions().getAvdDriverBinary()));
         }
     }
 }

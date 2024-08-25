@@ -14,19 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util.avd;
 
 import static org.mockito.Mockito.times;
 
-import com.android.tradefed.log.ITestLogger;
-import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.avd.OxygenClient;
 import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
-
-import com.google.common.net.HostAndPort;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -44,11 +40,12 @@ import java.io.OutputStream;
 public class HostOrchestratorUtilTest {
 
     private HostOrchestratorUtil mHOUtil;
-    private GceAvdInfo mMockGceAvd;
+    private static final String INSTANCE_NAME = "instance";
+    private static final String OXYGENATION_DEVICE_ID = "id";
+    private static final String HOST = "host";
     private OxygenClient mMockClient;
     private IRunUtil mMockRunUtil;
     private Process mMockProcess;
-    private ITestLogger mMockLogger;
     private File mMockFile;
     private static final String LIST_CVD_RES =
             "{\"cvds\":[{\"group\":\"cvd_1\",\"name\":\"ins-1\",\"build_source\":{},"
@@ -68,11 +65,9 @@ public class HostOrchestratorUtilTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockGceAvd = Mockito.mock(GceAvdInfo.class);
         mMockClient = Mockito.mock(OxygenClient.class);
         mMockProcess = Mockito.mock(Process.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
-        mMockLogger = Mockito.mock(ITestLogger.class);
         mMockFile = Mockito.mock(File.class);
     }
 
@@ -83,7 +78,14 @@ public class HostOrchestratorUtilTest {
     public void testCreateHostOrchestratorTunnel_NoCVDNoOxygenation() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        false, false, mMockFile, "some_user", mMockGceAvd, mMockClient);
+                        false,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient);
         Assert.assertNull(mHOUtil.createHostOrchestratorTunnel("1111"));
         Mockito.verify(mMockClient, times(0))
                 .createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id");
@@ -93,9 +95,14 @@ public class HostOrchestratorUtilTest {
     public void testCreateHostOrchestratorTunnel_Oxygenation() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient);
-        Mockito.doReturn("instance").when(mMockGceAvd).instanceName();
-        Mockito.doReturn("id").when(mMockGceAvd).getOxygenationDeviceId();
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient);
         mHOUtil.createHostOrchestratorTunnel("1111");
         Mockito.verify(mMockClient, times(1))
                 .createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id");
@@ -105,13 +112,19 @@ public class HostOrchestratorUtilTest {
     public void testCreateHostOrchestratorTunnel_UseCVDOxygen() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        false, true, mMockFile, "instance", mMockGceAvd, mMockClient) {
+                        false,
+                        true,
+                        mMockFile,
+                        "instance",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
-        Mockito.doReturn(HostAndPort.fromString("host:2080")).when(mMockGceAvd).hostAndPort();
         mHOUtil.createHostOrchestratorTunnel("1111");
         Mockito.verify(mMockClient, times(0))
                 .createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id");
@@ -140,14 +153,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -161,7 +181,10 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq((OutputStream) null),
                         Mockito.eq((OutputStream) null),
                         (String[]) Mockito.any());
-        mHOUtil.collectLogByCommand(mMockLogger, "log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        File tempFile =
+                mHOUtil.collectLogByCommand("log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        FileUtil.deleteFile(tempFile);
+
         Mockito.verify(mMockRunUtil, times(1))
                 .runTimedCmd(
                         Mockito.anyLong(),
@@ -179,8 +202,6 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("--compressed"),
                         Mockito.eq("-o"),
                         Mockito.any());
-        Mockito.verify(mMockLogger, times(1))
-                .testLog(Mockito.eq("log"), Mockito.eq(LogDataType.CUTTLEFISH_LOG), Mockito.any());
         Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
     }
 
@@ -190,14 +211,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -211,7 +239,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq((OutputStream) null),
                         Mockito.eq((OutputStream) null),
                         (String[]) Mockito.any());
-        mHOUtil.collectLogByCommand(mMockLogger, "log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        File tempFile =
+                mHOUtil.collectLogByCommand("log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
         Mockito.verify(mMockRunUtil, times(1))
                 .runTimedCmd(
                         Mockito.anyLong(),
@@ -229,8 +258,7 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("--compressed"),
                         Mockito.eq("-o"),
                         Mockito.any());
-        Mockito.verify(mMockLogger, times(0))
-                .testLog(Mockito.eq("log"), Mockito.eq(LogDataType.CUTTLEFISH_LOG), Mockito.any());
+        FileUtil.deleteFile(tempFile);
         Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
     }
 
@@ -240,19 +268,26 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
 
                     @Override
-                    CommandResult cvdOperationExecution(
+                    public CommandResult cvdOperationExecution(
                             String portNumber, String method, String request, long maxWaitTime) {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("operation_id");
@@ -323,14 +358,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -378,14 +420,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return null;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -423,19 +472,26 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
 
                     @Override
-                    CommandResult cvdOperationExecution(
+                    public CommandResult cvdOperationExecution(
                             String portNumber, String method, String request, long maxWaitTime) {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("operation_id");
@@ -483,14 +539,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -538,14 +601,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -636,14 +706,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return null;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -678,14 +755,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -723,14 +807,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -768,14 +859,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -813,14 +911,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    public IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -911,14 +1016,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return null;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    public IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -953,14 +1065,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    public IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -998,14 +1117,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    public IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1043,14 +1169,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    public IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1086,9 +1219,16 @@ public class HostOrchestratorUtilTest {
     public void testCvdOperationExecution_Failed() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1116,9 +1256,16 @@ public class HostOrchestratorUtilTest {
     public void testCvdOperationExecution_FailedOperation() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1173,9 +1320,16 @@ public class HostOrchestratorUtilTest {
     public void testCvdOperationExecution_Success() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1230,9 +1384,16 @@ public class HostOrchestratorUtilTest {
     public void testCvdOperationExecution_Timedout() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1273,7 +1434,14 @@ public class HostOrchestratorUtilTest {
     public void testParseListCvdOutput_success() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient);
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient);
         Assert.assertEquals("cvd_1", mHOUtil.parseListCvdOutput(LIST_CVD_RES, "group"));
     }
 
@@ -1281,7 +1449,14 @@ public class HostOrchestratorUtilTest {
     public void testParseListCvdOutput_failed() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient);
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient);
         Assert.assertEquals("", mHOUtil.parseListCvdOutput(LIST_CVD_BADRES, "group"));
     }
 
@@ -1291,14 +1466,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1326,14 +1508,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return mMockProcess;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1362,14 +1551,21 @@ public class HostOrchestratorUtilTest {
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
-                        true, false, mMockFile, "some_user", mMockGceAvd, mMockClient) {
+                        true,
+                        false,
+                        mMockFile,
+                        "some_user",
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        mMockClient) {
                     @Override
-                    Process createHostOrchestratorTunnel(String portNumber) {
+                    public Process createHostOrchestratorTunnel(String portNumber) {
                         return null;
                     }
 
                     @Override
-                    IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
