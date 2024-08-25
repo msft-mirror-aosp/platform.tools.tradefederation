@@ -26,7 +26,6 @@ import com.android.tradefed.util.RunUtil;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.ArrayList;
@@ -49,7 +48,10 @@ public class OxygenClient {
         CURL;
     }
 
-    private final File mClientBinary;
+    // A list of commands to be executed to lease or release Oxygen devices, examples:
+    // 1. if the binary is an executable script, execute it directly.
+    // 2. if the binary is a jar file, execute it by using java -jar ${binary_path}.
+    private final List<String> mCmdArgs = Lists.newArrayList();
 
     private IRunUtil mRunUtil;
 
@@ -99,19 +101,25 @@ public class OxygenClient {
         return mRunUtil;
     }
 
-    public OxygenClient(File clientBinary, IRunUtil runUtil) {
-        this(clientBinary);
+    /**
+     * The constructor of OxygenClient class.
+     *
+     * @param cmdArgs a {@link List<String>} of commands to run Oxygen client.
+     * @param runUtil a {@link IRunUtil} to execute commands.
+     */
+    public OxygenClient(List<String> cmdArgs, IRunUtil runUtil) {
+        mCmdArgs.addAll(cmdArgs);
         mRunUtil = runUtil;
     }
 
     /**
      * The constructor of OxygenClient class.
      *
-     * @param clientBinary the executable Oxygen client binary file.
+     * @param cmdArgs a {@link List<String>} of commands to run Oxygen client.
      */
-    public OxygenClient(File clientBinary) {
+    public OxygenClient(List<String> cmdArgs) {
+        mCmdArgs.addAll(cmdArgs);
         mRunUtil = RunUtil.getDefault();
-        mClientBinary = clientBinary;
     }
 
     /**
@@ -149,6 +157,7 @@ public class OxygenClient {
      * @param extraOxygenArgs {@link Map<String, String>} of extra Oxygen lease args
      * @param attributes attributes associated with current invocation
      * @param gceCmdTimeout number of ms for the command line timeout
+     * @param useOxygenation whether the device is leased from OmniLab Infra or not.
      * @return a {@link CommandResult} that Oxygen binary returned.
      */
     public CommandResult leaseDevice(
@@ -161,8 +170,9 @@ public class OxygenClient {
             List<String> gceDriverParams,
             Map<String, String> extraOxygenArgs,
             MultiMap<String, String> attributes,
-            long gceCmdTimeout) {
-        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
+            long gceCmdTimeout,
+            boolean useOxygenation) {
+        List<String> oxygenClientArgs = Lists.newArrayList(mCmdArgs);
         oxygenClientArgs.add("-lease");
         // Add options from GceDriverParams
         int i = 0;
@@ -226,6 +236,10 @@ public class OxygenClient {
 
         addInvocationAttributes(oxygenClientArgs, attributes);
 
+        if (useOxygenation) {
+            oxygenClientArgs.add("-use_omnilab");
+        }
+
         CLog.i("Leasing device from oxygen client with %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(
                 oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]), gceCmdTimeout);
@@ -256,7 +270,7 @@ public class OxygenClient {
             Map<String, String> extraOxygenArgs,
             MultiMap<String, String> attributes,
             long gceCmdTimeout) {
-        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
+        List<String> oxygenClientArgs = Lists.newArrayList(mCmdArgs);
         oxygenClientArgs.add("-lease");
 
         if (buildTargets.size() > 0) {
@@ -303,7 +317,9 @@ public class OxygenClient {
      * @param targetRegion target region
      * @param accountingUser name of accounting user email
      * @param extraOxygenArgs {@link Map<String, String>} of extra Oxygen args
-     * @return a boolean which indicate whether the device release is successful.
+     * @param gceCmdTimeout number of ms for the command line timeout
+     * @param useOxygenation whether the device is leased from OmniLab Infra or not.
+     * @return a {@link CommandResult} that Oxygen binary returned.
      */
     public CommandResult release(
             String instanceName,
@@ -311,8 +327,9 @@ public class OxygenClient {
             String targetRegion,
             String accountingUser,
             Map<String, String> extraOxygenArgs,
-            long gceCmdTimeout) {
-        List<String> oxygenClientArgs = Lists.newArrayList(mClientBinary.getAbsolutePath());
+            long gceCmdTimeout,
+            boolean useOxygenation) {
+        List<String> oxygenClientArgs = Lists.newArrayList(mCmdArgs);
 
         // If gceAvdInfo is missing info, then it means the device wasn't get leased successfully.
         // In such case, there is no need to release the device.
@@ -340,6 +357,9 @@ public class OxygenClient {
         oxygenClientArgs.add(instanceName);
         oxygenClientArgs.add("-accounting_user");
         oxygenClientArgs.add(accountingUser);
+        if (useOxygenation) {
+            oxygenClientArgs.add("-use_omnilab");
+        }
         CLog.i("Releasing device from oxygen client with command %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(
                 oxygenClientArgs.toArray(new String[oxygenClientArgs.size()]), gceCmdTimeout);
