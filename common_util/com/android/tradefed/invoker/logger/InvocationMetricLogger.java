@@ -253,11 +253,13 @@ public class InvocationMetricLogger {
         ART_RUN_TEST_CHECKER_COMMAND_TIME_MS("art_run_test_checker_command_time_ms", true),
 
         // CAS downloader metrics
+        CAS_VERSION("cas_version", false),
         // Name of files downloaded by CAS downloader.
         CAS_DOWNLOAD_FILES("cas_download_files", true),
         CAS_DOWNLOAD_FILE_SUCCESS_COUNT("cas_download_file_success_count", true),
         CAS_DOWNLOAD_FILE_FAIL_COUNT("cas_download_file_fail_count", true),
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
+        CAS_DOWNLOAD_START_TIMESTAMP("cas_download_start_timesstamp", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
         CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
