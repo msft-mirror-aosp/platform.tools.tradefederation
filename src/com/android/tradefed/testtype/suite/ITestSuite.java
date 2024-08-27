@@ -1364,6 +1364,7 @@ public abstract class ITestSuite
             // to carry these extra data.
             cleanUpSuiteSetup();
 
+            Set<String> unchangedModules = SkipFeature.getUnchangedModules();
             // create an association of one ITestSuite <=> one ModuleDefinition as the smallest
             // execution unit supported.
             List<IRemoteTest> splitTests = new ArrayList<>();
@@ -1372,6 +1373,7 @@ public abstract class ITestSuite
                 OptionCopier.copyOptionsNoThrow(this, suite);
                 suite.mIsSharded = true;
                 suite.mDirectModule = m;
+                suite.setUnchangedModules(unchangedModules);
                 splitTests.add(suite);
             }
             // return the list of ITestSuite with their ModuleDefinition assigned
