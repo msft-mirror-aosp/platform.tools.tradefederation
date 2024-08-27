@@ -20,7 +20,9 @@ import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.FileNode;
+
 import com.google.auto.value.AutoValue;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -42,7 +44,7 @@ public abstract class MerkleTree {
         Directory.Builder rootBuilder = Directory.newBuilder();
 
         // Sort the files, so that two equivalent directory messages have matching digests.
-        TreeSet<File> files = new TreeSet(Arrays.asList(directory.listFiles()));
+        TreeSet<File> files = new TreeSet<>(Arrays.asList(directory.listFiles()));
         for (File f : files) {
             if (f.isFile()) {
                 Digest digest = DigestCalculator.compute(f);
