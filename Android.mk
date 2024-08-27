@@ -22,14 +22,3 @@ include $(CLEAR_VARS)
 # so tradefed.sh can automatically add to classpath
 
 $(HOST_OUT_JAVA_LIBRARIES)/tradefed.jar : $(HOST_OUT)/tradefed/loganalysis.jar
-
-#######################################################
-
-# Create a simple alias to build all the TF-related targets
-# Note that this is incompatible with `make dist`.  If you want to make
-# the distribution, you must run `tapas` with the individual target names.
-.PHONY: tradefed-core
-tradefed-core: tradefed tradefed-test-framework atest_tradefed.sh tradefed-contrib script_help.sh tradefed.sh
-
-.PHONY: tradefed-all
-tradefed-all: tradefed-core tradefed-tests tradefed_win compatibility-host-util compatibility-tradefed casuploader tradefed-avd-util-tests
