@@ -39,6 +39,7 @@ public class DeviceMerkleTree {
                             context.contentInformation().currentContent, context.contentEntry());
             Directory.Builder rootBuilder = Directory.newBuilder();
             List<ArtifactFileDescriptor> allFiles = currentContent.details;
+            ImageContentAnalyzer.normalizeDeviceImage(allFiles);
             // Sort to ensure final messages are identical
             Collections.sort(
                     allFiles,
