@@ -807,6 +807,7 @@ public class AdbSshConnectionTest {
         when(mMockDevice.getOptions()).thenReturn(mOptions);
         when(mMockFile.exists()).thenReturn(true);
         when(mMockFile.canExecute()).thenReturn(true);
+        when(mMockFile.getAbsolutePath()).thenReturn("somepath");
         GceAvdInfo gceAvd =
                 new GceAvdInfo(
                         "user", HostAndPort.fromHost("127.0.0.1"), null, null, GceStatus.SUCCESS);
@@ -854,6 +855,7 @@ public class AdbSshConnectionTest {
         when(mMockDevice.getOptions()).thenReturn(mOptions);
         when(mMockFile.exists()).thenReturn(true);
         when(mMockFile.canExecute()).thenReturn(true);
+        when(mMockFile.getAbsolutePath()).thenReturn("somepath");
         GceAvdInfo gceAvd =
                 new GceAvdInfo(
                         "user", HostAndPort.fromHost("127.0.0.1"), null, null, GceStatus.SUCCESS);

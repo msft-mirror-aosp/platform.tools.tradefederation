@@ -289,7 +289,7 @@ public class GceManager {
         long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignore = new CloseableTraceScope("startMultiDevicesGce")) {
             OxygenClient oxygenClient =
-                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+                    OxygenUtil.createOxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             List<String> buildTargets = new ArrayList<>();
             List<String> buildBranches = new ArrayList<>();
             List<String> buildIds = new ArrayList<>();
@@ -316,9 +316,7 @@ public class GceManager {
                             getTestDeviceOptions().getExtraOxygenArgs(),
                             attributes,
                             getTestDeviceOptions().getGceCmdTimeout());
-            gceAvdInfos =
-                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
-                            res, mDeviceOptions.getRemoteAdbPort());
+            gceAvdInfos = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions);
             mGceAvdInfo = gceAvdInfos.get(0);
             return gceAvdInfos;
         } finally {
@@ -350,7 +348,7 @@ public class GceManager {
         long fetchTime = 0;
         try {
             OxygenClient oxygenClient =
-                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+                    OxygenUtil.createOxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             String buildTarget =
                     mBuildInfo.getBuildAttributes().containsKey("build_target")
                             ? mBuildInfo.getBuildAttributes().get("build_target")
@@ -366,7 +364,8 @@ public class GceManager {
                             getTestDeviceOptions().getGceDriverParams(),
                             getTestDeviceOptions().getExtraOxygenArgs(),
                             attributes,
-                            getTestDeviceOptions().getGceCmdTimeout());
+                            getTestDeviceOptions().getGceCmdTimeout(),
+                            getTestDeviceOptions().useOxygenationDevice());
 
             // Retry lease up to 2x if error code is in list of error codes
             int iteration = 1;
@@ -387,7 +386,8 @@ public class GceManager {
                                 getTestDeviceOptions().getGceDriverParams(),
                                 getTestDeviceOptions().getExtraOxygenArgs(),
                                 attributes,
-                                getTestDeviceOptions().getGceCmdTimeout());
+                                getTestDeviceOptions().getGceCmdTimeout(),
+                                getTestDeviceOptions().useOxygenationDevice());
                 // Update Oxygen lease attempt metrics
                 if (res.getStatus() == CommandStatus.SUCCESS) {
                     InvocationMetricLogger.addInvocationMetrics(
@@ -398,11 +398,8 @@ public class GceManager {
                 }
                 iteration++;
             }
+            mGceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions).get(0);
 
-            mGceAvdInfo =
-                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
-                                    res, mDeviceOptions.getRemoteAdbPort())
-                            .get(0);
             // Lease may time out, skip remaining logic if lease failed.
             if (mGceAvdInfo.hostAndPort() == null) {
                 CLog.w("Failed to lease a device: %s", mGceAvdInfo);
@@ -436,7 +433,7 @@ public class GceManager {
                                             ? mGceAvdInfo.hostAndPort().getHost()
                                             : null,
                                     mGceAvdInfo.getOxygenationDeviceId(),
-                                    getTestDeviceOptions().getAvdDriverBinary());
+                                    oxygenClient);
                     bootSuccess = hOUtil.deviceBootCompleted(timeout);
                 } else {
                     final String remoteFile =
@@ -798,7 +795,7 @@ public class GceManager {
                 return true;
             }
             OxygenClient oxygenClient =
-                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+                    OxygenUtil.createOxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
                     oxygenClient.release(
                             mGceAvdInfo.instanceName(),
@@ -806,7 +803,8 @@ public class GceManager {
                             OxygenUtil.getTargetRegion(getTestDeviceOptions()),
                             getTestDeviceOptions().getOxygenAccountingUser(),
                             getTestDeviceOptions().getExtraOxygenArgs(),
-                            getTestDeviceOptions().getGceCmdTimeout());
+                            getTestDeviceOptions().getGceCmdTimeout(),
+                            getTestDeviceOptions().useOxygenationDevice());
             if (!res.getStatus().equals(CommandStatus.SUCCESS)) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_COUNT, 1);
