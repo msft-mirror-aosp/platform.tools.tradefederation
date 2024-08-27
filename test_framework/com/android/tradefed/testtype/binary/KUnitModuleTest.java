@@ -217,8 +217,8 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                 CLog.w("Unable to unload module '%s'. %s", kunitModule, errorMessage);
             }
         } finally {
-            if (debugfsAlreadyMounted) {
-                // If debugfs was already mounted before this test, then keep it mounted.
+            if (!debugfsAlreadyMounted) {
+                // If debugfs was not mounted before this test, unmount it.
                 getDevice().unmountDebugfs();
             }
         }
