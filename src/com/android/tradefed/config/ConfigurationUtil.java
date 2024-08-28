@@ -29,6 +29,8 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -167,8 +169,17 @@ public class ConfigurationUtil {
                 throw new RuntimeException(e);
             }
         }
-
-        for (Field field : OptionSetter.getOptionFieldsForClass(obj.getClass())) {
+        List<Field> fields = OptionSetter.getOptionFieldsForClass(obj.getClass());
+        // Sort fields to always print in same order
+        Collections.sort(
+                fields,
+                new Comparator<Field>() {
+                    @Override
+                    public int compare(Field arg0, Field arg1) {
+                        return arg0.getName().compareTo(arg1.getName());
+                    }
+                });
+        for (Field field : fields) {
             Option option = field.getAnnotation(Option.class);
             Deprecated deprecatedAnnotation = field.getAnnotation(Deprecated.class);
             // If enabled, skip @Deprecated options

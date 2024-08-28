@@ -16,6 +16,7 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.tradefed.command.remote.DeviceDescriptor;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.log.LogUtil.CLog;
@@ -53,6 +54,15 @@ public class GceAvdInfo {
 
     // Patterns to match from Oxygen client's return message to identify error.
     private static final LinkedHashMap<InfraErrorIdentifier, String> OXYGEN_ERROR_PATTERN_MAP;
+
+    private static final Pattern OXYGEN_LEASE_RESPONSE_PATTERN =
+            Pattern.compile(
+                    "session_id:\"(.*?)\".*?server_url:\"(.*?)\".*?oxygen_version:\"(.*?)\"",
+                    Pattern.DOTALL);
+    private static final Pattern OXYGENATION_LEASE_RESPONSE_PATTERN =
+            Pattern.compile(
+                    "session_id:\\s?\"(.*?)\".*?server_url:\\s?\"(.*?)\".*?oxygen_version:\\s?\"(.*?)\".*?device_id:\\s?\"(.*?)\"",
+                    Pattern.DOTALL);
 
     static {
         OXYGEN_ERROR_PATTERN_MAP = new LinkedHashMap<InfraErrorIdentifier, String>();
@@ -216,6 +226,10 @@ public class GceAvdInfo {
 
     public String getOxygenationDeviceId() {
         return mOxygenationDeviceId;
+    }
+
+    public void setOxygenationDeviceId(String deviceId) {
+        mOxygenationDeviceId = deviceId;
     }
 
     public String instanceName() {
@@ -421,16 +435,16 @@ public class GceAvdInfo {
      * Parse a given command line output from Oxygen client binary to obtain leased AVD info.
      *
      * @param oxygenRes the {@link CommandResult} from Oxygen client command execution.
-     * @param remoteAdbPort the remote port that should be used for adb connection
+     * @param deviceOptions the {@link TestDeviceOptions} describing the device options
      * @return {@link List} of the devices successfully leased. Will throw {@link TargetSetupError}
      *     if failed to lease a device.
      */
     public static List<GceAvdInfo> parseGceInfoFromOxygenClientOutput(
-            CommandResult oxygenRes, int remoteAdbPort) throws TargetSetupError {
+            CommandResult oxygenRes, TestDeviceOptions deviceOptions) throws TargetSetupError {
         CommandStatus oxygenCliStatus = oxygenRes.getStatus();
         if (CommandStatus.SUCCESS.equals(oxygenCliStatus)) {
             return parseSucceedOxygenClientOutput(
-                    oxygenRes.getStdout() + oxygenRes.getStderr(), remoteAdbPort);
+                    oxygenRes.getStdout() + oxygenRes.getStderr(), deviceOptions);
         } else if (CommandStatus.TIMED_OUT.equals(oxygenCliStatus)) {
             return Arrays.asList(
                     new GceAvdInfo(
@@ -453,33 +467,49 @@ public class GceAvdInfo {
         }
     }
 
-    private static List<GceAvdInfo> parseSucceedOxygenClientOutput(String output, int remoteAdbPort)
-            throws TargetSetupError {
+    private static List<GceAvdInfo> parseSucceedOxygenClientOutput(
+            String output, TestDeviceOptions deviceOptions) throws TargetSetupError {
         CLog.d("Parsing oxygen client output: %s", output);
-
-        Pattern pattern =
-                Pattern.compile(
-                        "session_id:\"(.*?)\".*?server_url:\"(.*?)\".*?oxygen_version:\"(.*?)\"",
-                        Pattern.DOTALL);
-        Matcher matcher = pattern.matcher(output);
-
         List<GceAvdInfo> gceAvdInfos = new ArrayList<>();
-        int deviceOffset = 0;
-        while (matcher.find()) {
-            String sessionId = matcher.group(1);
-            String serverUrl = matcher.group(2);
-            String oxygenVersion = matcher.group(3);
-            gceAvdInfos.add(
-                    new GceAvdInfo(
-                            sessionId,
-                            HostAndPort.fromString(serverUrl)
-                                    .withDefaultPort(remoteAdbPort + deviceOffset),
-                            null,
-                            null,
-                            GceStatus.SUCCESS));
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
-            deviceOffset++;
+        if (deviceOptions.useOxygenationDevice()) {
+            Matcher matcher = OXYGENATION_LEASE_RESPONSE_PATTERN.matcher(output);
+            while (matcher.find()) {
+                String sessionId = matcher.group(1);
+                String serverUrl = matcher.group(2);
+                String oxygenationVersion = matcher.group(3);
+                String deviceId = matcher.group(4);
+                GceAvdInfo gceAvdInfo =
+                        new GceAvdInfo(
+                                sessionId,
+                                HostAndPort.fromString(serverUrl),
+                                null,
+                                null,
+                                GceStatus.SUCCESS);
+                gceAvdInfo.setOxygenationDeviceId(deviceId);
+                gceAvdInfos.add(gceAvdInfo);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGENATION_VERSION, oxygenationVersion);
+            }
+        } else {
+            Matcher matcher = OXYGEN_LEASE_RESPONSE_PATTERN.matcher(output);
+            int deviceOffset = 0;
+            while (matcher.find()) {
+                String sessionId = matcher.group(1);
+                String serverUrl = matcher.group(2);
+                String oxygenVersion = matcher.group(3);
+                gceAvdInfos.add(
+                        new GceAvdInfo(
+                                sessionId,
+                                HostAndPort.fromString(serverUrl)
+                                        .withDefaultPort(
+                                                deviceOptions.getRemoteAdbPort() + deviceOffset),
+                                null,
+                                null,
+                                GceStatus.SUCCESS));
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.CF_OXYGEN_VERSION, oxygenVersion);
+                deviceOffset++;
+            }
         }
         if (gceAvdInfos.isEmpty()) {
             throw new TargetSetupError(
