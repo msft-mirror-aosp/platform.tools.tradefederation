@@ -21,6 +21,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
@@ -49,9 +51,11 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.avd.HostOrchestratorUtil;
 
 import com.google.common.net.HostAndPort;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -84,9 +88,11 @@ public class AdbSshConnectionTest {
     @Mock ITestLogger mMockLogger;
     @Mock GceManager mGceHandler;
     @Mock GceSshTunnelMonitor mGceSshMonitor;
+    @Mock GceLHPTunnelMonitor mGceLhpMonitor;
     @Mock ITestDevice mMockTestDevice;
     @Mock GceAvdInfo mMockAvdInfo;
     @Mock File mMockFile;
+    @Mock HostOrchestratorUtil mMockHOUtil;
 
     public static interface TestableConfigurableVirtualDevice
             extends IDevice, IConfigurableVirtualDevice {}
@@ -126,6 +132,13 @@ public class AdbSshConnectionTest {
                         return mGceSshMonitor;
                     }
                 };
+    }
+
+    @After
+    public void tearDown() {
+        if (mConnection.getGceTunnelMonitor() != null) {
+            mConnection.getGceTunnelMonitor().shutdown();
+        }
     }
 
     /** Run powerwash() but GceAvdInfo = null. */
@@ -191,6 +204,61 @@ public class AdbSshConnectionTest {
         // Launch GCE before powerwash.
         mConnection.initializeConnection();
         mConnection.powerwashGce(instanceUser, null);
+    }
+
+    /** Test powerwash cvd in oxygen command */
+    @Test
+    public void testPowerwashCvdOxygen() throws Exception {
+        String instanceUser = "user1";
+        mOptions.setAvdDriverBinary(mMockFile);
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("instance-user", instanceUser);
+        setter.setOptionValue("extra-oxygen-args", "use_cvd", "");
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+                        return mMockHOUtil;
+                    }
+                };
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        when(mMockFile.getAbsolutePath()).thenReturn("a/b/c/script");
+        when(mMockAvdInfo.instanceName()).thenReturn("instance");
+        when(mMockAvdInfo.getOxygenationDeviceId()).thenReturn("device_id");
+        when(mMockAvdInfo.hostAndPort()).thenReturn(HostAndPort.fromString("127.0.0.1"));
+        GceAvdInfo gceAvd =
+                new GceAvdInfo(
+                        instanceUser,
+                        HostAndPort.fromHost("127.0.0.1"),
+                        null,
+                        null,
+                        GceStatus.SUCCESS);
+        doReturn(gceAvd)
+                .when(mGceHandler)
+                .startGce(
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(0),
+                        Mockito.any(),
+                        Mockito.eq(mMockLogger));
+        CommandResult powerwashCmdResult = new CommandResult(CommandStatus.SUCCESS);
+        when(mMockHOUtil.powerwashGce()).thenReturn(powerwashCmdResult);
+        when(mMockMonitor.waitForDeviceAvailable(Mockito.anyLong())).thenReturn(mMockIDevice);
+        when(mMockIDevice.getState()).thenReturn(DeviceState.ONLINE);
+
+        // Launch GCE before powerwash.
+        mConnection.initializeConnection();
+        mConnection.powerwashGce(instanceUser, null);
+        verify(mMockHOUtil, times(1)).powerwashGce();
     }
 
     @Test
@@ -744,25 +812,6 @@ public class AdbSshConnectionTest {
         }
     }
 
-    /** Test LHP tunnel monitor will be initialized when use-oxygenation-device is True */
-    @Test
-    public void testCreateGceTunnelMonitor_LHPTunnel() throws Exception {
-        mConnection =
-                new AdbSshConnection(
-                        new ConnectionBuilder(
-                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger));
-        mOptions = new TestDeviceOptions();
-        mOptions.setAvdDriverBinary(mMockFile);
-        OptionSetter setter = new OptionSetter(mOptions);
-        setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
-        setter.setOptionValue("use-oxygenation-device", "true");
-        when(mMockDevice.getOptions()).thenReturn(mOptions);
-        when(mMockFile.exists()).thenReturn(true);
-        when(mMockFile.canExecute()).thenReturn(true);
-        mConnection.createGceTunnelMonitor(mMockDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
-        assertTrue(mConnection.getGceTunnelMonitor() instanceof GceLHPTunnelMonitor);
-    }
-
     /** Test SSH tunnel monitor will be initialized when use-oxygenation-device is False */
     @Test
     public void testCreateGceTunnelMonitor_SSHTunnel() throws Exception {
@@ -774,6 +823,8 @@ public class AdbSshConnectionTest {
         OptionSetter setter = new OptionSetter(mOptions);
         setter.setOptionValue(TestDeviceOptions.INSTANCE_TYPE_OPTION, "CUTTLEFISH");
         setter.setOptionValue("use-oxygenation-device", "false");
+        mOptions.setSshPrivateKeyPath(mMockFile);
+        when(mMockFile.canRead()).thenReturn(true);
         mConnection.createGceTunnelMonitor(mMockTestDevice, mMockBuildInfo, mMockAvdInfo, mOptions);
         assertTrue(mConnection.getGceTunnelMonitor() instanceof GceSshTunnelMonitor);
     }
