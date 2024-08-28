@@ -31,33 +31,40 @@ import java.util.List;
 /** Compute a MerkleTree from the device content information. */
 public class DeviceMerkleTree {
 
-    /** Builds a merkle tree and returns the root digest from the device content informaton */
-    public static Digest buildFromContext(ContentAnalysisContext context) throws IOException {
-        ArtifactDetails currentContent =
-                ArtifactDetails.parseFile(
-                        context.contentInformation().currentContent, context.contentEntry());
-        Directory.Builder rootBuilder = Directory.newBuilder();
-        List<ArtifactFileDescriptor> allFiles = currentContent.details;
-        // Sort to ensure final messages are identical
-        Collections.sort(
-                allFiles,
-                new Comparator<ArtifactFileDescriptor>() {
-                    @Override
-                    public int compare(ArtifactFileDescriptor arg0, ArtifactFileDescriptor arg1) {
-                        return arg0.path.compareTo(arg1.path);
-                    }
-                });
-        for (ArtifactFileDescriptor afd : currentContent.details) {
-            Digest digest = Digest.newBuilder().setHash(afd.digest).setSizeBytes(afd.size).build();
-            rootBuilder.addFiles(
-                    FileNode.newBuilder()
-                            .setDigest(digest)
-                            .setName(afd.path)
-                            .setIsExecutable(false));
+    /** Builds a merkle tree and returns the root digest from the device content information */
+    public static Digest buildFromContext(ContentAnalysisContext context) {
+        try {
+            ArtifactDetails currentContent =
+                    ArtifactDetails.parseFile(
+                            context.contentInformation().currentContent, context.contentEntry());
+            Directory.Builder rootBuilder = Directory.newBuilder();
+            List<ArtifactFileDescriptor> allFiles = currentContent.details;
+            // Sort to ensure final messages are identical
+            Collections.sort(
+                    allFiles,
+                    new Comparator<ArtifactFileDescriptor>() {
+                        @Override
+                        public int compare(
+                                ArtifactFileDescriptor arg0, ArtifactFileDescriptor arg1) {
+                            return arg0.path.compareTo(arg1.path);
+                        }
+                    });
+            for (ArtifactFileDescriptor afd : currentContent.details) {
+                Digest digest =
+                        Digest.newBuilder().setHash(afd.digest).setSizeBytes(afd.size).build();
+                rootBuilder.addFiles(
+                        FileNode.newBuilder()
+                                .setDigest(digest)
+                                .setName(afd.path)
+                                .setIsExecutable(false));
+            }
+            Directory root = rootBuilder.build();
+            Digest d = DigestCalculator.compute(root);
+            CLog.d("Digest for '%s' is '%s'", context.contentEntry(), d);
+            return d;
+        } catch (IOException e) {
+            CLog.e(e);
+            return null;
         }
-        Directory root = rootBuilder.build();
-        Digest d = DigestCalculator.compute(root);
-        CLog.d("Digest for '%s' is '%s'", context.contentEntry(), d);
-        return d;
     }
 }

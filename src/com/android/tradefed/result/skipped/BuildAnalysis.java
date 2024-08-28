@@ -15,8 +15,12 @@
  */
 package com.android.tradefed.result.skipped;
 
+import build.bazel.remote.execution.v2.Digest;
+
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Represents the results of a single build analysis. */
@@ -26,6 +30,7 @@ public class BuildAnalysis {
     private final boolean mHasTestsArtifacts;
     private boolean mHasChangesInTests = false;
     private Set<String> mUnchangedModules = new HashSet<>();
+    private Map<String, Digest> mImageToDigest = new LinkedHashMap<>();
 
     public BuildAnalysis(boolean deviceImageChanged, boolean hasTestsArtifacts) {
         this.mDeviceImageChanged = deviceImageChanged;
@@ -52,8 +57,17 @@ public class BuildAnalysis {
         mUnchangedModules.addAll(unchangedModules);
     }
 
+    public BuildAnalysis addImageDigestMapping(Map<String, Digest> imageToDigest) {
+        mImageToDigest.putAll(imageToDigest);
+        return this;
+    }
+
     public Set<String> getUnchangedModules() {
         return mUnchangedModules;
+    }
+
+    public Map<String, Digest> getImageToDigest() {
+        return mImageToDigest;
     }
 
     @Override
@@ -64,17 +78,22 @@ public class BuildAnalysis {
                 + mHasTestsArtifacts
                 + ", mHasChangesInTests="
                 + mHasChangesInTests
+                + ", imageDigests="
+                + mImageToDigest
                 + "]";
     }
 
     public static BuildAnalysis mergeReports(List<BuildAnalysis> reports) {
         boolean deviceImageChanged = false;
         boolean hasTestsArtifacts = false;
+        Map<String, Digest> mergedImageToDigest = new LinkedHashMap<>();
         // Anchor toward things changing
         for (BuildAnalysis rep : reports) {
             deviceImageChanged |= rep.deviceImageChanged();
             hasTestsArtifacts |= rep.hasTestsArtifacts();
+            mergedImageToDigest.putAll(rep.getImageToDigest());
         }
-        return new BuildAnalysis(deviceImageChanged, hasTestsArtifacts);
+        return new BuildAnalysis(deviceImageChanged, hasTestsArtifacts)
+                .addImageDigestMapping(mergedImageToDigest);
     }
 }

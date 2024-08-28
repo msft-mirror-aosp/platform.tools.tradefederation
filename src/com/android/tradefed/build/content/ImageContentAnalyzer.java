@@ -97,6 +97,8 @@ public class ImageContentAnalyzer {
                                     "build key '%s' was unchanged.",
                                     context.contentEntry());
                         }
+                        results.addImageDigestMapping(
+                                context.contentEntry(), DeviceMerkleTree.buildFromContext(context));
                         break;
                     case DEVICE_IMAGE:
                         long changeCount = deviceImageAnalysis(context);
@@ -104,6 +106,8 @@ public class ImageContentAnalyzer {
                             CLog.d("device image '%s' has changed.", context.contentEntry());
                             results.addDeviceImageChanges(changeCount);
                         }
+                        results.addImageDigestMapping(
+                                "device_image", DeviceMerkleTree.buildFromContext(context));
                         break;
                     default:
                         break;

@@ -32,8 +32,12 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SystemUtil;
 
+import build.bazel.remote.execution.v2.Digest;
+
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 /** A utility that helps analyze the build artifacts for insight. */
@@ -122,6 +126,7 @@ public class ArtifactsAnalyzer {
             Entry<ITestDevice, IBuildInfo> deviceBuild, List<ContentAnalysisContext> context) {
         ITestDevice device = deviceBuild.getKey();
         IBuildInfo build = deviceBuild.getValue();
+        Map<String, Digest> imageToDigest = new LinkedHashMap<>();
         boolean deviceImageChanged = true; // anchor toward changing
         if (device.getIDevice() != null
                 && device.getIDevice().getClass().isAssignableFrom(NullDevice.class)) {
@@ -146,6 +151,7 @@ public class ArtifactsAnalyzer {
                 if (res == null) {
                     deviceImageChanged = true;
                 } else {
+                    imageToDigest.putAll(res.getImageToDigest());
                     if (hasOneDeviceAnalysis) {
                         if (res.hasDeviceImageChanges()) {
                             CLog.d("Changes in device image.");
@@ -173,6 +179,7 @@ public class ArtifactsAnalyzer {
                 && build.getFile(BuildInfoFileKey.ROOT_DIRECTORY) == null) {
             hasTestsArtifacts = false;
         }
-        return new BuildAnalysis(deviceImageChanged, hasTestsArtifacts);
+        return new BuildAnalysis(deviceImageChanged, hasTestsArtifacts)
+                .addImageDigestMapping(imageToDigest);
     }
 }

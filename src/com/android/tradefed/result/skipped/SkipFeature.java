@@ -23,8 +23,11 @@ import com.android.tradefed.service.IRemoteFeature;
 import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.testtype.ITestInformationReceiver;
 
+import build.bazel.remote.execution.v2.Digest;
+
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.proto.tradefed.feature.ErrorInfo;
 import com.proto.tradefed.feature.FeatureRequest;
 import com.proto.tradefed.feature.FeatureResponse;
@@ -35,7 +38,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 /** A feature allowing to access some of the {@link SkipManager} information. */
@@ -44,6 +50,7 @@ public class SkipFeature
 
     public static final String SKIP_FEATURE = "skipFeature";
     public static final String SKIPPED_MODULES = "skipModules";
+    public static final String IMAGE_DIGESTS = "imageDigests";
     public static final String PRESUBMIT = "presubmit";
     public static final String DELIMITER_NAME = "delimiter";
     private static final String DELIMITER = "+,";
@@ -96,6 +103,15 @@ public class SkipFeature
                                                 .join(
                                                         mConfig.getSkipManager()
                                                                 .getUnchangedModules())));
+                multiPartBuilder.addResponsePart(
+                        PartResponse.newBuilder()
+                                .setKey(IMAGE_DIGESTS)
+                                .setValue(
+                                        Joiner.on(DELIMITER)
+                                                .join(
+                                                        serializeDigest(
+                                                                mConfig.getSkipManager()
+                                                                        .getImageToDigest()))));
                 responseBuilder.setMultiPartResponse(multiPartBuilder);
             } else {
                 responseBuilder.setErrorInfo(
@@ -130,6 +146,8 @@ public class SkipFeature
                         unchangedModulesSet.addAll(splitStringFilters(delimiter, rep.getValue()));
                     } else if (rep.getKey().equals(PRESUBMIT)) {
                         isPresubmit = Boolean.parseBoolean(rep.getValue());
+                    } else if (rep.getKey().equals(IMAGE_DIGESTS)) {
+                        // TODO: parse the digests
                     } else if (rep.getKey().equals(DELIMITER_NAME)) {
                         // Ignore
                     } else {
@@ -153,5 +171,36 @@ public class SkipFeature
             return new ArrayList<String>();
         }
         return Arrays.asList(value.split(delimiter));
+    }
+
+    private static List<String> serializeDigest(Map<String, Digest> imageToDigest) {
+        List<String> serializedItems = new ArrayList<>();
+        for (Entry<String, Digest> entry : imageToDigest.entrySet()) {
+            serializedItems.add(
+                    String.format(
+                            "%s=%s=%s",
+                            entry.getKey(),
+                            entry.getValue().getHash(),
+                            entry.getValue().getSizeBytes()));
+        }
+        return serializedItems;
+    }
+
+    public static Map<String, Digest> parseDigests(String delimiter, String serializedString)
+            throws InvalidProtocolBufferException {
+        Map<String, Digest> imageToDigest = new LinkedHashMap<>();
+        if (Strings.isNullOrEmpty(serializedString)) {
+            return imageToDigest;
+        }
+        for (String sub : serializedString.split(delimiter)) {
+            String[] keyValue = sub.split("=");
+            imageToDigest.put(
+                    keyValue[0],
+                    Digest.newBuilder()
+                            .setHash(keyValue[1])
+                            .setSizeBytes(Long.parseLong(keyValue[2]))
+                            .build());
+        }
+        return imageToDigest;
     }
 }
