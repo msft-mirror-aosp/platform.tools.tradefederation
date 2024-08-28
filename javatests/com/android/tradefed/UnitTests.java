@@ -231,7 +231,6 @@ import com.android.tradefed.result.proto.ModuleProtoResultReporterTest;
 import com.android.tradefed.result.proto.ProtoResultParserTest;
 import com.android.tradefed.result.proto.ProtoResultReporterTest;
 import com.android.tradefed.result.proto.StreamProtoResultReporterTest;
-import com.android.tradefed.result.skipped.SkipFeatureTest;
 import com.android.tradefed.result.skipped.SkipManagerTest;
 import com.android.tradefed.result.skipped.SkipReasonTest;
 import com.android.tradefed.result.suite.FormattedGeneratorReporterTest;
@@ -806,7 +805,6 @@ import org.junit.runners.Suite.SuiteClasses;
     StreamProtoResultReporterTest.class,
 
     // result.skipped
-    SkipFeatureTest.class,
     SkipManagerTest.class,
     SkipReasonTest.class,
 
