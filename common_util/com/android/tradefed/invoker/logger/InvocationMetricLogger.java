@@ -183,6 +183,7 @@ public class InvocationMetricLogger {
         CF_OXYGEN_SERVER_URL("cf_oxygen_server_url", false),
         CF_OXYGEN_SESSION_ID("cf_oxygen_session_id", false),
         CF_OXYGEN_VERSION("cf_oxygen_version", false),
+        CF_OXYGENATION_VERSION("cf_oxygenation_version", false),
         CRASH_FAILURES("crash_failures", true),
         UNCAUGHT_CRASH_FAILURES("uncaught_crash_failures", true),
         TEST_CRASH_FAILURES("test_crash_failures", true),
@@ -259,7 +260,7 @@ public class InvocationMetricLogger {
         CAS_DOWNLOAD_FILE_SUCCESS_COUNT("cas_download_file_success_count", true),
         CAS_DOWNLOAD_FILE_FAIL_COUNT("cas_download_file_fail_count", true),
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
-        CAS_DOWNLOAD_START_TIMESTAMP("cas_download_start_timesstamp", true),
+        CAS_DOWNLOAD_START_TIMESTAMP("cas_download_start_timestamp", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
         CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
