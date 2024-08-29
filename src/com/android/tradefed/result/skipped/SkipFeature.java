@@ -122,9 +122,10 @@ public class SkipFeature
     }
 
     /** Fetch and populate unchanged modules if needed. */
-    public static Set<String> getUnchangedModules() {
+    public static SkipContext getSkipContext() {
         boolean isPresubmit = false;
         Set<String> unchangedModulesSet = new HashSet<>();
+        Map<String, Digest> imageToDigestMap = new LinkedHashMap<String, Digest>();
         try (TradefedFeatureClient client = new TradefedFeatureClient()) {
             FeatureResponse unchangedModules =
                     client.triggerFeature(SkipFeature.SKIP_FEATURE, new HashMap<String, String>());
@@ -143,7 +144,7 @@ public class SkipFeature
                     } else if (rep.getKey().equals(PRESUBMIT)) {
                         isPresubmit = Boolean.parseBoolean(rep.getValue());
                     } else if (rep.getKey().equals(IMAGE_DIGESTS)) {
-                        // TODO: parse the digests
+                        imageToDigestMap = parseDigests(delimiter, rep.getValue());
                     } else if (rep.getKey().equals(DELIMITER_NAME)) {
                         // Ignore
                     } else {
@@ -156,10 +157,7 @@ public class SkipFeature
         } catch (Exception e) {
             CLog.e(e);
         }
-        if (!isPresubmit) {
-            return new HashSet<String>();
-        }
-        return unchangedModulesSet;
+        return new SkipContext(isPresubmit, unchangedModulesSet, imageToDigestMap);
     }
 
     private static List<String> splitStringFilters(String delimiter, String value) {
