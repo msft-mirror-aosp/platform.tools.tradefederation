@@ -57,6 +57,14 @@ public class HostOrchestratorClient {
                 .build();
     }
 
+    // https://github.com/google/android-cuttlefish/blob/fff7e3487c924435e6f6120345edf1dddb49d50b/frontend/src/host_orchestrator/orchestrator/controller.go#L69
+    public static HttpRequest buildCreateBugreportRequest(String baseURL, String group) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(String.format("%s/cvds/%s/:bugreport", baseURL, group)))
+                .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
+                .build();
+    }
+
     public static interface IHoHttpClient {
         HttpResponse<String> send(HttpRequest request)
                 throws IOException, InterruptedException, ErrorResponseException;
