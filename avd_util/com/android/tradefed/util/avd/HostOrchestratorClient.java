@@ -47,6 +47,13 @@ public class HostOrchestratorClient {
                 .build();
     }
 
+    // https://github.com/google/android-cuttlefish/blob/fff7e3487c924435e6f6120345edf1dddb49d50b/frontend/src/host_orchestrator/orchestrator/controller.go#L82
+    public static HttpRequest buildGetOperationResultRequest(String baseURL, String name) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(String.format("%s/operations/%s/result", baseURL, name)))
+                .build();
+    }
+
     public static interface IHoHttpClient {
         HttpResponse<String> send(HttpRequest request)
                 throws IOException, InterruptedException, ErrorResponseException;
