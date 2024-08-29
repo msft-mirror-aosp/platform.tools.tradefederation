@@ -266,6 +266,7 @@ public class InvocationMetricLogger {
         CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
         CAS_CACHE_FALLBACK_COUNT("cas_cache_fallback_count", true),
         CAS_TIMEOUT_COUNT("cas_timeout_count", true),
+        CAS_RETRY_BUDGET_EXHAUSTED_COUNT("cas_retry_budget_exhausted_count", true),
         // Records cache hit metrics
         CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
