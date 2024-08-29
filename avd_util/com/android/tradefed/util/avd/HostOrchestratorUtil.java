@@ -22,6 +22,7 @@ import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBugreportRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildPowerwashRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
@@ -278,17 +279,11 @@ public class HostOrchestratorUtil {
                 curlRes.setStatus(CommandStatus.FAILED);
                 return curlRes;
             }
-            curlRes =
-                    cvdOperationExecution(
-                            mHttpClient,
-                            mHOPortNumber,
-                            "POST",
-                            String.format(URL_HO_POWERWASH, cvdGroup, cvdName),
-                            WAIT_FOR_OPERATION_TIMEOUT_MS);
-            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
-                CLog.e("Failed powerwashing cvd via Host Orchestrator: %s", curlRes.getStdout());
-            }
-        } catch (IOException | InterruptedException | ErrorResponseException e) {
+            String baseUrl = getHOBaseUrl(mHOPortNumber);
+            HttpRequest httpRequest = buildPowerwashRequest(baseUrl, cvdGroup, cvdName);
+            Operation operation = sendRequest(mHttpClient, httpRequest, Operation.class);
+            waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
+        } catch (IOException | InterruptedException | ErrorResponseException | TimeoutException e) {
             CLog.e("Failed powerwashing gce via Host Orchestrator: %s", e);
         }
         return curlRes;
