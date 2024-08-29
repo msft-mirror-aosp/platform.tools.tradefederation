@@ -23,11 +23,14 @@ import build.bazel.remote.execution.v2.Digest;
 import com.google.common.truth.Truth;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.IOException;
 
 /** Unit tests for {@link DeviceMerkleTree}. */
+@RunWith(JUnit4.class)
 public class DeviceMerkleTreeTest {
 
     @Test
