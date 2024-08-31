@@ -469,7 +469,7 @@ public class IncrementalImageUtil {
             if (mApplySnapshot) {
                 if (mWipeAfterApplySnapshot) {
                     CommandResult cancelResults =
-                            mDevice.executeFastbootCommand("snapshot-update cancel");
+                            mDevice.executeFastbootCommand("snapshot-update", "cancel");
                     CLog.d("Cancel status: %s", cancelResults.getStatus());
                     CLog.d("Cancel stdout: %s", cancelResults.getStdout());
                     CLog.d("Cancel stderr: %s", cancelResults.getStderr());
