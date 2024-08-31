@@ -183,6 +183,7 @@ public class InvocationMetricLogger {
         CF_OXYGEN_SERVER_URL("cf_oxygen_server_url", false),
         CF_OXYGEN_SESSION_ID("cf_oxygen_session_id", false),
         CF_OXYGEN_VERSION("cf_oxygen_version", false),
+        CF_OXYGENATION_VERSION("cf_oxygenation_version", false),
         CRASH_FAILURES("crash_failures", true),
         UNCAUGHT_CRASH_FAILURES("uncaught_crash_failures", true),
         TEST_CRASH_FAILURES("test_crash_failures", true),
@@ -253,16 +254,20 @@ public class InvocationMetricLogger {
         ART_RUN_TEST_CHECKER_COMMAND_TIME_MS("art_run_test_checker_command_time_ms", true),
 
         // CAS downloader metrics
+        CAS_VERSION("cas_version", false),
+        CAS_DOWNLOAD_ERRORS("cas_download_errors", true),
         // Name of files downloaded by CAS downloader.
         CAS_DOWNLOAD_FILES("cas_download_files", true),
         CAS_DOWNLOAD_FILE_SUCCESS_COUNT("cas_download_file_success_count", true),
         CAS_DOWNLOAD_FILE_FAIL_COUNT("cas_download_file_fail_count", true),
         CAS_DOWNLOAD_TIME("cas_download_time_ms", true),
+        CAS_DOWNLOAD_START_TIMESTAMP("cas_download_start_timestamp", true),
         // Records the wait time caused by CAS downloader concurrency limitation.
         CAS_DOWNLOAD_WAIT_TIME("cas_download_wait_time_ms", true),
         CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
         CAS_CACHE_FALLBACK_COUNT("cas_cache_fallback_count", true),
         CAS_TIMEOUT_COUNT("cas_timeout_count", true),
+        CAS_RETRY_BUDGET_EXHAUSTED_COUNT("cas_retry_budget_exhausted_count", true),
         // Records cache hit metrics
         CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
