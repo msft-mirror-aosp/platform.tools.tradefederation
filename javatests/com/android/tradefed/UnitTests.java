@@ -28,6 +28,7 @@ import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
+import com.android.tradefed.build.content.DeviceMerkleTreeTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
 import com.android.tradefed.cache.UploadManifestTest;
@@ -230,6 +231,7 @@ import com.android.tradefed.result.proto.ModuleProtoResultReporterTest;
 import com.android.tradefed.result.proto.ProtoResultParserTest;
 import com.android.tradefed.result.proto.ProtoResultReporterTest;
 import com.android.tradefed.result.proto.StreamProtoResultReporterTest;
+import com.android.tradefed.result.skipped.SkipFeatureTest;
 import com.android.tradefed.result.skipped.SkipManagerTest;
 import com.android.tradefed.result.skipped.SkipReasonTest;
 import com.android.tradefed.result.suite.FormattedGeneratorReporterTest;
@@ -530,6 +532,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // build.content
     ArtifactDetailsTest.class,
     ContentAnalysisResultsTest.class,
+    DeviceMerkleTreeTest.class,
     TestContentAnalyzerTest.class,
 
     // cache
@@ -803,6 +806,7 @@ import org.junit.runners.Suite.SuiteClasses;
     StreamProtoResultReporterTest.class,
 
     // result.skipped
+    SkipFeatureTest.class,
     SkipManagerTest.class,
     SkipReasonTest.class,
 
