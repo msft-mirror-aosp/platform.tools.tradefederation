@@ -98,7 +98,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
     /** List of tests that failed in the current test run when test run was complete. */
     private Set<String> mCurFailedTests = new LinkedHashSet<>();
 
-    private TestRunResultListener mTestRunResultListener = new TestRunResultListener();
+    private TestRunResultListener mTestRunResultListener;
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -349,6 +349,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException { // DNAE is part of IRemoteTest.
         try {
+            mTestRunResultListener = new TestRunResultListener();
             // Reset flags that are used to track results of current test run.
             mIncompleteTestFound = false;
             mCurFailedTests = new LinkedHashSet<>();

@@ -1289,12 +1289,8 @@ public class RunUtil implements IRunUtil {
         return symlink;
     }
 
-    /**
-     * Uploads the last {@link ExecutableActionResult} ran with a cacheClient.
-     *
-     * @param cacheClient The {@link ICacheClient} used to upload the result.
-     * @param actionResult The {@link ExecutableActionResult} to upload.
-     */
+    /** {@inheritDoc} */
+    @Override
     public void uploadCache(ICacheClient cacheClient, ExecutableActionResult actionResult) {
         if (actionResult.exitCode() != 0 || cacheClient == null || mAction == null) {
             return;

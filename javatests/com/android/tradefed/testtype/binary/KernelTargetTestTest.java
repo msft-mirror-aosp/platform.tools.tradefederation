@@ -189,18 +189,24 @@ public class KernelTargetTestTest {
 
         // Both tests should run
         TestDescription testDescription = new TestDescription(TEST_NAME_1, TEST_NAME_1);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        eq(testDescription), eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription),
+                        Mockito.anyLong(),
+                        eq(new HashMap<String, MetricMeasurement.Metric>()));
 
         TestDescription testDescription2 = new TestDescription(TEST_NAME_2, TEST_NAME_2);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(eq(testDescription2), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        eq(testDescription2), eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription2),
+                        Mockito.anyLong(),
+                        eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(anyLong(), Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
     }
@@ -239,19 +245,25 @@ public class KernelTargetTestTest {
 
         // First test should be ignored
         TestDescription testDescription = new TestDescription(TEST_NAME_1, TEST_NAME_1);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1)).testIgnored(eq(testDescription));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        eq(testDescription), eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription),
+                        Mockito.anyLong(),
+                        eq(new HashMap<String, MetricMeasurement.Metric>()));
 
         // Second test should be run
         TestDescription testDescription2 = new TestDescription(TEST_NAME_2, TEST_NAME_2);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testDescription2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(eq(testDescription2), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never()).testIgnored(eq(testDescription2));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
-                        eq(testDescription2), eq(new HashMap<String, MetricMeasurement.Metric>()));
+                        eq(testDescription2),
+                        Mockito.anyLong(),
+                        eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(anyLong(), Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
     }
@@ -279,7 +291,8 @@ public class KernelTargetTestTest {
 
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(any(), eq(1));
         for (Pair<TestDescription, Boolean> testResult : expectedTestResults) {
-            Mockito.verify(mListener, Mockito.times(1)).testStarted(eq(testResult.first));
+            Mockito.verify(mListener, Mockito.times(1))
+                    .testStarted(eq(testResult.first), Mockito.anyLong());
             if (!testResult.second) {
                 Mockito.verify(mListener, Mockito.times(1))
                         .testFailed(Mockito.eq(testResult.first), any(FailureDescription.class));
@@ -287,6 +300,7 @@ public class KernelTargetTestTest {
             Mockito.verify(mListener, Mockito.times(1))
                     .testEnded(
                             eq(testResult.first),
+                            Mockito.anyLong(),
                             eq(new HashMap<String, MetricMeasurement.Metric>()));
         }
         Mockito.verify(mListener, Mockito.times(1))
