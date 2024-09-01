@@ -316,9 +316,7 @@ public class GceManager {
                             getTestDeviceOptions().getExtraOxygenArgs(),
                             attributes,
                             getTestDeviceOptions().getGceCmdTimeout());
-            gceAvdInfos =
-                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
-                            res, mDeviceOptions.getRemoteAdbPort());
+            gceAvdInfos = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions);
             mGceAvdInfo = gceAvdInfos.get(0);
             return gceAvdInfos;
         } finally {
@@ -400,11 +398,8 @@ public class GceManager {
                 }
                 iteration++;
             }
+            mGceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions).get(0);
 
-            mGceAvdInfo =
-                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
-                                    res, mDeviceOptions.getRemoteAdbPort())
-                            .get(0);
             // Lease may time out, skip remaining logic if lease failed.
             if (mGceAvdInfo.hostAndPort() == null) {
                 CLog.w("Failed to lease a device: %s", mGceAvdInfo);
