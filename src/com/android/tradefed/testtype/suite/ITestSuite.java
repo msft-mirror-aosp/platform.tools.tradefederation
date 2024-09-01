@@ -66,6 +66,7 @@ import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
+import com.android.tradefed.result.skipped.SkipContext;
 import com.android.tradefed.result.skipped.SkipFeature;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
@@ -414,7 +415,8 @@ public abstract class ITestSuite
     // Current modules to run, null if not started to run yet.
     private List<ModuleDefinition> mRunModules = null;
     private ModuleDefinition mModuleInProgress = null;
-    private Set<String> mUnchangedModules = null;
+    private SkipContext mSkipContext = null;
+
     // Logger to be used to files.
     private ITestLogger mCurrentLogger = null;
     // Whether or not we are currently in split
@@ -849,10 +851,9 @@ public abstract class ITestSuite
                     mRunModules);
         }
 
-        if (mUnchangedModules == null) {
-            mUnchangedModules = SkipFeature.getUnchangedModules();
+        if (mSkipContext == null) {
+            mSkipContext = SkipFeature.getSkipContext();
         }
-        Set<String> unchangedModulesNames = mUnchangedModules;
         /** Run all the module, make sure to reduce the list to release resources as we go. */
         try {
             while (!mRunModules.isEmpty()) {
@@ -934,7 +935,7 @@ public abstract class ITestSuite
                     logModuleConfig(listener, module);
                     boolean moduleRan = true;
                     try {
-                        if (unchangedModulesNames.contains(
+                        if (mSkipContext.shouldSkipModule(
                                 module.getModuleInvocationContext()
                                         .getConfigurationDescriptor()
                                         .getModuleName())) {
@@ -1364,6 +1365,7 @@ public abstract class ITestSuite
             // to carry these extra data.
             cleanUpSuiteSetup();
 
+            SkipContext skipContext = SkipFeature.getSkipContext();
             // create an association of one ITestSuite <=> one ModuleDefinition as the smallest
             // execution unit supported.
             List<IRemoteTest> splitTests = new ArrayList<>();
@@ -1372,6 +1374,7 @@ public abstract class ITestSuite
                 OptionCopier.copyOptionsNoThrow(this, suite);
                 suite.mIsSharded = true;
                 suite.mDirectModule = m;
+                suite.setSkipContext(skipContext);
                 splitTests.add(suite);
             }
             // return the list of ITestSuite with their ModuleDefinition assigned
@@ -1848,7 +1851,7 @@ public abstract class ITestSuite
         return mIntraModuleSharding;
     }
 
-    public void setUnchangedModules(Set<String> unchangedModules) {
-        mUnchangedModules = unchangedModules;
+    public void setSkipContext(SkipContext skipContext) {
+        mSkipContext = skipContext;
     }
 }

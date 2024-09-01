@@ -45,6 +45,23 @@ public class ImageContentAnalyzer {
         this.mAnalysisLevel = analysisLevel;
     }
 
+    /** Remove descriptors for files that do not impact the device image functionally */
+    public static void normalizeDeviceImage(List<ArtifactFileDescriptor> allDescriptors) {
+        // Remove all build.prop paths
+        allDescriptors.removeIf(d -> d.path.endsWith("/build.prop"));
+        allDescriptors.removeIf(d -> d.path.endsWith("/prop.default"));
+        allDescriptors.removeIf(d -> d.path.endsWith("/default.prop"));
+        // Remove all notices they don't change the image
+        allDescriptors.removeIf(d -> d.path.endsWith("/etc/NOTICE.xml.gz"));
+        // Remove build time flags, we will catch other files that are changing
+        allDescriptors.removeIf(d -> d.path.endsWith("/etc/build_flags.json"));
+        // Remove all IMAGES/ paths
+        allDescriptors.removeIf(d -> d.path.startsWith("IMAGES/"));
+        allDescriptors.removeIf(d -> d.path.startsWith("META/"));
+        allDescriptors.removeIf(d -> d.path.startsWith("PREBUILT_IMAGES/"));
+        allDescriptors.removeIf(d -> d.path.startsWith("RADIO/"));
+    }
+
     public ContentAnalysisResults evaluate() {
         List<ContentAnalysisContext> activeContexts = new ArrayList<>(contexts);
         try (CloseableTraceScope ignored = new CloseableTraceScope("image_analysis")) {
@@ -97,6 +114,8 @@ public class ImageContentAnalyzer {
                                     "build key '%s' was unchanged.",
                                     context.contentEntry());
                         }
+                        results.addImageDigestMapping(
+                                context.contentEntry(), DeviceMerkleTree.buildFromContext(context));
                         break;
                     case DEVICE_IMAGE:
                         long changeCount = deviceImageAnalysis(context);
@@ -104,6 +123,8 @@ public class ImageContentAnalyzer {
                             CLog.d("device image '%s' has changed.", context.contentEntry());
                             results.addDeviceImageChanges(changeCount);
                         }
+                        results.addImageDigestMapping(
+                                "device_image", DeviceMerkleTree.buildFromContext(context));
                         break;
                     default:
                         break;
@@ -145,19 +166,7 @@ public class ImageContentAnalyzer {
                             context.contentInformation(), context.contentEntry());
             // Remove paths that are ignored
             diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
-            // Remove all build.prop paths
-            diffs.removeIf(d -> d.path.endsWith("/build.prop"));
-            diffs.removeIf(d -> d.path.endsWith("/prop.default"));
-            diffs.removeIf(d -> d.path.endsWith("/default.prop"));
-            // Remove all notices they don't change the image
-            diffs.removeIf(d -> d.path.endsWith("/etc/NOTICE.xml.gz"));
-            // Remove build time flags, we will catch other files that are changing
-            diffs.removeIf(d -> d.path.endsWith("/etc/build_flags.json"));
-            // Remove all IMAGES/ paths
-            diffs.removeIf(d -> d.path.startsWith("IMAGES/"));
-            diffs.removeIf(d -> d.path.startsWith("META/"));
-            diffs.removeIf(d -> d.path.startsWith("PREBUILT_IMAGES/"));
-            diffs.removeIf(d -> d.path.startsWith("RADIO/"));
+            normalizeDeviceImage(diffs);
             if (mAnalysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
                 boolean removed = false;
                 // b/335722003

@@ -25,13 +25,13 @@ import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.DeviceRuntimeException;
 import com.android.tradefed.device.INativeDevice;
-import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
-import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.util.AdbRootElevator;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -40,6 +40,7 @@ import com.android.tradefed.util.FileUtil;
 import com.google.common.base.Strings;
 
 import java.io.File;
+import java.util.HashSet;
 import java.util.Map;
 
 /**
@@ -60,6 +61,7 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
     private IConfiguration mConfiguration;
     private boolean mTestRunStartFail;
     private int mTestCount;
+    private HashSet<String> mDevicesMountedOnStart = new HashSet<>();
 
     public GcovKernelCodeCoverageCollector() {
         setDisableReceiver(false);
@@ -83,6 +85,7 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
     public void onTestRunStart(DeviceMetricData runData, int testCount)
             throws DeviceNotAvailableException {
         mTestCount = testCount;
+        mDevicesMountedOnStart.clear();
 
         if (!isGcovKernelCoverageEnabled()) {
             return;
@@ -96,7 +99,10 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
         try {
             for (ITestDevice device : getRealDevices()) {
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-                    device.mountDebugfs();
+                    if (!device.isDebugfsMounted()) {
+                        device.mountDebugfs();
+                        mDevicesMountedOnStart.add(device.getSerialNumber());
+                    }
                     resetGcovCounts(device);
                 }
             }
@@ -122,7 +128,9 @@ public final class GcovKernelCodeCoverageCollector extends BaseDeviceMetricColle
         for (ITestDevice device : getRealDevices()) {
             try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                 collectGcovDebugfsCoverage(device, getTarBasename());
-                device.unmountDebugfs();
+                if (mDevicesMountedOnStart.contains(device.getSerialNumber())) {
+                    device.unmountDebugfs();
+                }
             }
         }
     }
