@@ -100,11 +100,9 @@ public class KernelModuleUtils {
      * @throws TargetSetupError if the module cannot be installed
      * @throws DeviceNotAvailableException if the device is not available
      */
-    public static void installModule(
+    public static CommandResult installModule(
             ITestDevice device, String modulePath, String arg, long timeoutMs)
             throws TargetSetupError, DeviceNotAvailableException {
-
-        String kernelModule = getDisplayedModuleName(modulePath);
 
         String command = String.format("insmod %s %s", modulePath, arg);
         CLog.i("Installing %s on %s", modulePath, device.getSerialNumber());
@@ -118,18 +116,41 @@ public class KernelModuleUtils {
                     DeviceErrorIdentifier.KERNEL_MODULE_INSTALLATION_FAILED);
         }
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            String moduleName = getDisplayedModuleName(modulePath);
             String errorMessage =
                     String.format(
                             "shell command %s failed with exit code: %d, stderr: %s, stdout:"
                                     + " %s",
                             command, result.getExitCode(), result.getStderr(), result.getStdout());
-            CLog.e("Unable to install module '%s'. Error message: %s", kernelModule, errorMessage);
+            CLog.e("Unable to install module '%s'. Error message: %s", moduleName, errorMessage);
             throw new TargetSetupError(
                     String.format(
                             "Failed to install %s on %s. Error message: '%s'",
-                            kernelModule, device.getSerialNumber(), errorMessage),
+                            moduleName, device.getSerialNumber(), errorMessage),
                     DeviceErrorIdentifier.KERNEL_MODULE_INSTALLATION_FAILED);
         }
+        return result;
+    }
+
+    /**
+     * Remove a kernel module from the given device.
+     *
+     * <p>This method attempts to remove the target kernel module from the device. No dependent
+     * modules will be removed.
+     *
+     * @param device the device to remove the module from
+     * @param moduleName the name to the module to remove
+     * @throws DeviceNotAvailableException if the device is not available
+     */
+    public static CommandResult removeSingleModule(ITestDevice device, String moduleName)
+            throws DeviceNotAvailableException {
+
+        String command = String.format("rmmod %s", moduleName);
+        CommandResult result = device.executeShellV2Command(command);
+        if (result != null) {
+            CLog.i("'%s' returned %s.", command, result.getStdout());
+        }
+        return result;
     }
 
     /**
@@ -140,29 +161,20 @@ public class KernelModuleUtils {
      * effort.
      *
      * @param device the device to remove the module from
-     * @param module the name or the path to the module to remove
+     * @param moduleName the name to the module to remove
      * @throws DeviceNotAvailableException if the device is not available
      */
-    public static void removeModule(ITestDevice device, String module)
+    public static CommandResult removeModuleWithDependency(ITestDevice device, String moduleName)
             throws DeviceNotAvailableException {
-
-        String kernelModule = getDisplayedModuleName(module);
-        String command;
-
-        CLog.i("Remove kernel module %s from %s", kernelModule, device.getSerialNumber());
 
         String output = device.executeShellCommand("lsmod");
         CLog.d("lsmod output: %s from %s", output, device.getSerialNumber());
-        for (String modName : getDependentModules(kernelModule, output)) {
+        for (String modName : getDependentModules(moduleName, output)) {
             String trimmedName = modName.trim();
-            command = String.format("rmmod %s", trimmedName);
-            output = device.executeShellCommand(command);
-            CLog.i("'%s' returned %s.", command, output);
+            removeSingleModule(device, trimmedName);
         }
 
         // Clean up, unload module with best effort
-        command = String.format("rmmod %s", kernelModule);
-        output = device.executeShellCommand(command);
-        CLog.i("'%s' returned %s.", command, output);
+        return removeSingleModule(device, moduleName);
     }
 }
