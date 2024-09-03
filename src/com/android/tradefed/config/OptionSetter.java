@@ -801,8 +801,8 @@ public class OptionSetter {
      * @param optionClass the {@link Class} to search
      * @return a {@link Collection} of fields annotated with {@link Option}
      */
-    public static Collection<Field> getOptionFieldsForClass(final Class<?> optionClass) {
-        Collection<Field> fieldList = new ArrayList<Field>();
+    public static List<Field> getOptionFieldsForClass(final Class<?> optionClass) {
+        List<Field> fieldList = new ArrayList<Field>();
         buildOptionFieldsForClass(optionClass, fieldList);
         return fieldList;
     }

@@ -21,6 +21,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceDisconnectedException;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.SnapuserdWaitPhase;
@@ -88,6 +89,7 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
+    private final boolean mWipeAfterApplySnapshot;
     private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
@@ -108,6 +110,7 @@ public class IncrementalImageUtil {
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
             boolean applySnapshot,
+            boolean wipeAfterApply,
             SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
@@ -115,11 +118,11 @@ public class IncrementalImageUtil {
             CLog.d("test is configured with isolation grade, doesn't support incremental yet.");
             return null;
         }
+        String serialNumber = device.getSerialNumber();
         FileCacheTracker tracker =
-                DeviceImageTracker.getDefaultCache()
-                        .getBaselineDeviceImage(device.getSerialNumber());
+                DeviceImageTracker.getDefaultCache().getBaselineDeviceImage(serialNumber);
         if (tracker == null) {
-            CLog.d("Not tracking current baseline image.");
+            CLog.d("Not tracking current baseline image for %s", serialNumber);
             return null;
         }
         String deviceBuildId = device.getBuildId();
@@ -193,6 +196,7 @@ public class IncrementalImageUtil {
                 build.getDeviceImageFile(),
                 createSnapshot,
                 applySnapshot,
+                wipeAfterApply,
                 waitPhase);
     }
 
@@ -204,12 +208,14 @@ public class IncrementalImageUtil {
             File targetImage,
             File createSnapshot,
             boolean applySnapshot,
+            boolean wipeAfterApply,
             SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
         mApplySnapshot = applySnapshot;
+        mWipeAfterApplySnapshot = wipeAfterApply;
         mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
@@ -429,8 +435,11 @@ public class IncrementalImageUtil {
             CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
 
             if (mApplySnapshot) {
-                CommandResult mapOutput =
-                        mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
+                String applyCommand = "snapshotctl apply-update /data/ndb/";
+                if (mWipeAfterApplySnapshot) {
+                    applyCommand += " -w";
+                }
+                CommandResult mapOutput = mDevice.executeShellV2Command(applyCommand);
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
                     InvocationMetricLogger.addInvocationMetrics(
@@ -458,6 +467,17 @@ public class IncrementalImageUtil {
             }
             mDevice.rebootIntoBootloader();
             if (mApplySnapshot) {
+                if (mWipeAfterApplySnapshot) {
+                    CommandResult cancelResults =
+                            mDevice.executeFastbootCommand("snapshot-update", "cancel");
+                    CLog.d("Cancel status: %s", cancelResults.getStatus());
+                    CLog.d("Cancel stdout: %s", cancelResults.getStdout());
+                    CLog.d("Cancel stderr: %s", cancelResults.getStderr());
+                    CommandResult wipeResults = mDevice.executeFastbootCommand("-w");
+                    CLog.d("wipe status: %s", wipeResults.getStatus());
+                    CLog.d("wipe stdout: %s", wipeResults.getStdout());
+                    CLog.d("wipe stderr: %s", wipeResults.getStderr());
+                }
                 updateBootloaderAndBasebandIfNeeded(
                         targetDirectory, currentBootloader, currentRadio);
             }
@@ -691,27 +711,35 @@ public class IncrementalImageUtil {
         if (!CommandStatus.SUCCESS.equals(fastbootResult.getStatus())) {
             return false;
         }
-        // TODO: Make the fallback faster
+        RecoveryMode recoveryMode = mDevice.getRecoveryMode();
         try {
-            mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
-        } catch (DeviceNotAvailableException e) {
-            if (mApplySnapshot) {
-                if (TestDeviceState.RECOVERY.equals(mDevice.getDeviceState())) {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.INCREMENTAL_RECOVERY_FALLBACK, 1);
-                    // Go back to bootloader for fallback flashing
-                    mDevice.rebootIntoBootloader();
-                    CommandResult result = mDevice.executeFastbootCommand("-w");
-                    CLog.d("wipe status: %s", result.getStatus());
-                    CLog.d("wipe stdout: %s", result.getStdout());
-                    CLog.d("wipe stderr: %s", result.getStderr());
-                    throw new TargetSetupError(
-                            "Device went to recovery unexpectedly",
-                            e,
-                            DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+            mDevice.setRecoveryMode(RecoveryMode.NONE);
+            ((IManagedTestDevice) mDevice).getMonitor().attachFinalState(TestDeviceState.RECOVERY);
+            boolean available = mDevice.waitForDeviceAvailable(5 * 60 * 1000L);
+            if (!available) {
+                if (mApplySnapshot) {
+                    if (TestDeviceState.RECOVERY.equals(mDevice.getDeviceState())) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.INCREMENTAL_RECOVERY_FALLBACK, 1);
+                        // Go back to bootloader for fallback flashing
+                        mDevice.rebootIntoBootloader();
+                        CommandResult result = mDevice.executeFastbootCommand("-w");
+                        CLog.d("wipe status: %s", result.getStatus());
+                        CLog.d("wipe stdout: %s", result.getStdout());
+                        CLog.d("wipe stderr: %s", result.getStderr());
+                        throw new TargetSetupError(
+                                "Device went to recovery unexpectedly",
+                                DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+                    }
+                } else {
+                    throw new DeviceNotAvailableException(
+                            "device did not become available after flashing.",
+                            mDevice.getSerialNumber(),
+                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
                 }
             }
-            throw e;
+        } finally {
+            mDevice.setRecoveryMode(recoveryMode);
         }
         return true;
     }

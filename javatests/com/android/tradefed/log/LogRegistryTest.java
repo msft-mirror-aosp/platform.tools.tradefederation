@@ -19,8 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.android.ddmlib.Log;
-import com.android.ddmlib.Log.LogLevel;
+import com.android.tradefed.log.Log.LogLevel;
 
 import org.junit.After;
 import org.junit.Before;
