@@ -336,14 +336,6 @@ public class GceManager {
      */
     private GceAvdInfo startGceWithOxygenClient(
             ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
-        if (getTestDeviceOptions().useOxygenationDevice()) {
-            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
-            // Lease an oxygenation device with additional options passed in when
-            // use-oxygenation-device is set.
-            // For now, return failure with exceptions first.
-            throw new TargetSetupError(
-                    "OxygenClient: Leasing an oxygenation device is not supported for now.");
-        }
         long startTime = System.currentTimeMillis();
         long fetchTime = 0;
         try {
@@ -423,9 +415,7 @@ public class GceManager {
                     hOUtil =
                             new HostOrchestratorUtil(
                                     getTestDeviceOptions().useOxygenationDevice(),
-                                    getTestDeviceOptions()
-                                            .getExtraOxygenArgs()
-                                            .containsKey("use_cvd"),
+                                    getTestDeviceOptions().getExtraOxygenArgs(),
                                     getTestDeviceOptions().getSshPrivateKeyPath(),
                                     getTestDeviceOptions().getInstanceUser(),
                                     mGceAvdInfo.instanceName(),
@@ -433,6 +423,8 @@ public class GceManager {
                                             ? mGceAvdInfo.hostAndPort().getHost()
                                             : null,
                                     mGceAvdInfo.getOxygenationDeviceId(),
+                                    OxygenUtil.getTargetRegion(getTestDeviceOptions()),
+                                    getTestDeviceOptions().getOxygenAccountingUser(),
                                     oxygenClient);
                     bootSuccess = hOUtil.deviceBootCompleted(timeout);
                 } else {
@@ -491,6 +483,13 @@ public class GceManager {
                                     "host_orchestrator",
                                     LogDataType.CUTTLEFISH_LOG,
                                     new FileInputStreamSource(tempFile));
+                            FileUtil.deleteFile(tempFile);
+                            tempFile = hOUtil.getTunnelLog();
+                            logger.testLog(
+                                    "host_orchestrator_tunnel_logs",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                            FileUtil.deleteFile(tempFile);
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
@@ -778,13 +777,6 @@ public class GceManager {
      */
     private boolean shutdownGceWithOxygen() {
         try {
-            if (getTestDeviceOptions().useOxygenationDevice()) {
-                // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
-                // Release an oxygenation device with additional options passed in when
-                // use-oxygenation-device is set.
-                // For now, return false first.
-                return false;
-            }
             // If gceAvdInfo is missing info, then it means the device wasn't get leased
             // successfully.
             // In such case, there is no need to release the device.
