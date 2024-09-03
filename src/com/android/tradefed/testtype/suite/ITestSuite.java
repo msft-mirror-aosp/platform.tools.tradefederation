@@ -927,10 +927,19 @@ public abstract class ITestSuite
                             }
                         }
                     }
+                    File moduleConfig = logModuleConfig(listener, module);
                     ModuleProtoResultReporter moduleReporter = null;
+                    File moduleDir = null; // b/363066706
                     if (mUploadCachedResults
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
                                     != null) {
+                        SuiteResultCacheUtil.lookUpModuleResults(
+                                mMainConfiguration,
+                                module.getId(),
+                                moduleConfig,
+                                moduleDir,
+                                mSkipContext);
+
                         moduleReporter = new ModuleProtoResultReporter();
                         moduleListeners.add(moduleReporter);
                     }
@@ -945,7 +954,6 @@ public abstract class ITestSuite
                     TestInformation moduleInfo =
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
-                    File moduleConfig = logModuleConfig(listener, module);
                     boolean moduleRan = true;
                     try {
                         if (mSkipContext.shouldSkipModule(
@@ -977,7 +985,6 @@ public abstract class ITestSuite
                         if (mUploadCachedResults && moduleReporter != null) {
                             File protoResults = moduleReporter.getOutputFile();
                             if (!moduleReporter.hasFailures()) {
-                                File moduleDir = null; // b/363066706
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         module.getId(),
