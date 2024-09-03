@@ -41,4 +41,8 @@ public class SkipContext {
     public boolean shouldSkipModule(String moduleName) {
         return presubmit && unchangedModules.contains(moduleName);
     }
+
+    public Map<String, Digest> getImageToDigest() {
+        return imageToDigest;
+    }
 }
