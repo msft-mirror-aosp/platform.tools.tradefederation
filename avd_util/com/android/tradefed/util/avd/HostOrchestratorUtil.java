@@ -32,11 +32,13 @@ import org.json.JSONObject;
 import org.json.JSONTokener;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /** Utility to execute commands via Host Orchestrator on remote instances. */
 public class HostOrchestratorUtil {
@@ -56,6 +58,9 @@ public class HostOrchestratorUtil {
     private static final String URL_QUERY_OPERATION = "operations/%s";
     private static final String URL_QUERY_OPERATION_RESULT = "operations/%s/result";
     private static final String UNSUPPORTED_API_RESPONSE = "404 page not found";
+
+    private File mTunnelLog;
+    private FileOutputStream mTunnelLogStream;
     private boolean mUseOxygenation = false;
     private boolean mUseCvdOxygen = false;
 
@@ -63,10 +68,14 @@ public class HostOrchestratorUtil {
     private File mSshPrivateKeyPath;
     private String mInstanceUser;
 
-    // Oxygen instance name, host name and device ID
+    // Oxygen instance name, host name, target region, accounting user, device ID, and other oxygen
+    // arguments.
     private String mInstanceName;
     private String mHost;
     private String mOxygenationDeviceId;
+    private String mTargetRegion;
+    private String mAccountingUser;
+    private Map<String, String> mExtraOxygenArgs;
 
     private OxygenClient mOxygenClient;
 
@@ -91,6 +100,7 @@ public class HostOrchestratorUtil {
                 new OxygenClient(Arrays.asList(avdDriverBinary.getAbsolutePath())));
     }
 
+    @Deprecated
     public HostOrchestratorUtil(
             boolean useOxygenation,
             boolean useCvdOxygen,
@@ -108,6 +118,30 @@ public class HostOrchestratorUtil {
         mHost = host;
         mOxygenationDeviceId = oxygenationDeviceId;
         mOxygenClient = oxygenClient;
+    }
+
+    public HostOrchestratorUtil(
+            boolean useOxygenation,
+            Map<String, String> extraOxygenArgs,
+            File sshPrivateKeyPath,
+            String instanceUser,
+            String instanceName,
+            String host,
+            String oxygenationDeviceId,
+            String targetRegion,
+            String accountingUser,
+            OxygenClient oxygenClient) {
+        mUseOxygenation = useOxygenation;
+        mExtraOxygenArgs = extraOxygenArgs;
+        mSshPrivateKeyPath = sshPrivateKeyPath;
+        mInstanceUser = instanceUser;
+        mInstanceName = instanceName;
+        mHost = host;
+        mOxygenationDeviceId = oxygenationDeviceId;
+        mTargetRegion = targetRegion;
+        mAccountingUser = accountingUser;
+        mOxygenClient = oxygenClient;
+        mUseCvdOxygen = extraOxygenArgs.containsKey("use_cvd");
     }
 
     /**
@@ -364,17 +398,30 @@ public class HostOrchestratorUtil {
      */
     // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
     // (tradefed-avd-util)
-    public Process createHostOrchestratorTunnel(String portNumber) throws IOException {
-        // Basically, to portforwad the CURL tunnel, the rough process would be
-        // if it's oxygenation device -> portforward the CURL tunnel via LHP.
-        // if `use_cvd` is set -> portforward the CURL tunnel via SSH.
-        // TODO(easoncylee): Flesh out this section when it's ready.
+    Process createHostOrchestratorTunnel(String portNumber) throws IOException {
+        if (mTunnelLog == null || !mTunnelLog.exists()) {
+            try {
+                mTunnelLog = FileUtil.createTempFile("host-orchestrator-connection", ".txt");
+                mTunnelLogStream = new FileOutputStream(mTunnelLog, true);
+            } catch (IOException e) {
+                FileUtil.deleteFile(mTunnelLog);
+                CLog.e(e);
+            }
+        }
         if (mUseOxygenation) {
-            CLog.i("Portforwarding Host Orchestrator via LHP for Oxygenation CF.");
+            CLog.i("Portforwarding host orchestrator for oxygenation CF.");
             return mOxygenClient.createTunnelViaLHP(
-                    LHPTunnelMode.CURL, portNumber, mInstanceName, mOxygenationDeviceId);
+                    LHPTunnelMode.CURL,
+                    portNumber,
+                    mInstanceName,
+                    mHost,
+                    mTargetRegion,
+                    mAccountingUser,
+                    mOxygenationDeviceId,
+                    mExtraOxygenArgs,
+                    mTunnelLogStream);
         } else if (mUseCvdOxygen) {
-            CLog.i("Portforarding Host Orchestrator via SSH tunnel for Oxygen CF.");
+            CLog.i("Portforarding host orchestrator for oxygen CF.");
             List<String> tunnelParam = new ArrayList<>();
             tunnelParam.add(String.format(OXYGEN_TUNNEL_PARAM, portNumber));
             tunnelParam.add("-N");
@@ -406,7 +453,7 @@ public class HostOrchestratorUtil {
      */
     // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
     // (tradefed-avd-util)
-    protected CommandResult curlCommandExecution(
+    CommandResult curlCommandExecution(
             String portNumber,
             String method,
             String api,
@@ -492,7 +539,7 @@ public class HostOrchestratorUtil {
      */
     // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
     // (tradefed-avd-util)
-    public CommandResult cvdOperationExecution(
+    CommandResult cvdOperationExecution(
             String portNumber, String method, String request, long maxWaitTime) {
         CommandResult commandRes = curlCommandExecution(portNumber, method, request, true);
         if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
@@ -534,5 +581,10 @@ public class HostOrchestratorUtil {
     // (tradefed-avd-util)
     public String getUnsupportedHoResponse() {
         return UNSUPPORTED_API_RESPONSE;
+    }
+
+    /** Return the host orchestrator tunnel log file. */
+    public File getTunnelLog() {
+        return mTunnelLog;
     }
 }
