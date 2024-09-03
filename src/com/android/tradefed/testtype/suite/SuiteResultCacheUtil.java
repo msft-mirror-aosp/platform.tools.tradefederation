@@ -20,6 +20,8 @@ import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.skipped.SkipContext;
@@ -53,7 +55,11 @@ public class SuiteResultCacheUtil {
             File protoResults,
             File moduleDir,
             SkipContext skipContext) {
-        // TODO: Ensure skipContext is complete
+        if (!skipContext.shouldUseCache()) {
+            return;
+        }
+        // TODO: Ensure skipContext is complete and matches the device
+        // TODO: Ensure we have the link to the results
         try (CloseableTraceScope ignored = new CloseableTraceScope("upload_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
@@ -68,6 +74,48 @@ public class SuiteResultCacheUtil {
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
             ExecutableActionResult result = ExecutableActionResult.create(0, protoResults, null);
             cacheClient.uploadCache(action, result);
+        } catch (IOException | RuntimeException | InterruptedException e) {
+            CLog.e(e);
+        }
+    }
+
+    /**
+     * Look up results in RBE for the test module.
+     *
+     * @param mainConfig
+     * @param moduleId
+     * @param moduleConfig
+     * @param moduleDir
+     * @param skipContext
+     */
+    public static void lookUpModuleResults(
+            IConfiguration mainConfig,
+            String moduleId,
+            File moduleConfig,
+            File moduleDir,
+            SkipContext skipContext) {
+        if (!skipContext.shouldUseCache()) {
+            return;
+        }
+        try {
+            String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
+            ICacheClient cacheClient =
+                    CacheClientFactory.createCacheClient(
+                            CurrentInvocation.getWorkFolder(), cacheInstance);
+            Map<String, String> environment = new HashMap<>();
+            for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
+                environment.put(entry.getKey(), entry.getValue().getHash());
+            }
+            ExecutableAction action =
+                    ExecutableAction.create(
+                            moduleDir, Arrays.asList(moduleId), environment, 60000L);
+            ExecutableActionResult cachedResults = cacheClient.lookupCache(action);
+            if (cachedResults == null) {
+                CLog.d("No cached results for %s", moduleId);
+            } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.MODULE_RESULTS_CACHE_HIT, 1);
+            }
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
         }
