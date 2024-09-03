@@ -68,6 +68,11 @@ public class LogCollector {
                                             new AbstractMap.SimpleEntry<>(
                                                     "E fetch_cvd:", "fetch_cvd_failure_general")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "E cvd     : fetch_cvd",
+                                                    "fetch_cvd_failure_general")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to read from socket, retry",
