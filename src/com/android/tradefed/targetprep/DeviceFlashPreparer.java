@@ -185,6 +185,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mWipeAfterApplySnapshot = false;
 
     @Option(
+            name = "use-new-incremental-update-flow",
+            description = "A new update flow possible with latest incremental features.")
+    private boolean mNewIncrementalFlow = false;
+
+    @Option(
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
@@ -346,6 +351,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mAllowIncrementalCrossRelease,
                                 mApplySnapshot,
                                 mWipeAfterApplySnapshot,
+                                mNewIncrementalFlow,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
