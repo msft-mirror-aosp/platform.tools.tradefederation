@@ -17,12 +17,16 @@ package com.android.tradefed.result.proto;
 
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
+import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
+import com.android.tradefed.result.proto.TestRecordProto.TestStatus;
 
 /**
  * A result reporter meant to report only the module level results. No re-entry is supported in this
  * module.
  */
 public class ModuleProtoResultReporter extends FileProtoResultReporter {
+
+    private boolean mHasFailures = false;
 
     public ModuleProtoResultReporter() {
         setPeriodicWriting(false);
@@ -38,5 +42,25 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     @Override
     protected void afterModuleEnd() {
         invocationEnded(0);
+    }
+
+    @Override
+    public void processTestCaseEnded(TestRecord testCaseRecord) {
+        super.processTestCaseEnded(testCaseRecord);
+        if (testCaseRecord.getStatus().equals(TestStatus.FAIL)) {
+            mHasFailures = true;
+        }
+    }
+
+    @Override
+    public void processTestRunEnded(TestRecord runRecord, boolean moduleInProgress) {
+        super.processTestRunEnded(runRecord, moduleInProgress);
+        if (runRecord.hasDebugInfo()) {
+            mHasFailures = true;
+        }
+    }
+
+    public boolean hasFailures() {
+        return mHasFailures;
     }
 }
