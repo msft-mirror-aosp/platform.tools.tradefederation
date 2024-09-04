@@ -20,6 +20,8 @@ import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRel
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -80,6 +82,13 @@ public class ExecutableHostTest extends ExecutableBaseTest {
             name = "enable-cache",
             description = "Used to enable/disable caching for specific modules.")
     private boolean mEnableCache = false;
+
+    @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
 
     @Override
     public String findBinary(String binary) {
@@ -168,6 +177,7 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         }
         File stdout = FileUtil.createTempFile(scriptName + LOG_STDOUT_TAG, ".txt");
         File stderr = FileUtil.createTempFile(scriptName + LOG_STDERR_TAG, ".txt");
+        ICacheClient cacheClient = null;
 
         try (FileOutputStream stdoutStream = new FileOutputStream(stdout);
                 FileOutputStream stderrStream = new FileOutputStream(stderr); ) {
@@ -175,8 +185,11 @@ public class ExecutableHostTest extends ExecutableBaseTest {
                     mEnableCache
                             ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
                             : null;
+            if (!Strings.isNullOrEmpty(instanceName)) {
+                cacheClient = getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
+            }
             CommandResult res =
-                    Strings.isNullOrEmpty(instanceName)
+                    cacheClient == null
                             ? runUtil.runTimedCmd(
                                     getTimeoutPerBinaryMs(),
                                     stdoutStream,
@@ -187,8 +200,7 @@ public class ExecutableHostTest extends ExecutableBaseTest {
                                     0,
                                     stdoutStream,
                                     stderrStream,
-                                    CacheClientFactory.createCacheClient(
-                                            CurrentInvocation.getWorkFolder(), instanceName),
+                                    cacheClient,
                                     command.toArray(new String[0]));
             if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
                 FailureStatus status = FailureStatus.TEST_FAILURE;
@@ -204,6 +216,10 @@ public class ExecutableHostTest extends ExecutableBaseTest {
                 listener.testFailed(
                         description,
                         FailureDescription.create(errorMessage).setFailureStatus(status));
+            } else if (!res.isCached() && !isTestFailed(description.getTestName())) {
+                runUtil.uploadCache(
+                        cacheClient,
+                        ExecutableActionResult.create(res.getExitCode(), stdout, stderr));
             }
         } finally {
             logFile(stdout, listener);
@@ -231,7 +247,12 @@ public class ExecutableHostTest extends ExecutableBaseTest {
 
     @VisibleForTesting
     IRunUtil createRunUtil() {
-        return new RunUtil();
+        return new RunUtil(mInheritEnvVars);
+    }
+
+    @VisibleForTesting
+    ICacheClient getCacheClient(File workFolder, String instanceName) {
+        return CacheClientFactory.createCacheClient(workFolder, instanceName);
     }
 
     @VisibleForTesting

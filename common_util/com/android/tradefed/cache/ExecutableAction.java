@@ -39,6 +39,9 @@ import java.util.stream.Collectors;
 @AutoValue
 public abstract class ExecutableAction {
 
+    // A silo key used to invalid stale cache.
+    private static final String SILO_CACHE_KEY = "0.0";
+
     /** Builds an {@link ExecutableAction}. */
     public static ExecutableAction create(
             File input, Iterable<String> args, Map<String, String> envVariables, long timeout)
@@ -58,6 +61,11 @@ public abstract class ExecutableAction {
                                                                                 "os.name"),
                                                                         System.getProperty(
                                                                                 "os.version")))
+                                                        .build())
+                                        .addProperties(
+                                                Property.newBuilder()
+                                                        .setName("cache-silo-key")
+                                                        .setValue(SILO_CACHE_KEY)
                                                         .build())
                                         .build())
                         .addAllEnvironmentVariables(

@@ -192,25 +192,42 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
         if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
             setSystemBuildInfo(device.getBuildId(), device.getBuildFlavor());
         }
-
-        if (!initialStateFastbootD) {
-            device.rebootIntoBootloader();
-        }
-
         downloadFlashingResources(device, deviceBuild);
-        preFlashSetup(device, deviceBuild);
         if (device instanceof IManagedTestDevice) {
             String fastbootVersion = ((IManagedTestDevice) device).getFastbootVersion();
             if (fastbootVersion != null) {
                 deviceBuild.addBuildAttribute(FASTBOOT_VERSION, fastbootVersion);
             }
         }
+
+        if (mIncrementalFlashing != null && mIncrementalFlashing.useUpdatedFlow()) {
+            try {
+                mIncrementalFlashing.updateDeviceWithNewFlow(
+                        deviceBuild.getBootloaderImageFile(), deviceBuild.getBasebandImageFile());
+            } catch (TargetSetupError e) {
+                // In case of TargetSetupError for incremental flashing,
+                // fallback to full flashing.
+                CLog.e(e);
+                DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
+                if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
+                    device.rebootIntoBootloader();
+                }
+            }
+        } else {
+            if (!initialStateFastbootD) {
+                device.rebootIntoBootloader();
+            }
+        }
+        preFlashSetup(device, deviceBuild);
     }
 
     /** {@inheritDoc} */
     @Override
     public void flash(ITestDevice device, IDeviceBuildInfo deviceBuild)
             throws TargetSetupError, DeviceNotAvailableException {
+        if (mIncrementalFlashing != null && mIncrementalFlashing.updateCompleted()) {
+            return;
+        }
         handleUserDataFlashing(device, deviceBuild);
         checkAndFlashBootloader(device, deviceBuild);
         checkAndFlashBaseband(device, deviceBuild);

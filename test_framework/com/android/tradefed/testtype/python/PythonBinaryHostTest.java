@@ -16,6 +16,8 @@
 package com.android.tradefed.testtype.python;
 
 import com.android.annotations.VisibleForTesting;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.IConfiguration;
@@ -36,6 +38,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.ResultForwarder;
+import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -154,6 +157,13 @@ public class PythonBinaryHostTest
     private boolean mEnableCache = false;
 
     @Option(
+            name = "inherit-env-vars",
+            description =
+                    "Whether the subprocess should inherit environment variables from the main"
+                            + " process.")
+    private boolean mInheritEnvVars = true;
+
+    @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
@@ -171,6 +181,7 @@ public class PythonBinaryHostTest
     private TestInformation mTestInfo;
     private IRunUtil mRunUtil;
     private IConfiguration mConfiguration = new Configuration("", "");
+    private TestRunResultListener mTestRunResultListener;
 
     /** {@inheritDoc} */
     @Override
@@ -229,6 +240,8 @@ public class PythonBinaryHostTest
     @Override
     public final void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
+        mTestRunResultListener = new TestRunResultListener();
+        listener = new ResultForwarder(listener, mTestRunResultListener);
         mTestInfo = testInfo;
         File testDir = mTestInfo.executionFiles().get(FilesKey.HOST_TESTS_DIRECTORY);
         if (testDir == null || !testDir.exists()) {
@@ -392,23 +405,26 @@ public class PythonBinaryHostTest
         PythonUnitTestResultParser pythonParser =
                 new PythonUnitTestResultParser(
                         Arrays.asList(receiver), "python-run", mIncludeFilters, mExcludeFilters);
+        String instanceName =
+                mEnableCache
+                        ? mConfiguration.getCommandOptions().getRemoteCacheInstanceName()
+                        : null;
+        ICacheClient cacheClient =
+                Strings.isNullOrEmpty(instanceName)
+                        ? null
+                        : getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
 
         CommandResult result = null;
         File stderrFile = null;
+        File stdoutFile = null;
         try {
             stderrFile = FileUtil.createTempFile("python-res", ".txt");
             if (mUseTestOutputFile) {
                 result = getRunUtil().runTimedCmd(mTestTimeout, commandLine.toArray(new String[0]));
             } else {
                 try (FileOutputStream fileOutputParser = new FileOutputStream(stderrFile)) {
-                    String instanceName =
-                            mEnableCache
-                                    ? mConfiguration
-                                            .getCommandOptions()
-                                            .getRemoteCacheInstanceName()
-                                    : null;
                     result =
-                            Strings.isNullOrEmpty(instanceName)
+                            cacheClient == null
                                     ? getRunUtil()
                                             .runTimedCmd(
                                                     mTestTimeout,
@@ -421,14 +437,13 @@ public class PythonBinaryHostTest
                                                     0,
                                                     null,
                                                     fileOutputParser,
-                                                    CacheClientFactory.createCacheClient(
-                                                            CurrentInvocation.getWorkFolder(),
-                                                            instanceName),
+                                                    cacheClient,
                                                     commandLine.toArray(new String[0]));
                     fileOutputParser.flush();
                 }
             }
 
+            stdoutFile = FileUtil.createTempFile("python-stdout", ".txt");
             if (!Strings.isNullOrEmpty(result.getStdout())) {
                 CLog.i("\nstdout:\n%s", result.getStdout());
                 try (InputStreamSource data =
@@ -438,6 +453,7 @@ public class PythonBinaryHostTest
                             LogDataType.TEXT,
                             data);
                 }
+                FileUtil.writeToFile(result.getStdout(), stdoutFile);
             }
             if (!Strings.isNullOrEmpty(result.getStderr())) {
                 CLog.i("\nstderr:\n%s", result.getStderr());
@@ -453,6 +469,13 @@ public class PythonBinaryHostTest
             }
             String testOutput = FileUtil.readStringFromFile(testOutputFile);
             pythonParser.processNewLines(testOutput.split("\n"));
+            if (!result.isCached() && !mTestRunResultListener.isTestRunFailed(runName)) {
+                getRunUtil()
+                        .uploadCache(
+                                cacheClient,
+                                ExecutableActionResult.create(
+                                        result.getExitCode(), stdoutFile, stderrFile));
+            }
         } catch (RuntimeException e) {
             StringBuilder message = new StringBuilder();
             String stderr = "";
@@ -496,6 +519,7 @@ public class PythonBinaryHostTest
                     CLog.e(e);
                 }
             }
+            FileUtil.deleteFile(stdoutFile);
             FileUtil.deleteFile(stderrFile);
             FileUtil.deleteFile(tempTestOutputFile);
         }
@@ -514,9 +538,14 @@ public class PythonBinaryHostTest
     @VisibleForTesting
     IRunUtil getRunUtil() {
         if (mRunUtil == null) {
-            mRunUtil = new RunUtil();
+            mRunUtil = new RunUtil(mInheritEnvVars);
         }
         return mRunUtil;
+    }
+
+    @VisibleForTesting
+    ICacheClient getCacheClient(File workFolder, String instanceName) {
+        return CacheClientFactory.createCacheClient(workFolder, instanceName);
     }
 
     @VisibleForTesting
