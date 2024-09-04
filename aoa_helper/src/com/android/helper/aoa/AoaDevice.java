@@ -16,12 +16,11 @@
 package com.android.helper.aoa;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Range;
 import com.google.common.util.concurrent.Uninterruptibles;
-
 import java.awt.Point;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
@@ -29,7 +28,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-
 import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 
@@ -59,10 +57,11 @@ public class AoaDevice implements AutoCloseable {
     private static final Range<Integer> AUDIO_PID = Range.closed(0x2D02, 0x2D05);
     private static final ImmutableSet<Integer> ADB_PID = ImmutableSet.of(0x2D01, 0x2D03, 0x2D05);
 
-    // Simulated accessory information
-    private static final byte[] MANUFACTURER = "Android\0".getBytes(Charsets.UTF_8);
-    private static final byte[] MODEL = (AoaDevice.class.getName() + "\0").getBytes(Charsets.UTF_8);
-    private static final byte[] VERSION = "1.0\0".getBytes(Charsets.UTF_8);
+  // Simulated accessory information
+  private static final byte[] MANUFACTURER = "Android\0".getBytes(StandardCharsets.UTF_8);
+  private static final byte[] MODEL =
+      (AoaDevice.class.getName() + "\0").getBytes(StandardCharsets.UTF_8);
+  private static final byte[] VERSION = "1.0\0".getBytes(StandardCharsets.UTF_8);
 
     // AOA requests
     static final byte ACCESSORY_GET_PROTOCOL = 51;

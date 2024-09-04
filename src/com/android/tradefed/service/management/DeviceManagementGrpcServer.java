@@ -29,16 +29,16 @@ import com.proto.tradefed.device.ReserveDeviceResponse.Result;
 import com.proto.tradefed.device.StopLeasingRequest;
 import com.proto.tradefed.device.StopLeasingResponse;
 
+import io.grpc.Server;
+import io.grpc.ServerBuilder;
+import io.grpc.stub.ServerCallStreamObserver;
+import io.grpc.stub.StreamObserver;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.stub.ServerCallStreamObserver;
-import io.grpc.stub.StreamObserver;
 
 /** GRPC server allowing to reserve a device from Tradefed. */
 public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
@@ -61,8 +61,9 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
 
     private void initRunTargetInfo() {
         final IClusterOptions clusterOptions =
-            (IClusterOptions) GlobalConfiguration.getInstance()
-            .getConfigurationObject(ClusterOptions.TYPE_NAME);
+                (IClusterOptions)
+                        GlobalConfiguration.getInstance()
+                                .getConfigurationObject(ClusterOptions.TYPE_NAME);
         if (clusterOptions != null) {
             mRunTargetFormat = clusterOptions.getRunTargetFormat();
             mDeviceTags = clusterOptions.getDeviceTag();
@@ -119,7 +120,8 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
             StreamObserver<GetDevicesStatusResponse> responseObserver) {
         GetDevicesStatusResponse.Builder responseBuilder = GetDevicesStatusResponse.newBuilder();
         if (request.getDeviceIdList().isEmpty()) {
-            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices(true)) {
+            // query device manager for full device descriptor to ensure we get all device props
+            for (DeviceDescriptor descriptor : mDeviceManager.listAllDevices(false)) {
                 responseBuilder.addDeviceStatus(descriptorToStatus(descriptor));
             }
         } else {
@@ -279,8 +281,8 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
     private DeviceStatus descriptorToStatus(DeviceDescriptor descriptor) {
         DeviceStatus.Builder deviceStatusBuilder = DeviceStatus.newBuilder();
         deviceStatusBuilder.setDeviceId(descriptor.getSerial());
-        deviceStatusBuilder.setRunTarget(ClusterHostUtil.getRunTarget(descriptor,
-                mRunTargetFormat, mDeviceTags));
+        deviceStatusBuilder.setRunTarget(
+                ClusterHostUtil.getRunTarget(descriptor, mRunTargetFormat, mDeviceTags));
         deviceStatusBuilder.setReservationStatus(
                 allocationStateToReservation(descriptor.getState(), descriptor.getSerial()));
         return deviceStatusBuilder.build();
