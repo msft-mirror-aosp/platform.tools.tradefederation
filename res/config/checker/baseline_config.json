@@ -65,5 +65,11 @@
     "class_name": "com.android.tradefed.suite.checker.baseline.CommandBaselineSetter",
     "command": "settings delete global hidden_api_policy",
     "min_api_level": "35"
+  },
+  "ensure_verify_apps": {
+    "class_name": "com.android.tradefed.suite.checker.baseline.CommandBaselineSetter",
+    "command": "pm get-user-restriction --user 0 ensure_verify_apps",
+    "min_api_level": "35",
+    "experimental": true
   }
 }

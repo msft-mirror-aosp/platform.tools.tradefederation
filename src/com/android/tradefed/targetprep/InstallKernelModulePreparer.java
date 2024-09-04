@@ -183,7 +183,7 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
         CLog.i("Remove kernel module %s from %s", kernelModule, device.getSerialNumber());
 
         String output = device.executeShellCommand("lsmod");
-        CLog.i("lsmod output: %s from %s", output, device.getSerialNumber());
+        CLog.d("lsmod output: %s from %s", output, device.getSerialNumber());
         for (String modName : getDependentModules(kernelModule, output)) {
             String trimmedName = modName.trim();
             command = String.format("rmmod %s", trimmedName);
