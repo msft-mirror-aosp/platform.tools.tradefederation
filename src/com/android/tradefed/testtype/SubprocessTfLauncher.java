@@ -157,6 +157,8 @@ public abstract class SubprocessTfLauncher
                             // Aosp Tf jars
                             "tradefed.jar",
                             "tradefed-tests.jar",
+                            // AVD util test jar
+                            "^tradefed-avd-util-tests.jar",
                             // libs
                             "tools-common-prebuilt.jar",
                             // jar in older branches

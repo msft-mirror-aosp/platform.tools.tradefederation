@@ -28,6 +28,7 @@ import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
+import com.android.tradefed.build.content.DeviceMerkleTreeTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
 import com.android.tradefed.cache.UploadManifestTest;
@@ -101,10 +102,8 @@ import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
 import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
-import com.android.tradefed.device.cloud.HostOrchestratorUtilTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
-import com.android.tradefed.device.cloud.OxygenClientTest;
 import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
@@ -228,9 +227,11 @@ import com.android.tradefed.result.XmlResultReporterTest;
 import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarderTest;
 import com.android.tradefed.result.error.ErrorIdentifierTest;
 import com.android.tradefed.result.proto.FileProtoResultReporterTest;
+import com.android.tradefed.result.proto.ModuleProtoResultReporterTest;
 import com.android.tradefed.result.proto.ProtoResultParserTest;
 import com.android.tradefed.result.proto.ProtoResultReporterTest;
 import com.android.tradefed.result.proto.StreamProtoResultReporterTest;
+import com.android.tradefed.result.skipped.SkipFeatureTest;
 import com.android.tradefed.result.skipped.SkipManagerTest;
 import com.android.tradefed.result.skipped.SkipReasonTest;
 import com.android.tradefed.result.suite.FormattedGeneratorReporterTest;
@@ -531,6 +532,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // build.content
     ArtifactDetailsTest.class,
     ContentAnalysisResultsTest.class,
+    DeviceMerkleTreeTest.class,
     TestContentAnalyzerTest.class,
 
     // cache
@@ -632,10 +634,8 @@ import org.junit.runners.Suite.SuiteClasses;
     GceAvdInfoTest.class,
     GceManagerTest.class,
     GceSshTunnelMonitorTest.class,
-    HostOrchestratorUtilTest.class,
     ManagedRemoteDeviceTest.class,
     NestedRemoteDeviceTest.class,
-    OxygenClientTest.class,
     OxygenUtilTest.class,
     RemoteAndroidVirtualDeviceTest.class,
     RemoteFileUtilTest.class,
@@ -800,11 +800,13 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // result.proto
     FileProtoResultReporterTest.class,
+    ModuleProtoResultReporterTest.class,
     ProtoResultParserTest.class,
     ProtoResultReporterTest.class,
     StreamProtoResultReporterTest.class,
 
     // result.skipped
+    SkipFeatureTest.class,
     SkipManagerTest.class,
     SkipReasonTest.class,
 
