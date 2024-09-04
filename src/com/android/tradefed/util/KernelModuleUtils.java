@@ -78,7 +78,8 @@ public class KernelModuleUtils {
 
         Pattern pattern =
                 Pattern.compile(
-                        String.format("^%s\\s+\\d+\\s+\\d+\\s+(\\S*)", modName), Pattern.MULTILINE);
+                        String.format("^%s\\s+\\d+\\s+\\d+\\s+(\\S*)$", modName),
+                        Pattern.MULTILINE);
         Matcher matcher = pattern.matcher(lsmodOutput);
         if (matcher.find()) {
             String dependModNames = matcher.group(1);

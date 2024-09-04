@@ -29,8 +29,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * A target preparer that flash the device with android common kernel generic image. Please see
- * https://source.android.com/devices/architecture/kernel/android-common for details.
+ * A target preparer that install kernel modules. Please see
+ * https://source.android.com/docs/core/architecture/kernel/modules for details.
  */
 @OptionClass(alias = "install-kernel-module-preparer")
 public class InstallKernelModulePreparer extends BaseTargetPreparer implements ILabPreparer {
