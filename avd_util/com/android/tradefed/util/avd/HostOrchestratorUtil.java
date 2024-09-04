@@ -26,6 +26,8 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil2;
 import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -396,8 +398,7 @@ public class HostOrchestratorUtil {
      * @param portNumber The port number that Host Orchestrator communicates with.
      * @return A {@link Process} of the Host Orchestrator connection between CuttleFish and TF.
      */
-    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
-    // (tradefed-avd-util)
+    @VisibleForTesting
     Process createHostOrchestratorTunnel(String portNumber) throws IOException {
         if (mTunnelLog == null || !mTunnelLog.exists()) {
             try {
@@ -451,8 +452,7 @@ public class HostOrchestratorUtil {
      * @param commands The command to be executed.
      * @return A {@link CommandResult} containing the status and logs.
      */
-    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
-    // (tradefed-avd-util)
+    @VisibleForTesting
     CommandResult curlCommandExecution(
             String portNumber,
             String method,
@@ -486,9 +486,8 @@ public class HostOrchestratorUtil {
     }
 
     /** Return the value by parsing the output of list cvds with a given keyword. */
-    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
-    // (tradefed-avd-util)
-    public String parseListCvdOutput(String content, String keyword) {
+    @VisibleForTesting
+    String parseListCvdOutput(String content, String keyword) {
         // An example output of the given content is:
         // {"cvds":
         //      [{
@@ -537,8 +536,7 @@ public class HostOrchestratorUtil {
      * @param maxWaitTime The max timeout expected to execute the HTTP request.
      * @return A CommandResult containing the status and logs after running curl command.
      */
-    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
-    // (tradefed-avd-util)
+    @VisibleForTesting
     CommandResult cvdOperationExecution(
             String portNumber, String method, String request, long maxWaitTime) {
         CommandResult commandRes = curlCommandExecution(portNumber, method, request, true);
@@ -577,9 +575,8 @@ public class HostOrchestratorUtil {
     }
 
     /** Return the unsupported api response. Exposed for unit testing. */
-    // TODO(dshi): Restore VisibleForTesting after the unittest is moved to the same package
-    // (tradefed-avd-util)
-    public String getUnsupportedHoResponse() {
+    @VisibleForTesting
+    String getUnsupportedHoResponse() {
         return UNSUPPORTED_API_RESPONSE;
     }
 
