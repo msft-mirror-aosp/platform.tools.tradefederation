@@ -938,6 +938,7 @@ public abstract class ITestSuite
                     File moduleDir = null;
                     try {
                         moduleDir = FileUtil.findDirectory(baseModuleName, getTestsDir());
+                        CLog.d("module %s directory is %s", module.getId(), moduleDir);
                     } catch (IOException e) {
                         CLog.e(e);
                     }
@@ -1002,9 +1003,9 @@ public abstract class ITestSuite
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         module.getId(),
-                                        moduleDir,
-                                        protoResults,
                                         moduleConfig,
+                                        protoResults,
+                                        moduleDir,
                                         mSkipContext);
                             }
                             FileUtil.deleteFile(protoResults);
