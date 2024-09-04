@@ -98,6 +98,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private String mRamdiskImageName = "ramdisk.img";
 
     @Option(
+            name = "initramfs-image-name",
+            description = "The file name in BuildInfo that provides initramfs image.")
+    private String mInitramfsImageName = "initramfs.img";
+
+    @Option(
             name = "vendor-boot-image-name",
             description = "The file name in BuildInfo that provides vendor boot image.")
     private String mVendorBootImageName = "vendor_boot.img";
@@ -327,6 +332,16 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 tmpDir);
                 executeFastbootCmd(device, "flash", "vendor_kernel_boot",
                                 vendorKernelBootImg.getAbsolutePath());
+            }
+            if (buildInfo.getFile(mInitramfsImageName) != null) {
+                File initramfsImg =
+                        getRequestedFile(
+                                device,
+                                mInitramfsImageName,
+                                buildInfo.getFile(mInitramfsImageName),
+                                tmpDir);
+                executeFastbootCmd(
+                        device, "flash", "vendor_boot:dlkm", initramfsImg.getAbsolutePath());
             }
             if (buildInfo.getFile(mDtboImageName) != null) {
                 File dtboImg =

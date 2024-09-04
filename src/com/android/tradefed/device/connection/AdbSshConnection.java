@@ -308,6 +308,13 @@ public class AdbSshConnection extends AdbTcpConnection {
                                     LogDataType.CUTTLEFISH_LOG,
                                     new FileInputStreamSource(tempFile));
                     FileUtil.deleteFile(tempFile);
+                    tempFile = mHOUtil.getTunnelLog();
+                    getLogger()
+                            .testLog(
+                                    "host_orchestrator_tunnel_logs",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -969,7 +976,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             mHOUtil =
                     new HostOrchestratorUtil(
                             getDevice().getOptions().useOxygenationDevice(),
-                            getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
+                            getDevice().getOptions().getExtraOxygenArgs(),
                             getDevice().getOptions().getSshPrivateKeyPath(),
                             getDevice().getOptions().getInstanceUser(),
                             gceAvdInfo.instanceName(),
@@ -977,7 +984,10 @@ public class AdbSshConnection extends AdbTcpConnection {
                                     ? gceAvdInfo.hostAndPort().getHost()
                                     : null,
                             gceAvdInfo.getOxygenationDeviceId(),
-                            getDevice().getOptions().getAvdDriverBinary());
+                            OxygenUtil.getTargetRegion(getDevice().getOptions()),
+                            getDevice().getOptions().getOxygenAccountingUser(),
+                            OxygenUtil.createOxygenClient(
+                                    getDevice().getOptions().getAvdDriverBinary()));
         }
     }
 }
