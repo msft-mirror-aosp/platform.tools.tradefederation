@@ -22,13 +22,13 @@ import glob
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
-import re
 import tempfile
 import time
 import cas_metrics_pb2  # type: ignore
-from google.protobuf.json_format import ParseDict, ParseError
+from google.protobuf import json_format
 
 
 @dataclasses.dataclass
@@ -133,6 +133,9 @@ ARTIFACTS = [
     ArtifactConfig('device-platinum-tests.zip', True),
     ArtifactConfig('device-platinum-tests_configs.zip', True),
     ArtifactConfig('device-platinum-tests_host-shared-libs.zip', True),
+    ArtifactConfig('camera-hal-tests.zip', True),
+    ArtifactConfig('camera-hal-tests_configs.zip', True),
+    ArtifactConfig('camera-hal-tests_host-shared-libs.zip', True),
     ArtifactConfig('device-pixel-tests.zip', True),
     ArtifactConfig('device-pixel-tests_configs.zip', True),
     ArtifactConfig('device-pixel-tests_host-shared-libs.zip', True),
@@ -415,10 +418,13 @@ def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMet
     try:
         with open(metrics_file, "r", encoding='utf8') as file:
             json_metrics = json.load(file)
-            cas_metrics.artifacts.append(ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics()))
+            cas_metrics.artifacts.append(
+                json_format.ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics())
+            )
+
     except FileNotFoundError:
         logging.exception("File not found: %s", metrics_file)
-    except ParseError as e:  # Catch any other unexpected errors
+    except json_format.ParseError as e:  # Catch any other unexpected errors
         logging.exception("Error converting Json to protobuf: %s", e)
 
 
