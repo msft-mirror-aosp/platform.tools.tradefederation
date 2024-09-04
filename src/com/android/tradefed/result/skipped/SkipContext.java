@@ -42,6 +42,11 @@ public class SkipContext {
         return presubmit && unchangedModules.contains(moduleName);
     }
 
+    /** Reports whether to use caching or not. */
+    public boolean shouldUseCache() {
+        return !presubmit; // For now, we only allow caching in postsubmit.
+    }
+
     public Map<String, Digest> getImageToDigest() {
         return imageToDigest;
     }

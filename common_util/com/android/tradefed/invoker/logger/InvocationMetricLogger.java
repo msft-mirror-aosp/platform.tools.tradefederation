@@ -401,6 +401,9 @@ public class InvocationMetricLogger {
 
         // Test caching metrics
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
+
+        // Module level caching
+        MODULE_RESULTS_CACHE_HIT("module_results_cache_hit", true),
         ;
 
         private final String mKeyName;

@@ -927,12 +927,35 @@ public abstract class ITestSuite
                             }
                         }
                     }
+                    File moduleConfig = logModuleConfig(listener, module);
+                    String baseModuleName =
+                            module.getModuleInvocationContext()
+                                    .getConfigurationDescriptor()
+                                    .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
+                    boolean cacheHit = false;
+                    // TODO(b/363066706): Switch to official API
+                    File moduleDir = null;
+                    try {
+                        moduleDir = FileUtil.findDirectory(baseModuleName, getTestsDir());
+                    } catch (IOException e) {
+                        CLog.e(e);
+                    }
                     if (mUploadCachedResults
+                            && moduleDir != null
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
                                     != null) {
-                        moduleReporter = new ModuleProtoResultReporter();
-                        moduleListeners.add(moduleReporter);
+                        cacheHit =
+                                SuiteResultCacheUtil.lookUpModuleResults(
+                                        mMainConfiguration,
+                                        module.getId(),
+                                        moduleConfig,
+                                        moduleDir,
+                                        mSkipContext);
+                        if (!cacheHit) {
+                            moduleReporter = new ModuleProtoResultReporter();
+                            moduleListeners.add(moduleReporter);
+                        }
                     }
                     module.getModuleInvocationContext()
                             .addInvocationAttribute(
@@ -945,19 +968,13 @@ public abstract class ITestSuite
                     TestInformation moduleInfo =
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
-                    File moduleConfig = logModuleConfig(listener, module);
                     boolean moduleRan = true;
                     try {
-                        if (mSkipContext.shouldSkipModule(
-                                module.getModuleInvocationContext()
-                                        .getConfigurationDescriptor()
-                                        .getModuleName())) {
+                        if (mSkipContext.shouldSkipModule(baseModuleName)) {
                             moduleRan = false;
                             CLog.d(
-                                "Skipping module '%s' due to no changes in artifacts.",
-                                module.getModuleInvocationContext()
-                                    .getConfigurationDescriptor()
-                                    .getModuleName());
+                                    "Skipping module '%s' due to no changes in artifacts.",
+                                    baseModuleName);
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
                                             ModuleDefinition.MODULE_SKIPPED,
@@ -965,6 +982,11 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
+                        } else if (cacheHit) {
+                            // TODO: Include pointer to base results
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(
+                                            ModuleDefinition.MODULE_SKIPPED, "Cached results.");
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
@@ -977,7 +999,6 @@ public abstract class ITestSuite
                         if (mUploadCachedResults && moduleReporter != null) {
                             File protoResults = moduleReporter.getOutputFile();
                             if (!moduleReporter.hasFailures()) {
-                                File moduleDir = null; // b/363066706
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         module.getId(),
