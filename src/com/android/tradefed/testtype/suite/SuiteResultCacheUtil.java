@@ -26,6 +26,7 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.skipped.SkipContext;
 import com.android.tradefed.util.CacheClientFactory;
+import com.android.tradefed.util.FileUtil;
 
 import build.bazel.remote.execution.v2.Digest;
 
@@ -87,17 +88,18 @@ public class SuiteResultCacheUtil {
      * @param moduleConfig
      * @param moduleDir
      * @param skipContext
+     * @return true if we get a cache hit
      */
-    public static void lookUpModuleResults(
+    public static boolean lookUpModuleResults(
             IConfiguration mainConfig,
             String moduleId,
             File moduleConfig,
             File moduleDir,
             SkipContext skipContext) {
         if (!skipContext.shouldUseCache()) {
-            return;
+            return false;
         }
-        try {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
                     CacheClientFactory.createCacheClient(
@@ -115,9 +117,13 @@ public class SuiteResultCacheUtil {
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.MODULE_RESULTS_CACHE_HIT, 1);
+                FileUtil.deleteFile(cachedResults.stdOut());
+                FileUtil.deleteFile(cachedResults.stdErr());
+                return true;
             }
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
         }
+        return false;
     }
 }
