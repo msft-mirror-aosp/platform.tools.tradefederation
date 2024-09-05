@@ -992,7 +992,9 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheHit && mEnableModuleCachingResults) {
+                        } else if (cacheHit
+                                && mEnableModuleCachingResults
+                                && mSkipContext.shouldUseCache()) {
                             CLog.d("Reporting cached results for module %s", module.getId());
                             // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
@@ -1009,7 +1011,7 @@ public abstract class ITestSuite
                         new ResultForwarder(moduleListeners).testModuleEnded();
                         if (mUploadCachedResults && moduleReporter != null) {
                             File protoResults = moduleReporter.getOutputFile();
-                            if (!moduleReporter.hasFailures()) {
+                            if (!moduleReporter.stopCaching()) {
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         testInfo,

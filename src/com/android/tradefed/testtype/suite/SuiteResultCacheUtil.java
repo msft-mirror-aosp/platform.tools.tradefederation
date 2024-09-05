@@ -42,6 +42,8 @@ import java.util.Map.Entry;
 /** Utility to upload and download cache results for a test module. */
 public class SuiteResultCacheUtil {
 
+    public static final String DEVICE_IMAGE_KEY = "device_image";
+
     /**
      * Upload results to RBE
      *
@@ -59,16 +61,19 @@ public class SuiteResultCacheUtil {
             File protoResults,
             File moduleDir,
             SkipContext skipContext) {
-        if (!skipContext.shouldUseCache()) {
-            return;
-        }
         //  TODO: We don't support multi-devices
         if (testInfo.getDevices().size() > 1) {
             return;
         }
         if (!(testInfo.getDevice().getIDevice() instanceof NullDevice)
-                && !skipContext.getImageToDigest().containsKey("device_image")) {
+                && !skipContext.getImageToDigest().containsKey(DEVICE_IMAGE_KEY)) {
             CLog.d("We have device but no device digest.");
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
+            return;
+        }
+        if (skipContext.getImageToDigest().containsValue(null)) {
+            CLog.d("No digest for device.");
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
             return;
@@ -110,7 +115,8 @@ public class SuiteResultCacheUtil {
             File moduleConfig,
             File moduleDir,
             SkipContext skipContext) {
-        if (!skipContext.shouldUseCache()) {
+        if (skipContext.getImageToDigest().containsValue(null)) {
+            CLog.d("No digest for device.");
             return false;
         }
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
