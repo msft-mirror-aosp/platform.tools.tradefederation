@@ -928,20 +928,35 @@ public abstract class ITestSuite
                         }
                     }
                     File moduleConfig = logModuleConfig(listener, module);
+                    String baseModuleName =
+                            module.getModuleInvocationContext()
+                                    .getConfigurationDescriptor()
+                                    .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
-                    File moduleDir = null; // b/363066706
+                    boolean cacheHit = false;
+                    // TODO(b/363066706): Switch to official API
+                    File moduleDir = null;
+                    try {
+                        moduleDir = FileUtil.findDirectory(baseModuleName, getTestsDir());
+                        CLog.d("module %s directory is %s", module.getId(), moduleDir);
+                    } catch (IOException e) {
+                        CLog.e(e);
+                    }
                     if (mUploadCachedResults
+                            && moduleDir != null
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
                                     != null) {
-                        SuiteResultCacheUtil.lookUpModuleResults(
-                                mMainConfiguration,
-                                module.getId(),
-                                moduleConfig,
-                                moduleDir,
-                                mSkipContext);
-
-                        moduleReporter = new ModuleProtoResultReporter();
-                        moduleListeners.add(moduleReporter);
+                        cacheHit =
+                                SuiteResultCacheUtil.lookUpModuleResults(
+                                        mMainConfiguration,
+                                        module.getId(),
+                                        moduleConfig,
+                                        moduleDir,
+                                        mSkipContext);
+                        if (!cacheHit) {
+                            moduleReporter = new ModuleProtoResultReporter();
+                            moduleListeners.add(moduleReporter);
+                        }
                     }
                     module.getModuleInvocationContext()
                             .addInvocationAttribute(
@@ -956,16 +971,11 @@ public abstract class ITestSuite
                                     testInfo, module.getModuleInvocationContext());
                     boolean moduleRan = true;
                     try {
-                        if (mSkipContext.shouldSkipModule(
-                                module.getModuleInvocationContext()
-                                        .getConfigurationDescriptor()
-                                        .getModuleName())) {
+                        if (mSkipContext.shouldSkipModule(baseModuleName)) {
                             moduleRan = false;
                             CLog.d(
-                                "Skipping module '%s' due to no changes in artifacts.",
-                                module.getModuleInvocationContext()
-                                    .getConfigurationDescriptor()
-                                    .getModuleName());
+                                    "Skipping module '%s' due to no changes in artifacts.",
+                                    baseModuleName);
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
                                             ModuleDefinition.MODULE_SKIPPED,
@@ -973,6 +983,12 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
+                        } else if (cacheHit) {
+                            CLog.d("Reporting cached results for module %s", module.getId());
+                            // TODO: Include pointer to base results
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(
+                                            ModuleDefinition.MODULE_SKIPPED, "Cached results.");
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
@@ -988,9 +1004,9 @@ public abstract class ITestSuite
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         module.getId(),
-                                        moduleDir,
-                                        protoResults,
                                         moduleConfig,
+                                        protoResults,
+                                        moduleDir,
                                         mSkipContext);
                             }
                             FileUtil.deleteFile(protoResults);
