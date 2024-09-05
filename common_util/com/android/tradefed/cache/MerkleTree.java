@@ -36,7 +36,8 @@ public abstract class MerkleTree {
     /** Builds a merkle tree for the {@code directory}. */
     public static MerkleTree buildFromDir(File directory) throws IOException {
         if (!directory.exists() || !directory.isDirectory()) {
-            throw new IllegalArgumentException("Directory does not exist or is not a Directory!");
+            throw new IllegalArgumentException(
+                    String.format("Directory %s does not exist or is not a Directory!", directory));
         }
 
         LinkedHashMap<Digest, File> digestToFile = new LinkedHashMap<>();
