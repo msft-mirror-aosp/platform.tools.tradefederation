@@ -984,6 +984,7 @@ public abstract class ITestSuite
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
                         } else if (cacheHit) {
+                            CLog.d("Reporting cached results for module %s", module.getId());
                             // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(

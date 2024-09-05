@@ -74,6 +74,7 @@ public class SuiteResultCacheUtil {
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
             ExecutableActionResult result = ExecutableActionResult.create(0, protoResults, null);
+            CLog.d("Uploading cache for %s", action);
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
@@ -111,6 +112,7 @@ public class SuiteResultCacheUtil {
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
+            CLog.d("Looking up cache for %s", action);
             ExecutableActionResult cachedResults = cacheClient.lookupCache(action);
             if (cachedResults == null) {
                 CLog.d("No cached results for %s", moduleId);
