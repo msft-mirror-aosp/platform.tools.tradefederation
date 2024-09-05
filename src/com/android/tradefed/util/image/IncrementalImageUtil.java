@@ -390,7 +390,9 @@ public class IncrementalImageUtil {
         }
         // We need a few seconds after boot complete for update_engine to finish
         // TODO: we could improve by listening to some update_engine messages.
-        RunUtil.getDefault().sleep(5000L);
+        if (!mNewFlow) {
+            RunUtil.getDefault().sleep(5000L);
+        }
         File srcDirectory = mParallelSetup.getSrcDirectory();
         File targetDirectory = mParallelSetup.getTargetDirectory();
         File workDir = mParallelSetup.getWorkDir();

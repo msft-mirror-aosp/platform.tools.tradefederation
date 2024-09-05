@@ -23,6 +23,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
@@ -98,7 +99,8 @@ public class OxygenClient {
                                     Collectors.toMap(data -> data[0], data -> data[1]),
                                     Collections::<String, String>unmodifiableMap));
 
-    protected IRunUtil getRunUtil() {
+    @VisibleForTesting
+    IRunUtil getRunUtil() {
         return mRunUtil;
     }
 
@@ -108,7 +110,8 @@ public class OxygenClient {
      * @param cmdArgs a {@link List<String>} of commands to run Oxygen client.
      * @param runUtil a {@link IRunUtil} to execute commands.
      */
-    public OxygenClient(List<String> cmdArgs, IRunUtil runUtil) {
+    @VisibleForTesting
+    OxygenClient(List<String> cmdArgs, IRunUtil runUtil) {
         mCmdArgs.addAll(cmdArgs);
         mRunUtil = runUtil;
     }
