@@ -43,6 +43,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -110,6 +111,7 @@ public class IncrementalImageUtil {
             File createSnapshot,
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
+            MultiMap<String, String> allowedbranchTransition,
             boolean applySnapshot,
             boolean wipeAfterApply,
             boolean newFlow,
@@ -137,8 +139,17 @@ public class IncrementalImageUtil {
             return null;
         }
         if (!tracker.branch.equals(build.getBuildBranch())) {
-            CLog.d("Newer build is not on the same branch.");
-            return null;
+            if (applySnapshot
+                    && wipeAfterApply
+                    && allowedbranchTransition.containsKey(tracker.branch)
+                    && allowedbranchTransition
+                            .get(tracker.branch)
+                            .contains(build.getBuildBranch())) {
+                CLog.d("Allowing transition from %s => %s", tracker.branch, build.getBuildBranch());
+            } else {
+                CLog.d("Newer build is not on the same branch.");
+                return null;
+            }
         }
         boolean crossRelease = false;
         if (!tracker.flavor.equals(build.getBuildFlavor())) {
