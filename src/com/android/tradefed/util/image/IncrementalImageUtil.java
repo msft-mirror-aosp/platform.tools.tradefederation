@@ -89,6 +89,8 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
+    private final boolean mWipeAfterApplySnapshot;
+    private final boolean mNewFlow;
     private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
@@ -109,6 +111,8 @@ public class IncrementalImageUtil {
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
             boolean applySnapshot,
+            boolean wipeAfterApply,
+            boolean newFlow,
             SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
@@ -194,6 +198,8 @@ public class IncrementalImageUtil {
                 build.getDeviceImageFile(),
                 createSnapshot,
                 applySnapshot,
+                wipeAfterApply,
+                newFlow,
                 waitPhase);
     }
 
@@ -205,12 +211,16 @@ public class IncrementalImageUtil {
             File targetImage,
             File createSnapshot,
             boolean applySnapshot,
+            boolean wipeAfterApply,
+            boolean newFlow,
             SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
         mApplySnapshot = applySnapshot;
+        mWipeAfterApplySnapshot = wipeAfterApply;
+        mNewFlow = newFlow;
         mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
@@ -305,6 +315,10 @@ public class IncrementalImageUtil {
         mAllowUnzipBaseline = true;
     }
 
+    public boolean useUpdatedFlow() {
+        return mNewFlow;
+    }
+
     /** Returns whether device is currently using snapshots or not. */
     public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
         CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
@@ -313,6 +327,14 @@ public class IncrementalImageUtil {
             return false;
         }
         return true;
+    }
+
+    public void updateDeviceWithNewFlow(File currentBootloader, File currentRadio)
+            throws DeviceNotAvailableException, TargetSetupError {
+        if (!mNewFlow) {
+            return;
+        }
+        updateDevice(currentBootloader, currentRadio);
     }
 
     /** Updates the device using the snapshot logic. */
@@ -368,7 +390,9 @@ public class IncrementalImageUtil {
         }
         // We need a few seconds after boot complete for update_engine to finish
         // TODO: we could improve by listening to some update_engine messages.
-        RunUtil.getDefault().sleep(5000L);
+        if (!mNewFlow) {
+            RunUtil.getDefault().sleep(5000L);
+        }
         File srcDirectory = mParallelSetup.getSrcDirectory();
         File targetDirectory = mParallelSetup.getTargetDirectory();
         File workDir = mParallelSetup.getWorkDir();
@@ -430,8 +454,11 @@ public class IncrementalImageUtil {
             CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
 
             if (mApplySnapshot) {
-                CommandResult mapOutput =
-                        mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
+                String applyCommand = "snapshotctl apply-update /data/ndb/";
+                if (mWipeAfterApplySnapshot) {
+                    applyCommand += " -w";
+                }
+                CommandResult mapOutput = mDevice.executeShellV2Command(applyCommand);
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
                     InvocationMetricLogger.addInvocationMetrics(
@@ -459,6 +486,17 @@ public class IncrementalImageUtil {
             }
             mDevice.rebootIntoBootloader();
             if (mApplySnapshot) {
+                if (mWipeAfterApplySnapshot) {
+                    CommandResult cancelResults =
+                            mDevice.executeFastbootCommand("snapshot-update", "cancel");
+                    CLog.d("Cancel status: %s", cancelResults.getStatus());
+                    CLog.d("Cancel stdout: %s", cancelResults.getStdout());
+                    CLog.d("Cancel stderr: %s", cancelResults.getStderr());
+                    CommandResult wipeResults = mDevice.executeFastbootCommand("-w");
+                    CLog.d("wipe status: %s", wipeResults.getStatus());
+                    CLog.d("wipe stdout: %s", wipeResults.getStdout());
+                    CLog.d("wipe stderr: %s", wipeResults.getStderr());
+                }
                 updateBootloaderAndBasebandIfNeeded(
                         targetDirectory, currentBootloader, currentRadio);
             }
