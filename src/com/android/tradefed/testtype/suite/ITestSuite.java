@@ -394,6 +394,11 @@ public abstract class ITestSuite
             description = "Whether or not to upload the results of a module to the cache")
     private boolean mUploadCachedResults = false;
 
+    @Option(
+            name = "report-cache-results",
+            description = "Actually enable the reporting of caching status.")
+    private boolean mEnableModuleCachingResults = false;
+
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
         FULLY_ISOLATED; // Test received a fresh device.
@@ -942,6 +947,10 @@ public abstract class ITestSuite
                     } catch (IOException e) {
                         CLog.e(e);
                     }
+                    if (moduleDir == null) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
+                    }
                     if (mUploadCachedResults
                             && moduleDir != null
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
@@ -983,7 +992,7 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheHit) {
+                        } else if (cacheHit && mEnableModuleCachingResults) {
                             CLog.d("Reporting cached results for module %s", module.getId());
                             // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
@@ -1003,6 +1012,7 @@ public abstract class ITestSuite
                             if (!moduleReporter.hasFailures()) {
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
+                                        testInfo,
                                         module.getId(),
                                         moduleConfig,
                                         protoResults,
