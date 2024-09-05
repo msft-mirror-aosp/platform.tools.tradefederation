@@ -19,6 +19,8 @@ import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -51,6 +53,7 @@ public class SuiteResultCacheUtil {
      */
     public static void uploadModuleResults(
             IConfiguration mainConfig,
+            TestInformation testInfo,
             String moduleId,
             File moduleConfig,
             File protoResults,
@@ -59,7 +62,17 @@ public class SuiteResultCacheUtil {
         if (!skipContext.shouldUseCache()) {
             return;
         }
-        // TODO: Ensure skipContext is complete and matches the device
+        //  TODO: We don't support multi-devices
+        if (testInfo.getDevices().size() > 1) {
+            return;
+        }
+        if (!(testInfo.getDevice().getIDevice() instanceof NullDevice)
+                && !skipContext.getImageToDigest().containsKey("device_image")) {
+            CLog.d("We have device but no device digest.");
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
+            return;
+        }
         // TODO: Ensure we have the link to the results
         try (CloseableTraceScope ignored = new CloseableTraceScope("upload_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
