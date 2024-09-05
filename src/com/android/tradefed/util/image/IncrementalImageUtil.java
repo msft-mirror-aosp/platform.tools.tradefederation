@@ -160,9 +160,12 @@ public class IncrementalImageUtil {
 
         String splTarget = getSplVersion(build);
         String splBaseline = device.getProperty("ro.build.version.security_patch");
-        if (splTarget != null && !splBaseline.equals(splTarget)) {
-            CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
-            return null;
+        // When we wipe, do not consider security_patch
+        if (!wipeAfterApply) {
+            if (splTarget != null && !splBaseline.equals(splTarget)) {
+                CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
+                return null;
+            }
         }
         if (crossRelease) {
             InvocationMetricLogger.addInvocationMetrics(
