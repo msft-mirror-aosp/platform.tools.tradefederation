@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.result.proto;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -40,6 +41,7 @@ import org.mockito.MockitoAnnotations;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 
 /** Unit tests for {@link ModuleProtoResultReporter}. */
 public class ModuleProtoResultReporterTest {
@@ -93,6 +95,27 @@ public class ModuleProtoResultReporterTest {
         verify(mMockListener).testRunEnded(200L, new HashMap<String, Metric>());
         verify(mMockListener).testModuleEnded();
         verify(mMockListener, never()).invocationEnded(anyLong());
+    }
+
+    @Test
+    public void testModuleReporting_metadata() throws Exception {
+        IInvocationContext context = new InvocationContext();
+        context.addInvocationAttribute(ModuleProtoResultReporter.INVOCATION_ID_KEY, "I8888");
+        mReporter = new ModuleProtoResultReporter(context);
+        mReporter.setFileOutput(mOutput);
+        TestDescription test1 = new TestDescription("class1", "test1");
+
+        IInvocationContext module1Context = createModuleContext("module1");
+        mReporter.testModuleStarted(module1Context);
+        mReporter.testRunStarted("run1", 1);
+        mReporter.testStarted(test1);
+        mReporter.testEnded(test1, new HashMap<String, Metric>());
+        mReporter.testRunEnded(200L, new HashMap<String, Metric>());
+        module1Context.addInvocationAttribute(ITestSuite.MODULE_END_TIME, "endTime");
+        mReporter.testModuleEnded();
+
+        Map<String, String> metadata = ModuleProtoResultReporter.parseResultsMetadata(mOutput);
+        assertEquals(metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY), "I8888");
     }
 
     private IInvocationContext createModuleContext(String moduleId) {

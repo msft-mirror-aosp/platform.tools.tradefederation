@@ -953,7 +953,7 @@ public abstract class ITestSuite
                                         moduleDir,
                                         mSkipContext);
                         if (!cacheHit) {
-                            moduleReporter = new ModuleProtoResultReporter();
+                            moduleReporter = new ModuleProtoResultReporter(testInfo.getContext());
                             moduleListeners.add(moduleReporter);
                         }
                     }
