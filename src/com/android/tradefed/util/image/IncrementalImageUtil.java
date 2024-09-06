@@ -91,7 +91,7 @@ public class IncrementalImageUtil {
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
     private final boolean mWipeAfterApplySnapshot;
-    private final boolean mNewFlow;
+    private boolean mNewFlow;
     private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
@@ -345,7 +345,8 @@ public class IncrementalImageUtil {
 
     public void updateDeviceWithNewFlow(File currentBootloader, File currentRadio)
             throws DeviceNotAvailableException, TargetSetupError {
-        if (!mNewFlow) {
+        if (!mNewFlow || !mApplySnapshot || !mWipeAfterApplySnapshot) {
+            mNewFlow = false;
             return;
         }
         updateDevice(currentBootloader, currentRadio);
