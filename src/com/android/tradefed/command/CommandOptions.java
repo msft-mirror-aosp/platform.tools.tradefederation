@@ -355,6 +355,16 @@ public class CommandOptions implements ICommandOptions {
                         + " projects/[PROJECT_ID]/instances/[INSTANCE_ID].")
     private String mRemoteCacheInstanceName = null;
 
+    @Option(
+            name = "upload-cached-module-results",
+            description = "Whether or not to upload the results of a module to the cache")
+    private boolean mUploadCachedResults = false;
+
+    @Option(
+            name = "report-cache-results",
+            description = "Actually enable the reporting of caching status.")
+    private boolean mEnableModuleCachingResults = false;
+
     /**
      * Set the help mode for the config.
      * <p/>
@@ -872,5 +882,17 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public String getRemoteCacheInstanceName() {
         return mRemoteCacheInstanceName;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUploadCacheResults() {
+        return mUploadCachedResults;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean reportCacheResults() {
+        return mEnableModuleCachingResults;
     }
 }
