@@ -26,6 +26,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.proto.ModuleProtoResultReporter;
 import com.android.tradefed.result.skipped.SkipContext;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.FileUtil;
@@ -138,6 +139,13 @@ public class SuiteResultCacheUtil {
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.MODULE_RESULTS_CACHE_HIT, 1);
+                Map<String, String> metadata =
+                        ModuleProtoResultReporter.parseResultsMetadata(cachedResults.stdOut());
+                if (metadata.containsKey(ModuleProtoResultReporter.INVOCATION_ID_KEY)) {
+                    CLog.d(
+                            "cached results origin: http://ab/%s",
+                            metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY));
+                }
                 FileUtil.deleteFile(cachedResults.stdOut());
                 FileUtil.deleteFile(cachedResults.stdErr());
                 return true;
