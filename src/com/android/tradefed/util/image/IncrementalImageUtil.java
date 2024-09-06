@@ -90,6 +90,7 @@ public class IncrementalImageUtil {
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
     private final boolean mWipeAfterApplySnapshot;
+    private final boolean mNewFlow;
     private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
@@ -111,6 +112,7 @@ public class IncrementalImageUtil {
             boolean allowCrossRelease,
             boolean applySnapshot,
             boolean wipeAfterApply,
+            boolean newFlow,
             SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
@@ -158,9 +160,12 @@ public class IncrementalImageUtil {
 
         String splTarget = getSplVersion(build);
         String splBaseline = device.getProperty("ro.build.version.security_patch");
-        if (splTarget != null && !splBaseline.equals(splTarget)) {
-            CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
-            return null;
+        // When we wipe, do not consider security_patch
+        if (!wipeAfterApply) {
+            if (splTarget != null && !splBaseline.equals(splTarget)) {
+                CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
+                return null;
+            }
         }
         if (crossRelease) {
             InvocationMetricLogger.addInvocationMetrics(
@@ -197,6 +202,7 @@ public class IncrementalImageUtil {
                 createSnapshot,
                 applySnapshot,
                 wipeAfterApply,
+                newFlow,
                 waitPhase);
     }
 
@@ -209,6 +215,7 @@ public class IncrementalImageUtil {
             File createSnapshot,
             boolean applySnapshot,
             boolean wipeAfterApply,
+            boolean newFlow,
             SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
@@ -216,6 +223,7 @@ public class IncrementalImageUtil {
         mSrcBaseband = baseband;
         mApplySnapshot = applySnapshot;
         mWipeAfterApplySnapshot = wipeAfterApply;
+        mNewFlow = newFlow;
         mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
@@ -310,6 +318,10 @@ public class IncrementalImageUtil {
         mAllowUnzipBaseline = true;
     }
 
+    public boolean useUpdatedFlow() {
+        return mNewFlow;
+    }
+
     /** Returns whether device is currently using snapshots or not. */
     public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
         CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
@@ -318,6 +330,14 @@ public class IncrementalImageUtil {
             return false;
         }
         return true;
+    }
+
+    public void updateDeviceWithNewFlow(File currentBootloader, File currentRadio)
+            throws DeviceNotAvailableException, TargetSetupError {
+        if (!mNewFlow) {
+            return;
+        }
+        updateDevice(currentBootloader, currentRadio);
     }
 
     /** Updates the device using the snapshot logic. */
@@ -373,7 +393,9 @@ public class IncrementalImageUtil {
         }
         // We need a few seconds after boot complete for update_engine to finish
         // TODO: we could improve by listening to some update_engine messages.
-        RunUtil.getDefault().sleep(5000L);
+        if (!mNewFlow) {
+            RunUtil.getDefault().sleep(5000L);
+        }
         File srcDirectory = mParallelSetup.getSrcDirectory();
         File targetDirectory = mParallelSetup.getTargetDirectory();
         File workDir = mParallelSetup.getWorkDir();

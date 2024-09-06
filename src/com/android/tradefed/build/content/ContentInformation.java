@@ -36,6 +36,13 @@ public class ContentInformation {
         this.currentBuildId = currentBuildId;
     }
 
+    public boolean isValid() {
+        return baseContent != null
+                && baseBuildId != null
+                && currentContent != null
+                && currentBuildId != null;
+    }
+
     public void clean() {
         FileUtil.deleteFile(baseContent);
         FileUtil.deleteFile(currentContent);
