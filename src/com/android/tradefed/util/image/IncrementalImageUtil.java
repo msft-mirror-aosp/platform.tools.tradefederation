@@ -160,9 +160,12 @@ public class IncrementalImageUtil {
 
         String splTarget = getSplVersion(build);
         String splBaseline = device.getProperty("ro.build.version.security_patch");
-        if (splTarget != null && !splBaseline.equals(splTarget)) {
-            CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
-            return null;
+        // When we wipe, do not consider security_patch
+        if (!wipeAfterApply) {
+            if (splTarget != null && !splBaseline.equals(splTarget)) {
+                CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
+                return null;
+            }
         }
         if (crossRelease) {
             InvocationMetricLogger.addInvocationMetrics(
@@ -390,7 +393,9 @@ public class IncrementalImageUtil {
         }
         // We need a few seconds after boot complete for update_engine to finish
         // TODO: we could improve by listening to some update_engine messages.
-        RunUtil.getDefault().sleep(5000L);
+        if (!mNewFlow) {
+            RunUtil.getDefault().sleep(5000L);
+        }
         File srcDirectory = mParallelSetup.getSrcDirectory();
         File targetDirectory = mParallelSetup.getTargetDirectory();
         File workDir = mParallelSetup.getWorkDir();
