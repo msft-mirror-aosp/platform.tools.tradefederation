@@ -416,8 +416,6 @@ public class GceManager {
                             new HostOrchestratorUtil(
                                     getTestDeviceOptions().useOxygenationDevice(),
                                     getTestDeviceOptions().getExtraOxygenArgs(),
-                                    getTestDeviceOptions().getSshPrivateKeyPath(),
-                                    getTestDeviceOptions().getInstanceUser(),
                                     mGceAvdInfo.instanceName(),
                                     mGceAvdInfo.hostAndPort() != null
                                             ? mGceAvdInfo.hostAndPort().getHost()
@@ -471,25 +469,13 @@ public class GceManager {
                                     hOUtil.collectLogByCommand(
                                             "host_kernel",
                                             HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                            logger.testLog(
-                                    "host_kernel",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                            FileUtil.deleteFile(tempFile);
+                            logAndDeleteFile(tempFile, "host_kernel", logger);
                             tempFile =
                                     hOUtil.collectLogByCommand(
                                             "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                            logger.testLog(
-                                    "host_orchestrator",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                            FileUtil.deleteFile(tempFile);
+                            logAndDeleteFile(tempFile, "host_orchestrator", logger);
                             tempFile = hOUtil.getTunnelLog();
-                            logger.testLog(
-                                    "host_orchestrator_tunnel_logs",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                            FileUtil.deleteFile(tempFile);
+                            logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
@@ -517,6 +503,15 @@ public class GceManager {
                         System.currentTimeMillis() - startTime);
             }
         }
+    }
+
+    public static void logAndDeleteFile(File tempFile, String dataName, ITestLogger logger) {
+        if (tempFile == null || logger == null) {
+            CLog.i("Skip logging due to either null file or null logger...");
+            return;
+        }
+        logger.testLog(dataName, LogDataType.CUTTLEFISH_LOG, new FileInputStreamSource(tempFile));
+        FileUtil.deleteFile(tempFile);
     }
 
     /**

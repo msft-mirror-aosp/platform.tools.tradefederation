@@ -1333,27 +1333,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         boolean dismissed = false;
         long startTime = System.currentTimeMillis();
         while (System.currentTimeMillis() - startTime < mDismissSetupWizardTimeout) {
-            // check the current focus
-            CommandResult dumpsysCmdOut =
+            CommandResult cmdOut =
                     device.executeShellV2Command("dumpsys window displays | grep mCurrentFocus");
-            if (CommandStatus.SUCCESS.equals(dumpsysCmdOut.getStatus())
-                    && !dumpsysCmdOut.getStdout().contains("setupwizard")) {
-                // Additionally check the launcher package name
-                CommandResult pkgCmdOut =
-                        device.executeShellV2Command(
-                                "adb shell cmd package resolve-activity"
-                                        + " -c android.intent.category.HOME"
-                                        + " -a android.intent.action.MAIN");
-                if (CommandStatus.SUCCESS.equals(pkgCmdOut.getStatus())
-                        && !pkgCmdOut
-                                .getStdout()
-                                .contains("packageName=com.google.android.setupwizard")) {
-                    CLog.d("Setup wizard is dismissed.");
-                    CLog.d("Dumpsys cmd output: %s", dumpsysCmdOut.getStdout());
-                    CLog.d("Package cmd output: %s", pkgCmdOut.getStdout());
-                    dismissed = true;
-                    break;
-                }
+            if (CommandStatus.SUCCESS.equals(cmdOut.getStatus())
+                    && !cmdOut.getStdout().contains("setupwizard")) {
+                CLog.d("Setup wizard is dismissed.");
+                dismissed = true;
+                break;
             } else {
                 RunUtil.getDefault().sleep(2 * 1000);
             }
