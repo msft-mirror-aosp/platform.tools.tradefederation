@@ -59,15 +59,19 @@ public class LogCollector {
                                                     "Unable to connect to vsock server",
                                                     "unable_to_connect_to_vsock_server")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*launcher.*"),
+                                            Pattern.compile(".*(launcher|vdl_stdout).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to initialize fetch system images",
                                                     "fetch_cvd_failure")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*vdl_stdout.*"),
                                             new AbstractMap.SimpleEntry<>(
-                                                    "failed to initialize fetch system images",
-                                                    "fetch_cvd_failure")),
+                                                    "E fetch_cvd:", "fetch_cvd_failure_general")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "E cvd     : fetch_cvd",
+                                                    "fetch_cvd_failure_general")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
@@ -89,7 +93,7 @@ public class LogCollector {
                                                     "Setup failed for cuttlefish::ConfigServer",
                                                     "config_server_failed")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*(launcher|kernel).*"),
+                                            Pattern.compile(".*(launcher|kernel|logcat).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "VIRTUAL_DEVICE_BOOT_FAILED: Dependencies not"
                                                             + " ready after 10 checks: Bluetooth",
@@ -98,7 +102,13 @@ public class LogCollector {
                                             Pattern.compile("^logcat.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "System zygote died with fatal exception",
-                                                    "zygote_fatal_exception")))
+                                                    "zygote_fatal_exception")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^logcat.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "mkdir failed: errno 117 (Structure needs"
+                                                            + " cleaning)",
+                                                    "filesystem_corrupt")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**
