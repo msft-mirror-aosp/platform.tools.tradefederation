@@ -68,6 +68,11 @@ public class LogCollector {
                                             new AbstractMap.SimpleEntry<>(
                                                     "E fetch_cvd:", "fetch_cvd_failure_general")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "E cvd     : fetch_cvd",
+                                                    "fetch_cvd_failure_general")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to read from socket, retry",
@@ -97,7 +102,13 @@ public class LogCollector {
                                             Pattern.compile("^logcat.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "System zygote died with fatal exception",
-                                                    "zygote_fatal_exception")))
+                                                    "zygote_fatal_exception")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^logcat.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "mkdir failed: errno 117 (Structure needs"
+                                                            + " cleaning)",
+                                                    "filesystem_corrupt")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**
