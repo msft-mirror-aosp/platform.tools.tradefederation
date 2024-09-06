@@ -17,25 +17,46 @@ package com.android.tradefed.result.proto;
 
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
+import com.android.tradefed.invoker.proto.InvocationContext.Context;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
 import com.android.tradefed.result.proto.TestRecordProto.TestStatus;
+import com.android.tradefed.util.proto.TestRecordProtoUtil;
+
+import com.google.common.base.Strings;
+import com.google.protobuf.Any;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A result reporter meant to report only the module level results. No re-entry is supported in this
- * module.
+ * module. The intent of this reporter is primarily for caching at module level.
  */
 public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
+    public static final String INVOCATION_ID_KEY = "invocation_id";
     private boolean mStopCache = false;
+    private String mInvocationId = null;
 
     public ModuleProtoResultReporter() {
         setPeriodicWriting(false);
         setDelimitedOutput(false);
     }
 
+    public ModuleProtoResultReporter(IInvocationContext mainInvocationContext) {
+        this();
+        copyAttributes(mainInvocationContext);
+    }
+
     @Override
     protected void beforeModuleStart() {
         IInvocationContext stubContext = new InvocationContext();
+        if (mInvocationId != null) {
+            stubContext.addInvocationAttribute(INVOCATION_ID_KEY, mInvocationId);
+        }
         invocationStarted(stubContext);
     }
 
@@ -70,5 +91,32 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
     public boolean stopCaching() {
         return mStopCache;
+    }
+
+    private void copyAttributes(IInvocationContext mainContext) {
+        String invocationId = mainContext.getAttribute(INVOCATION_ID_KEY);
+        if (!Strings.isNullOrEmpty(invocationId)) {
+            mInvocationId = invocationId;
+        }
+    }
+
+    /** Parsing util to extract metadata we might have transferred */
+    public static Map<String, String> parseResultsMetadata(File protoResults) {
+        if (protoResults == null) {
+            return new HashMap<>();
+        }
+        try {
+            TestRecord record = TestRecordProtoUtil.readFromFile(protoResults, false);
+            Any anyDescription = record.getDescription();
+            if (!anyDescription.is(Context.class)) {
+                throw new RuntimeException("Expected Any description of type Context");
+            }
+            IInvocationContext receivedContext =
+                    InvocationContext.fromProto(anyDescription.unpack(Context.class));
+            return receivedContext.getAttributes().getUniqueMap();
+        } catch (IOException | RuntimeException e) {
+            CLog.e(e);
+        }
+        return new HashMap<>();
     }
 }
