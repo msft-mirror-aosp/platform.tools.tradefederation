@@ -102,7 +102,13 @@ public class LogCollector {
                                             Pattern.compile("^logcat.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "System zygote died with fatal exception",
-                                                    "zygote_fatal_exception")))
+                                                    "zygote_fatal_exception")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile("^logcat.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "mkdir failed: errno 117 (Structure needs"
+                                                            + " cleaning)",
+                                                    "filesystem_corrupt")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**
