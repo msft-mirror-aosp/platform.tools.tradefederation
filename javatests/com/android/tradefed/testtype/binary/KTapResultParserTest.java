@@ -1177,7 +1177,7 @@ public class KTapResultParserTest {
                                 ? expectedSuiteResults
                                 : new String[][] {expectedModuleResults});
         CollectingTestListener listener = new CollectingTestListener();
-        String moduleName = "kunit_test_module.ko";
+        String moduleName = "kunit_test_module";
         listener.testRunStarted(moduleName, 1);
 
         KTapResultParser.applyKTapResultToListener(
