@@ -255,6 +255,7 @@ public class InvocationMetricLogger {
 
         // CAS downloader metrics
         CAS_VERSION("cas_version", false),
+        CAS_DOWNLOAD_ERRORS("cas_download_errors", true),
         // Name of files downloaded by CAS downloader.
         CAS_DOWNLOAD_FILES("cas_download_files", true),
         CAS_DOWNLOAD_FILE_SUCCESS_COUNT("cas_download_file_success_count", true),
@@ -266,6 +267,7 @@ public class InvocationMetricLogger {
         CAS_LOCK_TIMEOUTS("cas_lock_timeout", true),
         CAS_CACHE_FALLBACK_COUNT("cas_cache_fallback_count", true),
         CAS_TIMEOUT_COUNT("cas_timeout_count", true),
+        CAS_RETRY_BUDGET_EXHAUSTED_COUNT("cas_retry_budget_exhausted_count", true),
         // Records cache hit metrics
         CAS_DOWNLOAD_HOT_BYTES("cas_download_hot_bytes", true),
         CAS_DOWNLOAD_COLD_BYTES("cas_download_cold_bytes", true),
@@ -399,6 +401,11 @@ public class InvocationMetricLogger {
 
         // Test caching metrics
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
+
+        // Module level caching
+        MODULE_RESULTS_CACHE_HIT("module_results_cache_hit", true),
+        MODULE_CACHE_NO_DIR("module_cache_no_dir", true),
+        MODULE_RESULTS_CACHE_DEVICE_MISMATCH("module_results_cache_device_mismatch", true),
         ;
 
         private final String mKeyName;

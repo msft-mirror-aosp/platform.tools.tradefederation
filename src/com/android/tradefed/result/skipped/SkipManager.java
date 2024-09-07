@@ -30,6 +30,8 @@ import com.android.tradefed.service.TradefedFeatureClient;
 import com.android.tradefed.util.IDisableable;
 import com.android.tradefed.util.MultiMap;
 
+import build.bazel.remote.execution.v2.Digest;
+
 import com.proto.tradefed.feature.FeatureResponse;
 import com.proto.tradefed.feature.PartResponse;
 
@@ -86,7 +88,7 @@ public class SkipManager implements IDisableable {
             name = "report-module-skipped",
             description =
                     "Report a placeholder skip when module are skipped as unchanged in presubmit.")
-    private boolean mReportModuleSkipped = false;
+    private boolean mReportModuleSkipped = true;
 
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();
@@ -99,6 +101,7 @@ public class SkipManager implements IDisableable {
 
     private String mReasonForSkippingInvocation = "SkipManager decided to skip.";
     private Set<String> mUnchangedModules = new HashSet<>();
+    private Map<String, Digest> mImageFileToDigest = new LinkedHashMap<>();
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -125,6 +128,10 @@ public class SkipManager implements IDisableable {
      */
     public Set<String> getUnchangedModules() {
         return mUnchangedModules;
+    }
+
+    public Map<String, Digest> getImageToDigest() {
+        return mImageFileToDigest;
     }
 
     public void setImageAnalysis(ITestDevice device, ContentAnalysisContext analysisContext) {
@@ -216,6 +223,7 @@ public class SkipManager implements IDisableable {
         if (results == null) {
             return false;
         }
+        mImageFileToDigest.putAll(results.getImageToDigest());
         boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
         if (results.deviceImageChanged()) {
             return false;
