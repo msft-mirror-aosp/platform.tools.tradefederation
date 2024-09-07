@@ -42,6 +42,7 @@ public class HostOrchestratorUtilTest {
 
     private HostOrchestratorUtil mHOUtil;
     private static final String INSTANCE_NAME = "instance";
+    private static final String INSTANCE_USER = "instance_user";
     private static final String OXYGENATION_DEVICE_ID = "id";
     private static final String TARGET_REGION = "target_region";
     private static final String ACCOUNTING_USER = "accounting_user";
@@ -49,6 +50,7 @@ public class HostOrchestratorUtilTest {
     private OxygenClient mMockClient;
     private IRunUtil mMockRunUtil;
     private Process mMockProcess;
+    private File mMockFile;
     private static final String LIST_CVD_RES =
             "{\"cvds\":[{\"group\":\"cvd_1\",\"name\":\"ins-1\",\"build_source\":{},"
                     + "\"status\":\"Running\",\"displays\":[\"720 x 1280 ( 320 )\"],"
@@ -73,6 +75,7 @@ public class HostOrchestratorUtilTest {
         mMockClient = Mockito.mock(OxygenClient.class);
         mMockProcess = Mockito.mock(Process.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
+        mMockFile = Mockito.mock(File.class);
     }
 
     @After
@@ -80,6 +83,33 @@ public class HostOrchestratorUtilTest {
         FileUtil.deleteFile(mHOUtil.getTunnelLog());
     }
 
+    @Test
+    public void testCreateHostOrchestratorTunnel_NoCVDNoOxygenation() throws Exception {
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        false,
+                        mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
+                        mMockClient);
+        Assert.assertNull(mHOUtil.createHostOrchestratorTunnel("1111"));
+        Mockito.verify(mMockClient, times(0))
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
+    }
 
     @Test
     public void testCreateHostOrchestratorTunnel_Oxygenation() throws Exception {
@@ -87,6 +117,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -107,6 +139,56 @@ public class HostOrchestratorUtilTest {
                         Mockito.any());
     }
 
+    @Test
+    public void testCreateHostOrchestratorTunnel_UseCVDOxygen() throws Exception {
+        mExtraOxygenArgs.put("use_cvd", "");
+        mHOUtil =
+                new HostOrchestratorUtil(
+                        false,
+                        mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
+                        INSTANCE_NAME,
+                        HOST,
+                        OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
+                        mMockClient) {
+                    @Override
+                    protected IRunUtil getRunUtil() {
+                        return mMockRunUtil;
+                    }
+                };
+        mHOUtil.createHostOrchestratorTunnel("1111");
+        Mockito.verify(mMockClient, times(0))
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
+        Mockito.verify(mMockRunUtil, times(1))
+                .runCmdInBackground(
+                        Mockito.eq("ssh"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("-L1111:127.0.0.1:2080"),
+                        Mockito.eq("-N"),
+                        Mockito.eq("instance_user@host"),
+                        Mockito.any());
+    }
 
     @Test
     public void testCollectLogByCommand_Success() throws Exception {
@@ -116,6 +198,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -174,6 +258,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -231,6 +317,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -321,6 +409,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -383,6 +473,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -435,6 +527,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -502,6 +596,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -564,6 +660,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -669,6 +767,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -718,6 +818,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -770,6 +872,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -822,6 +926,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -874,6 +980,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -979,6 +1087,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1028,6 +1138,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1080,6 +1192,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1132,6 +1246,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1182,6 +1298,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1219,6 +1337,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1283,6 +1403,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1347,6 +1469,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1397,6 +1521,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1412,6 +1538,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1429,6 +1557,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1471,6 +1601,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
@@ -1514,6 +1646,8 @@ public class HostOrchestratorUtilTest {
                 new HostOrchestratorUtil(
                         true,
                         mExtraOxygenArgs,
+                        mMockFile,
+                        INSTANCE_USER,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,

@@ -26,7 +26,7 @@ import com.android.tradefed.result.proto.TestRecordProto.TestStatus;
  */
 public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
-    private boolean mStopCache = false;
+    private boolean mHasFailures = false;
 
     public ModuleProtoResultReporter() {
         setPeriodicWriting(false);
@@ -48,7 +48,7 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     public void processTestCaseEnded(TestRecord testCaseRecord) {
         super.processTestCaseEnded(testCaseRecord);
         if (testCaseRecord.getStatus().equals(TestStatus.FAIL)) {
-            mStopCache = true;
+            mHasFailures = true;
         }
     }
 
@@ -56,19 +56,11 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     public void processTestRunEnded(TestRecord runRecord, boolean moduleInProgress) {
         super.processTestRunEnded(runRecord, moduleInProgress);
         if (runRecord.hasDebugInfo()) {
-            mStopCache = true;
+            mHasFailures = true;
         }
     }
 
-    @Override
-    public void processTestModuleEnd(TestRecord moduleRecord) {
-        super.processTestModuleEnd(moduleRecord);
-        if (moduleRecord.hasSkipReason()) {
-            mStopCache = true;
-        }
-    }
-
-    public boolean stopCaching() {
-        return mStopCache;
+    public boolean hasFailures() {
+        return mHasFailures;
     }
 }

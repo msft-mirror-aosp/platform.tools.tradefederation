@@ -19,8 +19,6 @@ import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.device.NullDevice;
-import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -42,8 +40,6 @@ import java.util.Map.Entry;
 /** Utility to upload and download cache results for a test module. */
 public class SuiteResultCacheUtil {
 
-    public static final String DEVICE_IMAGE_KEY = "device_image";
-
     /**
      * Upload results to RBE
      *
@@ -55,29 +51,15 @@ public class SuiteResultCacheUtil {
      */
     public static void uploadModuleResults(
             IConfiguration mainConfig,
-            TestInformation testInfo,
             String moduleId,
             File moduleConfig,
             File protoResults,
             File moduleDir,
             SkipContext skipContext) {
-        //  TODO: We don't support multi-devices
-        if (testInfo.getDevices().size() > 1) {
+        if (!skipContext.shouldUseCache()) {
             return;
         }
-        if (!(testInfo.getDevice().getIDevice() instanceof NullDevice)
-                && !skipContext.getImageToDigest().containsKey(DEVICE_IMAGE_KEY)) {
-            CLog.d("We have device but no device digest.");
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
-            return;
-        }
-        if (skipContext.getImageToDigest().containsValue(null)) {
-            CLog.d("No digest for device.");
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
-            return;
-        }
+        // TODO: Ensure skipContext is complete and matches the device
         // TODO: Ensure we have the link to the results
         try (CloseableTraceScope ignored = new CloseableTraceScope("upload_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
@@ -92,7 +74,6 @@ public class SuiteResultCacheUtil {
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
             ExecutableActionResult result = ExecutableActionResult.create(0, protoResults, null);
-            CLog.d("Uploading cache for %s", action);
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
@@ -115,8 +96,7 @@ public class SuiteResultCacheUtil {
             File moduleConfig,
             File moduleDir,
             SkipContext skipContext) {
-        if (skipContext.getImageToDigest().containsValue(null)) {
-            CLog.d("No digest for device.");
+        if (!skipContext.shouldUseCache()) {
             return false;
         }
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
@@ -131,7 +111,6 @@ public class SuiteResultCacheUtil {
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
-            CLog.d("Looking up cache for %s", action);
             ExecutableActionResult cachedResults = cacheClient.lookupCache(action);
             if (cachedResults == null) {
                 CLog.d("No cached results for %s", moduleId);

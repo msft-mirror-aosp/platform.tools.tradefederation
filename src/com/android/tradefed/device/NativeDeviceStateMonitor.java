@@ -21,7 +21,6 @@ import com.android.ddmlib.IDevice;
 import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.TimeoutException;
 import com.android.tradefed.device.IDeviceManager.IFastbootListener;
-import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -136,10 +135,8 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      */
     @Override
     public IDevice waitForDeviceOnline(long waitTime) {
-        try (CloseableTraceScope ignored = new CloseableTraceScope("waitForDeviceOnline")) {
-            if (waitForDeviceState(TestDeviceState.ONLINE, waitTime)) {
-                return getIDevice();
-            }
+        if (waitForDeviceState(TestDeviceState.ONLINE, waitTime)) {
+            return getIDevice();
         }
         return null;
     }
@@ -313,59 +310,57 @@ public class NativeDeviceStateMonitor implements IDeviceStateMonitor {
      */
     @Override
     public boolean waitForBootComplete(final long waitTime) {
-        try (CloseableTraceScope ignored = new CloseableTraceScope("waitForBootComplete")) {
-            CLog.i("Waiting %d ms for device %s boot complete", waitTime, getSerialNumber());
-            long start = System.currentTimeMillis();
-            // For the first boot (first adb command after ONLINE state), we allow a few miscall for
-            // stability.
-            int[] offlineCount = new int[1];
-            offlineCount[0] = 5;
-            Callable<BUSY_WAIT_STATUS> bootComplete =
-                    () -> {
-                        final String cmd = "getprop " + BOOTCOMPLETE_PROP;
-                        try {
-                            CollectingOutputReceiver receiver = new CollectingOutputReceiver();
-                            getIDevice()
-                                    .executeShellCommand(
-                                            "getprop " + BOOTCOMPLETE_PROP,
-                                            receiver,
-                                            60000L,
-                                            TimeUnit.MILLISECONDS);
-                            String bootFlag = receiver.getOutput();
-                            if (bootFlag != null) {
-                                // Workaround for microdroid: `adb shell` prints permission warnings
-                                bootFlag = bootFlag.lines().reduce((a, b) -> b).orElse(null);
-                            }
-                            if (bootFlag != null && "1".equals(bootFlag.trim())) {
-                                return BUSY_WAIT_STATUS.SUCCESS;
-                            }
-                        } catch (IOException | ShellCommandUnresponsiveException e) {
-                            CLog.e("%s failed on: %s", cmd, getSerialNumber());
-                            CLog.e(e);
-                        } catch (TimeoutException e) {
-                            CLog.e("%s failed on %s: timeout", cmd, getSerialNumber());
-                            CLog.e(e);
-                        } catch (AdbCommandRejectedException e) {
-                            CLog.e("%s failed on: %s", cmd, getSerialNumber());
-                            CLog.e(e);
-                            if (e.isDeviceOffline() || e.wasErrorDuringDeviceSelection()) {
-                                offlineCount[0]--;
-                                if (offlineCount[0] <= 0) {
-                                    return BUSY_WAIT_STATUS.ABORT;
-                                }
+        CLog.i("Waiting %d ms for device %s boot complete", waitTime, getSerialNumber());
+        long start = System.currentTimeMillis();
+        // For the first boot (first adb command after ONLINE state), we allow a few miscall for
+        // stability.
+        int[] offlineCount = new int[1];
+        offlineCount[0] = 5;
+        Callable<BUSY_WAIT_STATUS> bootComplete =
+                () -> {
+                    final String cmd = "getprop " + BOOTCOMPLETE_PROP;
+                    try {
+                        CollectingOutputReceiver receiver = new CollectingOutputReceiver();
+                        getIDevice()
+                                .executeShellCommand(
+                                        "getprop " + BOOTCOMPLETE_PROP,
+                                        receiver,
+                                        60000L,
+                                        TimeUnit.MILLISECONDS);
+                        String bootFlag = receiver.getOutput();
+                        if (bootFlag != null) {
+                            // Workaround for microdroid: `adb shell` prints permission warnings
+                            bootFlag = bootFlag.lines().reduce((a, b) -> b).orElse(null);
+                        }
+                        if (bootFlag != null && "1".equals(bootFlag.trim())) {
+                            return BUSY_WAIT_STATUS.SUCCESS;
+                        }
+                    } catch (IOException | ShellCommandUnresponsiveException e) {
+                        CLog.e("%s failed on: %s", cmd, getSerialNumber());
+                        CLog.e(e);
+                    } catch (TimeoutException e) {
+                        CLog.e("%s failed on %s: timeout", cmd, getSerialNumber());
+                        CLog.e(e);
+                    } catch (AdbCommandRejectedException e) {
+                        CLog.e("%s failed on: %s", cmd, getSerialNumber());
+                        CLog.e(e);
+                        if (e.isDeviceOffline() || e.wasErrorDuringDeviceSelection()) {
+                            offlineCount[0]--;
+                            if (offlineCount[0] <= 0) {
+                                return BUSY_WAIT_STATUS.ABORT;
                             }
                         }
-                        return BUSY_WAIT_STATUS.CONTINUE_WAITING;
-                    };
-            boolean result = busyWaitFunction(bootComplete, waitTime);
-            if (!result) {
-                CLog.w(
-                        "Device %s did not boot after %s ms",
-                        getSerialNumber(),
-                        TimeUtil.formatElapsedTime(System.currentTimeMillis() - start));
                     }
-            return result;
+                    return BUSY_WAIT_STATUS.CONTINUE_WAITING;
+                };
+        boolean result = busyWaitFunction(bootComplete, waitTime);
+        if (!result) {
+            CLog.w(
+                    "Device %s did not boot after %s ms",
+                    getSerialNumber(),
+                    TimeUtil.formatElapsedTime(System.currentTimeMillis() - start));
         }
+        return result;
     }
 
     /**

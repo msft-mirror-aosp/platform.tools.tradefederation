@@ -28,7 +28,6 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.testtype.suite.SuiteResultCacheUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SystemUtil;
 
@@ -148,7 +147,6 @@ public class ArtifactsAnalyzer {
                 ContentAnalysisResults res = analyze.evaluate();
                 if (res == null) {
                     deviceImageChanged = true;
-                    imageToDigest.put(SuiteResultCacheUtil.DEVICE_IMAGE_KEY, null);
                 } else {
                     imageToDigest.putAll(res.getImageToDigest());
                     if (hasOneDeviceAnalysis) {

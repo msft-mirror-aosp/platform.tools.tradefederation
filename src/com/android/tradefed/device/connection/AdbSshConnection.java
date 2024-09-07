@@ -293,14 +293,28 @@ public class AdbSshConnection extends AdbTcpConnection {
                     File tempFile =
                             mHOUtil.collectLogByCommand(
                                     "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    GceManager.logAndDeleteFile(tempFile, "host_kernel", getLogger());
+                    getLogger()
+                            .testLog(
+                                    "host_kernel",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
                     tempFile =
                             mHOUtil.collectLogByCommand(
                                     "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                    GceManager.logAndDeleteFile(tempFile, "host_orchestrator", getLogger());
+                    getLogger()
+                            .testLog(
+                                    "host_orchestrator",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
                     tempFile = mHOUtil.getTunnelLog();
-                    GceManager.logAndDeleteFile(
-                            tempFile, "host_orchestrator_tunnel_log", getLogger());
+                    getLogger()
+                            .testLog(
+                                    "host_orchestrator_tunnel_logs",
+                                    LogDataType.CUTTLEFISH_LOG,
+                                    new FileInputStreamSource(tempFile));
+                    FileUtil.deleteFile(tempFile);
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -963,6 +977,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                     new HostOrchestratorUtil(
                             getDevice().getOptions().useOxygenationDevice(),
                             getDevice().getOptions().getExtraOxygenArgs(),
+                            getDevice().getOptions().getSshPrivateKeyPath(),
+                            getDevice().getOptions().getInstanceUser(),
                             gceAvdInfo.instanceName(),
                             gceAvdInfo.hostAndPort() != null
                                     ? gceAvdInfo.hostAndPort().getHost()

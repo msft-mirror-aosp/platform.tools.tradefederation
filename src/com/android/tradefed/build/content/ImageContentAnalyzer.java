@@ -22,7 +22,6 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetr
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.skipped.AnalysisHeuristic;
-import com.android.tradefed.testtype.suite.SuiteResultCacheUtil;
 
 import com.google.api.client.util.Joiner;
 
@@ -125,8 +124,7 @@ public class ImageContentAnalyzer {
                             results.addDeviceImageChanges(changeCount);
                         }
                         results.addImageDigestMapping(
-                                SuiteResultCacheUtil.DEVICE_IMAGE_KEY,
-                                DeviceMerkleTree.buildFromContext(context));
+                                "device_image", DeviceMerkleTree.buildFromContext(context));
                         break;
                     default:
                         break;
