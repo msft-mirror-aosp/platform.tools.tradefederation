@@ -922,7 +922,7 @@ public abstract class ITestSuite
                             }
                         }
                     }
-                    File moduleConfig = logModuleConfig(listener, module);
+                    File moduleConfig = dumpModuleConfig(module);
                     String baseModuleName =
                             module.getModuleInvocationContext()
                                     .getConfigurationDescriptor()
@@ -965,6 +965,13 @@ public abstract class ITestSuite
                     // Trigger module start on module level listener too
                     new ResultForwarder(moduleListeners)
                             .testModuleStarted(module.getModuleInvocationContext());
+                    if (moduleConfig != null) {
+                        try (InputStreamSource source =
+                                new FileInputStreamSource(moduleConfig, false)) {
+                            listener.testLog(
+                                    "module-configuration", LogDataType.HARNESS_CONFIG, source);
+                        }
+                    }
                     TestInformation moduleInfo =
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
@@ -1066,7 +1073,7 @@ public abstract class ITestSuite
     }
 
     /** Log the module configuration. */
-    private File logModuleConfig(ITestLogger logger, ModuleDefinition module) {
+    private File dumpModuleConfig(ModuleDefinition module) {
         try {
             File configFile =
                     FileUtil.createTempFile(
@@ -1083,9 +1090,6 @@ public abstract class ITestSuite
                                 true,
                                 false);
                 pw.flush();
-                try (InputStreamSource source = new FileInputStreamSource(configFile, false)) {
-                    logger.testLog("module-configuration", LogDataType.HARNESS_CONFIG, source);
-                }
                 return configFile;
             }
         } catch (RuntimeException | IOException e) {
