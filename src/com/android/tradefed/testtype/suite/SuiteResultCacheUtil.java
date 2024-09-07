@@ -26,6 +26,7 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.proto.ModuleProtoResultReporter;
 import com.android.tradefed.result.skipped.SkipContext;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.FileUtil;
@@ -41,6 +42,8 @@ import java.util.Map.Entry;
 
 /** Utility to upload and download cache results for a test module. */
 public class SuiteResultCacheUtil {
+
+    public static final String DEVICE_IMAGE_KEY = "device_image";
 
     /**
      * Upload results to RBE
@@ -59,16 +62,19 @@ public class SuiteResultCacheUtil {
             File protoResults,
             File moduleDir,
             SkipContext skipContext) {
-        if (!skipContext.shouldUseCache()) {
-            return;
-        }
         //  TODO: We don't support multi-devices
         if (testInfo.getDevices().size() > 1) {
             return;
         }
         if (!(testInfo.getDevice().getIDevice() instanceof NullDevice)
-                && !skipContext.getImageToDigest().containsKey("device_image")) {
+                && !skipContext.getImageToDigest().containsKey(DEVICE_IMAGE_KEY)) {
             CLog.d("We have device but no device digest.");
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
+            return;
+        }
+        if (skipContext.getImageToDigest().containsValue(null)) {
+            CLog.d("No digest for device.");
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
             return;
@@ -110,7 +116,8 @@ public class SuiteResultCacheUtil {
             File moduleConfig,
             File moduleDir,
             SkipContext skipContext) {
-        if (!skipContext.shouldUseCache()) {
+        if (skipContext.getImageToDigest().containsValue(null)) {
+            CLog.d("No digest for device.");
             return false;
         }
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
@@ -132,6 +139,13 @@ public class SuiteResultCacheUtil {
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.MODULE_RESULTS_CACHE_HIT, 1);
+                Map<String, String> metadata =
+                        ModuleProtoResultReporter.parseResultsMetadata(cachedResults.stdOut());
+                if (metadata.containsKey(ModuleProtoResultReporter.INVOCATION_ID_KEY)) {
+                    CLog.d(
+                            "cached results origin: http://ab/%s",
+                            metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY));
+                }
                 FileUtil.deleteFile(cachedResults.stdOut());
                 FileUtil.deleteFile(cachedResults.stdErr());
                 return true;

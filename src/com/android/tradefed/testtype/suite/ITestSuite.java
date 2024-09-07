@@ -389,16 +389,6 @@ public abstract class ITestSuite
     @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
     private boolean mStageRemoteFile = true;
 
-    @Option(
-            name = "upload-cached-module-results",
-            description = "Whether or not to upload the results of a module to the cache")
-    private boolean mUploadCachedResults = false;
-
-    @Option(
-            name = "report-cache-results",
-            description = "Actually enable the reporting of caching status.")
-    private boolean mEnableModuleCachingResults = false;
-
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
         FULLY_ISOLATED; // Test received a fresh device.
@@ -951,7 +941,7 @@ public abstract class ITestSuite
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
                     }
-                    if (mUploadCachedResults
+                    if (mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
                             && moduleDir != null
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
                                     != null) {
@@ -963,7 +953,7 @@ public abstract class ITestSuite
                                         moduleDir,
                                         mSkipContext);
                         if (!cacheHit) {
-                            moduleReporter = new ModuleProtoResultReporter();
+                            moduleReporter = new ModuleProtoResultReporter(testInfo.getContext());
                             moduleListeners.add(moduleReporter);
                         }
                     }
@@ -992,7 +982,9 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheHit && mEnableModuleCachingResults) {
+                        } else if (cacheHit
+                                && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                && mSkipContext.shouldUseCache()) {
                             CLog.d("Reporting cached results for module %s", module.getId());
                             // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
@@ -1007,9 +999,10 @@ public abstract class ITestSuite
                                         MODULE_END_TIME, Long.toString(System.currentTimeMillis()));
                         // Trigger module end on module level listener too
                         new ResultForwarder(moduleListeners).testModuleEnded();
-                        if (mUploadCachedResults && moduleReporter != null) {
+                        if (mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
+                                && moduleReporter != null) {
                             File protoResults = moduleReporter.getOutputFile();
-                            if (!moduleReporter.hasFailures()) {
+                            if (!moduleReporter.stopCaching()) {
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         testInfo,
