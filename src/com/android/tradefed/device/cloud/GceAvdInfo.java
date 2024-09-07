@@ -57,7 +57,7 @@ public class GceAvdInfo {
 
     private static final Pattern OXYGEN_LEASE_RESPONSE_PATTERN =
             Pattern.compile(
-                    "session_id:\"(.*?)\".*?server_url:\"(.*?)\".*?oxygen_version:\"(.*?)\"",
+                    "session_id:\\s?\"(.*?)\".*?server_url:\\s?\"(.*?)\".*?oxygen_version:\\s?\"(.*?)\"",
                     Pattern.DOTALL);
     private static final Pattern OXYGENATION_LEASE_RESPONSE_PATTERN =
             Pattern.compile(
