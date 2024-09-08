@@ -47,6 +47,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
@@ -185,6 +186,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mWipeAfterApplySnapshot = false;
 
     @Option(
+            name = "use-new-incremental-update-flow",
+            description = "A new update flow possible with latest incremental features.")
+    private boolean mNewIncrementalFlow = false;
+
+    @Option(
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
@@ -202,6 +208,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
+    private MultiMap<String, String> mAllowedBranchTransition = new MultiMap<>();
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -344,8 +351,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mCreateSnapshotBinary,
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
+                                mAllowedBranchTransition,
                                 mApplySnapshot,
                                 mWipeAfterApplySnapshot,
+                                mNewIncrementalFlow,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
@@ -687,5 +696,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     public void setIgnoreHostOptions(boolean ignoreHostOptions) {
         mIgnoreHostOptions = ignoreHostOptions;
+    }
+
+    public void addBranchTransitionInIncremental(String origin, String destination) {
+        mAllowedBranchTransition.put(origin, destination);
     }
 }
