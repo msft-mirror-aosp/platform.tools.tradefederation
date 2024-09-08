@@ -1563,6 +1563,10 @@ public class DeviceSetupTest {
                 .thenReturn(successResult);
         when(mMockDevice.executeShellV2Command("dumpsys window displays | grep mCurrentFocus"))
                 .thenReturn(successResult);
+        when(mMockDevice.executeShellV2Command(
+                        "adb shell cmd package resolve-activity -c android.intent.category.HOME -a"
+                                + " android.intent.action.MAIN"))
+                .thenReturn(successResult);
     }
 
     /** Perform common EasyMock expect operations for a setUp call which syncs local data */

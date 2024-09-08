@@ -255,6 +255,7 @@ public class InvocationMetricLogger {
 
         // CAS downloader metrics
         CAS_VERSION("cas_version", false),
+        CAS_DOWNLOAD_ERRORS("cas_download_errors", true),
         // Name of files downloaded by CAS downloader.
         CAS_DOWNLOAD_FILES("cas_download_files", true),
         CAS_DOWNLOAD_FILE_SUCCESS_COUNT("cas_download_file_success_count", true),
@@ -400,6 +401,9 @@ public class InvocationMetricLogger {
 
         // Test caching metrics
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
+
+        // Module level caching
+        MODULE_RESULTS_CACHE_HIT("module_results_cache_hit", true),
         ;
 
         private final String mKeyName;
