@@ -17,7 +17,7 @@
 package com.android.tradefed.util.avd;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.times;
 
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -38,6 +38,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -51,6 +52,7 @@ public class OxygenClientTest {
     private File mOxygenJarFile;
 
     private OxygenClient mOxygenClient;
+    private OxygenClient mOxygenClientJar;
 
     // Build info
     private static final String BUILD_TARGET = "target";
@@ -71,6 +73,8 @@ public class OxygenClientTest {
     private HashMap<String, String> mExtraOxygenArgs;
 
     private IRunUtil mRunUtil;
+
+    private FileOutputStream mMockFileOutputStream;
 
     private static final String[] GCE_DEVICE_PARAMS =
             new String[] {
@@ -136,6 +140,9 @@ public class OxygenClientTest {
         mRunUtil = Mockito.mock(IRunUtil.class);
         mOxygenClient =
                 new OxygenClient(Arrays.asList(mOxygenBinaryFile.getAbsolutePath()), mRunUtil);
+        mOxygenClientJar =
+                new OxygenClient(Arrays.asList(mOxygenJarFile.getAbsolutePath()), mRunUtil);
+        mMockFileOutputStream = Mockito.mock(FileOutputStream.class);
     }
 
     @After
@@ -925,19 +932,115 @@ public class OxygenClientTest {
 
     @Test
     public void testCreateTunnelViaLHP_ADB() throws Exception {
-        // TODO(easoncylee): Flesh out when the oxygen client is ready.
-        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.ADB, "1111", "instance", "id"));
+        mOxygenClientJar.createTunnelViaLHP(
+                LHPTunnelMode.ADB,
+                "1111",
+                "session",
+                "server",
+                "target_region",
+                "user",
+                "device_id",
+                mExtraOxygenArgs,
+                mMockFileOutputStream);
+        Mockito.verify(mRunUtil, times(1))
+                .runCmdInBackground(
+                        Mockito.eq(
+                                Arrays.asList(
+                                        mOxygenJarFile.getAbsolutePath(),
+                                        "-build_lab_host_proxy_tunnel",
+                                        "-server_url",
+                                        "server",
+                                        "-session_id",
+                                        "session",
+                                        "-arg1",
+                                        "value1",
+                                        "-target_region",
+                                        "target_region",
+                                        "-accounting_user",
+                                        "user",
+                                        "-use_omnilab",
+                                        "-tunnel_type",
+                                        "adb",
+                                        "-tunnel_local_port",
+                                        "1111",
+                                        "-device_id",
+                                        "device_id")),
+                        Mockito.eq(mMockFileOutputStream));
     }
 
     @Test
     public void testCreateSSHTunnelViaLHP_SSH() throws Exception {
-        // TODO(easoncylee): Flesh out when the oxygen client is ready.
-        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.SSH, "1111", "instance", "id"));
+        mOxygenClientJar.createTunnelViaLHP(
+                LHPTunnelMode.SSH,
+                "1111",
+                "session",
+                "server",
+                "target_region",
+                "user",
+                "device_id",
+                mExtraOxygenArgs,
+                mMockFileOutputStream);
+        Mockito.verify(mRunUtil, times(1))
+                .runCmdInBackground(
+                        Mockito.eq(
+                                Arrays.asList(
+                                        mOxygenJarFile.getAbsolutePath(),
+                                        "-build_lab_host_proxy_tunnel",
+                                        "-server_url",
+                                        "server",
+                                        "-session_id",
+                                        "session",
+                                        "-arg1",
+                                        "value1",
+                                        "-target_region",
+                                        "target_region",
+                                        "-accounting_user",
+                                        "user",
+                                        "-use_omnilab",
+                                        "-tunnel_type",
+                                        "ssh",
+                                        "-tunnel_local_port",
+                                        "1111",
+                                        "-device_id",
+                                        "device_id")),
+                        Mockito.eq(mMockFileOutputStream));
     }
 
     @Test
     public void testCreateTunnelViaLHP_CURL() throws Exception {
-        // TODO(easoncylee): Flesh out when the oxygen client is ready.
-        assertNull(mOxygenClient.createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id"));
+        mOxygenClientJar.createTunnelViaLHP(
+                LHPTunnelMode.CURL,
+                "1111",
+                "session",
+                "server",
+                "target_region",
+                "user",
+                "device_id",
+                mExtraOxygenArgs,
+                mMockFileOutputStream);
+        Mockito.verify(mRunUtil, times(1))
+                .runCmdInBackground(
+                        Mockito.eq(
+                                Arrays.asList(
+                                        mOxygenJarFile.getAbsolutePath(),
+                                        "-build_lab_host_proxy_tunnel",
+                                        "-server_url",
+                                        "server",
+                                        "-session_id",
+                                        "session",
+                                        "-arg1",
+                                        "value1",
+                                        "-target_region",
+                                        "target_region",
+                                        "-accounting_user",
+                                        "user",
+                                        "-use_omnilab",
+                                        "-tunnel_type",
+                                        "curl",
+                                        "-tunnel_local_port",
+                                        "1111",
+                                        "-device_id",
+                                        "device_id")),
+                        Mockito.eq(mMockFileOutputStream));
     }
 }

@@ -88,7 +88,7 @@ public class SkipManager implements IDisableable {
             name = "report-module-skipped",
             description =
                     "Report a placeholder skip when module are skipped as unchanged in presubmit.")
-    private boolean mReportModuleSkipped = false;
+    private boolean mReportModuleSkipped = true;
 
     // Contains the filter and reason for demotion
     private final Map<String, SkipReason> mDemotionFilters = new LinkedHashMap<>();

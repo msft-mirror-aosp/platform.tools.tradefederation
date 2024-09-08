@@ -34,6 +34,7 @@ import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.OutputStream;
+import java.util.HashMap;
 
 /** Unit tests for {@link HostOrchestratorUtil} */
 @RunWith(JUnit4.class)
@@ -42,11 +43,12 @@ public class HostOrchestratorUtilTest {
     private HostOrchestratorUtil mHOUtil;
     private static final String INSTANCE_NAME = "instance";
     private static final String OXYGENATION_DEVICE_ID = "id";
+    private static final String TARGET_REGION = "target_region";
+    private static final String ACCOUNTING_USER = "accounting_user";
     private static final String HOST = "host";
     private OxygenClient mMockClient;
     private IRunUtil mMockRunUtil;
     private Process mMockProcess;
-    private File mMockFile;
     private static final String LIST_CVD_RES =
             "{\"cvds\":[{\"group\":\"cvd_1\",\"name\":\"ins-1\",\"build_source\":{},"
                     + "\"status\":\"Running\",\"displays\":[\"720 x 1280 ( 320 )\"],"
@@ -62,90 +64,49 @@ public class HostOrchestratorUtilTest {
             "{\"cvds\":[{\"build_source\":{},"
                     + "\"status\":\"Running\",\"displays\":[\"720 x 1280 ( 320 )\"],"
                     + "\"webrtc_device_id\":\"cvd-1\"}]}";
+    private HashMap<String, String> mExtraOxygenArgs;
 
     @Before
     public void setUp() throws Exception {
+        mExtraOxygenArgs = new HashMap<>();
+        mExtraOxygenArgs.put("arg1", "value1");
         mMockClient = Mockito.mock(OxygenClient.class);
         mMockProcess = Mockito.mock(Process.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
-        mMockFile = Mockito.mock(File.class);
     }
 
     @After
-    public void tearDown() {}
-
-    @Test
-    public void testCreateHostOrchestratorTunnel_NoCVDNoOxygenation() throws Exception {
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        false,
-                        false,
-                        mMockFile,
-                        "some_user",
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        mMockClient);
-        Assert.assertNull(mHOUtil.createHostOrchestratorTunnel("1111"));
-        Mockito.verify(mMockClient, times(0))
-                .createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id");
+    public void tearDown() {
+        FileUtil.deleteFile(mHOUtil.getTunnelLog());
     }
+
 
     @Test
     public void testCreateHostOrchestratorTunnel_Oxygenation() throws Exception {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient);
         mHOUtil.createHostOrchestratorTunnel("1111");
         Mockito.verify(mMockClient, times(1))
-                .createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id");
-    }
-
-    @Test
-    public void testCreateHostOrchestratorTunnel_UseCVDOxygen() throws Exception {
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        false,
-                        true,
-                        mMockFile,
-                        "instance",
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        mMockClient) {
-                    @Override
-                    protected IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-                };
-        mHOUtil.createHostOrchestratorTunnel("1111");
-        Mockito.verify(mMockClient, times(0))
-                .createTunnelViaLHP(LHPTunnelMode.CURL, "1111", "instance", "id");
-        Mockito.verify(mMockRunUtil, times(1))
-                .runCmdInBackground(
-                        Mockito.eq("ssh"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("LogLevel=ERROR"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("UserKnownHostsFile=/dev/null"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("StrictHostKeyChecking=no"),
-                        Mockito.eq("-o"),
-                        Mockito.eq("ServerAliveInterval=10"),
-                        Mockito.eq("-i"),
-                        Mockito.any(),
-                        Mockito.eq("-L1111:127.0.0.1:2080"),
-                        Mockito.eq("-N"),
-                        Mockito.eq("instance@host"),
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
                         Mockito.any());
     }
+
 
     @Test
     public void testCollectLogByCommand_Success() throws Exception {
@@ -154,12 +115,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -212,12 +173,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -269,12 +230,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -359,12 +320,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -421,12 +382,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -473,12 +434,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -540,12 +501,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -602,12 +563,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -707,12 +668,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -756,12 +717,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -808,12 +769,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -860,12 +821,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -912,12 +873,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -1017,12 +978,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -1066,12 +1027,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -1118,12 +1079,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -1170,12 +1131,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -1220,12 +1181,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
@@ -1257,12 +1218,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
@@ -1321,12 +1282,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
@@ -1385,12 +1346,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
@@ -1435,12 +1396,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient);
         Assert.assertEquals("cvd_1", mHOUtil.parseListCvdOutput(LIST_CVD_RES, "group"));
     }
@@ -1450,12 +1411,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient);
         Assert.assertEquals("", mHOUtil.parseListCvdOutput(LIST_CVD_BADRES, "group"));
     }
@@ -1467,12 +1428,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -1509,12 +1470,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
@@ -1552,12 +1513,12 @@ public class HostOrchestratorUtilTest {
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
-                        false,
-                        mMockFile,
-                        "some_user",
+                        mExtraOxygenArgs,
                         INSTANCE_NAME,
                         HOST,
                         OXYGENATION_DEVICE_ID,
+                        TARGET_REGION,
+                        ACCOUNTING_USER,
                         mMockClient) {
                     @Override
                     public Process createHostOrchestratorTunnel(String portNumber) {
