@@ -145,18 +145,45 @@ public class KTapResultParser {
     static final Predicate<String> IS_PLAN = PLAN_PATTERN.asPredicate();
     static final Predicate<String> IS_TEST_CASE_RESULT = TEST_CASE_RESULT_PATTERN.asPredicate();
 
+    private static TestDescription individualLeavesTestDescription(
+            String testRunName, String testName) {
+        // Rearrange the test description (class and method) in testStarted() for INDIVIDUAL_LEAVES.
+        // For example, transform `kunit_example_test#example.example_simple_test` into
+        // `kunit_example_test.example#example_simple_test` to better match the pattern
+        // <package>.<class>#<method>. In this case, package = kunit_example_test, class = example,
+        // method = example_simple_test.
+
+        int firstDotIndex = testName.indexOf(".");
+
+        if (firstDotIndex != -1) {
+            testRunName = String.format("%s.%s", testRunName, testName.substring(0, firstDotIndex));
+            testName = testName.substring(firstDotIndex + 1);
+        }
+        return new TestDescription(testRunName, testName);
+    }
+
     public static void applyKTapResultToListener(
             ITestInvocationListener listener,
             String testRunName,
             List<String> ktapFileContentList,
             ParseResolution resolution) {
+        applyKTapResultToListener(listener, testRunName, ktapFileContentList, resolution, false);
+    }
+
+    public static void applyKTapResultToListener(
+            ITestInvocationListener listener,
+            String testRunName,
+            List<String> ktapFileContentList,
+            ParseResolution resolution,
+            boolean rearrangeClassMethod) {
         KTapResultParser parser = new KTapResultParser();
         List<TestResult> rootList = new ArrayList<>();
         for (String ktapFileContent : ktapFileContentList) {
             TestResult root = parser.processResultsFileContent(ktapFileContent);
             rootList.add(root);
         }
-        parser.applyToListener(listener, testRunName, rootList, resolution);
+        // rearrangeClassMethod takes effect only when parser resolution is INDIVIDUAL_LEAVES now
+        parser.applyToListener(listener, testRunName, rootList, resolution, rearrangeClassMethod);
     }
 
     @VisibleForTesting
@@ -293,9 +320,10 @@ public class KTapResultParser {
             ITestInvocationListener listener,
             String testRunName,
             List<TestResult> rootList,
-            ParseResolution resolution) {
+            ParseResolution resolution,
+            boolean rearrangeClassMethod) {
         if (resolution == ParseResolution.INDIVIDUAL_LEAVES) {
-            applySubtestLeavesToListener(listener, testRunName, rootList, "");
+            applySubtestLeavesToListener(listener, testRunName, rootList, "", rearrangeClassMethod);
         } else if (resolution == ParseResolution.AGGREGATED_SUITE) {
             applyAggregatedSuiteToListener(listener, testRunName, rootList, "");
         } else if (resolution == ParseResolution.AGGREGATED_MODULE) {
@@ -307,14 +335,17 @@ public class KTapResultParser {
             ITestInvocationListener listener,
             String testRunName,
             List<TestResult> testList,
-            String prefix) {
+            String prefix,
+            boolean rearrangeClassMethod) {
         for (TestResult test : testList) {
             String testName =
                     prefix == null || prefix.isEmpty() ? test.name : prefix + "." + test.name;
             if (test.subtests.size() > 0) {
-                applySubtestLeavesToListener(listener, testRunName, test.subtests, testName);
+                applySubtestLeavesToListener(
+                        listener, testRunName, test.subtests, testName, rearrangeClassMethod);
             } else {
-                applyTestResultToListener(listener, testRunName, testName, test);
+                applyTestResultToListener(
+                        listener, testRunName, testName, test, rearrangeClassMethod);
             }
         }
     }
@@ -379,8 +410,12 @@ public class KTapResultParser {
             ITestInvocationListener listener,
             String testRunName,
             String testName,
-            TestResult test) {
-        TestDescription testDescription = new TestDescription(testRunName, testName);
+            TestResult test,
+            boolean rearrangeClassMethod) {
+        TestDescription testDescription =
+                rearrangeClassMethod
+                        ? individualLeavesTestDescription(testRunName, testName)
+                        : new TestDescription(testRunName, testName);
         listener.testStarted(testDescription);
         switch (test.directive) {
             case NOTSET:

@@ -456,8 +456,7 @@ public abstract class ExecutableBaseTest
      *
      * @return a Map{@link LinkedHashMap}<String, String> of testCommands.
      */
-    @VisibleForTesting
-    Map<String, String> getAllTestCommands() {
+    protected Map<String, String> getAllTestCommands() {
         Map<String, String> testCommands = new LinkedHashMap<>(mTestCommands);
         for (String binary : mBinaryPaths) {
             testCommands.put(new File(binary).getName(), binary);
