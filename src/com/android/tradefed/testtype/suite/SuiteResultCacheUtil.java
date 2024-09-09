@@ -93,7 +93,7 @@ public class SuiteResultCacheUtil {
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
             ExecutableActionResult result = ExecutableActionResult.create(0, protoResults, null);
-            CLog.d("Uploading cache for %s", action);
+            CLog.d("Uploading cache for %s and %s", action, protoResults);
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
