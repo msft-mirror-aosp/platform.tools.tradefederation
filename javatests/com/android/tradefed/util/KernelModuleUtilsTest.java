@@ -34,6 +34,8 @@ public class KernelModuleUtilsTest {
         String[] actual = KernelModuleUtils.getDependentModules("kunit", output);
         assertArrayEquals(expected, actual);
         assertArrayEquals(
+                new String[0], KernelModuleUtils.getDependentModules("kunit_test", output));
+        assertArrayEquals(
                 new String[0], KernelModuleUtils.getDependentModules("kunit", "kunit 123 12"));
     }
 
