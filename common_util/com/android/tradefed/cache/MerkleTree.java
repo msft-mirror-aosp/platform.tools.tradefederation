@@ -20,7 +20,9 @@ import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.FileNode;
+
 import com.google.auto.value.AutoValue;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
@@ -34,7 +36,8 @@ public abstract class MerkleTree {
     /** Builds a merkle tree for the {@code directory}. */
     public static MerkleTree buildFromDir(File directory) throws IOException {
         if (!directory.exists() || !directory.isDirectory()) {
-            throw new IllegalArgumentException("Directory does not exist or is not a Directory!");
+            throw new IllegalArgumentException(
+                    String.format("Directory %s does not exist or is not a Directory!", directory));
         }
 
         LinkedHashMap<Digest, File> digestToFile = new LinkedHashMap<>();
@@ -42,7 +45,7 @@ public abstract class MerkleTree {
         Directory.Builder rootBuilder = Directory.newBuilder();
 
         // Sort the files, so that two equivalent directory messages have matching digests.
-        TreeSet<File> files = new TreeSet(Arrays.asList(directory.listFiles()));
+        TreeSet<File> files = new TreeSet<>(Arrays.asList(directory.listFiles()));
         for (File f : files) {
             if (f.isFile()) {
                 Digest digest = DigestCalculator.compute(f);

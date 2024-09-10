@@ -22,13 +22,13 @@ import glob
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
-import re
 import tempfile
 import time
 import cas_metrics_pb2  # type: ignore
-from google.protobuf.json_format import ParseDict, ParseError
+from google.protobuf import json_format
 
 
 @dataclasses.dataclass
@@ -133,6 +133,9 @@ ARTIFACTS = [
     ArtifactConfig('device-platinum-tests.zip', True),
     ArtifactConfig('device-platinum-tests_configs.zip', True),
     ArtifactConfig('device-platinum-tests_host-shared-libs.zip', True),
+    ArtifactConfig('camera-hal-tests.zip', True),
+    ArtifactConfig('camera-hal-tests_configs.zip', True),
+    ArtifactConfig('camera-hal-tests_host-shared-libs.zip', True),
     ArtifactConfig('device-pixel-tests.zip', True),
     ArtifactConfig('device-pixel-tests_configs.zip', True),
     ArtifactConfig('device-pixel-tests_host-shared-libs.zip', True),
@@ -248,6 +251,11 @@ def _upload(
     if not dump_file_details:
         logging.warning('-dump-file-details is not enabled')
 
+    # `-dump-metrics` only supports on cas uploader V1.3 or later.
+    dump_metrics = cas_info.client_version >= (1, 3)
+    if not dump_metrics:
+        logging.warning('-dump-metrics is not enabled')
+
     with tempfile.NamedTemporaryFile(mode='w+') as digest_file, tempfile.NamedTemporaryFile(
       mode='w+') as content_details_file:
         logging.info(
@@ -262,8 +270,6 @@ def _upload(
             cas_info.cas_service,
             '-dump-digest',
             digest_file.name,
-            '-dump-metrics',
-            metrics_file,
             '-use-adc',
         ]
 
@@ -277,6 +283,9 @@ def _upload(
 
         if dump_file_details:
             cmd = cmd + ['-dump-file-details', content_details_file.name]
+
+        if dump_metrics:
+            cmd = cmd + ['-dump-metrics', metrics_file]
 
         try:
             logging.info('Running command: %s', cmd)
@@ -388,8 +397,9 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
             else:
                 logging.warning('Skip to save the content details of file %s', name)
 
-            _add_artifact_metrics(metrics_file, cas_metrics)
-            os.remove(metrics_file)
+            if os.path.exists(metrics_file):
+                _add_artifact_metrics(metrics_file, cas_metrics)
+                os.remove(metrics_file)
 
             logging.info(
                 'Elapsed time of uploading %s: %d seconds\n\n',
@@ -408,10 +418,13 @@ def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMet
     try:
         with open(metrics_file, "r", encoding='utf8') as file:
             json_metrics = json.load(file)
-            cas_metrics.artifacts.append(ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics()))
+            cas_metrics.artifacts.append(
+                json_format.ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics())
+            )
+
     except FileNotFoundError:
         logging.exception("File not found: %s", metrics_file)
-    except ParseError as e:  # Catch any other unexpected errors
+    except json_format.ParseError as e:  # Catch any other unexpected errors
         logging.exception("Error converting Json to protobuf: %s", e)
 
 

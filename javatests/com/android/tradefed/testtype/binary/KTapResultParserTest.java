@@ -89,13 +89,10 @@ public class KTapResultParserTest {
             {"main_test.example_test_3.test_2", "FAILURE", "# test_2: FAIL"},
             {"main_test.example_test_3.test_3", "IGNORED", ""}
         };
-        String[][] expectedKunitSuiteResults = {{"main_test", "FAILURE", ""}};
-        String[] expectedKunitModuleResults = {"main_test", "FAILURE", ""};
+        String[][] expectedSuiteResults = {{"main_test", "FAILURE", ""}};
+        String[] expectedModuleResults = {"main_test", "FAILURE", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -137,13 +134,13 @@ public class KTapResultParserTest {
         // The full KTAP should pass with no error.
         Optional<String> ktapResults =
                 Arrays.stream(ktapResultsByLine).reduce((str1, str2) -> str1 + str2);
-        String[][] expectedKunitSuiteResults = {{"main_test", "FAILURE", ""}};
-        String[] expectedKunitModuleResults = {"main_test", "FAILURE", ""};
+        String[][] expectedSuiteResults = {{"main_test", "FAILURE", ""}};
+        String[] expectedModuleResults = {"main_test", "FAILURE", ""};
         checkKTap(
                 new String[] {ktapResults.get()},
                 expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                expectedSuiteResults,
+                expectedModuleResults);
 
         // Loop through the good KTAP with an additional line removed for each iteration.
         // An exception should be thrown for each partial result.
@@ -161,8 +158,8 @@ public class KTapResultParserTest {
                             checkKTap(
                                     new String[] {ktapResults2.get()},
                                     expectedLeafResults,
-                                    expectedKunitSuiteResults,
-                                    expectedKunitModuleResults));
+                                    expectedSuiteResults,
+                                    expectedModuleResults));
         }
     }
 
@@ -428,13 +425,10 @@ public class KTapResultParserTest {
                 ""
             },
         };
-        String[][] expectedKunitSuiteResults = {{"ext4_inode_test", "PASSED", ""}};
-        String[] expectedKunitModuleResults = {"ext4_inode_test", "PASSED", ""};
+        String[][] expectedSuiteResults = {{"ext4_inode_test", "PASSED", ""}};
+        String[] expectedModuleResults = {"ext4_inode_test", "PASSED", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -588,13 +582,10 @@ public class KTapResultParserTest {
                 ""
             },
         };
-        String[][] expectedKunitSuiteResults = {{"fat_test", "PASSED", ""}};
-        String[] expectedKunitModuleResults = {"fat_test", "PASSED", ""};
+        String[][] expectedSuiteResults = {{"fat_test", "PASSED", ""}};
+        String[] expectedModuleResults = {"fat_test", "PASSED", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -602,16 +593,16 @@ public class KTapResultParserTest {
         // Example taken from KUnits: test_data/test_is_test_passed-no_tests_run_with_header.log
         String[] ktapResultsList = {"TAP version 14\n" + "1..0\n"};
         String[][] expectedLeafResults = {};
-        String[][] expectedKunitSuiteResults = {};
-        String[] expectedKunitModuleResults = {};
+        String[][] expectedSuiteResults = {};
+        String[] expectedModuleResults = {};
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
                         checkKTap(
                                 ktapResultsList,
                                 expectedLeafResults,
-                                expectedKunitSuiteResults,
-                                expectedKunitModuleResults));
+                                expectedSuiteResults,
+                                expectedModuleResults));
     }
 
     @Test
@@ -628,13 +619,10 @@ public class KTapResultParserTest {
         };
 
         String[][] expectedLeafResults = {{"suite.case", "PASSED", ""}};
-        String[][] expectedKunitSuiteResults = {{"suite", "PASSED", ""}};
-        String[] expectedKunitModuleResults = {"suite", "PASSED", ""};
+        String[][] expectedSuiteResults = {{"suite", "PASSED", ""}};
+        String[] expectedModuleResults = {"suite", "PASSED", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -694,13 +682,10 @@ public class KTapResultParserTest {
             {"example.example_simple_test", "PASSED", ""},
             {"example.example_mock_test", "PASSED", ""},
         };
-        String[][] expectedKunitSuiteResults = {{"sysctl_test.example", "PASSED", ""}};
-        String[] expectedKunitModuleResults = {"sysctl_test.example", "PASSED", ""};
+        String[][] expectedSuiteResults = {{"sysctl_test.example", "PASSED", ""}};
+        String[] expectedModuleResults = {"sysctl_test.example", "PASSED", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -729,23 +714,20 @@ public class KTapResultParserTest {
             {"selftests:_membarrier:_membarrier_test_single_thread", "PASSED", ""},
             {"selftests:_membarrier:_membarrier_test_multi_thread", "PASSED", ""}
         };
-        String[][] expectedKunitSuiteResults = {
+        String[][] expectedSuiteResults = {
             {
                 "selftests:_membarrier:_membarrier_test_single_thread.selftests:_membarrier:_membarrier_test_multi_thread",
                 "PASSED",
                 ""
             }
         };
-        String[] expectedKunitModuleResults = {
+        String[] expectedModuleResults = {
             "selftests:_membarrier:_membarrier_test_single_thread.selftests:_membarrier:_membarrier_test_multi_thread",
             "PASSED",
             ""
         };
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -821,13 +803,10 @@ public class KTapResultParserTest {
             },
             {"example.example_mock_test", "PASSED", ""},
         };
-        String[][] expectedKunitSuiteResults = {{"sysctl_test.example", "FAILURE", ""}};
-        String[] expectedKunitModuleResults = {"sysctl_test.example", "FAILURE", ""};
+        String[][] expectedSuiteResults = {{"sysctl_test.example", "FAILURE", ""}};
+        String[] expectedModuleResults = {"sysctl_test.example", "FAILURE", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -882,13 +861,10 @@ public class KTapResultParserTest {
             {"example.example_simple_test", "PASSED", ""},
             {"example.example_mock_test", "PASSED", ""}
         };
-        String[][] expectedKunitSuiteResults = {{"sysctl_test.example", "PASSED", ""}};
-        String[] expectedKunitModuleResults = {"sysctl_test.example", "PASSED", ""};
+        String[][] expectedSuiteResults = {{"sysctl_test.example", "PASSED", ""}};
+        String[] expectedModuleResults = {"sysctl_test.example", "PASSED", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -950,13 +926,10 @@ public class KTapResultParserTest {
             {"example.example_simple_test", "PASSED", ""},
             {"example.example_mock_test", "PASSED", ""},
         };
-        String[][] expectedKunitSuiteResults = {{"sysctl_test.example", "PASSED", ""}};
-        String[] expectedKunitModuleResults = {"sysctl_test.example", "PASSED", ""};
+        String[][] expectedSuiteResults = {{"sysctl_test.example", "PASSED", ""}};
+        String[] expectedModuleResults = {"sysctl_test.example", "PASSED", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -994,17 +967,14 @@ public class KTapResultParserTest {
             {"unnamed_test_3", "IGNORED", ""}
         };
 
-        String[][] expectedKunitSuiteResults = {
+        String[][] expectedSuiteResults = {
             {"unnamed_test_1.global.binderfs_test_privileged.unnamed_test_3", "PASSED", ""}
         };
-        String[] expectedKunitModuleResults = {
+        String[] expectedModuleResults = {
             "unnamed_test_1.global.binderfs_test_privileged.unnamed_test_3", "PASSED", ""
         };
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -1092,16 +1062,13 @@ public class KTapResultParserTest {
             {"example.example_slow_test", "PASSED", ""},
             {"example_init.example_init_test", "FAILURE", "# example_init_test: FAIL"},
         };
-        String[][] expectedKunitSuiteResults = {
+        String[][] expectedSuiteResults = {
             {"example", "PASSED", ""},
             {"example_init", "FAILURE", ""},
         };
-        String[] expectedKunitModuleResults = {"example,example_init", "FAILURE", ""};
+        String[] expectedModuleResults = {"example,example_init", "FAILURE", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     @Test
@@ -1188,32 +1155,29 @@ public class KTapResultParserTest {
             {"example.example_slow_test", "PASSED", ""},
             {"example_init.example_init_test", "PASSED", ""},
         };
-        String[][] expectedKunitSuiteResults = {
+        String[][] expectedSuiteResults = {
             {"example", "PASSED", ""},
             {"example_init", "PASSED", ""},
         };
-        String[] expectedKunitModuleResults = {"example,example_init", "PASSED", ""};
+        String[] expectedModuleResults = {"example,example_init", "PASSED", ""};
         checkKTap(
-                ktapResultsList,
-                expectedLeafResults,
-                expectedKunitSuiteResults,
-                expectedKunitModuleResults);
+                ktapResultsList, expectedLeafResults, expectedSuiteResults, expectedModuleResults);
     }
 
     private void checkKTap(
             String[] ktapResultsList,
             String[][] expectedLeafResults,
-            String[][] expectedKunitSuiteResults,
-            String[] expectedKunitModuleResults) {
+            String[][] expectedSuiteResults,
+            String[] expectedModuleResults) {
         // Setup
         String[][] expectedResults =
                 mParseResolution == KTapResultParser.ParseResolution.INDIVIDUAL_LEAVES
                         ? expectedLeafResults
                         : (mParseResolution == KTapResultParser.ParseResolution.AGGREGATED_SUITE
-                                ? expectedKunitSuiteResults
-                                : new String[][] {expectedKunitModuleResults});
+                                ? expectedSuiteResults
+                                : new String[][] {expectedModuleResults});
         CollectingTestListener listener = new CollectingTestListener();
-        String moduleName = "kunit_test_module.ko";
+        String moduleName = "kunit_test_module";
         listener.testRunStarted(moduleName, 1);
 
         KTapResultParser.applyKTapResultToListener(

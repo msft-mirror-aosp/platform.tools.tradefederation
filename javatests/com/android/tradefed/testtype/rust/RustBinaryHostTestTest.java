@@ -16,13 +16,19 @@
 package com.android.tradefed.testtype.rust;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
+import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IBuildInfo;
+import com.android.tradefed.cache.ICacheClient;
+import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -37,9 +43,11 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.RunUtilTest;
 
 import com.google.common.truth.Truth;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -55,8 +63,10 @@ import java.util.List;
 /** Unit tests for {@link RustBinaryHostTest}. */
 @RunWith(JUnit4.class)
 public class RustBinaryHostTestTest {
+    private RunUtilTest.FakeCacheClient mFakeCacheClient;
     private RustBinaryHostTest mTest;
     private TestInformation mTestInfo;
+    private File mModuleDir;
     @Mock IRunUtil mMockRunUtil;
     @Mock IBuildInfo mMockBuildInfo;
     @Mock ITestInvocationListener mMockListener;
@@ -76,6 +86,19 @@ public class RustBinaryHostTestTest {
         InvocationContext context = new InvocationContext();
         context.addDeviceBuildInfo("device", mMockBuildInfo);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
+        mModuleDir = FileUtil.createTempDir("rust-module");
+        mFakeCacheClient = new RunUtilTest.FakeCacheClient();
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        FileUtil.recursiveDelete(mModuleDir);
+        mFakeCacheClient.getAllCache().values().stream()
+                .forEach(
+                        a -> {
+                            FileUtil.deleteFile(a.stdOut());
+                            FileUtil.deleteFile(a.stdErr());
+                        });
     }
 
     private CommandResult newCommandResult(CommandStatus status, String stderr, String stdout) {
@@ -195,10 +218,46 @@ public class RustBinaryHostTestTest {
                 .thenReturn(successResult("", output));
     }
 
+    /** Test that a success rust test run is uploaded to cache service. */
+    @Test
+    public void testRun_upload_cache_for_success_run() throws Exception {
+        RustBinaryHostTest rustTest =
+                createRustBinaryHostTestWithCache(
+                        "#!/bin/bash\n"
+                            + "[ \"${@: -1}\" == \"--list\" ] && echo \"hello_world_test : test\""
+                            + " || echo \"running 1 tests\n"
+                            + "test hello_world ... ok <0.001s>\n"
+                            + "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0"
+                            + " filtered out; finished in 0.01s\n"
+                            + "\"");
+
+        rustTest.run(mTestInfo, mMockListener);
+
+        assertFalse(mFakeCacheClient.getAllCache().isEmpty());
+    }
+
+    /** Test that a failed rust test run is not uploaded to cache service. */
+    @Test
+    public void testRun_skip_cache_uploading_for_failed_run() throws Exception {
+        RustBinaryHostTest rustTest =
+                createRustBinaryHostTestWithCache(
+                        "#!/bin/bash\n"
+                            + "[ \"${@: -1}\" == \"--list\" ] && echo \"hello_world_test : test\""
+                            + " || echo \"running 1 tests\n"
+                            + "test hello_world ... FAILED <0.001s>\n"
+                            + "test result: ok. 0 passed; 1 failed; 0 ignored; 0 measured; 0"
+                            + " filtered out; finished in 0.01s\n"
+                            + "\"");
+
+        rustTest.run(mTestInfo, mMockListener);
+
+        assertTrue(mFakeCacheClient.getAllCache().isEmpty());
+    }
+
     /** Test that when running a rust binary the output is parsed to obtain results. */
     @Test
     public void testRun() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -232,7 +291,7 @@ public class RustBinaryHostTestTest {
         mMockBuildInfo = mock(IBuildInfo.class);
         mTest.setBuild(mMockBuildInfo);
 
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -259,7 +318,7 @@ public class RustBinaryHostTestTest {
     /** If the binary returns an exception status, it is treated as a failed test. */
     @Test
     public void testRunFail_exception() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -292,7 +351,7 @@ public class RustBinaryHostTestTest {
      */
     @Test
     public void testRunFail_list() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -319,7 +378,7 @@ public class RustBinaryHostTestTest {
     /** If the binary reports a FAILED status, it is treated as a failed test. */
     @Test
     public void testRunFail_failureOnly() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -347,7 +406,7 @@ public class RustBinaryHostTestTest {
     /** Test the exclude filtering of test methods. */
     @Test
     public void testExcludeFilter() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -398,7 +457,7 @@ public class RustBinaryHostTestTest {
     /** Test both include and exclude filters. */
     @Test
     public void testIncludeExcludeFilter() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -453,7 +512,7 @@ public class RustBinaryHostTestTest {
     /** Test multiple include and exclude filters. */
     @Test
     public void testMultipleIncludeExcludeFilter() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -543,7 +602,7 @@ public class RustBinaryHostTestTest {
     /** Test benchmark run */
     @Test
     public void testRun_benchmark() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -568,12 +627,18 @@ public class RustBinaryHostTestTest {
                             Mockito.anyInt(),
                             Mockito.anyLong());
             verifyListenerLog(binary, false);
-            verify(mMockListener).testStarted(desc1);
+            verify(mMockListener).testStarted(Mockito.eq(desc1), Mockito.anyLong());
             verify(mMockListener)
-                    .testEnded(Mockito.eq(desc1), Mockito.<HashMap<String, Metric>>any());
-            verify(mMockListener).testStarted(desc2);
+                    .testEnded(
+                            Mockito.eq(desc1),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener).testStarted(Mockito.eq(desc2), Mockito.anyLong());
             verify(mMockListener)
-                    .testEnded(Mockito.eq(desc2), Mockito.<HashMap<String, Metric>>any());
+                    .testEnded(
+                            Mockito.eq(desc2),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
             verify(mMockListener)
                     .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         } finally {
@@ -583,7 +648,7 @@ public class RustBinaryHostTestTest {
 
     @Test
     public void testRun_benchmarkDoubleStart() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -606,13 +671,19 @@ public class RustBinaryHostTestTest {
                             Mockito.anyInt(),
                             Mockito.anyLong());
             verifyListenerLog(binary, false);
-            verify(mMockListener).testStarted(desc1);
+            verify(mMockListener).testStarted(Mockito.eq(desc1), Mockito.anyLong());
             verify(mMockListener).testFailed(Mockito.eq(desc1), Mockito.<String>any());
             verify(mMockListener)
-                    .testEnded(Mockito.eq(desc1), Mockito.<HashMap<String, Metric>>any());
-            verify(mMockListener).testStarted(desc2);
+                    .testEnded(
+                            Mockito.eq(desc1),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener).testStarted(Mockito.eq(desc2), Mockito.anyLong());
             verify(mMockListener)
-                    .testEnded(Mockito.eq(desc2), Mockito.<HashMap<String, Metric>>any());
+                    .testEnded(
+                            Mockito.eq(desc2),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
             verify(mMockListener)
                     .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         } finally {
@@ -622,7 +693,7 @@ public class RustBinaryHostTestTest {
 
     @Test
     public void testRun_benchmarkNotFinished() throws Exception {
-        File binary = FileUtil.createTempFile("rust-dir", "");
+        File binary = FileUtil.createTempFile("rust-dir", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mTest);
             setter.setOptionValue("test-file", binary.getAbsolutePath());
@@ -646,13 +717,19 @@ public class RustBinaryHostTestTest {
                             Mockito.anyInt(),
                             Mockito.anyLong());
             verifyListenerLog(binary, false);
-            verify(mMockListener).testStarted(desc1);
+            verify(mMockListener).testStarted(Mockito.eq(desc1), Mockito.anyLong());
             verify(mMockListener)
-                    .testEnded(Mockito.eq(desc1), Mockito.<HashMap<String, Metric>>any());
-            verify(mMockListener).testStarted(desc2);
+                    .testEnded(
+                            Mockito.eq(desc1),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
+            verify(mMockListener).testStarted(Mockito.eq(desc2), Mockito.anyLong());
             verify(mMockListener).testFailed(Mockito.eq(desc2), Mockito.<String>any());
             verify(mMockListener)
-                    .testEnded(Mockito.eq(desc2), Mockito.<HashMap<String, Metric>>any());
+                    .testEnded(
+                            Mockito.eq(desc2),
+                            Mockito.anyLong(),
+                            Mockito.<HashMap<String, Metric>>any());
             verify(mMockListener).testRunFailed(Mockito.<String>any());
             verify(mMockListener)
                     .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
@@ -686,5 +763,33 @@ public class RustBinaryHostTestTest {
         } finally {
             FileUtil.recursiveDelete(testsDir);
         }
+    }
+
+    private RustBinaryHostTest createRustBinaryHostTestWithCache(String scriptContent)
+            throws Exception {
+        RustBinaryHostTest rustTest =
+                new RustBinaryHostTest() {
+                    @Override
+                    ICacheClient getCacheClient(File workFolder, String instanceName) {
+                        return mFakeCacheClient;
+                    }
+                };
+        File hostLinkedFolder = FileUtil.createTempDir("hosttestcases", mModuleDir);
+        File binary = new File(hostLinkedFolder, "hello_world_test");
+        FileUtil.writeToFile(scriptContent, binary);
+        binary.setExecutable(true);
+        OptionSetter testSetter = new OptionSetter(rustTest);
+        testSetter.setOptionValue("test-file", binary.getAbsolutePath());
+        testSetter.setOptionValue("enable-cache", "true");
+        DeviceBuildInfo buildInfo = new DeviceBuildInfo();
+        buildInfo.setFile(BuildInfoFileKey.HOST_LINKED_DIR, hostLinkedFolder, "0.0");
+        rustTest.setBuild(buildInfo);
+        CommandOptions commandOptions = new CommandOptions();
+        OptionSetter commandOptionsSetter = new OptionSetter(commandOptions);
+        commandOptionsSetter.setOptionValue("remote-cache-instance-name", "test_instance");
+        IConfiguration config = new Configuration("config", "Test config");
+        config.setCommandOptions(commandOptions);
+        rustTest.setConfiguration(config);
+        return rustTest;
     }
 }

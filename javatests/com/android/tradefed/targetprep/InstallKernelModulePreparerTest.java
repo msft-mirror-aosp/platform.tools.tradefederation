@@ -51,6 +51,14 @@ public class InstallKernelModulePreparerTest {
     private static final String KUNIT_MODULE_INSTALLATION_COMMAND =
             String.format("insmod %s enable=1", KUNIT_MODULE);
     private static final String KUNIT_MODULE_REMOVAL_COMMAND = "rmmod kunit";
+    private static final String LIST_MODULE_COMMAND = "lsmod";
+    private static final String NO_PREEXISTING_MODULE_OUTPUT =
+            "Module Size  Used by\n" + "sec_touch             663552  0";
+    private static final String PREEXISTING_MODULE_OUTPUT =
+            "Module Size  Used by\n"
+                    + "sec_touch             663552  0"
+                    + "kunit                  57344  0";
+
     private InstallKernelModulePreparer mPreparer;
     private TestInformation mTestInfo;
     private OptionSetter mOptionSetter;
@@ -110,12 +118,48 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("install-arg", "enable=1");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
+        when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
+                .thenReturn(NO_PREEXISTING_MODULE_OUTPUT);
         when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(
                         matches(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
                 .thenReturn(mSuccessResult);
         mPreparer.setUp(mTestInfo);
+    }
+
+    /**
+     * Test {@link InstallKernelModulePreparer#setUp()} by successfully installing a kernel module
+     * file with the module already loaded on the device
+     */
+    @Test
+    public void testSetupWithPreExistingDependentModule()
+            throws DeviceNotAvailableException,
+                    BuildError,
+                    TargetSetupError,
+                    ConfigurationException {
+        String output =
+                "Module Size  Used b\n"
+                        + "kunit_test             663552  0\n"
+                        + "time_test             663558  0\n"
+                        + "kunit                  57344  15 kunit_test,time_test\n";
+        mOptionSetter.setOptionValue("install-arg", "enable=1");
+        when(mMockDevice.isAdbRoot()).thenReturn(true);
+
+        when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
+                .thenReturn(output)
+                .thenReturn(output)
+                .thenReturn(output);
+        when(mMockDevice.executeShellV2Command(
+                        matches(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
+                .thenReturn(mSuccessResult)
+                .thenReturn(mSuccessResult)
+                .thenReturn(mSuccessResult);
+        mPreparer.setUp(mTestInfo);
+        InOrder inOrder = Mockito.inOrder(mMockDevice);
+        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit_test"));
+        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod time_test"));
+        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit"));
     }
 
     /** Test {@link InstallKernelModulePreparer#setUp()} by successfully installing 1 ko file */
@@ -129,6 +173,8 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("install-arg", "stats_enabled=0");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
+        when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
+                .thenReturn(NO_PREEXISTING_MODULE_OUTPUT);
         when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(
@@ -150,13 +196,14 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("module-path", "/data/kunit/kunit-test.ko");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
+        when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
+                .thenReturn(NO_PREEXISTING_MODULE_OUTPUT);
         when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(
                         matches(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeShellV2Command(matches("rmmod kunit_test")))
-                .thenReturn(mFailedResult);
+        when(mMockDevice.executeShellCommand(matches("rmmod kunit_test"))).thenReturn("");
         when(mMockDevice.executeShellV2Command(
                         matches("insmod /data/kunit/kunit-test.ko enable=1"), anyLong(), any()))
                 .thenReturn(mSuccessResult);
@@ -173,6 +220,8 @@ public class InstallKernelModulePreparerTest {
         mOptionSetter.setOptionValue("install-arg", "enable=1");
         when(mMockDevice.isAdbRoot()).thenReturn(true);
 
+        when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
+                .thenReturn(NO_PREEXISTING_MODULE_OUTPUT);
         when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_REMOVAL_COMMAND)))
                 .thenReturn(mFailedResult);
         when(mMockDevice.executeShellV2Command(matches(KUNIT_MODULE_INSTALLATION_COMMAND)))
@@ -195,7 +244,9 @@ public class InstallKernelModulePreparerTest {
                     BuildError,
                     TargetSetupError,
                     ConfigurationException {
-        when(mMockDevice.executeShellV2Command(matches("rmmod kunit"))).thenReturn(mSuccessResult);
+        when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
+                .thenReturn(PREEXISTING_MODULE_OUTPUT);
+        when(mMockDevice.executeShellCommand(matches("rmmod kunit"))).thenReturn("");
         mPreparer.tearDown(mTestInfo, null);
     }
 
@@ -210,12 +261,13 @@ public class InstallKernelModulePreparerTest {
                     TargetSetupError,
                     ConfigurationException {
         mOptionSetter.setOptionValue("module-path", "/data/kunit/kunit_test.ko");
-        when(mMockDevice.executeShellV2Command(matches("rmmod kunit_test")))
-                .thenReturn(mFailedResult);
-        when(mMockDevice.executeShellV2Command(matches("rmmod kunit"))).thenReturn(mSuccessResult);
+        when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
+                .thenReturn(NO_PREEXISTING_MODULE_OUTPUT);
+        when(mMockDevice.executeShellCommand(matches("rmmod kunit_test"))).thenReturn("");
+        when(mMockDevice.executeShellCommand(matches("rmmod kunit"))).thenReturn("");
         mPreparer.tearDown(mTestInfo, null);
         InOrder inOrder = Mockito.inOrder(mMockDevice);
-        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit_test"));
-        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit"));
+        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit_test"));
+        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit"));
     }
 }

@@ -27,7 +27,9 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IAbi;
@@ -110,6 +112,7 @@ public abstract class ExecutableBaseTest
     private Set<String> mIncludeFilters = new LinkedHashSet<>();
     private Set<String> mExcludeFilters = new LinkedHashSet<>();
     private IConfiguration mConfiguration = null;
+    private TestRunResultListener mTestRunResultListener;
 
     /**
      * Get test commands.
@@ -141,6 +144,10 @@ public abstract class ExecutableBaseTest
 
     protected boolean doesRunBinaryGenerateTestResults() {
         return false;
+    }
+
+    protected boolean isTestFailed(String testName) {
+        return mTestRunResultListener.isTestFailed(testName);
     }
 
     /** {@inheritDoc} */
@@ -194,6 +201,8 @@ public abstract class ExecutableBaseTest
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
+        mTestRunResultListener = new TestRunResultListener();
+        listener = new ResultForwarder(listener, mTestRunResultListener);
         setTestInfo(testInfo);
         String moduleId = getModuleId(testInfo.getContext());
         Map<String, String> testCommands = getAllTestCommands();
@@ -447,8 +456,7 @@ public abstract class ExecutableBaseTest
      *
      * @return a Map{@link LinkedHashMap}<String, String> of testCommands.
      */
-    @VisibleForTesting
-    Map<String, String> getAllTestCommands() {
+    protected Map<String, String> getAllTestCommands() {
         Map<String, String> testCommands = new LinkedHashMap<>(mTestCommands);
         for (String binary : mBinaryPaths) {
             testCommands.put(new File(binary).getName(), binary);
