@@ -953,8 +953,16 @@ public abstract class ITestSuite
                                         moduleDir,
                                         mSkipContext);
                         if (!cacheHit) {
-                            moduleReporter = new ModuleProtoResultReporter(testInfo.getContext());
-                            moduleListeners.add(moduleReporter);
+                            try {
+                                File protoResults =
+                                        FileUtil.createTempFile("module-results", ".proto");
+                                moduleReporter =
+                                        new ModuleProtoResultReporter(testInfo.getContext());
+                                moduleReporter.setOutputFile(protoResults);
+                                moduleListeners.add(moduleReporter);
+                            } catch (IOException e) {
+                                CLog.e(e);
+                            }
                         }
                     }
                     module.getModuleInvocationContext()
@@ -1020,6 +1028,7 @@ public abstract class ITestSuite
                                         mSkipContext);
                             }
                             FileUtil.deleteFile(protoResults);
+                            moduleListeners.remove(moduleReporter);
                         }
                         FileUtil.deleteFile(moduleConfig);
                         // clear out module invocation context since we are now done with module

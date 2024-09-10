@@ -55,6 +55,7 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     protected void beforeModuleStart() {
         IInvocationContext stubContext = new InvocationContext();
         if (mInvocationId != null) {
+            CLog.d("Copying property into module results: %s", mInvocationId);
             stubContext.addInvocationAttribute(INVOCATION_ID_KEY, mInvocationId);
         }
         invocationStarted(stubContext);
@@ -103,6 +104,7 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     /** Parsing util to extract metadata we might have transferred */
     public static Map<String, String> parseResultsMetadata(File protoResults) {
         if (protoResults == null) {
+            CLog.w("Proto result file is null, cannot parse it.");
             return new HashMap<>();
         }
         try {
@@ -113,7 +115,9 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
             }
             IInvocationContext receivedContext =
                     InvocationContext.fromProto(anyDescription.unpack(Context.class));
-            return receivedContext.getAttributes().getUniqueMap();
+            Map<String, String> receivedAttributes = receivedContext.getAttributes().getUniqueMap();
+            CLog.d("Attributes received from cached results: %s", receivedAttributes);
+            return receivedAttributes;
         } catch (IOException | RuntimeException e) {
             CLog.e(e);
         }
