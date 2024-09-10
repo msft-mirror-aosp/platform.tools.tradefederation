@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.suite;
 
+import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
@@ -89,11 +90,13 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
+            Digest configDigest = DigestCalculator.compute(moduleConfig);
+            environment.put("module_config", configDigest.getHash());
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
             ExecutableActionResult result = ExecutableActionResult.create(0, protoResults, null);
-            CLog.d("Uploading cache for %s", action);
+            CLog.d("Uploading cache for %s and %s", action, protoResults);
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
@@ -129,6 +132,8 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
+            Digest configDigest = DigestCalculator.compute(moduleConfig);
+            environment.put("module_config", configDigest.getHash());
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
