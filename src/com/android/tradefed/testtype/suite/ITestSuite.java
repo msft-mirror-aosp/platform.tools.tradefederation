@@ -87,6 +87,7 @@ import com.android.tradefed.testtype.IReportNotExecuted;
 import com.android.tradefed.testtype.IRuntimeHintProvider;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestCollector;
+import com.android.tradefed.testtype.suite.SuiteResultCacheUtil.CacheResultDescriptor;
 import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
@@ -388,11 +389,6 @@ public abstract class ITestSuite
 
     @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
     private boolean mStageRemoteFile = true;
-
-    @Option(
-            name = "upload-cached-module-results",
-            description = "Whether or not to upload the results of a module to the cache")
-    private boolean mUploadCachedResults = false;
 
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
@@ -927,13 +923,13 @@ public abstract class ITestSuite
                             }
                         }
                     }
-                    File moduleConfig = logModuleConfig(listener, module);
+                    File moduleConfig = dumpModuleConfig(module);
                     String baseModuleName =
                             module.getModuleInvocationContext()
                                     .getConfigurationDescriptor()
                                     .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
-                    boolean cacheHit = false;
+                    CacheResultDescriptor cacheDescriptor = null;
                     // TODO(b/363066706): Switch to official API
                     File moduleDir = null;
                     try {
@@ -942,20 +938,32 @@ public abstract class ITestSuite
                     } catch (IOException e) {
                         CLog.e(e);
                     }
-                    if (mUploadCachedResults
+                    if (moduleDir == null) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
+                    }
+                    if (mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
                             && moduleDir != null
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
                                     != null) {
-                        cacheHit =
+                        cacheDescriptor =
                                 SuiteResultCacheUtil.lookUpModuleResults(
                                         mMainConfiguration,
                                         module.getId(),
                                         moduleConfig,
                                         moduleDir,
                                         mSkipContext);
-                        if (!cacheHit) {
-                            moduleReporter = new ModuleProtoResultReporter();
-                            moduleListeners.add(moduleReporter);
+                        if (!cacheDescriptor.isCacheHit()) {
+                            try {
+                                File protoResults =
+                                        FileUtil.createTempFile("module-results", ".proto");
+                                moduleReporter =
+                                        new ModuleProtoResultReporter(testInfo.getContext());
+                                moduleReporter.setOutputFile(protoResults);
+                                moduleListeners.add(moduleReporter);
+                            } catch (IOException e) {
+                                CLog.e(e);
+                            }
                         }
                     }
                     module.getModuleInvocationContext()
@@ -966,6 +974,13 @@ public abstract class ITestSuite
                     // Trigger module start on module level listener too
                     new ResultForwarder(moduleListeners)
                             .testModuleStarted(module.getModuleInvocationContext());
+                    if (moduleConfig != null) {
+                        try (InputStreamSource source =
+                                new FileInputStreamSource(moduleConfig, false)) {
+                            listener.testLog(
+                                    "module-configuration", LogDataType.HARNESS_CONFIG, source);
+                        }
+                    }
                     TestInformation moduleInfo =
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
@@ -983,12 +998,16 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheHit) {
+                        } else if (cacheDescriptor != null
+                                && cacheDescriptor.isCacheHit()
+                                && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                && mSkipContext.shouldUseCache()) {
                             CLog.d("Reporting cached results for module %s", module.getId());
                             // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
-                                            ModuleDefinition.MODULE_SKIPPED, "Cached results.");
+                                            ModuleDefinition.MODULE_SKIPPED,
+                                            cacheDescriptor.getDetails());
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
@@ -998,11 +1017,13 @@ public abstract class ITestSuite
                                         MODULE_END_TIME, Long.toString(System.currentTimeMillis()));
                         // Trigger module end on module level listener too
                         new ResultForwarder(moduleListeners).testModuleEnded();
-                        if (mUploadCachedResults && moduleReporter != null) {
+                        if (mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
+                                && moduleReporter != null) {
                             File protoResults = moduleReporter.getOutputFile();
-                            if (!moduleReporter.hasFailures()) {
+                            if (!moduleReporter.stopCaching()) {
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
+                                        testInfo,
                                         module.getId(),
                                         moduleConfig,
                                         protoResults,
@@ -1010,6 +1031,7 @@ public abstract class ITestSuite
                                         mSkipContext);
                             }
                             FileUtil.deleteFile(protoResults);
+                            moduleListeners.remove(moduleReporter);
                         }
                         FileUtil.deleteFile(moduleConfig);
                         // clear out module invocation context since we are now done with module
@@ -1063,7 +1085,7 @@ public abstract class ITestSuite
     }
 
     /** Log the module configuration. */
-    private File logModuleConfig(ITestLogger logger, ModuleDefinition module) {
+    private File dumpModuleConfig(ModuleDefinition module) {
         try {
             File configFile =
                     FileUtil.createTempFile(
@@ -1080,9 +1102,6 @@ public abstract class ITestSuite
                                 true,
                                 false);
                 pw.flush();
-                try (InputStreamSource source = new FileInputStreamSource(configFile, false)) {
-                    logger.testLog("module-configuration", LogDataType.HARNESS_CONFIG, source);
-                }
                 return configFile;
             }
         } catch (RuntimeException | IOException e) {

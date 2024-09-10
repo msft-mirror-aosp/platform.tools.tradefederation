@@ -437,6 +437,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             description = "Number of times to retry to dismiss setup wizard.")
     private int mDismissSetupWizardRetry = 2;
 
+    @Option(
+            name = "check-launcher-package-name",
+            description = "Check the launcher package name to verify setup wizard is dismissed.")
+    private boolean mCheckLauncherPackageName = true;
+
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
     private Map<String, String> mPreviousGlobalSettings = new HashMap<>();
@@ -1338,25 +1343,36 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     device.executeShellV2Command("dumpsys window displays | grep mCurrentFocus");
             if (CommandStatus.SUCCESS.equals(dumpsysCmdOut.getStatus())
                     && !dumpsysCmdOut.getStdout().contains("setupwizard")) {
-                // Additionally check the launcher package name
-                CommandResult pkgCmdOut =
-                        device.executeShellV2Command(
-                                "adb shell cmd package resolve-activity"
-                                        + " -c android.intent.category.HOME"
-                                        + " -a android.intent.action.MAIN");
-                if (CommandStatus.SUCCESS.equals(pkgCmdOut.getStatus())
-                        && !pkgCmdOut
-                                .getStdout()
-                                .contains("packageName=com.google.android.setupwizard")) {
+                if (mCheckLauncherPackageName) {
+                    // Additionally check the launcher package name
+                    CommandResult pkgCmdOut =
+                            device.executeShellV2Command(
+                                    "cmd package resolve-activity"
+                                            + " -c android.intent.category.HOME"
+                                            + " -a android.intent.action.MAIN");
+                    if (CommandStatus.SUCCESS.equals(pkgCmdOut.getStatus())
+                            && !pkgCmdOut
+                                    .getStdout()
+                                    .contains("packageName=com.google.android.setupwizard")) {
+                        CLog.d("Setup wizard is dismissed.");
+                        dismissed = true;
+                        break;
+                    } else {
+                        // Log the package cmd output for debugging purpose
+                        CLog.d("Package cmd output: %s", pkgCmdOut.getStdout());
+                        CLog.d("Package cmd stderr: %s", pkgCmdOut.getStderr());
+                    }
+                } else {
                     CLog.d("Setup wizard is dismissed.");
-                    CLog.d("Dumpsys cmd output: %s", dumpsysCmdOut.getStdout());
-                    CLog.d("Package cmd output: %s", pkgCmdOut.getStdout());
                     dismissed = true;
                     break;
                 }
             } else {
-                RunUtil.getDefault().sleep(2 * 1000);
+                // Log the dumpsys cmd output for debugging purpose
+                CLog.d("Dumpsys cmd output: %s", dumpsysCmdOut.getStdout());
+                CLog.d("Dumpsys cmd stderr: %s", dumpsysCmdOut.getStderr());
             }
+            RunUtil.getDefault().sleep(2 * 1000);
         }
         if (!dismissed) {
             CLog.w(

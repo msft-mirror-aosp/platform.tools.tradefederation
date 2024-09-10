@@ -281,7 +281,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (getDevice().getOptions().useCvdCF()) {
-                    createHostOrchestratorUtil(mGceAvd);
+                    mHOUtil = createHostOrchestratorUtil(mGceAvd);
                     File cvdLogsDir = mHOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
@@ -293,28 +293,14 @@ public class AdbSshConnection extends AdbTcpConnection {
                     File tempFile =
                             mHOUtil.collectLogByCommand(
                                     "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    getLogger()
-                            .testLog(
-                                    "host_kernel",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                    FileUtil.deleteFile(tempFile);
+                    GceManager.logAndDeleteFile(tempFile, "host_kernel", getLogger());
                     tempFile =
                             mHOUtil.collectLogByCommand(
                                     "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                    getLogger()
-                            .testLog(
-                                    "host_orchestrator",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                    FileUtil.deleteFile(tempFile);
+                    GceManager.logAndDeleteFile(tempFile, "host_orchestrator", getLogger());
                     tempFile = mHOUtil.getTunnelLog();
-                    getLogger()
-                            .testLog(
-                                    "host_orchestrator_tunnel_logs",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                    FileUtil.deleteFile(tempFile);
+                    GceManager.logAndDeleteFile(
+                            tempFile, "host_orchestrator_tunnel_log", getLogger());
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -456,7 +442,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
-        createHostOrchestratorUtil(mGceAvd);
+        mHOUtil = createHostOrchestratorUtil(mGceAvd);
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
@@ -466,7 +452,14 @@ public class AdbSshConnection extends AdbTcpConnection {
             GceAvdInfo gceAvdInfo,
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
-            mGceTunnelMonitor = new GceLHPTunnelMonitor();
+            mGceTunnelMonitor =
+                    new GceLHPTunnelMonitor(
+                            device,
+                            buildInfo,
+                            gceAvdInfo.instanceName(),
+                            gceAvdInfo.getOxygenationDeviceId(),
+                            gceAvdInfo.hostAndPort().getHost(),
+                            deviceOptions);
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
@@ -966,10 +959,10 @@ public class AdbSshConnection extends AdbTcpConnection {
     }
 
     /** Helper to create host orchestrator utility. */
-    private void createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+    HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
         if (mHOUtil != null) {
             CLog.i("Host Orchestrator Util has been initialized...");
-            return;
+            return mHOUtil;
         }
         if (getDevice().getOptions().useCvdCF()) {
             CLog.i("Creating host orchestrator utility...");
@@ -977,8 +970,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                     new HostOrchestratorUtil(
                             getDevice().getOptions().useOxygenationDevice(),
                             getDevice().getOptions().getExtraOxygenArgs(),
-                            getDevice().getOptions().getSshPrivateKeyPath(),
-                            getDevice().getOptions().getInstanceUser(),
                             gceAvdInfo.instanceName(),
                             gceAvdInfo.hostAndPort() != null
                                     ? gceAvdInfo.hostAndPort().getHost()
@@ -989,5 +980,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                             OxygenUtil.createOxygenClient(
                                     getDevice().getOptions().getAvdDriverBinary()));
         }
+        return mHOUtil;
     }
 }

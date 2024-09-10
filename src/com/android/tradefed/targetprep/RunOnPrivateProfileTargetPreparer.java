@@ -20,7 +20,7 @@ import static com.android.tradefed.device.UserInfo.UserType.PRIVATE_PROFILE;
 
 import com.android.tradefed.config.OptionClass;
 
-@OptionClass(alias = "run-on-clone-profile")
+@OptionClass(alias = "run-on-private-profile")
 public class RunOnPrivateProfileTargetPreparer extends ProfileTargetPreparer {
 
     public RunOnPrivateProfileTargetPreparer() {
