@@ -153,6 +153,7 @@ public class TestMappingsValidation implements IBuildReceiver {
             ImmutableSet.of(
                     "binderRpcTestNoKernel",
                     "CtsLibcoreOjTestCases_time",
+                    "CtsLibcoreOjTestCases_util",
                     "CtsTelecomTestCases",
                     "CtsAppTestCases",
                     "binderRpcTestSingleThreadedNoKernel",
