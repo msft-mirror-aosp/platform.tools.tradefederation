@@ -15,28 +15,39 @@
  */
 package com.android.tradefed.testtype.binary;
 
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.NativeDevice;
-import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /** Test runner for running KUnit test modules on device. */
 @OptionClass(alias = "kunit-module-test")
 public class KUnitModuleTest extends ExecutableTargetTest {
+
+    @Option(
+            name = "ktap-result-parser-resolution",
+            description = "Parser resolution for KTap results.")
+    private KTapResultParser.ParseResolution mKTapResultParserResolution =
+            KTapResultParser.ParseResolution.AGGREGATED_MODULE;
 
     public static final String RMMOD_COMMAND_FMT = "rmmod %s";
     public static final String INSMOD_COMMAND_FMT = "insmod %s";
@@ -44,6 +55,11 @@ public class KUnitModuleTest extends ExecutableTargetTest {
             String.format("%s/kunit", NativeDevice.DEBUGFS_PATH);
     public static final String KUNIT_RESULTS_FMT =
             String.format("%s/%%s/results", KUNIT_DEBUGFS_PATH);
+
+    /** Remove `.ko` extension if present */
+    private static String removeKoExtension(String s) {
+        return s.endsWith(".ko") ? s.substring(0, s.length() - 3) : s;
+    }
 
     /**
      * Return module name as it's displayed after loading.
@@ -66,10 +82,7 @@ public class KUnitModuleTest extends ExecutableTargetTest {
         }
 
         // Remove `.ko` extension if present
-        moduleName =
-                moduleName.endsWith(".ko")
-                        ? moduleName.substring(0, moduleName.length() - 3)
-                        : moduleName;
+        moduleName = removeKoExtension(moduleName);
 
         // Replace all '-' with '_'
         return moduleName.replace('-', '_');
@@ -87,6 +100,16 @@ public class KUnitModuleTest extends ExecutableTargetTest {
             throw new UnsupportedOperationException("collect-tests-only mode not support");
         }
         return false;
+    }
+
+    @Override
+    protected Map<String, String> getAllTestCommands() {
+        Map<String, String> originalTestCommands = super.getAllTestCommands();
+        Map<String, String> modifiedTestCommands = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : originalTestCommands.entrySet()) {
+            modifiedTestCommands.put(removeKoExtension(entry.getKey()), entry.getValue());
+        }
+        return modifiedTestCommands;
     }
 
     @Override
@@ -168,28 +191,31 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                 listener.testEnded(description, new HashMap<String, Metric>());
             }
 
+            List<String> ktapResultsList = new ArrayList<>();
             for (String testSuite : kunitTestSuitesAfter) {
                 String ktapResults =
                         getDevice().pullFileContents(String.format(KUNIT_RESULTS_FMT, testSuite));
                 CLog.i(
-                        "KUnit module '%s' KTAP result:\n%s",
-                        description.getTestName(), ktapResults);
+                        "KUnit module '%s' suite '%s' KTAP result:\n%s",
+                        description.getTestName(), testSuite, ktapResults);
+                ktapResultsList.add(ktapResults);
+            }
 
-                try {
-                    KTapResultParser.applyKTapResultToListener(
-                            listener,
-                            description.getTestName(),
-                            ktapResults,
-                            KTapResultParser.ParseResolution.AGGREGATED_TOP_LEVEL);
-                } catch (RuntimeException exception) {
-                    CLog.e("KTAP parse error: %s", exception.toString());
-                    listener.testStarted(description);
-                    listener.testFailed(
-                            description,
-                            FailureDescription.create(exception.toString())
-                                    .setFailureStatus(FailureStatus.TEST_FAILURE));
-                    listener.testEnded(description, new HashMap<String, Metric>());
-                }
+            try {
+                KTapResultParser.applyKTapResultToListener(
+                        listener,
+                        description.getTestName(),
+                        ktapResultsList,
+                        mKTapResultParserResolution,
+                        true);
+            } catch (RuntimeException exception) {
+                CLog.e("KTAP parse error: %s", exception.toString());
+                listener.testStarted(description);
+                listener.testFailed(
+                        description,
+                        FailureDescription.create(exception.toString())
+                                .setFailureStatus(FailureStatus.TEST_FAILURE));
+                listener.testEnded(description, new HashMap<String, Metric>());
             }
 
             // Clean up, unload module.
@@ -205,9 +231,156 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                 CLog.w("Unable to unload module '%s'. %s", kunitModule, errorMessage);
             }
         } finally {
-            if (debugfsAlreadyMounted) {
-                // If debugfs was already mounted before this test, then keep it mounted.
+            if (!debugfsAlreadyMounted) {
+                // If debugfs was not mounted before this test, unmount it.
                 getDevice().unmountDebugfs();
+            }
+        }
+    }
+
+    @Override
+    public void run(TestInformation testInfo, ITestInvocationListener listener)
+            throws DeviceNotAvailableException {
+
+        if (mKTapResultParserResolution == KTapResultParser.ParseResolution.AGGREGATED_MODULE) {
+            super.run(testInfo, listener);
+            return;
+        }
+
+        // KUnit does not support querying for number of test cases.
+        // This listener delays all events and counts the number of testStarted calls.
+        // After the tests end, it calls testRunStarted with the correct number.
+        List<Runnable> testEvents = new ArrayList<Runnable>();
+        int[] testCount = {0};
+        ITestInvocationListener delayListener =
+                new ITestInvocationListener() {
+                    @Override
+                    public void testRunStarted(String runName, int ignoredTestCount) {
+                        testEvents.add(() -> listener.testRunStarted(runName, testCount[0]));
+                    }
+
+                    @Override
+                    public void testRunStarted(
+                            String runName, int ignoredTestCount, int attemptNumber) {
+                        testEvents.add(
+                                () ->
+                                        listener.testRunStarted(
+                                                runName, testCount[0], attemptNumber));
+                    }
+
+                    @Override
+                    public void testRunStarted(
+                            String runName,
+                            int ignoredTestCount,
+                            int attemptNumber,
+                            long startTime) {
+                        testEvents.add(
+                                () ->
+                                        listener.testRunStarted(
+                                                runName, testCount[0], attemptNumber, startTime));
+                    }
+
+                    @Override
+                    public void testRunFailed(String errorMessage) {
+                        testEvents.add(() -> listener.testRunFailed(errorMessage));
+                    }
+
+                    @Override
+                    public void testRunFailed(FailureDescription failure) {
+                        testEvents.add(() -> listener.testRunFailed(failure));
+                    }
+
+                    @Override
+                    public void testRunEnded(
+                            long elapsedTimeMillis, Map<String, String> runMetrics) {
+                        testEvents.add(() -> listener.testRunEnded(elapsedTimeMillis, runMetrics));
+                    }
+
+                    @Override
+                    public void testRunEnded(
+                            long elapsedTimeMillis, HashMap<String, Metric> runMetrics) {
+                        testEvents.add(() -> listener.testRunEnded(elapsedTimeMillis, runMetrics));
+                    }
+
+                    @Override
+                    public void testRunStopped(long elapsedTime) {
+                        testEvents.add(() -> listener.testRunStopped(elapsedTime));
+                    }
+
+                    @Override
+                    public void testStarted(TestDescription test) {
+                        testEvents.add(() -> listener.testStarted(test));
+                        testCount[0]++;
+                    }
+
+                    @Override
+                    public void testStarted(TestDescription test, long startTime) {
+                        testEvents.add(() -> listener.testStarted(test, startTime));
+                        testCount[0]++;
+                    }
+
+                    @Override
+                    public void testFailed(TestDescription test, String trace) {
+                        testEvents.add(() -> listener.testFailed(test, trace));
+                    }
+
+                    @Override
+                    public void testFailed(TestDescription test, FailureDescription failure) {
+                        testEvents.add(() -> listener.testFailed(test, failure));
+                    }
+
+                    @Override
+                    public void testAssumptionFailure(TestDescription test, String trace) {
+                        testEvents.add(() -> listener.testAssumptionFailure(test, trace));
+                    }
+
+                    @Override
+                    public void testAssumptionFailure(
+                            TestDescription test, FailureDescription failure) {
+                        testEvents.add(() -> listener.testAssumptionFailure(test, failure));
+                    }
+
+                    @Override
+                    public void testIgnored(TestDescription test) {
+                        testEvents.add(() -> listener.testIgnored(test));
+                    }
+
+                    @Override
+                    public void testSkipped(TestDescription test, SkipReason reason) {
+                        testEvents.add(() -> listener.testSkipped(test, reason));
+                    }
+
+                    @Override
+                    public void testEnded(TestDescription test, Map<String, String> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, testMetrics));
+                    }
+
+                    @Override
+                    public void testEnded(
+                            TestDescription test, HashMap<String, Metric> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, testMetrics));
+                    }
+
+                    @Override
+                    public void testEnded(
+                            TestDescription test, long endTime, Map<String, String> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, endTime, testMetrics));
+                    }
+
+                    @Override
+                    public void testEnded(
+                            TestDescription test,
+                            long endTime,
+                            HashMap<String, Metric> testMetrics) {
+                        testEvents.add(() -> listener.testEnded(test, endTime, testMetrics));
+                    }
+                };
+
+        try {
+            super.run(testInfo, delayListener);
+        } finally {
+            for (Runnable testEvent : testEvents) {
+                testEvent.run();
             }
         }
     }

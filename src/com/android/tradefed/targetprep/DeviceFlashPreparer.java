@@ -47,6 +47,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
@@ -166,11 +167,28 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mAllowIncrementalCrossRelease = false;
 
     @Option(
+            name = "ignore-incremental-host-options",
+            description =
+                    "Ignore the HostOptions to disable incremental flashing. This can be useful for"
+                            + " boot tests in various environments.")
+    private boolean mIgnoreHostOptions = false;
+
+    @Option(
             name = "apply-snapshot",
             description =
                     "Whether to apply the snapshot after mounting it. "
                             + "This changes the baseline and does require reverting.")
     private boolean mApplySnapshot = false;
+
+    @Option(
+            name = "wipe-after-apply-snapshot",
+            description = "Whether to issue a wipe after applying snapshots.")
+    private boolean mWipeAfterApplySnapshot = false;
+
+    @Option(
+            name = "use-new-incremental-update-flow",
+            description = "A new update flow possible with latest incremental features.")
+    private boolean mNewIncrementalFlow = false;
 
     @Option(
             name = "snapuserd-wait-phase",
@@ -190,6 +208,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
+    private MultiMap<String, String> mAllowedBranchTransition = new MultiMap<>();
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -282,11 +301,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         long flashingTime = -1;
         long start = -1;
         // HostOptions can force the incremental flashing to true.
-        if (getHostOptions().isIncrementalFlashingEnabled()) {
-            mUseIncrementalFlashing = true;
-        }
-        if (getHostOptions().isOptOutOfIncrementalFlashing()) {
-            mUseIncrementalFlashing = false;
+        if (!mIgnoreHostOptions) {
+            if (getHostOptions().isIncrementalFlashingEnabled()) {
+                mUseIncrementalFlashing = true;
+            }
+            if (getHostOptions().isOptOutOfIncrementalFlashing()) {
+                mUseIncrementalFlashing = false;
+            }
         }
         if (mConfig != null) {
             for (IDeviceConfiguration deviceConfig : mConfig.getDeviceConfig()) {
@@ -330,7 +351,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mCreateSnapshotBinary,
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
+                                mAllowedBranchTransition,
                                 mApplySnapshot,
+                                mWipeAfterApplySnapshot,
+                                mNewIncrementalFlow,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
@@ -662,7 +686,19 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mApplySnapshot = applySnapshot;
     }
 
+    public void setWipeAfterApplySnapshot(boolean wipeAfterApplySnapshot) {
+        mWipeAfterApplySnapshot = wipeAfterApplySnapshot;
+    }
+
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
         mAllowUnzippedBaseline = allowUnzipBaseline;
+    }
+
+    public void setIgnoreHostOptions(boolean ignoreHostOptions) {
+        mIgnoreHostOptions = ignoreHostOptions;
+    }
+
+    public void addBranchTransitionInIncremental(String origin, String destination) {
+        mAllowedBranchTransition.put(origin, destination);
     }
 }

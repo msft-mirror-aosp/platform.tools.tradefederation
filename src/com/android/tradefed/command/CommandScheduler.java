@@ -17,7 +17,6 @@
 package com.android.tradefed.command;
 
 import com.android.ddmlib.DdmPreferences;
-import com.android.ddmlib.Log;
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.BuildRetrievalError;
@@ -69,6 +68,7 @@ import com.android.tradefed.invoker.tracing.ActiveTrace;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.ILogRegistry.EventType;
+import com.android.tradefed.log.Log;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ConsoleResultReporter;
@@ -633,30 +633,6 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                                 .getInvocationData()
                                 .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME));
             }
-            // Set experimental flags
-            if (config.getCommandOptions().isExperimentEnabled()) {
-                for (Map.Entry<String, String> entry :
-                        config.getCommandOptions().getExperimentalFlags().entrySet()) {
-                    try {
-                        String optionName = entry.getKey();
-                        String optionValue = entry.getValue();
-                        // Support map experiments, where optionValue is a key=value pair
-                        int equalsIndex = optionValue.indexOf('=');
-                        if (equalsIndex != -1) {
-                            String mapKey = optionValue.substring(0, equalsIndex);
-                            String mapValue = optionValue.substring(equalsIndex + 1);
-                            config.injectOptionValue(optionName, mapKey, mapValue);
-                        } else {
-                            config.injectOptionValue(optionName, optionValue);
-                        }
-                        mInvocationContext.addInvocationAttribute(
-                                "experiment:" + optionName, optionValue);
-                    } catch (ConfigurationException e) {
-                        CLog.e("Configuration Exception caught while setting experimental flags.");
-                        CLog.e(e);
-                    }
-                }
-            }
             mStartTime = System.currentTimeMillis();
             ITestInvocation instance = getInvocation();
             instance.setClearcutClient(mClient);
@@ -679,6 +655,33 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                         && !config.getCommandOptions().getInvocationData().isEmpty()) {
                     mInvocationContext.addInvocationAttributes(
                             config.getCommandOptions().getInvocationData());
+                }
+                // Set experimental flags
+                if (config.getCommandOptions().isExperimentEnabled()
+                        && !skipExperiment(config, mInvocationContext)) {
+                    for (Map.Entry<String, String> entry :
+                            config.getCommandOptions().getExperimentalFlags().entrySet()) {
+                        try {
+                            String optionName = entry.getKey();
+                            String optionValue = entry.getValue();
+                            // Support map experiments, where optionValue is a key=value pair
+                            int equalsIndex = optionValue.indexOf('=');
+                            if (equalsIndex != -1) {
+                                String mapKey = optionValue.substring(0, equalsIndex);
+                                String mapValue = optionValue.substring(equalsIndex + 1);
+                                config.injectOptionValue(optionName, mapKey, mapValue);
+                            } else {
+                                config.injectOptionValue(optionName, optionValue);
+                            }
+                            mInvocationContext.addInvocationAttribute(
+                                    "experiment:" + optionName, optionValue);
+                        } catch (ConfigurationException e) {
+                            CLog.e(
+                                    "Configuration Exception caught while setting experimental"
+                                            + " flags.");
+                            CLog.e(e);
+                        }
+                    }
                 }
                 mCmd.commandStarted();
                 long invocTimeout = config.getCommandOptions().getInvocationTimeout();
@@ -979,6 +982,12 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
                     }
                 }
             }
+        }
+
+        private boolean skipExperiment(IConfiguration config, IInvocationContext context) {
+            // skip experiment for TRYBOT runs
+            return config.getCommandOptions().skipTrybotExperiment()
+                    && "TRYBOT".equals(context.getAttribute("trigger"));
         }
     }
 
@@ -2251,9 +2260,9 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
      *
      * <p>Exposed so unit tests can mock.
      */
-    @SuppressWarnings("deprecation")
     protected void initLogging() {
-        DdmPreferences.setLogLevel(LogLevel.VERBOSE.getStringValue());
+        // Set ddmlib logging high so it doesn't print by default as we are migrating out of it.
+        DdmPreferences.setLogLevel(LogLevel.WARN.getStringValue());
         Log.setLogOutput(LogRegistry.getLogRegistry());
     }
 
@@ -2269,7 +2278,8 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
     /** log an event to the registry history logger. */
     @VisibleForTesting
     void logEvent(EventType event, Map<String, String> args) {
-        LogRegistry.getLogRegistry().logEvent(LogLevel.DEBUG, event, args);
+        LogRegistry.getLogRegistry()
+                .logEvent(com.android.tradefed.log.Log.LogLevel.DEBUG, event, args);
     }
 
     /** {@inheritDoc} */

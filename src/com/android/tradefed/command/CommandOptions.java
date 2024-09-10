@@ -258,6 +258,11 @@ public class CommandOptions implements ICommandOptions {
             description = "Map of experimental flags that can be used for feature gating projects.")
     private Map<String, String> mExperimentalFlags = new LinkedHashMap<>();
 
+    @Option(
+            name = "skip-trybot-experiment",
+            description = "Whether to skip experiments for TRYBOT runs.")
+    private boolean mSkipTrybotExperiment = true;
+
     @Deprecated
     @Option(
         name = "logcat-on-failure",
@@ -340,6 +345,25 @@ public class CommandOptions implements ICommandOptions {
                     "Whenever the java execution is forked to another subprocess, use this jdk"
                             + " folder instead of current one.")
     private File mJdkFolder;
+
+    @Option(
+            name = "remote-cache-instance-name",
+            description =
+                    "The name of the instance used to handle remote caching. Set this option to"
+                        + " enable caching in the test runners that support caching. The instance"
+                        + " name should be in this format:"
+                        + " projects/[PROJECT_ID]/instances/[INSTANCE_ID].")
+    private String mRemoteCacheInstanceName = null;
+
+    @Option(
+            name = "upload-cached-module-results",
+            description = "Whether or not to upload the results of a module to the cache")
+    private boolean mUploadCachedResults = false;
+
+    @Option(
+            name = "report-cache-results",
+            description = "Actually enable the reporting of caching status.")
+    private boolean mEnableModuleCachingResults = false;
 
     /**
      * Set the help mode for the config.
@@ -648,6 +672,12 @@ public class CommandOptions implements ICommandOptions {
 
     /** {@inheritDoc} */
     @Override
+    public boolean skipTrybotExperiment() {
+        return mSkipTrybotExperiment;
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public boolean captureScreenshotOnFailure() {
         return mScreenshotOnFailure;
     }
@@ -846,5 +876,23 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public void setShouldUseEvenModuleSharding(boolean useEvenModuleSharding) {
         mEvenModuleSharding = useEvenModuleSharding;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getRemoteCacheInstanceName() {
+        return mRemoteCacheInstanceName;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUploadCacheResults() {
+        return mUploadCachedResults;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean reportCacheResults() {
+        return mEnableModuleCachingResults;
     }
 }

@@ -30,7 +30,12 @@ import java.security.GeneralSecurityException;
 import java.util.Collection;
 
 /**
- * Base class for Gcs operation like download and upload. {@link GCSFileDownloader} and {@link
+ * Obsoleted! Use com.android.tradefed.util.gcs.GCSCommon instead.
+ *
+ * <p>This class is kept for backwards compatibility, so tradefed prebuilt can be used to build
+ * tests on older branches.
+ *
+ * <p>Base class for Gcs operation like download and upload. {@link GCSFileDownloader} and {@link
  * GCSFileUploader}.
  */
 public abstract class GCSCommon {

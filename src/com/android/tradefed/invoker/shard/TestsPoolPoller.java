@@ -16,7 +16,6 @@
 package com.android.tradefed.invoker.shard;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
@@ -36,9 +35,12 @@ import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.shard.token.ITokenRequest;
 import com.android.tradefed.log.ILogRegistry;
 import com.android.tradefed.log.ILogRegistry.EventType;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.skipped.SkipContext;
+import com.android.tradefed.result.skipped.SkipFeature;
 import com.android.tradefed.suite.checker.ISystemStatusChecker;
 import com.android.tradefed.suite.checker.ISystemStatusCheckerReceiver;
 import com.android.tradefed.testtype.IBuildReceiver;
@@ -115,6 +117,7 @@ public final class TestsPoolPoller
                 }
                 listenerWithCollectors = collector.init(info.getContext(), listenerWithCollectors);
             }
+            SkipContext skipContext = SkipFeature.getSkipContext();
             while (true) {
                 IRemoteTest test = poll();
                 if (test == null) {
@@ -138,6 +141,7 @@ public final class TestsPoolPoller
                 } else if (test instanceof BaseTestSuite) {
                     CLog.d("Applying global filters to BaseTestSuite");
                     mConfig.getGlobalFilters().applyFiltersToTest((BaseTestSuite) test);
+                    ((BaseTestSuite) test).setSkipContext(skipContext);
                 }
                 IConfiguration validationConfig = new Configuration("validation", "validation");
                 try {

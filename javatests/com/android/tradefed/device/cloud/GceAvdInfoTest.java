@@ -21,6 +21,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.tradefed.config.OptionSetter;
+import com.android.tradefed.device.TestDeviceOptions;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.result.LogDataType;
@@ -31,6 +33,7 @@ import com.android.tradefed.util.CommandStatus;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -44,6 +47,14 @@ import java.util.Map;
 /** Unit tests for {@link GceAvdInfo} */
 @RunWith(JUnit4.class)
 public class GceAvdInfoTest {
+
+    private TestDeviceOptions mOptions;
+
+    @Before
+    public void setUp() {
+        mOptions = new TestDeviceOptions();
+        mOptions.setRemoteAdbPort(1234);
+    }
 
     @Test
     public void testValidGceJsonParsing() throws Exception {
@@ -482,14 +493,14 @@ public class GceAvdInfoTest {
     @Test
     public void testOxygenClientSucceedResponse() {
         String output =
-                "debug info lease result: session_id:\"6a6a744e-0653-4926-b7b8-535d121a2fc9\"\n"
-                    + " server_url:\"10.0.80.227\"\n"
-                    + " ports:{type:test value:12345}\n"
-                    + " random_key:\"this-is-12345678\"\n"
-                    + " leased_device_spec:{type:TESTTYPE build_artifacts:{build_id:\"P1234567\""
-                    + " build_target:\"target\" build_branch:\"testBranch\"}}"
-                    + " oxygen_version:\"v20220509-0008-rc01-cl447382102\"  "
-                    + " debug_info:{reserved_cores:1 region:\"test-region\" environment:\"test\"}";
+                "debug info lease result: session_id: \"6a6a744e-0653-4926-b7b8-535d121a2fc9\"\n"
+                    + " server_url: \"10.0.80.227\"\n"
+                    + " ports: {type: test value:12345}\n"
+                    + " random_key: \"this-is-12345678\"\n"
+                    + " leased_device_spec: {type:TESTTYPE build_artifacts:{build_id:\"P1234567\""
+                    + " build_target: \"target\" build_branch:\"testBranch\"}} oxygen_version:"
+                    + " \"v20220509-0008-rc01-cl447382102\"   debug_info: {reserved_cores:1"
+                    + " region:\"test-region\" environment:\"test\"}";
         CommandResult res = Mockito.mock(CommandResult.class);
         Mockito.doAnswer(
                         new Answer<Object>() {
@@ -519,7 +530,8 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStderr();
         try {
-            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234).get(0);
+            GceAvdInfo gceAvdInfo =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions).get(0);
             assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.SUCCESS);
             assertEquals(gceAvdInfo.instanceName(), "6a6a744e-0653-4926-b7b8-535d121a2fc9");
             assertEquals(gceAvdInfo.hostAndPort().getHost(), "10.0.80.227");
@@ -533,29 +545,29 @@ public class GceAvdInfoTest {
     public void testOxygenClientLeaseMultiDevicesSucceedResponse() {
         String output =
                 "I0516 20:50:21.513705   21141 oxygen_proxy_cf_client.go:102] "
-                        + "lease_infos:{session_id:\"17c788fa-be05-45e9-a8df-6e02f387d4a4\"  "
-                        + "server_url:\"10.120.166.14\"  ports:{type:WATERFALL  value:26908}  "
-                        + "ports:{type:WATERFALL_REVERSE_PORT_FORWARDER  value:24885}  "
-                        + "leased_device_spec:{virtualization_type:CUTTLEFISH  "
-                        + "build_artifacts:{build_id:\"8552002\"  "
-                        + "build_target:\"cf_x86_64_phone-userdebug\"  "
-                        + "build_branch:\"git_master\"  "
-                        + "cuttlefish_build_artifacts:{build_id:\"8552002\"  "
-                        + "build_target:\"cf_x86_64_phone-userdebug\"  image_type:DEVICE_IMAGE}}}"
-                        + "  debug_info:{reserved_cores:5  region:\"us-east4\"  "
-                        + "environment:\"prod\"  oxygen_version:\"v20220509-0008-rc01-cl447382102"
-                        + "\"  prewarmed:false}}  lease_infos:{session_id:\"17c788fa-be05-45e9"
-                        + "-a8df-6e02f387d4a4\"  server_url:\"10.120.166.14\"  "
-                        + "ports:{type:WATERFALL  value:16590}  "
-                        + "ports:{type:WATERFALL_REVERSE_PORT_FORWARDER  value:26010}  "
-                        + "leased_device_spec:{virtualization_type:CUTTLEFISH  "
-                        + "build_artifacts:{build_id:\"8558504\"  "
-                        + "build_target:\"cf_x86_64_phone-userdebug\"  "
-                        + "build_branch:\"git_master\"  "
-                        + "cuttlefish_build_artifacts:{build_id:\"8558504\"  "
-                        + "build_target:\"cf_x86_64_phone-userdebug\"  image_type:DEVICE_IMAGE}}}"
+                        + "lease_infos:{session_id: \"17c788fa-be05-45e9-a8df-6e02f387d4a4\"  "
+                        + "server_url: \"10.120.166.14\"  ports: {type:WATERFALL  value:26908}  "
+                        + "ports: {type: WATERFALL_REVERSE_PORT_FORWARDER  value:24885}  "
+                        + "leased_device_spec: {virtualization_type:CUTTLEFISH  "
+                        + "build_artifacts: {build_id:\"8552002\"  "
+                        + "build_target: \"cf_x86_64_phone-userdebug\"  "
+                        + "build_branch: \"git_master\"  "
+                        + "cuttlefish_build_artifacts: {build_id:\"8552002\"  "
+                        + "build_target: \"cf_x86_64_phone-userdebug\"  image_type:DEVICE_IMAGE}}}"
+                        + "  debug_info:{reserved_cores:5  region: \"us-east4\"  "
+                        + "environment:\"prod\"  oxygen_version: \"v20220509-0008-rc01-cl447382102"
+                        + "\"  prewarmed:false}}  lease_infos:{session_id: \"17c788fa-be05-45e9"
+                        + "-a8df-6e02f387d4a4\"  server_url: \"10.120.166.14\"  "
+                        + "ports: {type:WATERFALL  value:16590}  "
+                        + "ports: {type:WATERFALL_REVERSE_PORT_FORWARDER  value:26010}  "
+                        + "leased_device_spec: {virtualization_type:CUTTLEFISH  "
+                        + "build_artifacts: {build_id:\"8558504\"  "
+                        + "build_target: \"cf_x86_64_phone-userdebug\"  "
+                        + "build_branch: \"git_master\"  "
+                        + "cuttlefish_build_artifacts: {build_id:\"8558504\"  "
+                        + "build_target: \"cf_x86_64_phone-userdebug\"  image_type:DEVICE_IMAGE}}}"
                         + "  index:1  debug_info:{reserved_cores:5  region:\"us-east4\"  "
-                        + "environment:\"prod\"  oxygen_version:\"v20220509-0008-rc01-cl447382102"
+                        + "environment:\"prod\"  oxygen_version: \"v20220509-0008-rc01-cl447382102"
                         + "\"  prewarmed:false}}  debug_info:{reserved_cores:5  "
                         + "region:\"us-east4\"  environment:\"prod\"  "
                         + "oxygen_version:\"v20220509-0008-rc01-cl447382102\"  prewarmed:false}";
@@ -589,10 +601,10 @@ public class GceAvdInfoTest {
                 .getStderr();
         try {
             List<GceAvdInfo> gceAvdInfoList =
-                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions);
             for (int i = 0; i < 2; i++) {
                 GceAvdInfo gceAvdInfo =
-                        GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234).get(i);
+                        GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions).get(i);
                 assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.SUCCESS);
                 assertEquals(gceAvdInfo.instanceName(), "17c788fa-be05-45e9-a8df-6e02f387d4a4");
                 assertEquals(gceAvdInfo.hostAndPort().getHost(), "10.120.166.14");
@@ -640,7 +652,7 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStderr();
         try {
-            GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions);
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             assertEquals(
@@ -667,7 +679,8 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStatus();
         try {
-            GceAvdInfo gceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234).get(0);
+            GceAvdInfo gceAvdInfo =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions).get(0);
             assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.FAIL);
             assertEquals(
                     gceAvdInfo.getErrorType(), InfraErrorIdentifier.OXYGEN_CLIENT_BINARY_TIMEOUT);
@@ -715,7 +728,7 @@ public class GceAvdInfoTest {
                 .when(res)
                 .getStderr();
         try {
-            GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, 1234);
+            GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions);
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             assertEquals("Oxygen client failed to lease a device", expected.getMessage());
@@ -769,6 +782,149 @@ public class GceAvdInfoTest {
                 GceAvdInfo.refineOxygenErrorType(
                         "Lease aborted due to launcher failure: Timed out waiting for virtual"
                                 + " device to start"));
+    }
+
+    /** Test handling succeeded Oxygenation device lease request. */
+    @Test
+    public void testOxygenationClientSucceedResponse() throws Exception {
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        String output =
+                "INFO: session_id: \"f549fcec-5246-4ef1-ba57-392af67bc2e9\""
+                        + "\nserver_url: \"oxy-gto2.us-central1-b.c.omnilab-oxygen-01.internal\""
+                        + "\ndebug_info {"
+                        + "\n  region: \"region\""
+                        + "\n  environment: \"env\""
+                        + "\n  cluster_name: \"somecluster\""
+                        + "\n  oxygen_version:\"someversion\""
+                        + "\n}"
+                        + "\ndevice_info {"
+                        + "\n  omnilab_device_info {"
+                        + "\n    device_id: \"0.0.0.0:6520\""
+                        + "\n  }"
+                        + "\n}";
+        CommandResult res = Mockito.mock(CommandResult.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return CommandStatus.SUCCESS;
+                            }
+                        })
+                .when(res)
+                .getStatus();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return "";
+                            }
+                        })
+                .when(res)
+                .getStdout();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return output;
+                            }
+                        })
+                .when(res)
+                .getStderr();
+        try {
+            GceAvdInfo gceAvdInfo =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions).get(0);
+            assertEquals(gceAvdInfo.getStatus(), GceAvdInfo.GceStatus.SUCCESS);
+            assertEquals(gceAvdInfo.instanceName(), "f549fcec-5246-4ef1-ba57-392af67bc2e9");
+            assertEquals(
+                    gceAvdInfo.hostAndPort().getHost(),
+                    "oxy-gto2.us-central1-b.c.omnilab-oxygen-01.internal");
+            assertEquals(gceAvdInfo.getOxygenationDeviceId(), "0.0.0.0:6520");
+        } catch (TargetSetupError e) {
+            e.printStackTrace();
+        }
+    }
+
+    /** Test handling succeeded Oxygenation device lease request. */
+    @Test
+    public void testOxygenationClientLeaseMultiDevicesSucceedResponse() throws Exception {
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        String output =
+                "INFO: session_id: \"f549fcec-5246-4ef1-ba57-392af67bc2e9\""
+                        + " server_url: \"oxy-gto2.us-central1-b.c.omnilab-oxygen-01.internal\""
+                        + "  debug_info {"
+                        + "   region: \"region\""
+                        + "   environment: \"env\""
+                        + "   cluster_name: \"somecluster\""
+                        + "   oxygen_version:\"someversion\""
+                        + " }"
+                        + " device_info {"
+                        + "   omnilab_device_info {"
+                        + "     device_id: \"0.0.0.0:6520\""
+                        + "   }"
+                        + " }"
+                        + "session_id: \"f549fcec-5246-4ef1-ba57-392af67bc2e9-1\""
+                        + " server_url: \"oxy-gto2.us-central1-b.c.omnilab-oxygen-02.internal\""
+                        + "  debug_info {"
+                        + "   region: \"region\""
+                        + "   environment: \"env\""
+                        + "   cluster_name: \"somecluster\""
+                        + "   oxygen_version:\"someversion\""
+                        + " }"
+                        + " device_info {"
+                        + "   omnilab_device_info {"
+                        + "     device_id: \"0.0.0.0:6521\""
+                        + "   }"
+                        + " }";
+        CommandResult res = Mockito.mock(CommandResult.class);
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return CommandStatus.SUCCESS;
+                            }
+                        })
+                .when(res)
+                .getStatus();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return "";
+                            }
+                        })
+                .when(res)
+                .getStdout();
+        Mockito.doAnswer(
+                        new Answer<Object>() {
+                            @Override
+                            public Object answer(InvocationOnMock mock) throws Throwable {
+                                return output;
+                            }
+                        })
+                .when(res)
+                .getStderr();
+        try {
+            List<GceAvdInfo> gceAvdInfos =
+                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mOptions);
+            assertEquals(gceAvdInfos.get(0).getStatus(), GceAvdInfo.GceStatus.SUCCESS);
+            assertEquals(gceAvdInfos.get(0).instanceName(), "f549fcec-5246-4ef1-ba57-392af67bc2e9");
+            assertEquals(
+                    gceAvdInfos.get(0).hostAndPort().getHost(),
+                    "oxy-gto2.us-central1-b.c.omnilab-oxygen-01.internal");
+            assertEquals(gceAvdInfos.get(0).getOxygenationDeviceId(), "0.0.0.0:6520");
+
+            assertEquals(gceAvdInfos.get(1).getStatus(), GceAvdInfo.GceStatus.SUCCESS);
+            assertEquals(
+                    gceAvdInfos.get(1).instanceName(), "f549fcec-5246-4ef1-ba57-392af67bc2e9-1");
+            assertEquals(
+                    gceAvdInfos.get(1).hostAndPort().getHost(),
+                    "oxy-gto2.us-central1-b.c.omnilab-oxygen-02.internal");
+            assertEquals(gceAvdInfos.get(1).getOxygenationDeviceId(), "0.0.0.0:6521");
+        } catch (TargetSetupError e) {
+            e.printStackTrace();
+        }
     }
 }
 

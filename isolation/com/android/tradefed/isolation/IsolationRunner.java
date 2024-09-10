@@ -77,7 +77,7 @@ public final class IsolationRunner {
                 RunnerReply reply;
                 switch (message.getCommand()) {
                     case RUNNER_OP_STOP:
-                        System.out.println("Received Stop Message");
+                        System.out.println("INFO: IsolationRunner: Received Stop Message");
                         reply =
                                 RunnerReply.newBuilder()
                                         .setRunnerStatus(RunnerStatus.RUNNER_STATUS_FINISHED_OK)
@@ -98,7 +98,7 @@ public final class IsolationRunner {
                         output.flush();
                         break;
                     default:
-                        System.out.println("Received unrecognized message");
+                        System.out.println("INFO: IsolationRunner: Received unrecognized message");
                 }
             }
         } finally {
@@ -121,14 +121,14 @@ public final class IsolationRunner {
     }
 
     private void runTests(OutputStream output, TestParameters params) throws IOException {
-        System.out.println("Filters: ");
+        System.out.println("INFO: IsolationRunner: Filters: ");
         System.out.println(params.getFilter());
 
         List<Class<?>> klasses = this.getClasses(params);
 
         try {
             for (Class<?> klass : klasses) {
-                System.out.println("Starting class: " + klass);
+                System.out.println("INFO: IsolationRunner: Starting class: " + klass);
                 IsolationResultForwarder list = new IsolationResultForwarder(output);
                 JUnitCore runnerCore = new JUnitCore();
                 runnerCore.addListener(list);
@@ -146,13 +146,21 @@ public final class IsolationRunner {
                     if (!params.hasFilter() && isFilterError) {
                         System.err.println(
                                 String.format(
-                                        "Found ErrorRunner when trying to run class: %s", klass));
+                                        "ERROR: IsolationRunner: Found ErrorRunner when trying to"
+                                                + " run class: %s",
+                                        klass));
                         runnerCore.run(req.getRunner());
+                    } else {
+                        System.err.println(
+                                String.format(
+                                        "ERROR: IsolationRunner: Encountered ErrorReportingRunner"
+                                                + " when trying to run: %s",
+                                        klass));
                     }
                 } else if (req.getRunner() instanceof IgnoredClassRunner) {
                     // Do nothing since class was ignored
                 } else {
-                    System.out.println("Executing class: " + klass);
+                    System.out.println("INFO: IsolationRunner: Executing class: " + klass);
                     Runner checkRunner = req.getRunner();
 
                     if (params.getDryRun()) {
@@ -184,7 +192,7 @@ public final class IsolationRunner {
     }
 
     private List<Class<?>> getClasses(TestParameters params) {
-        System.out.println("Excluded paths:");
+        System.out.println("INFO: IsolationRunner: Excluded paths:");
         params.getExcludePathsList().stream().forEach(path -> System.out.println(path));
         return HostUtils.getJUnitClasses(
                 new HashSet<>(params.getTestClassesList()),

@@ -219,4 +219,9 @@ public interface IDeviceStateMonitor {
 
     /** Gets the fastboot mode serial number. */
     public String getFastbootSerialNumber();
+
+    /** Attach a final state to abort waitForDeviceState if reached. */
+    public default void attachFinalState(TestDeviceState finalState) {
+        // Empty by default
+    }
 }

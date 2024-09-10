@@ -22,8 +22,10 @@ import build.bazel.remote.execution.v2.Command.EnvironmentVariable;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Platform;
 import build.bazel.remote.execution.v2.Platform.Property;
+
 import com.google.auto.value.AutoValue;
 import com.google.protobuf.Duration;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -37,6 +39,9 @@ import java.util.stream.Collectors;
 @AutoValue
 public abstract class ExecutableAction {
 
+    // A silo key used to invalid stale cache.
+    private static final String SILO_CACHE_KEY = "0.0";
+
     /** Builds an {@link ExecutableAction}. */
     public static ExecutableAction create(
             File input, Iterable<String> args, Map<String, String> envVariables, long timeout)
@@ -49,7 +54,18 @@ public abstract class ExecutableAction {
                                 Platform.newBuilder()
                                         .addProperties(
                                                 Property.newBuilder()
-                                                        .setName(System.getProperty("os.name"))
+                                                        .setName(
+                                                                String.format(
+                                                                        "%s(%s)",
+                                                                        System.getProperty(
+                                                                                "os.name"),
+                                                                        System.getProperty(
+                                                                                "os.version")))
+                                                        .build())
+                                        .addProperties(
+                                                Property.newBuilder()
+                                                        .setName("cache-silo-key")
+                                                        .setValue(SILO_CACHE_KEY)
                                                         .build())
                                         .build())
                         .addAllEnvironmentVariables(

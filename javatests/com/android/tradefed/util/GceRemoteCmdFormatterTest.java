@@ -13,11 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.tradefed.device.cloud;
+package com.android.tradefed.util;
 
 import static org.junit.Assert.*;
 
-import com.android.tradefed.device.cloud.GceRemoteCmdFormatter.ScpMode;
+import com.android.tradefed.util.GceRemoteCmdFormatter.ScpMode;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -75,15 +75,5 @@ public class GceRemoteCmdFormatterTest {
         assertEquals("/tmp/key", res.get(10));
         assertEquals("root@127.0.0.1:/sdcard/test", res.get(11));
         assertEquals("/tmp/here", res.get(12));
-    }
-
-    @Test
-    public void testFormatSshOverLHP() {
-        // TODO(easoncylee): Flesh out this section when it's ready.
-    }
-
-    @Test
-    public void testFormatScpOverLHP() {
-        // TODO(easoncylee): Flesh out this section when it's ready.
     }
 }

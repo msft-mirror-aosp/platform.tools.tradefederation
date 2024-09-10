@@ -39,9 +39,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
-import java.util.List;
-import java.util.HashMap;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -98,17 +98,21 @@ public class ExecutableTargetTestTest {
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
         TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
@@ -192,19 +196,23 @@ public class ExecutableTargetTestTest {
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
         TestDescription testDescription = new TestDescription(testName1, testName1);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1)).testFailed(testDescription, ERROR_MESSAGE);
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         TestDescription testDescription2 = new TestDescription(testName2, testName2);
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1)).testFailed(testDescription2, ERROR_MESSAGE);
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
@@ -243,17 +251,21 @@ public class ExecutableTargetTestTest {
         mExecutableTargetTest.run(mTestInfo, mListener);
         // testName1 should NOT run.
         Mockito.verify(mListener, Mockito.never()).testRunStarted(eq(testName1), eq(1));
-        Mockito.verify(mListener, Mockito.never()).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never())
                 .testEnded(
                         Mockito.eq(testDescription),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName2), eq(1));
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
@@ -261,10 +273,12 @@ public class ExecutableTargetTestTest {
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
         // testName3 should NOT run.
         Mockito.verify(mListener, Mockito.never()).testRunStarted(eq(testName3), eq(1));
-        Mockito.verify(mListener, Mockito.never()).testStarted(Mockito.eq(testDescription3));
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription3), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never())
                 .testEnded(
                         Mockito.eq(testDescription3),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
     }
 
@@ -298,17 +312,21 @@ public class ExecutableTargetTestTest {
         mExecutableTargetTest.run(mTestInfo, mListener);
         // testName1 should NOT run.
         Mockito.verify(mListener, Mockito.never()).testRunStarted(eq(testName1), eq(1));
-        Mockito.verify(mListener, Mockito.never()).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never())
                 .testEnded(
                         Mockito.eq(testDescription),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName2), eq(1));
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
@@ -316,10 +334,12 @@ public class ExecutableTargetTestTest {
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
         // testName3 should NOT run.
         Mockito.verify(mListener, Mockito.never()).testRunStarted(eq(testName3), eq(1));
-        Mockito.verify(mListener, Mockito.never()).testStarted(Mockito.eq(testDescription3));
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription3), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never())
                 .testEnded(
                         Mockito.eq(testDescription3),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
     }
 
@@ -353,17 +373,21 @@ public class ExecutableTargetTestTest {
         mExecutableTargetTest.run(mTestInfo, mListener);
         // testName1 should NOT run.
         Mockito.verify(mListener, Mockito.never()).testRunStarted(eq(testName1), eq(1));
-        Mockito.verify(mListener, Mockito.never()).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never())
                 .testEnded(
                         Mockito.eq(testDescription),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName2), eq(1));
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
@@ -371,10 +395,12 @@ public class ExecutableTargetTestTest {
                         Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
         // testName3 should NOT run.
         Mockito.verify(mListener, Mockito.never()).testRunStarted(eq(testName3), eq(1));
-        Mockito.verify(mListener, Mockito.never()).testStarted(Mockito.eq(testDescription3));
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription3), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.never())
                 .testEnded(
                         Mockito.eq(testDescription3),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
     }
 
@@ -477,10 +503,12 @@ public class ExecutableTargetTestTest {
         // run cmd1 test
         TestDescription testDescription = new TestDescription(testName1, testName1);
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(eq(testName1), eq(1));
-        Mockito.verify(mListener, Mockito.times(1)).testStarted(Mockito.eq(testDescription));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription),
+                        Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
     }
 }

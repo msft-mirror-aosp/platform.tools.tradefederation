@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipFile;
+
 /**
  * A helper class for file related operations
  */
@@ -525,31 +526,10 @@ public class FileUtil {
      * @param destDir the destination folder
      * @param ignoreExistingFile If True and the file being linked already exists, skip the
      *     exception.
-     * @throws IOException
-     */
-    public static void recursiveHardlink(File sourceDir, File destDir, boolean ignoreExistingFile)
-            throws IOException {
-        recursiveHardlink(sourceDir, destDir, ignoreExistingFile, new HashSet<>());
-    }
-
-    /**
-     * Recursively hardlink folder contents.
-     *
-     * <p>Only supports copying of files and directories - symlinks are not copied. If the
-     * destination directory does not exist, it will be created.
-     *
-     * @param sourceDir the folder that contains the files to copy
-     * @param destDir the destination folder
-     * @param ignoreExistingFile If True and the file being linked already exists, skip the
-     *     exception.
      * @param copyInsteadofHardlink Set of files that needs to be copied instead of linked.
      * @throws IOException
      */
-    public static void recursiveHardlink(
-            File sourceDir,
-            File destDir,
-            boolean ignoreExistingFile,
-            Set<String> copyInsteadofHardlink)
+    public static void recursiveHardlink(File sourceDir, File destDir, boolean ignoreExistingFile)
             throws IOException {
         if (!destDir.isDirectory() && !destDir.mkdir()) {
             throw new IOException(String.format("Could not create directory %s",
@@ -560,11 +540,7 @@ public class FileUtil {
             if (childFile.isDirectory()) {
                 recursiveHardlink(childFile, destChild, ignoreExistingFile);
             } else if (childFile.isFile()) {
-                if (copyInsteadofHardlink.contains(childFile.getName())) {
-                    FileUtil.copyFile(childFile, destChild);
-                } else {
-                    hardlinkFile(childFile, destChild, ignoreExistingFile);
-                }
+                hardlinkFile(childFile, destChild, ignoreExistingFile);
             }
         }
     }

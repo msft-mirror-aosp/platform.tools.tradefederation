@@ -35,7 +35,6 @@ import com.android.tradefed.device.cloud.GceAvdInfo.GceStatus;
 import com.android.tradefed.device.cloud.GceLHPTunnelMonitor;
 import com.android.tradefed.device.cloud.GceManager;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitor;
-import com.android.tradefed.device.cloud.HostOrchestratorUtil;
 import com.android.tradefed.device.cloud.OxygenUtil;
 import com.android.tradefed.device.cloud.RemoteFileUtil;
 import com.android.tradefed.device.cloud.VmRemoteDevice;
@@ -55,6 +54,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.avd.HostOrchestratorUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -74,6 +74,7 @@ public class AdbSshConnection extends AdbTcpConnection {
     private GceManager mGceHandler = null;
     private AbstractTunnelMonitor mGceTunnelMonitor;
     private DeviceNotAvailableException mTunnelInitFailed = null;
+    private HostOrchestratorUtil mHOUtil = null;
 
     private boolean mIsRemote = false;
     private String mKnownIp = null;
@@ -279,20 +280,27 @@ public class AdbSshConnection extends AdbTcpConnection {
             if (mGceAvd != null) {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
-                } else if (useCvdCF()) {
-                    HostOrchestratorUtil hOUtil = new HostOrchestratorUtil(getDevice(), mGceAvd);
-                    File cvdLogsDir = hOUtil.pullCvdHostLogs();
+                } else if (getDevice().getOptions().useCvdCF()) {
+                    mHOUtil = createHostOrchestratorUtil(mGceAvd);
+                    File cvdLogsDir = mHOUtil.pullCvdHostLogs();
                     if (cvdLogsDir != null) {
                         GceManager.logDirectory(
                                 cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
                         FileUtil.recursiveDelete(cvdLogsDir);
                     } else {
-                        CLog.i("CVD Logs is null, skip logging cvd logs.");
+                        CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
                     }
-                    hOUtil.collectLogByCommand(
-                            getLogger(), "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    hOUtil.collectLogByCommand(
-                            getLogger(), "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                    File tempFile =
+                            mHOUtil.collectLogByCommand(
+                                    "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                    GceManager.logAndDeleteFile(tempFile, "host_kernel", getLogger());
+                    tempFile =
+                            mHOUtil.collectLogByCommand(
+                                    "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                    GceManager.logAndDeleteFile(tempFile, "host_orchestrator", getLogger());
+                    tempFile = mHOUtil.getTunnelLog();
+                    GceManager.logAndDeleteFile(
+                            tempFile, "host_orchestrator_tunnel_log", getLogger());
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -401,8 +409,13 @@ public class AdbSshConnection extends AdbTcpConnection {
                         "Failed to start Gce with attempt: %s out of %s. With Exception: %s",
                         attempt + 1, getDevice().getOptions().getGceMaxAttempt(), tse);
                 exception = tse;
-
-                if (getDevice().getOptions().useOxygen()) {
+                // TODO(b/353826394): Refactor when avd_util wrapping is ready.
+                if (getDevice().getOptions().useCvdCF()) {
+                    // TODO(b/353649277): Flesh out this section when it's ready.
+                    // Basically, the rough processes to pull CF host logs are
+                    // 1. establish the CURL connection via LHP or SSH.
+                    // 2. Compose CURL command and execute it to pull CF logs.
+                } else if (getDevice().getOptions().useOxygen()) {
                     OxygenUtil util = new OxygenUtil();
                     util.downloadLaunchFailureLogs(tse, getLogger());
                 }
@@ -429,6 +442,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
+        mHOUtil = createHostOrchestratorUtil(mGceAvd);
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
@@ -438,7 +452,14 @@ public class AdbSshConnection extends AdbTcpConnection {
             GceAvdInfo gceAvdInfo,
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
-            mGceTunnelMonitor = new GceLHPTunnelMonitor();
+            mGceTunnelMonitor =
+                    new GceLHPTunnelMonitor(
+                            device,
+                            buildInfo,
+                            gceAvdInfo.instanceName(),
+                            gceAvdInfo.getOxygenationDeviceId(),
+                            gceAvdInfo.hostAndPort().getHost(),
+                            deviceOptions);
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
@@ -489,6 +510,14 @@ public class AdbSshConnection extends AdbTcpConnection {
     @VisibleForTesting
     GceManager getGceHandler() {
         return mGceHandler;
+    }
+
+    /**
+     * Returns the instance of the {@link com.android.tradefed.device.cloud.HostOrchestratorUtil}.
+     */
+    @VisibleForTesting
+    HostOrchestratorUtil getHostOrchestratorUtil() {
+        return mHOUtil;
     }
 
     /** Capture a remote bugreport by ssh-ing into the device directly. */
@@ -551,8 +580,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                     getDevice().getDeviceDescriptor(),
                     DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
-        if (useCvdCF()) {
-            powerwashRes = new HostOrchestratorUtil(getDevice(), mGceAvd).powerwashGce();
+        if (getDevice().getOptions().useCvdCF()) {
+            powerwashRes = mHOUtil.powerwashGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {
@@ -642,9 +671,6 @@ public class AdbSshConnection extends AdbTcpConnection {
         }
 
         if (getDevice().getOptions().useOxygen()) {
-            if (useCvdCF() && bin.equals("cvd")) {
-                return String.format("/usr/bin/%s %s", bin, args);
-            }
             CommandResult result =
                     GceManager.remoteSshCommandExecution(
                             mGceAvd,
@@ -684,36 +710,23 @@ public class AdbSshConnection extends AdbTcpConnection {
                     DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
         }
 
-        if (useCvdCF()) {
-            snapshotRes = new HostOrchestratorUtil(getDevice(), mGceAvd).snapshotGce();
+        if (getDevice().getOptions().useCvdCF()) {
+            snapshotRes = mHOUtil.snapshotGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {
                 user = getDevice().getOptions().getInstanceUser();
             }
 
-            String snapshotCommand;
-            if (useCvdCF()) {
-                snapshotCommand =
-                        commandBuilder(
-                                "cvd",
-                                String.format(
-                                        "snapshot_take --force --auto_suspend"
-                                                + " --snapshot_path=/tmp/%s/snapshots/%s",
-                                        user, snapshotId),
-                                user,
-                                offset);
-            } else {
-                snapshotCommand =
-                        commandBuilder(
-                                "snapshot_util_cvd",
-                                String.format(
-                                        "--subcmd=snapshot_take --force --auto_suspend"
-                                                + " --snapshot_path=/tmp/%s/snapshots/%s",
-                                        user, snapshotId),
-                                user,
-                                offset);
-            }
+            String snapshotCommand =
+                    commandBuilder(
+                            "snapshot_util_cvd",
+                            String.format(
+                                    "--subcmd=snapshot_take --force --auto_suspend"
+                                            + " --snapshot_path=/tmp/%s/snapshots/%s",
+                                    user, snapshotId),
+                            user,
+                            offset);
             if (Strings.isNullOrEmpty(snapshotCommand)) {
                 throw new TargetSetupError(
                         "failed to set up snapshot command, invalid path",
@@ -755,33 +768,20 @@ public class AdbSshConnection extends AdbTcpConnection {
             throws TargetSetupError {
         stopGce(user, offset);
         CommandResult restoreRes = null;
-        if (useCvdCF()) {
-            restoreRes = new HostOrchestratorUtil(getDevice(), mGceAvd).restoreSnapshotGce();
+        if (getDevice().getOptions().useCvdCF()) {
+            restoreRes = mHOUtil.restoreSnapshotGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {
                 user = getDevice().getOptions().getInstanceUser();
             }
 
-            String restoreCommand;
-            if (useCvdCF()) {
-                restoreCommand =
-                        commandBuilder(
-                                "cvd",
-                                String.format(
-                                        "start --snapshot_path=/tmp/%s/snapshots/%s",
-                                        user, snapshotId),
-                                user,
-                                offset);
-            } else {
-                restoreCommand =
-                        commandBuilder(
-                                "launch_cvd",
-                                String.format(
-                                        "--snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
-                                user,
-                                offset);
-            }
+            String restoreCommand =
+                    commandBuilder(
+                            "launch_cvd",
+                            String.format("--snapshot_path=/tmp/%s/snapshots/%s", user, snapshotId),
+                            user,
+                            offset);
             if (restoreCommand.length() == 0) {
                 throw new TargetSetupError(
                         "failed to set up restore command, invalid path",
@@ -829,20 +829,15 @@ public class AdbSshConnection extends AdbTcpConnection {
     private void stopGce(String user, Integer offset) throws TargetSetupError {
         long startTime = System.currentTimeMillis();
         CommandResult stopRes = null;
-        if (useCvdCF()) {
-            stopRes = new HostOrchestratorUtil(getDevice(), mGceAvd).stopGce();
+        if (getDevice().getOptions().useCvdCF()) {
+            stopRes = mHOUtil.stopGce();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {
                 user = getDevice().getOptions().getInstanceUser();
             }
 
-            String stopCommand;
-            if (useCvdCF()) {
-                stopCommand = commandBuilder("cvd", "stop", user, offset);
-            } else {
-                stopCommand = commandBuilder("stop_cvd", "", user, offset);
-            }
+            String stopCommand = commandBuilder("stop_cvd", "", user, offset);
             if (stopCommand.length() == 0) {
                 throw new TargetSetupError(
                         "failed to set up stop command, invalid path",
@@ -963,12 +958,28 @@ public class AdbSshConnection extends AdbTcpConnection {
         }
     }
 
-    /** Helper to return true if the device is launched by cvd, false otherwise. */
-    private boolean useCvdCF() {
-        TestDeviceOptions options = getDevice().getOptions();
-        if (options.useOxygenationDevice() || options.getExtraOxygenArgs().containsKey("use_cvd")) {
-            return true;
+    /** Helper to create host orchestrator utility. */
+    HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+        if (mHOUtil != null) {
+            CLog.i("Host Orchestrator Util has been initialized...");
+            return mHOUtil;
         }
-        return false;
+        if (getDevice().getOptions().useCvdCF()) {
+            CLog.i("Creating host orchestrator utility...");
+            mHOUtil =
+                    new HostOrchestratorUtil(
+                            getDevice().getOptions().useOxygenationDevice(),
+                            getDevice().getOptions().getExtraOxygenArgs(),
+                            gceAvdInfo.instanceName(),
+                            gceAvdInfo.hostAndPort() != null
+                                    ? gceAvdInfo.hostAndPort().getHost()
+                                    : null,
+                            gceAvdInfo.getOxygenationDeviceId(),
+                            OxygenUtil.getTargetRegion(getDevice().getOptions()),
+                            getDevice().getOptions().getOxygenAccountingUser(),
+                            OxygenUtil.createOxygenClient(
+                                    getDevice().getOptions().getAvdDriverBinary()));
+        }
+        return mHOUtil;
     }
 }

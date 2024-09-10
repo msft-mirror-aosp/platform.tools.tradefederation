@@ -15,9 +15,12 @@
  */
 package com.android.tradefed.build.content;
 
+import build.bazel.remote.execution.v2.Digest;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Summary of the content analysis. */
@@ -30,6 +33,8 @@ public class ContentAnalysisResults {
     private long buildKeyChanges = 0;
     private long deviceImageChanges = 0;
     private Set<String> unchangedModules = new HashSet<>();
+    private Set<String> modifiedModuleNames = new HashSet<>();
+    private Map<String, Digest> imageToDigest = new LinkedHashMap<>();
 
     public ContentAnalysisResults() {}
 
@@ -53,8 +58,14 @@ public class ContentAnalysisResults {
         return this;
     }
 
-    public ContentAnalysisResults addModifiedModule() {
+    public ContentAnalysisResults addModifiedModule(String moduleBaseName) {
+        modifiedModuleNames.add(moduleBaseName);
         modifiedModules++;
+        return this;
+    }
+
+    public ContentAnalysisResults addImageDigestMapping(String imageFileName, Digest digest) {
+        imageToDigest.put(imageFileName, digest);
         return this;
     }
 
@@ -72,7 +83,7 @@ public class ContentAnalysisResults {
     public boolean hasAnyTestsChange() {
         if (modifiedFiles > 0
                 || sharedFolderChanges > 0
-                || modifiedModules > 0
+                || modifiedModuleNames.size() > 0
                 || buildKeyChanges > 0) {
             return true;
         }
@@ -85,6 +96,18 @@ public class ContentAnalysisResults {
 
     public boolean hasDeviceImageChanges() {
         return deviceImageChanges > 0;
+    }
+
+    public boolean hasSharedFolderChanges() {
+        return sharedFolderChanges > 0;
+    }
+
+    public Set<String> getUnchangedModules() {
+        return unchangedModules;
+    }
+
+    public Map<String, Digest> getImageToDigest() {
+        return imageToDigest;
     }
 
     @Override
@@ -117,8 +140,12 @@ public class ContentAnalysisResults {
             mergedResults.modifiedModules += res.modifiedModules;
             mergedResults.buildKeyChanges += res.buildKeyChanges;
             mergedResults.unchangedModules.addAll(res.unchangedModules);
+            mergedResults.modifiedModuleNames.addAll(res.modifiedModuleNames);
             mergedResults.deviceImageChanges += res.deviceImageChanges;
+            mergedResults.imageToDigest.putAll(res.imageToDigest);
         }
+        // Re-align what didn't change across analysis.
+        mergedResults.unchangedModules.removeAll(mergedResults.modifiedModuleNames);
         return mergedResults;
     }
 }
