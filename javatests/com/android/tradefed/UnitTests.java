@@ -439,6 +439,7 @@ import com.android.tradefed.util.GoogleApiClientUtilTest;
 import com.android.tradefed.util.HprofAllocSiteParserTest;
 import com.android.tradefed.util.JUnitXmlParserTest;
 import com.android.tradefed.util.JavaCodeCoverageFlusherTest;
+import com.android.tradefed.util.KernelModuleUtilsTest;
 import com.android.tradefed.util.KeyguardControllerStateTest;
 import com.android.tradefed.util.ListInstrumentationParserTest;
 import com.android.tradefed.util.LocalRunInstructionBuilderTest;
@@ -1060,6 +1061,7 @@ import org.junit.runners.Suite.SuiteClasses;
     HprofAllocSiteParserTest.class,
     JavaCodeCoverageFlusherTest.class,
     JUnitXmlParserTest.class,
+    KernelModuleUtilsTest.class,
     KeyguardControllerStateTest.class,
     LegacySubprocessResultsReporterTest.class,
     ListInstrumentationParserTest.class,
