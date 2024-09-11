@@ -112,6 +112,7 @@ public class Configuration implements IConfiguration {
     public static final Set<String> NON_MODULE_OBJECTS =
             ImmutableSet.of(
                     BUILD_PROVIDER_TYPE_NAME,
+                    CMD_OPTIONS_TYPE_NAME,
                     DEVICE_RECOVERY_TYPE_NAME,
                     LOGGER_TYPE_NAME,
                     LOG_SAVER_TYPE_NAME,

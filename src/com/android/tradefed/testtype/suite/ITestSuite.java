@@ -87,6 +87,7 @@ import com.android.tradefed.testtype.IReportNotExecuted;
 import com.android.tradefed.testtype.IRuntimeHintProvider;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestCollector;
+import com.android.tradefed.testtype.suite.SuiteResultCacheUtil.CacheResultDescriptor;
 import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
@@ -928,7 +929,7 @@ public abstract class ITestSuite
                                     .getConfigurationDescriptor()
                                     .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
-                    boolean cacheHit = false;
+                    CacheResultDescriptor cacheDescriptor = null;
                     // TODO(b/363066706): Switch to official API
                     File moduleDir = null;
                     try {
@@ -945,16 +946,24 @@ public abstract class ITestSuite
                             && moduleDir != null
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
                                     != null) {
-                        cacheHit =
+                        cacheDescriptor =
                                 SuiteResultCacheUtil.lookUpModuleResults(
                                         mMainConfiguration,
                                         module.getId(),
                                         moduleConfig,
                                         moduleDir,
                                         mSkipContext);
-                        if (!cacheHit) {
-                            moduleReporter = new ModuleProtoResultReporter(testInfo.getContext());
-                            moduleListeners.add(moduleReporter);
+                        if (!cacheDescriptor.isCacheHit()) {
+                            try {
+                                File protoResults =
+                                        FileUtil.createTempFile("module-results", ".proto");
+                                moduleReporter =
+                                        new ModuleProtoResultReporter(testInfo.getContext());
+                                moduleReporter.setOutputFile(protoResults);
+                                moduleListeners.add(moduleReporter);
+                            } catch (IOException e) {
+                                CLog.e(e);
+                            }
                         }
                     }
                     module.getModuleInvocationContext()
@@ -989,14 +998,16 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheHit
+                        } else if (cacheDescriptor != null
+                                && cacheDescriptor.isCacheHit()
                                 && mMainConfiguration.getCommandOptions().reportCacheResults()
                                 && mSkipContext.shouldUseCache()) {
                             CLog.d("Reporting cached results for module %s", module.getId());
                             // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
-                                            ModuleDefinition.MODULE_SKIPPED, "Cached results.");
+                                            ModuleDefinition.MODULE_SKIPPED,
+                                            cacheDescriptor.getDetails());
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
@@ -1020,6 +1031,7 @@ public abstract class ITestSuite
                                         mSkipContext);
                             }
                             FileUtil.deleteFile(protoResults);
+                            moduleListeners.remove(moduleReporter);
                         }
                         FileUtil.deleteFile(moduleConfig);
                         // clear out module invocation context since we are now done with module
