@@ -46,6 +46,7 @@ public class HostOrchestratorUtil {
     public static final String URL_HOST_KERNEL_LOG = "_journal/entries?_TRANSPORT=kernel";
     public static final String URL_HO_LOG =
             "_journal/entries?_SYSTEMD_UNIT=cuttlefish-host_orchestrator.service";
+    public static final String URL_OXYGEN_CONTAINER_LOG = "_journal/entries?CONTAINER_NAME=oxygen";
     private static final long CMD_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
     private static final long WAIT_FOR_OPERATION_MS = 5 * 6 * 1000; // 30 sec
     private static final long WAIT_FOR_OPERATION_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
