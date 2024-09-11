@@ -349,6 +349,7 @@ public class IncrementalImageUtil {
             mNewFlow = false;
             return;
         }
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.INCREMENTAL_NEW_FLOW, 1);
         updateDevice(currentBootloader, currentRadio);
     }
 
