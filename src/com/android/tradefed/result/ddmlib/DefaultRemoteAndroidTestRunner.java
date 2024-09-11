@@ -19,7 +19,6 @@ import com.android.ddmlib.IShellEnabledDevice;
 import com.android.ddmlib.testrunner.IInstrumentationResultParser;
 import com.android.ddmlib.testrunner.ITestRunListener;
 import com.android.ddmlib.testrunner.InstrumentationResultParser;
-import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 
 import java.util.Collection;
 
