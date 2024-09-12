@@ -92,6 +92,7 @@ import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.SearchArtifactUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
@@ -930,14 +931,7 @@ public abstract class ITestSuite
                                     .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
                     CacheResultDescriptor cacheDescriptor = null;
-                    // TODO(b/363066706): Switch to official API
-                    File moduleDir = null;
-                    try {
-                        moduleDir = FileUtil.findDirectory(baseModuleName, getTestsDir());
-                        CLog.d("module %s directory is %s", module.getId(), moduleDir);
-                    } catch (IOException e) {
-                        CLog.e(e);
-                    }
+                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName, true);
                     if (moduleDir == null) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
