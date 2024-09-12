@@ -1210,6 +1210,8 @@ public class InvocationExecution implements IInvocationExecution {
                     if (!decision.isAutoRetryEnabled()
                             || RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())
                             || test instanceof ITestSuite
+                            // Exclude special launcher
+                            || test.getClass().getSimpleName().equals("CtsTestLauncher")
                             // TODO: Handle auto-retry in local-sharding for non-suite
                             || test instanceof TestsPoolPoller
                             // If test doesn't support auto-retry

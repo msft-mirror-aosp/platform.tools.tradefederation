@@ -21,6 +21,7 @@ java_library_host {
     // Restrict visibility to only those targets that need to access it.
     visibility: [
         "//tools/tradefederation/core",
+        "//tools/tradefederation/core/avd_util",
         "//tools/tradefederation/core/clearcut_client",
         "//tools/tradefederation/core/device_build_interfaces",
         "//tools/tradefederation/core/invocation_interfaces",
