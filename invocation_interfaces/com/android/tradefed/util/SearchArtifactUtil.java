@@ -27,6 +27,7 @@ import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.AltDirBehavior;
 import com.android.tradefed.testtype.Abi;
@@ -331,22 +332,25 @@ public class SearchArtifactUtil {
      * @return the module directory. Can be null.
      */
     public static File findModuleDir(String moduleName, boolean targetFirst) {
-        List<File> searchDirectories =
-                singleton.getSearchDirectories(targetFirst, null, null, null);
-        for (File searchDirectory : searchDirectories) {
-            try {
-                File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
-                if (moduleDir != null && moduleDir.exists()) {
-                    return moduleDir;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("findModuleDir")) {
+            List<File> searchDirectories =
+                    singleton.getSearchDirectories(targetFirst, null, null, null);
+            for (File searchDirectory : searchDirectories) {
+                try {
+                    File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
+                    if (moduleDir != null && moduleDir.exists()) {
+                        return moduleDir;
+                    }
+                } catch (IOException e) {
+                    CLog.w(
+                            "Something went wrong while searching for the module '%s' directory in"
+                                    + " %s.",
+                            moduleName, searchDirectory);
+                    CLog.e(e);
                 }
-            } catch (IOException e) {
-                CLog.w(
-                        "Something went wrong while searching for the module '%s' directory in %s.",
-                        moduleName, searchDirectory);
-                CLog.e(e);
             }
+            return null;
         }
-        return null;
     }
 
     /** returns the module name for the current test invocation if present. */
