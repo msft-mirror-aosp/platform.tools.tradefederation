@@ -323,6 +323,32 @@ public class SearchArtifactUtil {
         return null;
     }
 
+    /**
+     * Finds the module directory that matches the given module name
+     *
+     * @param moduleName The name of the module.
+     * @param targetFirst Whether we are favoring target-side vs. host-side for the search.
+     * @return the module directory. Can be null.
+     */
+    public static File findModuleDir(String moduleName, boolean targetFirst) {
+        List<File> searchDirectories =
+                singleton.getSearchDirectories(targetFirst, null, null, null);
+        for (File searchDirectory : searchDirectories) {
+            try {
+                File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
+                if (moduleDir != null && moduleDir.exists()) {
+                    return moduleDir;
+                }
+            } catch (IOException e) {
+                CLog.w(
+                        "Something went wrong while searching for the module '%s' directory in %s.",
+                        moduleName, searchDirectory);
+                CLog.e(e);
+            }
+        }
+        return null;
+    }
+
     /** returns the module name for the current test invocation if present. */
     @VisibleForTesting
     String findModuleName() {
