@@ -63,7 +63,7 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn("correctModule");
 
@@ -99,7 +99,7 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn(null);
 
@@ -144,7 +144,7 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn("correctModule");
 
@@ -183,7 +183,7 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn(null);
 
@@ -219,7 +219,7 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn(null);
 
@@ -250,7 +250,7 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn("correctModule");
 
@@ -288,10 +288,10 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn("correctModule");
-            when(SearchArtifactUtil.singleton.getExecutionFiles()).thenReturn(executionFiles);
+            when(SearchArtifactUtil.singleton.getExecutionFiles(null)).thenReturn(executionFiles);
 
             File f = SearchArtifactUtil.searchFile(correctFile.getName(), false);
             Truth.assertThat(f).isNotNull();
@@ -327,7 +327,7 @@ public class SearchArtifactUtilTest {
             searchDirectories.add(searchDirectory);
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
-            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null))
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
                     .thenReturn(searchDirectories);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn("correctModule");
             when(SearchArtifactUtil.singleton.getBuildInfo()).thenReturn(buildInfo);
@@ -373,9 +373,9 @@ public class SearchArtifactUtilTest {
 
             SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
             when(SearchArtifactUtil.singleton.findModuleName()).thenReturn("correctModule");
-            when(SearchArtifactUtil.singleton.getExecutionFiles()).thenReturn(executionFiles);
+            when(SearchArtifactUtil.singleton.getExecutionFiles(null)).thenReturn(executionFiles);
             when(SearchArtifactUtil.singleton.getSearchDirectories(
-                            false, altDirs, AltDirBehavior.OVERRIDE))
+                            false, altDirs, AltDirBehavior.OVERRIDE, null))
                     .thenCallRealMethod();
 
             File f =
