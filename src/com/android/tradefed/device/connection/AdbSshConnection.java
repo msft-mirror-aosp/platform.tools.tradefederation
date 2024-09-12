@@ -301,6 +301,11 @@ public class AdbSshConnection extends AdbTcpConnection {
                     tempFile = mHOUtil.getTunnelLog();
                     GceManager.logAndDeleteFile(
                             tempFile, "host_orchestrator_tunnel_log", getLogger());
+                    tempFile =
+                            mHOUtil.collectLogByCommand(
+                                    "oxygen_container_log",
+                                    HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
+                    GceManager.logAndDeleteFile(tempFile, "oxygen_container_log", getLogger());
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
