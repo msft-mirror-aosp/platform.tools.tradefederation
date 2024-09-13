@@ -151,6 +151,7 @@ public class TestMappingsValidation implements IBuildReceiver {
 
     private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST =
             ImmutableSet.of(
+                    "FrameworksServicesTests_Presubmit",
                     "binderRpcTestNoKernel",
                     "CtsLibcoreOjTestCases_time",
                     "CtsLibcoreOjTestCases_util",
@@ -170,6 +171,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsPermissionUiTestCases",
                     "sharedlibs_host_tests",
                     "CtsDevicePolicyManagerTestCases",
+                    "CtsDevicePolicyManagerTestCases_LockSettingsTest",
                     "CtsMediaAudioTestCases",
                     "CtsScopedStoragePublicVolumeHostTest",
                     "CtsContentTestCases",
@@ -198,6 +200,8 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsMediaCodecTestCases",
                     "CtsRollbackManagerHostTestCases",
                     "CtsAutoFillServiceTestCases",
+                    "CtsAutoFillServiceTestCases_cts_inline",
+                    "CtsAutoFillServiceTestCases_android_server_autofill_Presubmit",
                     "CtsOsTestCases",
                     "CtsDynamicMimeHostTestCases",
                     "VtsHalNeuralnetworksTargetTest",
