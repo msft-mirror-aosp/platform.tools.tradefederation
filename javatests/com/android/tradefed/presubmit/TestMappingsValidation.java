@@ -160,6 +160,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "binderRpcTestSingleThreadedNoKernel",
                     "CtsSuspendAppsPermissionTestCases",
                     "CtsAppSecurityHostTestCases",
+                    "CtsAppSecurityHostTestCases_cts_externalstoragehosttest",
                     "CtsPackageManagerTestCases", // Renamed from CtsAppSecurityHostTestCases
                     "FrameworksServicesTests",
                     "FrameworksServicesTests_presubmit",
@@ -171,6 +172,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsPermissionUiTestCases",
                     "sharedlibs_host_tests",
                     "CtsDevicePolicyManagerTestCases",
+                    "CtsDevicePolicyManagerTestCases_Permissions",
                     "CtsDevicePolicyManagerTestCases_LockSettingsTest",
                     "CtsMediaAudioTestCases",
                     "CtsScopedStoragePublicVolumeHostTest",
@@ -216,6 +218,7 @@ public class TestMappingsValidation implements IBuildReceiver {
             ImmutableSet.of(
                     "libnativeloader_e2e_tests",
                     "BugreportManagerTestCases",
+                    "BugreportManagerTestCases_android_server_os",
                     "CtsRootBugreportTestCases",
                     "ApexServiceTestCases",
                     "OverlayDeviceTests");
