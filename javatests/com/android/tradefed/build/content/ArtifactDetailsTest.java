@@ -65,7 +65,7 @@ public class ArtifactDetailsTest {
         }
     }
 
-    private File generateBaseContent() throws IOException {
+    public static File generateBaseContent() throws IOException {
         File content = FileUtil.createTempFile("artifacts-details-test", ".json");
         String baseContent =
                 "[\n"
@@ -108,7 +108,7 @@ public class ArtifactDetailsTest {
         return content;
     }
 
-    private File generateCurrentContent() throws IOException {
+    public static File generateCurrentContent() throws IOException {
         File content = FileUtil.createTempFile("artifacts-details-test", ".json");
         String currentContent =
                 "[\n"

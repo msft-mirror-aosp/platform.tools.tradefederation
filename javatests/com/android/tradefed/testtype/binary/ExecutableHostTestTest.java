@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype.binary;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -29,9 +31,14 @@ import static org.mockito.Mockito.verify;
 import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.cache.ICacheClient;
+import com.android.tradefed.command.CommandOptions;
+import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -45,7 +52,9 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.RunUtilTest;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -67,9 +76,11 @@ public class ExecutableHostTestTest {
     private ITestDevice mMockDevice;
     private IRunUtil mMockRunUtil;
     private TestInformation mTestInfo;
+    private File mModuleDir;
+    private RunUtilTest.FakeCacheClient mFakeCacheClient;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         mMockListener = Mockito.mock(ITestInvocationListener.class);
         mMockDevice = Mockito.mock(ITestDevice.class);
         mMockRunUtil = Mockito.mock(IRunUtil.class);
@@ -87,6 +98,41 @@ public class ExecutableHostTestTest {
         InvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
+        mModuleDir = FileUtil.createTempDir("test-module");
+        mFakeCacheClient = new RunUtilTest.FakeCacheClient();
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        FileUtil.recursiveDelete(mModuleDir);
+        mFakeCacheClient.getAllCache().values().stream()
+                .forEach(
+                        a -> {
+                            FileUtil.deleteFile(a.stdOut());
+                            FileUtil.deleteFile(a.stdErr());
+                        });
+    }
+
+    /** Test that a success executable host test run is uploaded to cache service. */
+    @Test
+    public void testRun_upload_cache_for_success_run() throws Exception {
+        doReturn(new StubDevice("123")).when(mMockDevice).getIDevice();
+        ExecutableHostTest executableTest = createExecutableHostTestWithCache("echo hello_world");
+
+        executableTest.run(mTestInfo, mMockListener);
+
+        assertFalse(mFakeCacheClient.getAllCache().isEmpty());
+    }
+
+    /** Test that a failed executable host test run is not uploaded to cache service. */
+    @Test
+    public void testRun_skip_cache_uploading_for_failed_run() throws Exception {
+        doReturn(new StubDevice("123")).when(mMockDevice).getIDevice();
+        ExecutableHostTest executableTest = createExecutableHostTestWithCache("exit 1");
+
+        executableTest.run(mTestInfo, mMockListener);
+
+        assertTrue(mFakeCacheClient.getAllCache().isEmpty());
     }
 
     @Test
@@ -118,12 +164,13 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
 
             CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+            result.setExitCode(0);
             doReturn(result)
                     .when(mMockRunUtil)
                     .runTimedCmd(
@@ -146,25 +193,21 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_relativePath() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
             setter.setOptionValue("relative-path-execution", "true");
 
             CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+            result.setExitCode(0);
             doReturn(result)
                     .when(mMockRunUtil)
                     .runTimedCmd(
                             Mockito.anyLong(),
                             (OutputStream) Mockito.any(),
                             Mockito.any(),
-                            Mockito.eq("bash"),
-                            Mockito.eq("-c"),
-                            Mockito.eq(
-                                    String.format(
-                                            "pushd %s; ./%s;",
-                                            tmpBinary.getParent(), tmpBinary.getName())));
+                            Mockito.eq(String.format("./%s", tmpBinary.getName())));
 
             mExecutableTest.run(mTestInfo, mMockListener);
 
@@ -180,12 +223,13 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_dnae() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
 
             CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+            result.setExitCode(0);
             doReturn(result)
                     .when(mMockRunUtil)
                     .runTimedCmd(
@@ -237,6 +281,7 @@ public class ExecutableHostTestTest {
             setter.setOptionValue("binary", tmpBinary.getName());
 
             CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+            result.setExitCode(0);
             doReturn(result)
                     .when(mMockRunUtil)
                     .runTimedCmd(
@@ -270,6 +315,7 @@ public class ExecutableHostTestTest {
             tmpBinary.delete();
 
             CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+            result.setExitCode(0);
             doReturn(result)
                     .when(mMockRunUtil)
                     .runTimedCmd(Mockito.anyLong(), Mockito.eq(tmpBinary.getAbsolutePath()));
@@ -294,7 +340,7 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_failure() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
@@ -340,7 +386,7 @@ public class ExecutableHostTestTest {
 
     @Test
     public void testRunHostExecutable_timeout() throws Exception {
-        File tmpBinary = FileUtil.createTempFile("test-executable", "");
+        File tmpBinary = FileUtil.createTempFile("test-executable", "", mModuleDir);
         try {
             OptionSetter setter = new OptionSetter(mExecutableTest);
             setter.setOptionValue("binary", tmpBinary.getAbsolutePath());
@@ -382,5 +428,30 @@ public class ExecutableHostTestTest {
         } finally {
             FileUtil.recursiveDelete(tmpBinary);
         }
+    }
+
+    private ExecutableHostTest createExecutableHostTestWithCache(String scriptContent)
+            throws Exception {
+        ExecutableHostTest executableTest =
+                new ExecutableHostTest() {
+                    @Override
+                    ICacheClient getCacheClient(File workFolder, String instanceName) {
+                        return mFakeCacheClient;
+                    }
+                };
+        File binary =
+                new File(FileUtil.createTempDir("hosttestcases", mModuleDir), "hello_world_test");
+        FileUtil.writeToFile(scriptContent, binary);
+        binary.setExecutable(true);
+        OptionSetter testSetter = new OptionSetter(executableTest);
+        testSetter.setOptionValue("binary", binary.getAbsolutePath());
+        testSetter.setOptionValue("enable-cache", "true");
+        CommandOptions commandOptions = new CommandOptions();
+        OptionSetter commandOptionsSetter = new OptionSetter(commandOptions);
+        commandOptionsSetter.setOptionValue("remote-cache-instance-name", "test_instance");
+        IConfiguration config = new Configuration("config", "Test config");
+        config.setCommandOptions(commandOptions);
+        executableTest.setConfiguration(config);
+        return executableTest;
     }
 }

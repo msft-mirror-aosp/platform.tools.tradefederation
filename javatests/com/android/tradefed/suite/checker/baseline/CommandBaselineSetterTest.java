@@ -72,11 +72,4 @@ public final class CommandBaselineSetterTest {
                 .thenReturn(new CommandResult(CommandStatus.FAILED));
         assertFalse(mSetter.setBaseline(mMockDevice));
     }
-
-    /** Test that the setter returns false when the baseline is failed to set. */
-    @Test
-    public void setBaseline_nullResult_returnFalse() throws Exception {
-        when(mMockDevice.executeShellV2Command("input keyevent KEYCODE_HOME")).thenReturn(null);
-        assertFalse(mSetter.setBaseline(mMockDevice));
-    }
 }

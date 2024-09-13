@@ -122,11 +122,31 @@ public class RunUtilTest {
         }
     }
 
+    /** Test class on {@link RunUtil} in order to monitor the real process. */
+    class MonitoredRunUtil extends RunUtil {
+        public ProcessBuilder processBuilder;
+
+        public MonitoredRunUtil(boolean inheritEnvVars) {
+            super(inheritEnvVars);
+        }
+
+        @Override
+        RunnableResult createRunnableResult(
+                OutputStream stdout, OutputStream stderr, ProcessBuilder processBuilder) {
+            this.processBuilder = processBuilder;
+            return super.createRunnableResult(stdout, stderr, processBuilder);
+        }
+    }
+
     /** Test class implementing {@link ICacheClient} to mock the cache client. */
-    class FakeCacheClient implements ICacheClient {
+    public static class FakeCacheClient implements ICacheClient {
         private final Map<Digest, ExecutableActionResult> mCache = new HashMap<>();
 
-        FakeCacheClient() {}
+        public FakeCacheClient() {}
+
+        public Map<Digest, ExecutableActionResult> getAllCache() {
+            return mCache;
+        }
 
         @Override
         public void uploadCache(ExecutableAction action, ExecutableActionResult actionResult) {
@@ -249,12 +269,12 @@ public class RunUtilTest {
         FileUtil.ensureGroupRWX(secondBinary);
         File secondStdout = FileUtil.createTempFile("stdout_subprocess_2_", ".txt", mWorkingDir);
         File secondStderr = FileUtil.createTempFile("stderr_subprocess_2_", ".txt", mWorkingDir);
-        RunUtil firstRunUtil = new RunUtil();
+        MonitoredRunUtil firstRunUtil = new MonitoredRunUtil(false);
         firstRunUtil.setWorkingDir(firstWorkingDir);
         firstRunUtil.setEnvVariable(
                 "LD_LIBRARY_PATH",
                 sharedLibA.getAbsolutePath() + ":" + sharedLibB.getAbsolutePath());
-        RunUtil secondRunUtil = new RunUtil();
+        MonitoredRunUtil secondRunUtil = new MonitoredRunUtil(false);
         secondRunUtil.setWorkingDir(secondWorkingDir);
         secondRunUtil.setEnvVariable(
                 "LD_LIBRARY_PATH",
@@ -271,6 +291,9 @@ public class RunUtilTest {
                         new FileOutputStream(firstStderr),
                         cacheClient,
                         firstCommand);
+        firstRunUtil.uploadCache(
+                cacheClient,
+                ExecutableActionResult.create(firstResult.getExitCode(), firstStdout, firstStderr));
         CommandResult secondResult =
                 secondRunUtil.runTimedCmdWithOutputMonitor(
                         LONG_TIMEOUT_MS,
@@ -287,41 +310,11 @@ public class RunUtilTest {
         assertEquals(CommandStatus.SUCCESS, secondResult.getStatus());
         // Remove the line break character.
         assertEquals(actualStdout.substring(0, actualStdout.length() - 1), "test-cache-stdout");
-        assertEquals(
-                FileUtil.readStringFromFile(firstStdout),
-                FileUtil.readStringFromFile(secondStdout));
+        assertEquals(actualStdout, FileUtil.readStringFromFile(secondStdout));
         assertTrue(FileUtil.readStringFromFile(firstStderr).isEmpty());
+        assertTrue(FileUtil.readStringFromFile(secondStderr).isEmpty());
         assertEquals(
-                FileUtil.readStringFromFile(firstStderr),
-                FileUtil.readStringFromFile(secondStderr));
-    }
-
-    /** Test cache works when the stdout stream and stderr stream are not specified. */
-    @Test
-    public void runTimedCmdWithOutputMonitor_cache_works_without_output_stream()
-            throws IOException {
-        File workingDir = FileUtil.createTempDir("first_run_", mWorkingDir);
-        File testBinary = new File(workingDir, "hello_world_test.sh");
-        testBinary.createNewFile();
-        FileUtil.writeToFile("echo test-cache-stdout", testBinary);
-        FileUtil.ensureGroupRWX(testBinary);
-        RunUtil runUtil = new RunUtil();
-        runUtil.setWorkingDir(workingDir);
-        ICacheClient cacheClient = new FakeCacheClient();
-
-        CommandResult firstResult =
-                runUtil.runTimedCmdWithOutputMonitor(
-                        LONG_TIMEOUT_MS, 0, null, null, cacheClient, testBinary.getAbsolutePath());
-        CommandResult secondResult =
-                runUtil.runTimedCmdWithOutputMonitor(
-                        LONG_TIMEOUT_MS, 0, null, null, cacheClient, testBinary.getAbsolutePath());
-
-        assertFalse(firstResult.isCached());
-        assertTrue(secondResult.isCached());
-        assertEquals(CommandStatus.SUCCESS, firstResult.getStatus());
-        assertEquals(CommandStatus.SUCCESS, secondResult.getStatus());
-        assertTrue(firstResult.getStdout().startsWith("test-cache-stdout"));
-        assertTrue(secondResult.getStdout().startsWith("test-cache-stdout"));
+                firstRunUtil.processBuilder.environment(), Map.of("LD_LIBRARY_PATH", "lib1:lib2"));
     }
 
     /**

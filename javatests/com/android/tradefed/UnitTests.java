@@ -28,8 +28,10 @@ import com.android.tradefed.build.LocalDeviceBuildProviderTest;
 import com.android.tradefed.build.cache.PartialZipDownloadCacheTest;
 import com.android.tradefed.build.content.ArtifactDetailsTest;
 import com.android.tradefed.build.content.ContentAnalysisResultsTest;
+import com.android.tradefed.build.content.DeviceMerkleTreeTest;
 import com.android.tradefed.build.content.TestContentAnalyzerTest;
 import com.android.tradefed.cache.MerkleTreeTest;
+import com.android.tradefed.cache.UploadManifestTest;
 import com.android.tradefed.cache.remote.ByteStreamDownloaderTest;
 import com.android.tradefed.cache.remote.ByteStreamUploaderTest;
 import com.android.tradefed.cache.remote.ChunkerTest;
@@ -100,10 +102,8 @@ import com.android.tradefed.device.cloud.CommonLogRemoteFileUtilTest;
 import com.android.tradefed.device.cloud.GceAvdInfoTest;
 import com.android.tradefed.device.cloud.GceManagerTest;
 import com.android.tradefed.device.cloud.GceSshTunnelMonitorTest;
-import com.android.tradefed.device.cloud.HostOrchestratorUtilTest;
 import com.android.tradefed.device.cloud.ManagedRemoteDeviceTest;
 import com.android.tradefed.device.cloud.NestedRemoteDeviceTest;
-import com.android.tradefed.device.cloud.OxygenClientTest;
 import com.android.tradefed.device.cloud.OxygenUtilTest;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDeviceTest;
 import com.android.tradefed.device.cloud.RemoteFileUtilTest;
@@ -227,9 +227,11 @@ import com.android.tradefed.result.XmlResultReporterTest;
 import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarderTest;
 import com.android.tradefed.result.error.ErrorIdentifierTest;
 import com.android.tradefed.result.proto.FileProtoResultReporterTest;
+import com.android.tradefed.result.proto.ModuleProtoResultReporterTest;
 import com.android.tradefed.result.proto.ProtoResultParserTest;
 import com.android.tradefed.result.proto.ProtoResultReporterTest;
 import com.android.tradefed.result.proto.StreamProtoResultReporterTest;
+import com.android.tradefed.result.skipped.SkipFeatureTest;
 import com.android.tradefed.result.skipped.SkipManagerTest;
 import com.android.tradefed.result.skipped.SkipReasonTest;
 import com.android.tradefed.result.suite.FormattedGeneratorReporterTest;
@@ -282,6 +284,7 @@ import com.android.tradefed.targetprep.GsiDeviceFlashPreparerTest;
 import com.android.tradefed.targetprep.InstallAllTestZipAppsSetupTest;
 import com.android.tradefed.targetprep.InstallApexModuleTargetPreparerTest;
 import com.android.tradefed.targetprep.InstallApkSetupTest;
+import com.android.tradefed.targetprep.InstallKernelModulePreparerTest;
 import com.android.tradefed.targetprep.InstrumentationPreparerTest;
 import com.android.tradefed.targetprep.KnownFailurePreparerTest;
 import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
@@ -436,6 +439,7 @@ import com.android.tradefed.util.GoogleApiClientUtilTest;
 import com.android.tradefed.util.HprofAllocSiteParserTest;
 import com.android.tradefed.util.JUnitXmlParserTest;
 import com.android.tradefed.util.JavaCodeCoverageFlusherTest;
+import com.android.tradefed.util.KernelModuleUtilsTest;
 import com.android.tradefed.util.KeyguardControllerStateTest;
 import com.android.tradefed.util.ListInstrumentationParserTest;
 import com.android.tradefed.util.LocalRunInstructionBuilderTest;
@@ -529,6 +533,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // build.content
     ArtifactDetailsTest.class,
     ContentAnalysisResultsTest.class,
+    DeviceMerkleTreeTest.class,
     TestContentAnalyzerTest.class,
 
     // cache
@@ -537,6 +542,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ByteStreamUploaderTest.class,
     ChunkerTest.class,
     RemoteCacheClientTest.class,
+    UploadManifestTest.class,
 
     // clearcut
     ClearcutClientTest.class,
@@ -629,10 +635,8 @@ import org.junit.runners.Suite.SuiteClasses;
     GceAvdInfoTest.class,
     GceManagerTest.class,
     GceSshTunnelMonitorTest.class,
-    HostOrchestratorUtilTest.class,
     ManagedRemoteDeviceTest.class,
     NestedRemoteDeviceTest.class,
-    OxygenClientTest.class,
     OxygenUtilTest.class,
     RemoteAndroidVirtualDeviceTest.class,
     RemoteFileUtilTest.class,
@@ -797,11 +801,13 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // result.proto
     FileProtoResultReporterTest.class,
+    ModuleProtoResultReporterTest.class,
     ProtoResultParserTest.class,
     ProtoResultReporterTest.class,
     StreamProtoResultReporterTest.class,
 
     // result.skipped
+    SkipFeatureTest.class,
     SkipManagerTest.class,
     SkipReasonTest.class,
 
@@ -837,6 +843,7 @@ import org.junit.runners.Suite.SuiteClasses;
     InstallAllTestZipAppsSetupTest.class,
     InstallApexModuleTargetPreparerTest.class,
     InstallApkSetupTest.class,
+    InstallKernelModulePreparerTest.class,
     InstrumentationPreparerTest.class,
     KnownFailurePreparerTest.class,
     LocalEmulatorLaunchTest.class,
@@ -1054,6 +1061,7 @@ import org.junit.runners.Suite.SuiteClasses;
     HprofAllocSiteParserTest.class,
     JavaCodeCoverageFlusherTest.class,
     JUnitXmlParserTest.class,
+    KernelModuleUtilsTest.class,
     KeyguardControllerStateTest.class,
     LegacySubprocessResultsReporterTest.class,
     ListInstrumentationParserTest.class,

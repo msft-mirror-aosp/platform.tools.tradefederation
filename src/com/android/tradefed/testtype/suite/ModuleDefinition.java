@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.testtype.suite;
 
-import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Configuration;
@@ -50,6 +49,7 @@ import com.android.tradefed.invoker.shard.token.TokenProperty;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ILogRegistry.EventType;
 import com.android.tradefed.log.ITestLogger;
+import com.android.tradefed.log.Log.LogLevel;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
@@ -135,6 +135,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String MODULE_ISOLATED = "module-isolated";
     /** This property is set to true if the test module results were cached. */
     public static final String MODULE_CACHED = "module-cached";
+
+    /** This property is set to true if the test module was skipped */
+    public static final String MODULE_SKIPPED = "module-skipped";
+
     /** This property is set to true if only module level events are reported. */
     public static final String SPARSE_MODULE = "sparse-module";
 
@@ -148,6 +152,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     public static final String ISOLATION_COST = "ISOLATION_COST";
     public static final String RETRY_SUCCESS_COUNT = "MODULE_RETRY_SUCCESS";
     public static final String RETRY_FAIL_COUNT = "MODULE_RETRY_FAILED";
+    public static final String MODULE_INVOCATION_ATTRIBUTE_FLAG_OVERRIDES_KEY =
+            "module-flag-overrides";
 
     private final IInvocationContext mModuleInvocationContext;
     private final IConfiguration mModuleConfiguration;
@@ -420,7 +426,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      * @param moduleInfo the {@link TestInformation} for the module.
      * @param listener the {@link ITestInvocationListener} where to report results.
      * @param moduleLevelListeners The list of listeners at the module level.
-     * @param failureListener a particular listener to collect logs on testFail. Can be null.
      * @param maxRunLimit the max number of runs for each testcase.
      * @throws DeviceNotAvailableException in case of device going offline.
      */
@@ -448,6 +453,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         }
 
         CLog.logAndDisplay(LogLevel.DEBUG, "Running module %s", getId());
+        // set the module context so it's available widely during the module run period.
+        CurrentInvocation.setModuleContext(mModuleInvocationContext);
         // Exception generated during setUp or run of the tests
         Throwable preparationException;
         DeviceNotAvailableException runException = null;
@@ -473,6 +480,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                     .getDeviceConfigByName(device)
                                     .addSpecificConfig(preparer);
                         } catch (ConfigurationException e) {
+                            // unset the module context since module run is ending.
+                            CurrentInvocation.setModuleContext(null);
                             // Shouldn't happen;
                             throw new RuntimeException(e);
                         }
@@ -505,6 +514,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     mTargetPreparerRetryCount,
                     shouldFailRun);
             if (shouldFailRun) {
+                // unset the module context since module run is ending.
+                CurrentInvocation.setModuleContext(null);
                 return;
             }
             mTargetPreparerRetryCount++;
@@ -744,6 +755,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         }
                     }
                 }
+                // unset the module context since module run is ending.
+                CurrentInvocation.setModuleContext(null);
             }
         }
     }

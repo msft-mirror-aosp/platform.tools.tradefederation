@@ -15,7 +15,9 @@
  */
 package com.android.tradefed.testtype.binary;
 
-import com.google.common.annotations.VisibleForTesting;
+import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -25,7 +27,11 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.TestRunResultListener;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IAbiReceiver;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -34,10 +40,9 @@ import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestCollector;
 import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
-import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.StreamUtil;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -57,6 +62,7 @@ import java.util.Set;
 /** Base class for executable style of tests. For example: binaries, shell scripts. */
 public abstract class ExecutableBaseTest
         implements IRemoteTest,
+                IConfigurationReceiver,
                 IRuntimeHintProvider,
                 ITestCollector,
                 IShardableTest,
@@ -105,6 +111,8 @@ public abstract class ExecutableBaseTest
     private TestInformation mTestInfo;
     private Set<String> mIncludeFilters = new LinkedHashSet<>();
     private Set<String> mExcludeFilters = new LinkedHashSet<>();
+    private IConfiguration mConfiguration = null;
+    private TestRunResultListener mTestRunResultListener;
 
     /**
      * Get test commands.
@@ -136,6 +144,10 @@ public abstract class ExecutableBaseTest
 
     protected boolean doesRunBinaryGenerateTestResults() {
         return false;
+    }
+
+    protected boolean isTestFailed(String testName) {
+        return mTestRunResultListener.isTestFailed(testName);
     }
 
     /** {@inheritDoc} */
@@ -189,6 +201,8 @@ public abstract class ExecutableBaseTest
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
+        mTestRunResultListener = new TestRunResultListener();
+        listener = new ResultForwarder(listener, mTestRunResultListener);
         setTestInfo(testInfo);
         String moduleId = getModuleId(testInfo.getContext());
         Map<String, String> testCommands = getAllTestCommands();
@@ -442,8 +456,7 @@ public abstract class ExecutableBaseTest
      *
      * @return a Map{@link LinkedHashMap}<String, String> of testCommands.
      */
-    @VisibleForTesting
-    Map<String, String> getAllTestCommands() {
+    protected Map<String, String> getAllTestCommands() {
         Map<String, String> testCommands = new LinkedHashMap<>(mTestCommands);
         for (String binary : mBinaryPaths) {
             testCommands.put(new File(binary).getName(), binary);
@@ -456,5 +469,23 @@ public abstract class ExecutableBaseTest
         Set<String> deps = new HashSet<String>();
         deps.addAll(mBinaryPaths);
         return deps;
+    }
+
+    /**
+     * Returns the test configuration.
+     *
+     * @return an IConfiguration
+     */
+    protected IConfiguration getConfiguration() {
+        if (mConfiguration == null) {
+            return new Configuration("", "");
+        }
+        return mConfiguration;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setConfiguration(IConfiguration configuration) {
+        mConfiguration = configuration;
     }
 }
