@@ -50,6 +50,7 @@ import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SplitApkInstaller;
 import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
+import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.sdklib.AndroidVersion;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
@@ -3323,7 +3324,7 @@ public class TestDeviceTest {
     /**
      * Test that trying to run a test with a user with {@link
      * TestDevice#runInstrumentationTestsAsUser(IRemoteAndroidTestRunner, int, Collection)} fails if
-     * the {@link IRemoteAndroidTestRunner} is not an instance of ddmlib RemoteAndroidTestRunner.
+     * the {@link IRemoteAndroidTestRunner} is not an instance of {@link RemoteAndroidTestRunner}.
      */
     @Test
     public void testrunInstrumentationTestsAsUser_failed() throws Exception {
