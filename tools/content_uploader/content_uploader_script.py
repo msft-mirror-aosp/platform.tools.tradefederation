@@ -487,6 +487,7 @@ def main():
         logging.info('Total time of uploading build artifacts to CAS: %d seconds',
                      elapsed)
         cas_metrics.time_ms = int(elapsed * 1000)
+        cas_metrics.client_version = '.'.join([str(num) for num in cas_info.client_version])
         serialized_metrics = cas_metrics.SerializeToString()
         if serialized_metrics:
             cas_metrics_file = os.path.join(dist_dir, CAS_METRICS_PATH)

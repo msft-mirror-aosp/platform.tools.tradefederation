@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.suite;
 
+import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
@@ -44,6 +45,25 @@ import java.util.Map.Entry;
 public class SuiteResultCacheUtil {
 
     public static final String DEVICE_IMAGE_KEY = "device_image";
+
+    /** Describes the cache results. */
+    public static class CacheResultDescriptor {
+        private final boolean cacheHit;
+        private final String cacheExplanation;
+
+        public CacheResultDescriptor(boolean cacheHit, String explanation) {
+            this.cacheHit = cacheHit;
+            this.cacheExplanation = explanation;
+        }
+
+        public boolean isCacheHit() {
+            return cacheHit;
+        }
+
+        public String getDetails() {
+            return cacheExplanation;
+        }
+    }
 
     /**
      * Upload results to RBE
@@ -89,11 +109,13 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
+            Digest configDigest = DigestCalculator.compute(moduleConfig);
+            environment.put("module_config", configDigest.getHash());
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
             ExecutableActionResult result = ExecutableActionResult.create(0, protoResults, null);
-            CLog.d("Uploading cache for %s", action);
+            CLog.d("Uploading cache for %s and %s", action, protoResults);
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
@@ -108,17 +130,19 @@ public class SuiteResultCacheUtil {
      * @param moduleConfig
      * @param moduleDir
      * @param skipContext
-     * @return true if we get a cache hit
+     * @return a {@link CacheResultDescriptor} describing the cache result.
      */
-    public static boolean lookUpModuleResults(
+    public static CacheResultDescriptor lookUpModuleResults(
             IConfiguration mainConfig,
             String moduleId,
             File moduleConfig,
             File moduleDir,
             SkipContext skipContext) {
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.MODULE_RESULTS_CHECKING_CACHE, 1);
         if (skipContext.getImageToDigest().containsValue(null)) {
             CLog.d("No digest for device.");
-            return false;
+            return new CacheResultDescriptor(false, null);
         }
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
@@ -129,6 +153,8 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
+            Digest configDigest = DigestCalculator.compute(moduleConfig);
+            environment.put("module_config", configDigest.getHash());
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
@@ -139,20 +165,23 @@ public class SuiteResultCacheUtil {
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.MODULE_RESULTS_CACHE_HIT, 1);
+                String details = "Cached results.";
                 Map<String, String> metadata =
                         ModuleProtoResultReporter.parseResultsMetadata(cachedResults.stdOut());
                 if (metadata.containsKey(ModuleProtoResultReporter.INVOCATION_ID_KEY)) {
-                    CLog.d(
-                            "cached results origin: http://ab/%s",
-                            metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY));
+                    details +=
+                            String.format(
+                                    " origin of results: http://ab/%s",
+                                    metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY));
+                    CLog.d(details);
                 }
                 FileUtil.deleteFile(cachedResults.stdOut());
                 FileUtil.deleteFile(cachedResults.stdErr());
-                return true;
+                return new CacheResultDescriptor(true, details);
             }
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
         }
-        return false;
+        return new CacheResultDescriptor(false, null);
     }
 }
