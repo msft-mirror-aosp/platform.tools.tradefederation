@@ -138,6 +138,8 @@ public class SuiteResultCacheUtil {
             File moduleConfig,
             File moduleDir,
             SkipContext skipContext) {
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.MODULE_RESULTS_CHECKING_CACHE, 1);
         if (skipContext.getImageToDigest().containsValue(null)) {
             CLog.d("No digest for device.");
             return new CacheResultDescriptor(false, null);
