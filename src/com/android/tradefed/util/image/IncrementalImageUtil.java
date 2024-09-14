@@ -349,6 +349,12 @@ public class IncrementalImageUtil {
             mNewFlow = false;
             return;
         }
+        // If device isn't online, we can't use the new flow
+        if (!TestDeviceState.ONLINE.equals(mDevice.getDeviceState())) {
+            mNewFlow = false;
+            return;
+        }
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.INCREMENTAL_NEW_FLOW, 1);
         updateDevice(currentBootloader, currentRadio);
     }
 

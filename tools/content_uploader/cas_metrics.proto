@@ -30,6 +30,7 @@ message ArtifactMetrics {
 
 // Contains metrics for a CAS upload session.
 message CasMetrics {
-  int64 time_ms = 1;    // End to end time for the upload session.
+  int64 time_ms = 1;            // End to end time for the upload session.
   repeated ArtifactMetrics artifacts = 2;
+  string client_version = 3;    // CAS uploader client version.
 }
