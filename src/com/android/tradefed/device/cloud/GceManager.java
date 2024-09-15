@@ -476,6 +476,11 @@ public class GceManager {
                             logAndDeleteFile(tempFile, "host_orchestrator", logger);
                             tempFile = hOUtil.getTunnelLog();
                             logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
+                            tempFile =
+                                    hOUtil.collectLogByCommand(
+                                            "oxygen_container_log",
+                                            HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
+                            logAndDeleteFile(tempFile, "oxygen_container_log", logger);
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
