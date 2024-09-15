@@ -151,6 +151,7 @@ public class TestMappingsValidation implements IBuildReceiver {
 
     private static final Set<String> PRESUBMIT_LARGE_ALLOWLIST =
             ImmutableSet.of(
+                    "FrameworksServicesTests_Presubmit",
                     "binderRpcTestNoKernel",
                     "CtsLibcoreOjTestCases_time",
                     "CtsLibcoreOjTestCases_util",
@@ -159,6 +160,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "binderRpcTestSingleThreadedNoKernel",
                     "CtsSuspendAppsPermissionTestCases",
                     "CtsAppSecurityHostTestCases",
+                    "CtsAppSecurityHostTestCases_cts_externalstoragehosttest",
                     "CtsPackageManagerTestCases", // Renamed from CtsAppSecurityHostTestCases
                     "FrameworksServicesTests",
                     "FrameworksServicesTests_presubmit",
@@ -170,6 +172,8 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsPermissionUiTestCases",
                     "sharedlibs_host_tests",
                     "CtsDevicePolicyManagerTestCases",
+                    "CtsDevicePolicyManagerTestCases_Permissions",
+                    "CtsDevicePolicyManagerTestCases_LockSettingsTest",
                     "CtsMediaAudioTestCases",
                     "CtsScopedStoragePublicVolumeHostTest",
                     "CtsContentTestCases",
@@ -198,6 +202,8 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsMediaCodecTestCases",
                     "CtsRollbackManagerHostTestCases",
                     "CtsAutoFillServiceTestCases",
+                    "CtsAutoFillServiceTestCases_cts_inline",
+                    "CtsAutoFillServiceTestCases_android_server_autofill_Presubmit",
                     "CtsOsTestCases",
                     "CtsDynamicMimeHostTestCases",
                     "VtsHalNeuralnetworksTargetTest",
@@ -212,6 +218,7 @@ public class TestMappingsValidation implements IBuildReceiver {
             ImmutableSet.of(
                     "libnativeloader_e2e_tests",
                     "BugreportManagerTestCases",
+                    "BugreportManagerTestCases_android_server_os",
                     "CtsRootBugreportTestCases",
                     "ApexServiceTestCases",
                     "OverlayDeviceTests");
