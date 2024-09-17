@@ -388,4 +388,98 @@ public class SearchArtifactUtilTest {
             FileUtil.recursiveDelete(altDir);
         }
     }
+
+    /**
+     * Should return the correct module directory from the target/testcases parent directory when
+     * target first is true.
+     */
+    @Test
+    public void testFindModuleDir_whenTargetFirst() throws IOException {
+        File testDir = null;
+        try {
+            testDir = FileUtil.createTempDir("test-dir");
+            File hostDir = FileUtil.createNamedTempDir(testDir, "host/testcases");
+            File targetDir = FileUtil.createNamedTempDir(testDir, "target/testcases");
+
+            File hostCorretModuleFile = new File(hostDir, "correctModule/testfile.txt");
+            hostCorretModuleFile.getParentFile().mkdirs();
+            hostCorretModuleFile.createNewFile();
+            File hostWrongModuleFile = new File(hostDir, "wrongModule/testfile.txt");
+            hostWrongModuleFile.getParentFile().mkdirs();
+            hostWrongModuleFile.createNewFile();
+
+            File targetCorrectModuleFile = new File(targetDir, "correctModule/testfile.txt");
+            targetCorrectModuleFile.getParentFile().mkdirs();
+            targetCorrectModuleFile.createNewFile();
+            File targetWrongModuleFile = new File(targetDir, "wrongModule/testfile.txt");
+            targetWrongModuleFile.getParentFile().mkdirs();
+            targetWrongModuleFile.createNewFile();
+
+            ExecutionFiles executionFiles = Mockito.mock(ExecutionFiles.class);
+            when(executionFiles.get(ExecutionFiles.FilesKey.TESTS_DIRECTORY)).thenReturn(testDir);
+            when(executionFiles.get(ExecutionFiles.FilesKey.HOST_TESTS_DIRECTORY))
+                    .thenReturn(hostDir);
+            when(executionFiles.get(ExecutionFiles.FilesKey.TARGET_TESTS_DIRECTORY))
+                    .thenReturn(targetDir);
+
+            SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
+            when(SearchArtifactUtil.singleton.getExecutionFiles(null)).thenReturn(executionFiles);
+            when(SearchArtifactUtil.singleton.getSearchDirectories(true, null, null, null))
+                    .thenCallRealMethod();
+
+            File dir = SearchArtifactUtil.findModuleDir("correctModule", true);
+            Truth.assertThat(dir).isNotNull();
+            Truth.assertThat(dir.getAbsolutePath())
+                    .isEqualTo(targetCorrectModuleFile.getParentFile().getAbsolutePath());
+        } finally {
+            FileUtil.recursiveDelete(testDir);
+        }
+    }
+
+    /**
+     * Should return the correct module directory from the host/testcases parent directory when
+     * target first is false.
+     */
+    @Test
+    public void testFindModuleDir_whenNotTargetFirst() throws IOException {
+        File testDir = null;
+        try {
+            testDir = FileUtil.createTempDir("test-dir");
+            File hostDir = FileUtil.createNamedTempDir(testDir, "host/testcases");
+            File targetDir = FileUtil.createNamedTempDir(testDir, "target/testcases");
+
+            File hostCorretModuleFile = new File(hostDir, "correctModule/testfile.txt");
+            hostCorretModuleFile.getParentFile().mkdirs();
+            hostCorretModuleFile.createNewFile();
+            File hostWrongModuleFile = new File(hostDir, "wrongModule/testfile.txt");
+            hostWrongModuleFile.getParentFile().mkdirs();
+            hostWrongModuleFile.createNewFile();
+
+            File targetCorrectModuleFile = new File(targetDir, "correctModule/testfile.txt");
+            targetCorrectModuleFile.getParentFile().mkdirs();
+            targetCorrectModuleFile.createNewFile();
+            File targetWrongModuleFile = new File(targetDir, "wrongModule/testfile.txt");
+            targetWrongModuleFile.getParentFile().mkdirs();
+            targetWrongModuleFile.createNewFile();
+
+            ExecutionFiles executionFiles = Mockito.mock(ExecutionFiles.class);
+            when(executionFiles.get(ExecutionFiles.FilesKey.TESTS_DIRECTORY)).thenReturn(testDir);
+            when(executionFiles.get(ExecutionFiles.FilesKey.HOST_TESTS_DIRECTORY))
+                    .thenReturn(hostDir);
+            when(executionFiles.get(ExecutionFiles.FilesKey.TARGET_TESTS_DIRECTORY))
+                    .thenReturn(targetDir);
+
+            SearchArtifactUtil.singleton = Mockito.mock(SearchArtifactUtil.class);
+            when(SearchArtifactUtil.singleton.getExecutionFiles(null)).thenReturn(executionFiles);
+            when(SearchArtifactUtil.singleton.getSearchDirectories(false, null, null, null))
+                    .thenCallRealMethod();
+
+            File dir = SearchArtifactUtil.findModuleDir("correctModule", false);
+            Truth.assertThat(dir).isNotNull();
+            Truth.assertThat(dir.getAbsolutePath())
+                    .isEqualTo(hostCorretModuleFile.getParentFile().getAbsolutePath());
+        } finally {
+            FileUtil.recursiveDelete(testDir);
+        }
+    }
 }
