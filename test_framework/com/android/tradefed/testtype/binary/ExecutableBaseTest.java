@@ -224,7 +224,12 @@ public abstract class ExecutableBaseTest
                 String cmd = testCommands.get(testName);
                 String path = findBinary(cmd);
 
-                if (path == null) {
+                FailureDescription abortDescription = shouldAbortRun(description);
+
+                if (abortDescription != null) {
+                    listener.testRunFailed(abortDescription);
+                    break;
+                } else if (path == null) {
                     listener.testStarted(description);
                     listener.testFailed(
                             description,
@@ -286,6 +291,16 @@ public abstract class ExecutableBaseTest
                     && !mIncludeFilters.contains(description.toString());
         }
         return false;
+    }
+
+    /**
+     * Check if the testRun should end early.
+     *
+     * @param description The test in progress.
+     * @return FailureDescription if the run loop should terminate.
+     */
+    public FailureDescription shouldAbortRun(TestDescription description) {
+        return null;
     }
 
     /**
