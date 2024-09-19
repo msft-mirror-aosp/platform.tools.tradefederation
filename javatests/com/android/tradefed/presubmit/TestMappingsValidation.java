@@ -158,6 +158,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsTelecomTestCases",
                     "CtsAppTestCases",
                     "CtsAppTestCases_all-except-large",
+                    "CtsAppTestCases_activitymanagerprocessstatetest",
                     "binderRpcTestSingleThreadedNoKernel",
                     "CtsSuspendAppsPermissionTestCases",
                     "CtsAppSecurityHostTestCases",
