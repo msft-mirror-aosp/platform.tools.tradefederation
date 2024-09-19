@@ -291,6 +291,7 @@ import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
 import com.android.tradefed.targetprep.MixKernelTargetPreparerTest;
 import com.android.tradefed.targetprep.ModuleOemTargetPreparerTest;
 import com.android.tradefed.targetprep.ModulePusherTest;
+import com.android.tradefed.targetprep.OtaUpdateDeviceFlasherTest;
 import com.android.tradefed.targetprep.PushFilePreparerTest;
 import com.android.tradefed.targetprep.PythonVirtualenvPreparerTest;
 import com.android.tradefed.targetprep.RebootTargetPreparerTest;
@@ -873,6 +874,7 @@ import org.junit.runners.Suite.SuiteClasses;
     SwitchUserTargetPreparerTest.class,
     UserCleanerTest.class,
     VisibleBackgroundUserPreparerTest.class,
+    OtaUpdateDeviceFlasherTest.class,
 
     // targetprep.adb
     AdbStopServerPreparerTest.class,
