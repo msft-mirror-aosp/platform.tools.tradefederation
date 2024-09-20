@@ -1439,6 +1439,7 @@ public class Configuration implements IConfiguration {
                     excludeFilters,
                     printDeprecatedOptions,
                     printUnchangedOptions);
+            output.flush();
         }
 
         for (IMultiTargetPreparer multipreparer : getMultiTargetPreparers()) {
