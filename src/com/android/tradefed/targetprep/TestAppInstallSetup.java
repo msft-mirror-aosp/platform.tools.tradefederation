@@ -16,6 +16,7 @@
 package com.android.tradefed.targetprep;
 
 import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+import static com.android.tradefed.targetprep.VisibleBackgroundUserPreparer.INSTALL_TEST_APK_FOR_ALL_USERS;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.incfs.install.IncrementalInstallSession;
@@ -215,6 +216,10 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     private IAbi mAbi = null;
     private Integer mUserId = null;
     private Boolean mGrantPermission = null;
+    // TODO: b/367468564 - Remove this flag once we have fixed the tests so that installation
+    // for the system user is no longer required when conducting tests for
+    // the secondary_user_on_secondary_display user type.
+    private boolean mInstallForAllUsers  = false;
 
     private Set<String> mPackagesInstalled = new HashSet<>();
     private TestInformation mTestInfo;
@@ -390,6 +395,11 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             } else {
                 CLog.d("Using user %s from testInfo properties.", mUserId);
             }
+        }
+
+        if (testInfo.properties().get(INSTALL_TEST_APK_FOR_ALL_USERS) != null) {
+            mInstallForAllUsers = testInfo.properties().get(INSTALL_TEST_APK_FOR_ALL_USERS)
+                    .equals("true");
         }
 
         if (mForceQueryable == null) {
@@ -682,7 +692,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     private String installPackage(ITestDevice device, List<File> appFiles)
             throws DeviceNotAvailableException {
         // Handle the different install use cases (with or without a user)
-        if (mUserId == null) {
+        if (mUserId == null || mInstallForAllUsers) {
             if (appFiles.size() == 1) {
                 return device.installPackage(
                         appFiles.get(0), true, mInstallArgs.toArray(new String[] {}));
@@ -721,7 +731,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     protected void uninstallPackage(ITestDevice device, String packageName)
             throws DeviceNotAvailableException {
         String msg;
-        if (mUserId == null) {
+        if (mUserId == null || mInstallForAllUsers) {
             msg = device.uninstallPackage(packageName);
         } else {
             msg = device.uninstallPackageForUser(packageName, mUserId);
