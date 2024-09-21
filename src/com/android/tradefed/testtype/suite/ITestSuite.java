@@ -102,6 +102,7 @@ import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -1088,7 +1089,8 @@ public abstract class ITestSuite
                                     .getModuleName(),
                             ".xml",
                             CurrentInvocation.getWorkFolder());
-            try (PrintWriter pw = new PrintWriter(configFile)) {
+            try (FileOutputStream stream = new FileOutputStream(configFile);
+                    PrintWriter pw = new PrintWriter(stream, true)) {
                 module.getModuleConfiguration()
                         .dumpXml(
                                 pw,
