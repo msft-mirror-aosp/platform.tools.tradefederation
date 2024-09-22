@@ -786,6 +786,10 @@ public class IncrementalImageUtil {
 
     private void logPatchesInformation(File patchesDirectory) {
         for (File patch : patchesDirectory.listFiles()) {
+            if (patch == null) {
+                CLog.w("Something went wrong listing %s", patchesDirectory);
+                return;
+            }
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationGroupMetricKey.INCREMENTAL_FLASHING_PATCHES_SIZE,
                     patch.getName(),
@@ -795,6 +799,10 @@ public class IncrementalImageUtil {
 
     private void logTargetInformation(File targetDirectory) {
         for (File patch : targetDirectory.listFiles()) {
+            if (patch == null) {
+                CLog.w("Something went wrong listing target %s", targetDirectory);
+                return;
+            }
             if (DYNAMIC_PARTITIONS_TO_DIFF.contains(patch.getName())) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationGroupMetricKey.INCREMENTAL_FLASHING_TARGET_SIZE,
