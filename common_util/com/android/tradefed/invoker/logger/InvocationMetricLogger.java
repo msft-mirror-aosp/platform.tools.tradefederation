@@ -404,6 +404,7 @@ public class InvocationMetricLogger {
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
 
         // Module level caching
+        MODULE_RESULTS_CHECKING_CACHE("module_results_checking_cache", true),
         MODULE_RESULTS_CACHE_HIT("module_results_cache_hit", true),
         MODULE_CACHE_NO_DIR("module_cache_no_dir", true),
         MODULE_RESULTS_CACHE_DEVICE_MISMATCH("module_results_cache_device_mismatch", true),
