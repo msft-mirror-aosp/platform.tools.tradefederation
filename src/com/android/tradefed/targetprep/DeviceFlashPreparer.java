@@ -583,8 +583,14 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         // could be an AppBuildInfo and return app build id. Need to be more explicit that we
         // check for the device build here.
         if (!mSkipPostFlashBuildIdCheck) {
-            checkBuildAttribute(deviceBuild.getDeviceBuildId(), device.getBuildId(),
-                    device.getSerialNumber());
+            String dbid = deviceBuild.getDeviceBuildId();
+            if (IDeviceBuildInfo.UNKNOWN_BUILD_ID.equals(dbid)) {
+                // if the device build isn't set, use the build id instead
+                // this happens when device image download is skipped, which could happen when
+                // other kinds of build artifact is used instead for "flashing", e.g. OTA package
+                dbid = deviceBuild.getBuildId();
+            }
+            checkBuildAttribute(dbid, device.getBuildId(), device.getSerialNumber());
         }
     }
 
