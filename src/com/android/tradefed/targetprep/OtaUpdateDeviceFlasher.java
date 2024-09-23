@@ -28,8 +28,12 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * A device flasher that triggers system/update_engine/scripts/update_device.py script with a full
@@ -139,18 +143,26 @@ public class OtaUpdateDeviceFlasher implements IDeviceFlasher {
         // allow OTA downgrade since it can't be assumed that incoming builds are always newer
         device.setProperty(OTA_DOWNGRADE_PROP, "1");
         // trigger the actual flashing
-        CommandResult result =
-                getRunUtil()
-                        .runTimedCmd(
-                                TimeUnit.MINUTES.toMillis(APPLY_OTA_PACKAGE_TIMEOUT_MINS),
+        List<String> cmd =
+                Arrays.asList(
                                 mUpdateDeviceScript.getAbsolutePath(), // the script
                                 "-s",
                                 device.getSerialNumber(),
                                 UserDataFlashOption.WIPE.equals(mUserDataFlashOptions)
                                         ? "--wipe-user-data"
-                                        : "",
+                                        // set to null if no wipe, which will be filtered
+                                        // out via lambda
+                                        : null,
                                 mOtaPackage.getAbsolutePath() // the OTA package
-                                );
+                                )
+                        .stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
+        CommandResult result =
+                getRunUtil()
+                        .runTimedCmd(
+                                TimeUnit.MINUTES.toMillis(APPLY_OTA_PACKAGE_TIMEOUT_MINS),
+                                cmd.toArray(new String[] {}));
         mOtaCommandStatus = result.getStatus();
         CLog.v("OTA script stdout: " + result.getStdout());
         CLog.v("OTA script stderr: " + result.getStderr());
