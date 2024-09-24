@@ -17,11 +17,13 @@ package com.android.tradefed.testtype.binary;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement;
@@ -154,9 +156,7 @@ public class ExecutableTargetTestTest {
                                 FailureStatus.TEST_FAILURE)
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
         Mockito.verify(mListener, Mockito.times(1))
-                .testFailed(
-                        Mockito.eq(testDescription1),
-                        Mockito.eq(failure1));
+                .testFailed(Mockito.eq(testDescription1), Mockito.eq(failure1));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription1),
@@ -171,9 +171,7 @@ public class ExecutableTargetTestTest {
                                 FailureStatus.TEST_FAILURE)
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
         Mockito.verify(mListener, Mockito.times(1))
-                .testFailed(
-                        Mockito.eq(testDescription2),
-                        Mockito.eq(failure2));
+                .testFailed(Mockito.eq(testDescription2), Mockito.eq(failure2));
         Mockito.verify(mListener, Mockito.times(1))
                 .testEnded(
                         Mockito.eq(testDescription2),
@@ -230,6 +228,105 @@ public class ExecutableTargetTestTest {
                         Mockito.eq(testDescription2),
                         Mockito.anyLong(),
                         Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testRunEnded(
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
+    }
+
+    /** Test run method aborts due to device going offline after first test */
+    @Test
+    public void testRun_cmdAbortedOffline()
+            throws DeviceNotAvailableException, ConfigurationException {
+        mExecutableTargetTest =
+                new ExecutableTargetTest() {
+                    @Override
+                    public String findBinary(String binary) {
+                        return binary;
+                    }
+
+                    @Override
+                    protected void checkCommandResult(
+                            CommandResult result,
+                            ITestInvocationListener listener,
+                            TestDescription description) {}
+                };
+        when(mMockITestDevice.getDeviceState())
+                .thenReturn(TestDeviceState.ONLINE, TestDeviceState.NOT_AVAILABLE);
+        when(mMockITestDevice.isAdbRoot()).thenReturn(true);
+        mExecutableTargetTest.setDevice(mMockITestDevice);
+        // Set test commands
+        OptionSetter setter = new OptionSetter(mExecutableTargetTest);
+        setter.setOptionValue("abort-if-device-lost", "true");
+        setter.setOptionValue("abort-if-root-lost", "true");
+        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("test-command-line", testName2, testCmd2);
+        setter.setOptionValue("test-command-line", testName3, testCmd3);
+        TestDescription testDescription = new TestDescription(testName1, testName1);
+        TestDescription testDescription2 = new TestDescription(testName2, testName2);
+        TestDescription testDescription3 = new TestDescription(testName3, testName3);
+        mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1))
+                .testRunFailed(Mockito.<FailureDescription>any());
+        // testName1 should run.
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
+        // testName2 should NOT run.
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
+        // testName3 should NOT run.
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription3), Mockito.anyLong());
+
+        Mockito.verify(mListener, Mockito.times(1))
+                .testRunEnded(
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, MetricMeasurement.Metric>>any());
+    }
+
+    /** Test run method aborts due to device unrooting after first test */
+    @Test
+    public void testRun_cmdAbortedUnroot()
+            throws DeviceNotAvailableException, ConfigurationException {
+        mExecutableTargetTest =
+                new ExecutableTargetTest() {
+                    @Override
+                    public String findBinary(String binary) {
+                        return binary;
+                    }
+
+                    @Override
+                    protected void checkCommandResult(
+                            CommandResult result,
+                            ITestInvocationListener listener,
+                            TestDescription description) {}
+                };
+        when(mMockITestDevice.getDeviceState()).thenReturn(TestDeviceState.ONLINE);
+        when(mMockITestDevice.isAdbRoot()).thenReturn(true, false);
+        mExecutableTargetTest.setDevice(mMockITestDevice);
+        // Set test commands
+        OptionSetter setter = new OptionSetter(mExecutableTargetTest);
+        setter.setOptionValue("abort-if-device-lost", "true");
+        setter.setOptionValue("abort-if-root-lost", "true");
+        setter.setOptionValue("test-command-line", testName1, testCmd1);
+        setter.setOptionValue("test-command-line", testName2, testCmd2);
+        setter.setOptionValue("test-command-line", testName3, testCmd3);
+        TestDescription testDescription = new TestDescription(testName1, testName1);
+        TestDescription testDescription2 = new TestDescription(testName2, testName2);
+        TestDescription testDescription3 = new TestDescription(testName3, testName3);
+        mExecutableTargetTest.run(mTestInfo, mListener);
+        Mockito.verify(mListener, Mockito.times(1))
+                .testRunFailed(Mockito.<FailureDescription>any());
+        // testName1 should run.
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription), Mockito.anyLong());
+        // testName2 should NOT run.
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
+        // testName3 should NOT run.
+        Mockito.verify(mListener, Mockito.never())
+                .testStarted(Mockito.eq(testDescription3), Mockito.anyLong());
+
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
