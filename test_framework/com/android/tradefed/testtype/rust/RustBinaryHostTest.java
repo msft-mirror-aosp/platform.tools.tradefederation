@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.rust;
 
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
 import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
 
 import com.android.annotations.VisibleForTesting;
@@ -41,6 +42,7 @@ import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.util.CacheClientFactory;
+import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -82,6 +84,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                             + " process.")
     private boolean mInheritEnvVars = true;
 
+    private File mCoverageDir;
     private IBuildInfo mBuildInfo;
     private TestRunResultListener mTestRunResultListener;
 
@@ -169,7 +172,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                         }
                     }
                 }
-
             }
             if (res == null) {
                 throw new RuntimeException(
@@ -182,6 +184,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     private void runSingleRustFile(ITestInvocationListener listener, File file) {
         CLog.d("Run single Rust File: %s", file.getAbsolutePath());
+        String runName = file.getName();
         List<Invocation> invocations = generateInvocations(file);
 
         Set<String> foundTests = new HashSet<>();
@@ -191,7 +194,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 FailureDescription failure =
                         FailureDescription.create(
                                 "Could not count the number of tests", FailureStatus.TEST_FAILURE);
-                listener.testRunStarted(file.getName(), 0);
+                listener.testRunStarted(runName, 0);
                 listener.testRunFailed(failure);
                 listener.testRunEnded(0, new HashMap<String, Metric>());
                 CLog.e(failure.getErrorMessage());
@@ -201,16 +204,39 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         int testCount = foundTests.size();
         CLog.d("Total test count: %d", testCount);
         long startTimeMs = System.currentTimeMillis();
-        listener.testRunStarted(file.getName(), testCount, 0, startTimeMs);
+        listener.testRunStarted(runName, testCount, 0, startTimeMs);
         if (testCount > 0) {
             for (Invocation invocation : invocations) {
+                File profdata = null;
                 try {
-                    runTest(listener, invocation, file.getName());
+                    runTest(listener, invocation, runName);
+                    if (isClangCoverageEnabled()) {
+                        Set<String> profraws = FileUtil.findFiles(mCoverageDir, ".*\\.profraw");
+                        ClangProfileIndexer indexer =
+                                new ClangProfileIndexer(
+                                        getConfiguration()
+                                                .getCoverageOptions()
+                                                .getLlvmProfdataPath());
+                        profdata = FileUtil.createTempFile(runName, ".profdata");
+                        indexer.index(profraws, profdata);
+
+                        try (FileInputStreamSource source =
+                                new FileInputStreamSource(profdata, true)) {
+                            listener.testLog(runName, LogDataType.CLANG_COVERAGE, source);
+                        }
+                    }
                 } catch (IOException e) {
                     listener.testRunFailed(e.getMessage());
                     long testTimeMs = System.currentTimeMillis() - startTimeMs;
                     listener.testRunEnded(testTimeMs, new HashMap<String, Metric>());
                     throw new RuntimeException(e);
+                } finally {
+                    if (isClangCoverageEnabled()) {
+                        FileUtil.deleteFile(profdata);
+                        FileUtil.recursiveDelete(mCoverageDir);
+                        mCoverageDir = null;
+                    }
+                    profdata = null;
                 }
             }
         }
@@ -259,6 +285,16 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
         }
+        if (isClangCoverageEnabled()) {
+            try {
+                mCoverageDir = FileUtil.createTempDir("clang");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            runUtil.setEnvVariable(
+                    "LLVM_PROFILE_FILE", mCoverageDir.getAbsolutePath() + "/clang-%m.profraw");
+        }
+
         runUtil.setEnvVariable(
                 "PATH",
                 buildPathWithRelativePaths(
@@ -346,5 +382,10 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     @VisibleForTesting
     ICacheClient getCacheClient(File workFolder, String instanceName) {
         return CacheClientFactory.createCacheClient(workFolder, instanceName);
+    }
+
+    private boolean isClangCoverageEnabled() {
+        return getConfiguration().getCoverageOptions().isCoverageEnabled()
+                && getConfiguration().getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 }
