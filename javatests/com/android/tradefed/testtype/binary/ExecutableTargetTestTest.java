@@ -123,6 +123,8 @@ public class ExecutableTargetTestTest {
     /** Test the run method for a couple commands but binary path not found. */
     @Test
     public void testRun_pathNotExist() throws DeviceNotAvailableException, ConfigurationException {
+        TestDescription testDescription1 = new TestDescription(testName1, testName1);
+        TestDescription testDescription2 = new TestDescription(testName2, testName2);
         mExecutableTargetTest =
                 new ExecutableTargetTest() {
                     @Override
@@ -144,6 +146,8 @@ public class ExecutableTargetTestTest {
         mExecutableTargetTest.run(mTestInfo, mListener);
         Mockito.verify(mListener, Mockito.times(1)).testRunStarted(Mockito.any(), eq(2));
         // run cmd1 test
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription1), Mockito.anyLong());
         FailureDescription failure1 =
                 FailureDescription.create(
                                 String.format(ExecutableBaseTest.NO_BINARY_ERROR, testCmd1),
@@ -151,9 +155,16 @@ public class ExecutableTargetTestTest {
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
         Mockito.verify(mListener, Mockito.times(1))
                 .testFailed(
-                        Mockito.eq(new TestDescription(testName1, testName1)),
+                        Mockito.eq(testDescription1),
                         Mockito.eq(failure1));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testEnded(
+                        Mockito.eq(testDescription1),
+                        Mockito.anyLong(),
+                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         // run cmd2 test
+        Mockito.verify(mListener, Mockito.times(1))
+                .testStarted(Mockito.eq(testDescription2), Mockito.anyLong());
         FailureDescription failure2 =
                 FailureDescription.create(
                                 String.format(ExecutableBaseTest.NO_BINARY_ERROR, testCmd2),
@@ -161,8 +172,13 @@ public class ExecutableTargetTestTest {
                         .setErrorIdentifier(InfraErrorIdentifier.ARTIFACT_NOT_FOUND);
         Mockito.verify(mListener, Mockito.times(1))
                 .testFailed(
-                        Mockito.eq(new TestDescription(testName2, testName2)),
+                        Mockito.eq(testDescription2),
                         Mockito.eq(failure2));
+        Mockito.verify(mListener, Mockito.times(1))
+                .testEnded(
+                        Mockito.eq(testDescription2),
+                        Mockito.anyLong(),
+                        Mockito.eq(new HashMap<String, MetricMeasurement.Metric>()));
         Mockito.verify(mListener, Mockito.times(1))
                 .testRunEnded(
                         Mockito.anyLong(),
