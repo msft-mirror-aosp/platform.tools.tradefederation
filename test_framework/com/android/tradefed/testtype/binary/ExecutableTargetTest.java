@@ -19,6 +19,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
+import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -37,7 +38,16 @@ import java.util.concurrent.TimeUnit;
 @OptionClass(alias = "executable-target-test")
 public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceTest {
 
+    public static final String DEVICE_LOST_ERROR = "Device was lost prior to %s; aborting run.";
+    public static final String ROOT_LOST_ERROR = "Root access was lost prior to %s; aborting run.";
+
     private ITestDevice mDevice = null;
+
+    @Option(name = "abort-if-device-lost", description = "Abort the test if the device is lost.")
+    private boolean mAbortIfDeviceLost = false;
+
+    @Option(name = "abort-if-root-lost", description = "Abort the test if root access is lost.")
+    private boolean mAbortIfRootLost = false;
 
     @Option(name = "skip-binary-check", description = "Skip the binary check in findBinary().")
     private boolean mSkipBinaryCheck = false;
@@ -56,6 +66,31 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
 
     protected boolean getSkipBinaryCheck() {
         return mSkipBinaryCheck;
+    }
+
+    @Override
+    public FailureDescription shouldAbortRun(TestDescription description) {
+        if (mAbortIfDeviceLost) {
+            if (!TestDeviceState.ONLINE.equals(getDevice().getDeviceState())) {
+                return FailureDescription.create(
+                        String.format(DEVICE_LOST_ERROR, description),
+                        FailureStatus.SYSTEM_UNDER_TEST_CRASHED);
+            }
+        }
+        if (mAbortIfRootLost) {
+            try {
+                if (!getDevice().isAdbRoot()) {
+                    return FailureDescription.create(
+                            String.format(ROOT_LOST_ERROR, description),
+                            FailureStatus.DEPENDENCY_ISSUE);
+                }
+            } catch (DeviceNotAvailableException e) {
+                return FailureDescription.create(
+                        String.format(DEVICE_LOST_ERROR, description),
+                        FailureStatus.SYSTEM_UNDER_TEST_CRASHED);
+            }
+        }
+        return null;
     }
 
     @Override

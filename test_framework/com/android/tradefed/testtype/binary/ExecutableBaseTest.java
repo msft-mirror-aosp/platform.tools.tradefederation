@@ -223,41 +223,46 @@ public abstract class ExecutableBaseTest
                 String testName = description.getTestName();
                 String cmd = testCommands.get(testName);
                 String path = findBinary(cmd);
-                try {
-                    if (path == null) {
+
+                FailureDescription abortDescription = shouldAbortRun(description);
+
+                if (abortDescription != null) {
+                    listener.testRunFailed(abortDescription);
+                    break;
+                } else if (path == null) {
+                    listener.testStarted(description);
+                    listener.testFailed(
+                            description,
+                            FailureDescription.create(
+                                            String.format(NO_BINARY_ERROR, cmd),
+                                            FailureStatus.TEST_FAILURE)
+                                    .setErrorIdentifier(
+                                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND));
+                    listener.testEnded(description, new HashMap<String, Metric>());
+                } else {
+                    try {
+                        if (!doesRunBinaryGenerateTestResults()) {
+                            listener.testStarted(description);
+                        }
+
+                        if (!getCollectTestsOnly()) {
+                            // Do not actually run the test if we are dry running it.
+                            runBinary(path, listener, description);
+                        }
+                    } catch (IOException e) {
                         listener.testFailed(
                                 description,
-                                FailureDescription.create(
-                                                String.format(NO_BINARY_ERROR, cmd),
-                                                FailureStatus.TEST_FAILURE)
-                                        .setErrorIdentifier(
-                                                InfraErrorIdentifier
-                                                        .CONFIGURED_ARTIFACT_NOT_FOUND));
-                    } else {
-                        try {
-                            if (!doesRunBinaryGenerateTestResults()) {
-                                listener.testStarted(description);
-                            }
-
-                            if (!getCollectTestsOnly()) {
-                                // Do not actually run the test if we are dry running it.
-                                runBinary(path, listener, description);
-                            }
-                        } catch (IOException e) {
-                            listener.testFailed(
-                                    description,
-                                    FailureDescription.create(StreamUtil.getStackTrace(e)));
-                            if (doesRunBinaryGenerateTestResults()) {
-                                // We can't rely on the `testEnded()` call in the finally
-                                // clause if `runBinary()` is responsible for generating test
-                                // results, therefore we call it here.
-                                listener.testEnded(description, new HashMap<String, Metric>());
-                            }
+                                FailureDescription.create(StreamUtil.getStackTrace(e)));
+                        if (doesRunBinaryGenerateTestResults()) {
+                            // We can't rely on the `testEnded()` call in the finally
+                            // clause if `runBinary()` is responsible for generating test
+                            // results, therefore we call it here.
+                            listener.testEnded(description, new HashMap<String, Metric>());
                         }
-                    }
-                } finally {
-                    if (!doesRunBinaryGenerateTestResults()) {
-                        listener.testEnded(description, new HashMap<String, Metric>());
+                    } finally {
+                        if (!doesRunBinaryGenerateTestResults()) {
+                            listener.testEnded(description, new HashMap<String, Metric>());
+                        }
                     }
                 }
             }
@@ -286,6 +291,16 @@ public abstract class ExecutableBaseTest
                     && !mIncludeFilters.contains(description.toString());
         }
         return false;
+    }
+
+    /**
+     * Check if the testRun should end early.
+     *
+     * @param description The test in progress.
+     * @return FailureDescription if the run loop should terminate.
+     */
+    public FailureDescription shouldAbortRun(TestDescription description) {
+        return null;
     }
 
     /**
