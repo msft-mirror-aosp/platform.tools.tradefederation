@@ -669,6 +669,10 @@ public class SuiteModuleLoader {
         } finally {
             StreamUtil.close(out);
         }
+        if (filterFile.length() == 0) {
+            FileUtil.deleteFile(filterFile);
+            return null;
+        }
         filterFile.deleteOnExit();
         return filterFile;
     }
