@@ -206,6 +206,14 @@ public class IsolatedHostTest
                             + " process.")
     private boolean mInheritEnvVars = true;
 
+    @Option(
+            name = "do-not-swallow-runner-errors",
+            description =
+                    "Whether the subprocess should not swallow runner errors. This should be set"
+                            + " to true. Setting it to false (default, legacy behavior) can cause"
+                            + " test problems to silently fail.")
+    private boolean mDoNotSwallowRunnerErrors = false;
+
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
     private static final String ISOLATED_JAVA_LOG = "isolated-java-logs";
     private IBuildInfo mBuildInfo;
@@ -562,6 +570,9 @@ public class IsolatedHostTest
                         mServer.getInetAddress().getHostAddress(),
                         "--timeout",
                         Integer.toString(mSocketTimeout)));
+        if (mDoNotSwallowRunnerErrors) {
+            cmdArgs.add("--do-not-swallow-runner-errors");
+        }
         return cmdArgs;
     }
 
