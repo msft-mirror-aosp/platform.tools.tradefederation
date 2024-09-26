@@ -75,6 +75,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -211,7 +212,7 @@ public class InstrumentationTest
             name = "instrumentation-arg",
             description = "Additional instrumentation arguments to provide.",
             requiredForRerun = true)
-    private final Map<String, String> mInstrArgMap = new HashMap<String, String>();
+    private final Map<String, String> mInstrArgMap = new LinkedHashMap<String, String>();
 
     @Option(
             name = "rerun-from-file",
