@@ -54,9 +54,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -132,13 +131,13 @@ public class AndroidJUnitTest extends InstrumentationTest
             name = "include-annotation",
             description = "The annotation class name of the test name to run, can be repeated",
             requiredForRerun = true)
-    private Set<String> mIncludeAnnotation = new HashSet<>();
+    private Set<String> mIncludeAnnotation = new LinkedHashSet<>();
 
     @Option(
             name = "exclude-annotation",
             description = "The notAnnotation class name of the test name to run, can be repeated",
             requiredForRerun = true)
-    private Set<String> mExcludeAnnotation = new HashSet<>();
+    private Set<String> mExcludeAnnotation = new LinkedHashSet<>();
 
     @Option(name = "test-file-include-filter",
             description="A file containing a list of line separated test classes and optionally"
