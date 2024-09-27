@@ -10,7 +10,8 @@
       "name": "BM_one",
       "iterations": 109451958,
       "real_time": 5,
-      "cpu_time": 5
+      "cpu_time": 5,
+      "time_unit": "ns"
     }
   ]
 }
