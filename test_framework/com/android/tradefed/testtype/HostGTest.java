@@ -29,18 +29,14 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.TestInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
-import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.error.TestErrorIdentifier;
-import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
@@ -60,7 +56,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -443,17 +438,6 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         }
     }
 
-    private void reportFailure(
-            ITestInvocationListener listener, String runName, RuntimeException exception) {
-        listener.testRunStarted(runName, 0);
-        listener.testRunFailed(createFailure(exception));
-        listener.testRunEnded(0L, new HashMap<String, Metric>());
-    }
-
-    private FailureDescription createFailure(Exception e) {
-        return TestInvocation.createFailureFromException(e, FailureStatus.TEST_FAILURE);
-    }
-
     /**
      * Apply exclusion filters and return the remaining files.
      *
@@ -462,7 +446,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
      */
     private Set<File> applyFileExclusionFilters(Set<File> filesToFilterFrom) {
         Set<File> retFiles = new LinkedHashSet<>();
-        List<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
+        Set<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
         for (File file : filesToFilterFrom) {
             boolean matchedRegex = false;
             for (String regex : fileExclusionFilterRegex) {
@@ -495,7 +479,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                 seen.put(file.getName(), file);
             }
         }
-        return new LinkedHashSet(seen.values());
+        return new LinkedHashSet<>(seen.values());
     }
 
     /** Returns whether Clang code coverage is enabled. */
