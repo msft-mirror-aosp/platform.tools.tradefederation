@@ -117,7 +117,6 @@ public class SearchArtifactUtil {
      * @param altDirs Alternative search paths, in addition to the default search paths.
      * @param altDirBehavior how alternative search paths should be used against default paths: as
      *     fallback, or as override; if unspecified, fallback will be used
-     * @param testInfo The {@link TestInformation} of the current test when available.
      * @return The found artifact file or null if none.
      */
     public static File searchFile(
@@ -265,10 +264,6 @@ public class SearchArtifactUtil {
             try {
                 File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
                 if (moduleDir != null) {
-                    // return the entire module directory if it matches the search file name
-                    if (moduleName.equals(filename)) {
-                        return moduleDir;
-                    }
                     CLog.d("Searching the module dir: %s", moduleDir);
                     // search with abi filtering on first
                     retFile = FileUtil.findFile(filename, abi, moduleDir);
@@ -295,7 +290,7 @@ public class SearchArtifactUtil {
 
         // if module subdirectory not present or file not found, search under the entire directory
         try {
-            Set<File> allMatch = FileUtil.findFilesObject(searchDirectory, filename);
+            Set<File> allMatch = FileUtil.findFilesObject(searchDirectory, filename, false);
             if (allMatch.size() == 1) {
                 // if only one file found, return this one since we can not filter anymore.
                 return allMatch.iterator().next();
