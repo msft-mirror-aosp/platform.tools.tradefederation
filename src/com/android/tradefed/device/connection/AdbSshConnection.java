@@ -282,30 +282,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (getDevice().getOptions().useCvdCF()) {
                     mHOUtil = createHostOrchestratorUtil(mGceAvd);
-                    File cvdLogsDir = mHOUtil.pullCvdHostLogs();
-                    if (cvdLogsDir != null) {
-                        GceManager.logDirectory(
-                                cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
-                        FileUtil.recursiveDelete(cvdLogsDir);
-                    } else {
-                        CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
-                    }
-                    File tempFile =
-                            mHOUtil.collectLogByCommand(
-                                    "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    GceManager.logAndDeleteFile(tempFile, "host_kernel", getLogger());
-                    tempFile =
-                            mHOUtil.collectLogByCommand(
-                                    "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                    GceManager.logAndDeleteFile(tempFile, "host_orchestrator", getLogger());
-                    tempFile = mHOUtil.getTunnelLog();
-                    GceManager.logAndDeleteFile(
-                            tempFile, "host_orchestrator_tunnel_log", getLogger());
-                    tempFile =
-                            mHOUtil.collectLogByCommand(
-                                    "oxygen_container_log",
-                                    HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
-                    GceManager.logAndDeleteFile(tempFile, "oxygen_container_log", getLogger());
+                    CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvd, mHOUtil, getLogger());
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
