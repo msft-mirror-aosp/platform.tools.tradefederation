@@ -25,10 +25,14 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ZipUtil;
+import com.android.tradefed.util.avd.HostOrchestratorUtil;
+
 import com.google.common.base.Strings;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -371,6 +375,41 @@ public class CommonLogRemoteFileUtil {
             CLog.e("Failed to zip the tombstones:");
             CLog.e(e);
         }
+    }
+
+    /**
+     * Pull CF logs via Host Orchestrator.
+     *
+     * @param gceAvdInfo The descriptor of the remote instance.
+     * @param hOUtil The {@link HostOrchestratorUtil} used to pull CF logs.
+     * @param logger The {@link ITestLogger} where to log the file.
+     */
+    public static void pullCommonCvdLogs(
+            GceAvdInfo gceAvdInfo, HostOrchestratorUtil hOUtil, ITestLogger logger) {
+        if (hOUtil == null || gceAvdInfo == null || gceAvdInfo.hostAndPort() == null) {
+            CLog.e(
+                    "HostOrchestratorUtil, GceAvdInfo or its host setting was null, cannot collect"
+                            + " remote files.");
+            return;
+        }
+        File cvdLogsDir = hOUtil.pullCvdHostLogs();
+        if (cvdLogsDir != null) {
+            GceManager.logDirectory(cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
+            FileUtil.recursiveDelete(cvdLogsDir);
+        } else {
+            CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
+        }
+        File tempFile =
+                hOUtil.collectLogByCommand("host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        GceManager.logAndDeleteFile(tempFile, "host_kernel", logger);
+        tempFile = hOUtil.collectLogByCommand("host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+        GceManager.logAndDeleteFile(tempFile, "host_orchestrator", logger);
+        tempFile = hOUtil.getTunnelLog();
+        GceManager.logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
+        tempFile =
+                hOUtil.collectLogByCommand(
+                        "oxygen_container_log", HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
+        GceManager.logAndDeleteFile(tempFile, "oxygen_container_log", logger);
     }
 
     /**
