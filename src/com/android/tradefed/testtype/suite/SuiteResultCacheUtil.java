@@ -184,9 +184,13 @@ public class SuiteResultCacheUtil {
             ExecutableActionResult cachedResults = cacheClient.lookupCache(action);
             if (cachedResults == null) {
                 CLog.d("No cached results for %s", moduleId);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.MODULE_CACHE_MISS_ID, moduleId);
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.MODULE_RESULTS_CACHE_HIT, 1);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.MODULE_CACHE_HIT_ID, moduleId);
                 String details = "Cached results.";
                 Map<String, String> metadata =
                         ModuleProtoResultReporter.parseResultsMetadata(cachedResults.stdOut());
