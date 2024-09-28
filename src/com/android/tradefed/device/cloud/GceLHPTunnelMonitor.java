@@ -159,8 +159,6 @@ public class GceLHPTunnelMonitor extends AbstractTunnelMonitor {
                 return;
             }
 
-            // Device serial should contain tunnel host and port number.
-            getRunUtil().sleep(WAIT_FOR_FIRST_CONNECT);
             // Checking if it is actually running.
             if (isTunnelAlive()) {
                 mLocalHostAndPort = HostAndPort.fromString(mDevice.getSerialNumber());
