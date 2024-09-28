@@ -19,6 +19,7 @@ package com.android.tradefed.cache.remote;
 import static java.lang.Math.min;
 
 import com.google.protobuf.ByteString;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.NoSuchElementException;
@@ -53,14 +54,12 @@ public final class Chunker {
 
     private InputStream mBlob;
     private long mSize;
-    private int mChunkSize;
     private long mOffset;
     private byte[] mChunkBuffer;
 
     public Chunker(InputStream blob, long size, int chunkSize) {
         mBlob = blob;
         mSize = size;
-        mChunkSize = chunkSize;
         mOffset = 0;
         mChunkBuffer = new byte[(int) min(size, chunkSize)];
     }
