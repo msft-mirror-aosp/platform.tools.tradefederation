@@ -71,8 +71,6 @@ public class RunUtil implements IRunUtil {
     private EnvPriority mEnvVariablePriority = EnvPriority.UNSET;
     private boolean mRedirectStderr = false;
     private boolean mLinuxInterruptProcess = false;
-    private static final String PROGRESS_MONITOR_ENV = "RUN_PROGRESS_MONITOR";
-    private static final String PROGRESS_MONITOR_TIMEOUT_ENV = "RUN_PROGRESS_MONITOR_TIMEOUT";
 
     private final CommandInterrupter mInterrupter;
     private final boolean mInheritEnvVars;
