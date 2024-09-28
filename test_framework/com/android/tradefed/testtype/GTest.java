@@ -252,7 +252,7 @@ public class GTest extends GTestBase implements IDeviceTest {
         }
 
         // filter out files excluded by the exclusion regex, for example .so files
-        List<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
+        Set<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
         for (String regex : fileExclusionFilterRegex) {
             if (fullPath.matches(regex)) {
                 CLog.i("File %s matches exclusion file regex %s, skipping", fullPath, regex);
