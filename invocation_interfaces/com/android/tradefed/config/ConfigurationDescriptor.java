@@ -95,6 +95,8 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
     /** Optional: track the shard index of the invocation */
     private Integer mShardIndex = null;
 
+    private MultiMap<String, String> mInternalMetaData = new MultiMap<>();
+
     /** a list of options applicable to rerun the test */
     private final List<OptionDef> mRerunOptions = new ArrayList<>();
 
@@ -112,12 +114,16 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
     public MultiMap<String, String> getAllMetaData() {
         MultiMap<String, String> copy = new MultiMap<>();
         copy.putAll(mMetaData);
+        copy.putAll(mInternalMetaData);
         return copy;
     }
 
     /** Get the named metadata entries */
     public List<String> getMetaData(String name) {
-        List<String> entry = mMetaData.get(name);
+        MultiMap<String, String> copy = new MultiMap<>();
+        copy.putAll(mMetaData);
+        copy.putAll(mInternalMetaData);
+        List<String> entry = copy.get(name);
         if (entry == null) {
             return null;
         }
@@ -136,7 +142,7 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
      * @param value A{@link String} of the additional value.
      */
     public void addMetadata(String key, String value) {
-        mMetaData.put(key, value);
+        mInternalMetaData.put(key, value);
     }
 
     /**
@@ -147,7 +153,7 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
      */
     public void addMetadata(String key, List<String> values) {
         for (String source : values) {
-            mMetaData.put(key, source);
+            mInternalMetaData.put(key, source);
         }
     }
 
@@ -155,7 +161,7 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
      * Remove the tracking of the specified metadata key.
      */
     public List<String> removeMetadata(String key) {
-        return mMetaData.remove(key);
+        return mInternalMetaData.remove(key);
     }
 
     /** Returns if the configuration is shardable or not as part of a suite */
@@ -238,9 +244,9 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
         descriptorBuilder.addAllTestSuiteTag(mSuiteTags);
         // Metadata
         List<Metadata> metadatas = new ArrayList<>();
-        for (String key : mMetaData.keySet()) {
-            Metadata value =
-                    Metadata.newBuilder().setKey(key).addAllValue(mMetaData.get(key)).build();
+        MultiMap<String, String> local = getAllMetaData();
+        for (String key : local.keySet()) {
+            Metadata value = Metadata.newBuilder().setKey(key).addAllValue(local.get(key)).build();
             metadatas.add(value);
         }
         descriptorBuilder.addAllMetadata(metadatas);
