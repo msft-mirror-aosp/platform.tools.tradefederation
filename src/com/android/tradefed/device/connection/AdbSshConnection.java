@@ -781,10 +781,16 @@ public class AdbSshConnection extends AdbTcpConnection {
 
         if (!CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             CLog.e("%s", restoreRes.getStderr());
+            DeviceErrorIdentifier identifier =
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT;
+            if (restoreRes.getStderr().contains("Not enough space remaining in fs containing")) {
+                identifier =
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT_NOT_ENOUGH_SPACE;
+            }
             throw new TargetSetupError(
                     String.format("failed to restore device: %s", restoreRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
+                    identifier);
         }
         try {
             waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
