@@ -114,7 +114,7 @@ public class IsolatedHostTest
             name = "jar",
             description = "The jars containing the JUnit test class to run.",
             importance = Importance.IF_UNSET)
-    private Set<String> mJars = new HashSet<String>();
+    private Set<String> mJars = new LinkedHashSet<String>();
 
     @Option(
             name = "socket-timeout",
@@ -127,14 +127,14 @@ public class IsolatedHostTest
     @Option(
             name = "include-annotation",
             description = "The set of annotations a test must have to be run.")
-    private Set<String> mIncludeAnnotations = new HashSet<>();
+    private Set<String> mIncludeAnnotations = new LinkedHashSet<>();
 
     @Option(
             name = "exclude-annotation",
             description =
                     "The set of annotations to exclude tests from running. A test must have "
                             + "none of the annotations in this list to run.")
-    private Set<String> mExcludeAnnotations = new HashSet<>();
+    private Set<String> mExcludeAnnotations = new LinkedHashSet<>();
 
     @Option(
             name = "java-flags",
@@ -205,6 +205,14 @@ public class IsolatedHostTest
                     "Whether the subprocess should inherit environment variables from the main"
                             + " process.")
     private boolean mInheritEnvVars = true;
+
+    @Option(
+            name = "do-not-swallow-runner-errors",
+            description =
+                    "Whether the subprocess should not swallow runner errors. This should be set"
+                            + " to true. Setting it to false (default, legacy behavior) can cause"
+                            + " test problems to silently fail.")
+    private boolean mDoNotSwallowRunnerErrors = false;
 
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
     private static final String ISOLATED_JAVA_LOG = "isolated-java-logs";
@@ -562,6 +570,9 @@ public class IsolatedHostTest
                         mServer.getInetAddress().getHostAddress(),
                         "--timeout",
                         Integer.toString(mSocketTimeout)));
+        if (mDoNotSwallowRunnerErrors) {
+            cmdArgs.add("--do-not-swallow-runner-errors");
+        }
         return cmdArgs;
     }
 
