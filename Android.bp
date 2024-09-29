@@ -202,6 +202,9 @@ tradefed_java_library_host {
         "tradefed-lib-core",
         "tradefed-test-framework",
     ],
+    required: [
+        "loganalysis",
+    ],
     manifest: "MANIFEST.mf",
     // b/267831518: Pin tradefed and dependencies to Java 11.
     java_version: "11",

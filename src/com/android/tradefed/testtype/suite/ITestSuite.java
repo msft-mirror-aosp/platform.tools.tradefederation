@@ -102,6 +102,7 @@ import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -943,7 +944,7 @@ public abstract class ITestSuite
                         cacheDescriptor =
                                 SuiteResultCacheUtil.lookUpModuleResults(
                                         mMainConfiguration,
-                                        module.getId(),
+                                        module,
                                         moduleConfig,
                                         moduleDir,
                                         mSkipContext);
@@ -1018,7 +1019,7 @@ public abstract class ITestSuite
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         testInfo,
-                                        module.getId(),
+                                        module,
                                         moduleConfig,
                                         protoResults,
                                         moduleDir,
@@ -1080,6 +1081,7 @@ public abstract class ITestSuite
 
     /** Log the module configuration. */
     private File dumpModuleConfig(ModuleDefinition module) {
+        boolean restore = false;
         try {
             File configFile =
                     FileUtil.createTempFile(
@@ -1088,7 +1090,12 @@ public abstract class ITestSuite
                                     .getModuleName(),
                             ".xml",
                             CurrentInvocation.getWorkFolder());
-            try (PrintWriter pw = new PrintWriter(configFile)) {
+            if (module.getModuleConfiguration().getTests().isEmpty()) {
+                module.getModuleConfiguration().setTests(module.getTests());
+                restore = true;
+            }
+            try (FileOutputStream stream = new FileOutputStream(configFile);
+                    PrintWriter pw = new PrintWriter(stream, true)) {
                 module.getModuleConfiguration()
                         .dumpXml(
                                 pw,
@@ -1097,6 +1104,10 @@ public abstract class ITestSuite
                                 false);
                 pw.flush();
                 return configFile;
+            } finally {
+                if (restore) {
+                    module.getModuleConfiguration().setTests(new ArrayList<>());
+                }
             }
         } catch (RuntimeException | IOException e) {
             CLog.e(e);

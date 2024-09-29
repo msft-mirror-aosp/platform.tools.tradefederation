@@ -610,7 +610,9 @@ public class SuiteModuleLoader {
         if (test instanceof ITestFileFilterReceiver) {
             String escapedFileName = escapeFilterFileName(moduleId);
             File includeFile = createFilterFile(escapedFileName, ".include", includes);
-            ((ITestFileFilterReceiver) test).setIncludeTestFile(includeFile);
+            if (includeFile != null) {
+                ((ITestFileFilterReceiver) test).setIncludeTestFile(includeFile);
+            }
         } else {
             // add test includes one at a time
             for (SuiteTestFilter include : includes) {
@@ -627,7 +629,9 @@ public class SuiteModuleLoader {
         if (test instanceof ITestFileFilterReceiver) {
             String escapedFileName = escapeFilterFileName(moduleId);
             File excludeFile = createFilterFile(escapedFileName, ".exclude", excludes);
-            ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFile);
+            if (excludeFile != null) {
+                ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFile);
+            }
         } else {
             // add test excludes one at a time
             for (SuiteTestFilter exclude : excludes) {
@@ -644,6 +648,9 @@ public class SuiteModuleLoader {
 
     private File createFilterFile(
             String prefix, String suffix, Collection<SuiteTestFilter> filters) {
+        if (filters.isEmpty()) {
+            return null;
+        }
         File filterFile = null;
         PrintWriter out = null;
         try {
@@ -661,6 +668,10 @@ public class SuiteModuleLoader {
                     "Failed to create filter file", e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         } finally {
             StreamUtil.close(out);
+        }
+        if (filterFile.length() == 0) {
+            FileUtil.deleteFile(filterFile);
+            return null;
         }
         filterFile.deleteOnExit();
         return filterFile;
