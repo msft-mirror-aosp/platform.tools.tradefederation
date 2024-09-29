@@ -76,7 +76,8 @@ public abstract class GTestBase
     @Option(
             name = "file-exclusion-filter-regex",
             description = "Regex to exclude certain files from executing. Can be repeated")
-    private List<String> mFileExclusionFilterRegex = new ArrayList<>(DEFAULT_FILE_EXCLUDE_FILTERS);
+    private Set<String> mFileExclusionFilterRegex =
+            new LinkedHashSet<>(DEFAULT_FILE_EXCLUDE_FILTERS);
 
     @Option(
             name = "positive-testname-filter",
@@ -415,7 +416,7 @@ public abstract class GTestBase
     }
 
     /** Gets regex to exclude certain files from executing. */
-    public List<String> getFileExclusionFilterRegex() {
+    public Set<String> getFileExclusionFilterRegex() {
         return mFileExclusionFilterRegex;
     }
 

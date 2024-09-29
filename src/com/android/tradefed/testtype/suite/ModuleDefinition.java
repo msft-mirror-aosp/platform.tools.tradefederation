@@ -165,6 +165,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
 
     private final String mId;
     private Collection<IRemoteTest> mTests = null;
+    private Integer mIntraModuleShardCount = null;
+    private Integer mIntraModuleShardIndex = null;
+
     private Map<String, List<ITargetPreparer>> mPreparersPerDevice = null;
     private Map<String, List<ITargetPreparer>> mSuitePreparersPerDevice = null;
 
@@ -303,6 +306,19 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 mRequiredTokens.add(TokenProperty.valueOf(token.toUpperCase()));
             }
         }
+    }
+
+    public void setIntraModuleInformation(int shardCount, int shardIndex) {
+        mIntraModuleShardCount = shardCount;
+        mIntraModuleShardIndex = shardIndex;
+    }
+
+    public Integer getIntraModuleShardCount() {
+        return mIntraModuleShardCount;
+    }
+
+    public Integer getIntraModuleShardIndex() {
+        return mIntraModuleShardIndex;
     }
 
     /** Returns the number of devices expected to run this test. */
