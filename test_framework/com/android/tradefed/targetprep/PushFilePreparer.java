@@ -41,7 +41,6 @@ import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
-import com.android.tradefed.util.SearchArtifactUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -222,19 +221,6 @@ public class PushFilePreparer extends BaseTargetPreparer
      */
     public File resolveRelativeFilePath(IBuildInfo buildInfo, String fileName) {
         File src = null;
-        try {
-            src = SearchArtifactUtil.searchFile(fileName, true, mAbi);
-        } catch (Exception e) {
-            // TODO: handle error when migration is complete.
-            CLog.e(e);
-        }
-        if (src != null && src.exists()) {
-            return src;
-        } else {
-            // Silently report not found and fall back to old logic.
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, 1);
-        }
         if (buildInfo != null) {
             src = buildInfo.getFile(fileName);
             if (src != null && src.exists()) {
@@ -362,11 +348,6 @@ public class PushFilePreparer extends BaseTargetPreparer
                     }
                 }
             }
-        }
-        if (src == null) {
-            // if old logic fails too, do not report search artifact failure
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, -1);
         }
         return src;
     }
