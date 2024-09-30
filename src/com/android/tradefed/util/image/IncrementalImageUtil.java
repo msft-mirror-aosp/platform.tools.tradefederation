@@ -505,7 +505,16 @@ public class IncrementalImageUtil {
                             InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
                 }
             }
-            mDevice.rebootIntoBootloader();
+            try {
+                mDevice.rebootIntoBootloader();
+            } catch (DeviceNotAvailableException e) {
+                if (mNewFlow) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FIRST_BOOTLOADER_REBOOT_FAIL, 1);
+                }
+                throw e;
+            }
+
             if (mApplySnapshot) {
                 if (mWipeAfterApplySnapshot) {
                     CommandResult cancelResults =
