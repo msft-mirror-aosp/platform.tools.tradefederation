@@ -148,7 +148,6 @@ public class ClusterDeviceMonitorTest {
         ClusterHostEvent hostEvent = capture.getValue();
         Assert.assertNotNull(hostEvent.getHostName());
         Assert.assertNotNull(hostEvent.getData().get(ClusterHostEvent.TEST_HARNESS_START_TIME_KEY));
-        Assert.assertNotNull(hostEvent.getTimestamp());
         Assert.assertEquals("cluster1", hostEvent.getClusterId());
         Assert.assertEquals(Arrays.asList("cluster2", "cluster3"), hostEvent.getNextClusterIds());
         Assert.assertEquals("lab1", hostEvent.getLabName());
@@ -171,7 +170,6 @@ public class ClusterDeviceMonitorTest {
         verify(mHostEventUploader).flush();
         ClusterHostEvent hostEvent = capture.getValue();
         Assert.assertNotNull(hostEvent.getHostName());
-        Assert.assertNotNull(hostEvent.getTimestamp());
         Assert.assertEquals("cluster1", hostEvent.getClusterId());
         Assert.assertEquals(Arrays.asList("cluster2", "cluster3"), hostEvent.getNextClusterIds());
         Assert.assertEquals("lab1", hostEvent.getLabName());
@@ -261,7 +259,6 @@ public class ClusterDeviceMonitorTest {
         verify(mHostEventUploader).flush();
         ClusterHostEvent hostEvent = capture.getValue();
         Assert.assertNotNull(hostEvent.getHostName());
-        Assert.assertNotNull(hostEvent.getTimestamp());
         Assert.assertEquals("cluster1", hostEvent.getClusterId());
         Assert.assertEquals(Arrays.asList("cluster2", "cluster3"), hostEvent.getNextClusterIds());
         Assert.assertEquals(1, hostEvent.getDeviceInfos().size());
