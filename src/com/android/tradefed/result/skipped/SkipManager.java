@@ -21,6 +21,7 @@ import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -195,7 +196,7 @@ public class SkipManager implements IDisableable {
         if (isDisabled()) {
             return;
         }
-        if ("WORK_NODE".equals(context.getAttribute("trigger"))) {
+        if (InvocationContext.isPresubmit(context)) {
             try (TradefedFeatureClient client = new TradefedFeatureClient()) {
                 Map<String, String> args = new HashMap<>();
                 FeatureResponse response = client.triggerFeature("FetchDemotionInformation", args);
@@ -224,7 +225,7 @@ public class SkipManager implements IDisableable {
             return false;
         }
         mImageFileToDigest.putAll(results.getImageToDigest());
-        boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+        boolean presubmit = InvocationContext.isPresubmit(information.getContext());
         if (results.deviceImageChanged()) {
             return false;
         }

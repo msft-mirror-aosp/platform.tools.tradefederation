@@ -362,6 +362,7 @@ public class InvocationMetricLogger {
                 "incremental_snapuserd_write_blocking_time", true),
         INCREMENTAL_FALLBACK_REASON("incremental_fallback_reason", true),
         INCREMENTAL_RECOVERY_FALLBACK("incremental_recovery_fallback", true),
+        INCREMENTAL_FIRST_BOOTLOADER_REBOOT_FAIL("incremental_first_bootloader_reboot_fail", true),
         INCREMENTAL_NEW_FLOW("incremental_new_flow", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
@@ -406,6 +407,8 @@ public class InvocationMetricLogger {
         // Module level caching
         MODULE_RESULTS_CHECKING_CACHE("module_results_checking_cache", true),
         MODULE_RESULTS_CACHE_HIT("module_results_cache_hit", true),
+        MODULE_CACHE_HIT_ID("module_cache_hit_id", true),
+        MODULE_CACHE_MISS_ID("module_cache_miss_id", true),
         MODULE_CACHE_NO_DIR("module_cache_no_dir", true),
         MODULE_RESULTS_CACHE_DEVICE_MISMATCH("module_results_cache_device_mismatch", true),
         ;

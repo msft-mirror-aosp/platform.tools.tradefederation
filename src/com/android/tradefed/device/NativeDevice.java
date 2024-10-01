@@ -1612,7 +1612,8 @@ public class NativeDevice
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
             if (!skipContentProvider) {
-                if (isSdcardOrEmulated(remoteFilePath)) {
+                // Skip Content provider for user 0
+                if (isSdcardOrEmulated(remoteFilePath) && userId != 0) {
                     ContentProviderHandler handler = getContentProvider(userId);
                     if (handler != null) {
                         return handler.pushFile(localFile, remoteFilePath);
