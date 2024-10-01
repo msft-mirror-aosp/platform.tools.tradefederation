@@ -200,7 +200,9 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
             }
         }
 
-        if (mIncrementalFlashing != null && mIncrementalFlashing.useUpdatedFlow()) {
+        if (mIncrementalFlashing != null
+                && mIncrementalFlashing.useUpdatedFlow()
+                && shouldFlashSystem(mSystemBuildId, mSystemBuildFlavor, deviceBuild)) {
             try {
                 mIncrementalFlashing.updateDeviceWithNewFlow(
                         deviceBuild.getBootloaderImageFile(), deviceBuild.getBasebandImageFile());
