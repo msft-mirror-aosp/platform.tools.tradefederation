@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -204,6 +205,7 @@ public class EmailTest {
      * Not enabled by default because the particular addresses to use will depend on the environment
      */
     @SuppressWarnings("unused")
+    @Ignore
     public void _manual_testFuncSend() throws IOException {
         final String sender = null;
         final String[] to = {"RECIPIENT"};
