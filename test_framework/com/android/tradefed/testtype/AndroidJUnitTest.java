@@ -377,12 +377,13 @@ public class AndroidJUnitTest extends InstrumentationTest
             // if mIncludeTestFile is set, perform filtering with this file
             if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
                 mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
-                pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener);
+                pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener, false);
                 if (mUseTestStorage) {
                     pushTestFile(
                             mIncludeTestFile,
                             mTestStorageInternalDir + mDeviceIncludeFile,
-                            listener);
+                            listener,
+                            true);
                 }
                 pushedFile = true;
                 // If an explicit include file filter is provided, do not use the package
@@ -392,12 +393,13 @@ public class AndroidJUnitTest extends InstrumentationTest
             // if mExcludeTestFile is set, perform filtering with this file
             if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
                 mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
-                pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener);
+                pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener, false);
                 if (mUseTestStorage) {
                     pushTestFile(
                             mExcludeTestFile,
                             mTestStorageInternalDir + mDeviceExcludeFile,
-                            listener);
+                            listener,
+                            true);
                 }
                 pushedFile = true;
             }
@@ -564,7 +566,8 @@ public class AndroidJUnitTest extends InstrumentationTest
      * @param destination the path on the device to which testFile is pushed
      * @param listener {@link ITestInvocationListener} to report failures.
      */
-    private void pushTestFile(File testFile, String destination, ITestInvocationListener listener)
+    private void pushTestFile(
+            File testFile, String destination, ITestInvocationListener listener, boolean skipLog)
             throws DeviceNotAvailableException {
         if (!testFile.canRead() || !testFile.isFile()) {
             String message = String.format("Cannot read test file %s", testFile.getAbsolutePath());
@@ -595,6 +598,9 @@ public class AndroidJUnitTest extends InstrumentationTest
         } catch (DeviceNotAvailableException e) {
             reportEarlyFailure(listener, e.getMessage());
             throw e;
+        }
+        if (skipLog) {
+            return;
         }
         try (FileInputStreamSource source = new FileInputStreamSource(testFile)) {
             listener.testLog("filter-" + testFile.getName(), LogDataType.TEXT, source);
