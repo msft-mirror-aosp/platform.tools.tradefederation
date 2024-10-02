@@ -42,6 +42,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ListInstrumentationParser;
 import com.android.tradefed.util.ResourceUtil;
+import com.android.tradefed.util.SearchArtifactUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -375,12 +376,13 @@ public class AndroidJUnitTest extends InstrumentationTest
         boolean pushedFile = false;
         try (CloseableTraceScope filter = new CloseableTraceScope("push_filter_files")) {
             // if mIncludeTestFile is set, perform filtering with this file
-            if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
+            File includeTestFile = findFilterFile(getIncludeTestFile(), listener);
+            if (includeTestFile != null) {
                 mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
-                pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener, false);
+                pushTestFile(includeTestFile, mDeviceIncludeFile, listener, false);
                 if (mUseTestStorage) {
                     pushTestFile(
-                            mIncludeTestFile,
+                            includeTestFile,
                             mTestStorageInternalDir + mDeviceIncludeFile,
                             listener,
                             true);
@@ -391,12 +393,13 @@ public class AndroidJUnitTest extends InstrumentationTest
             }
 
             // if mExcludeTestFile is set, perform filtering with this file
-            if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
+            File excludeTestFile = findFilterFile(getExcludeTestFile(), listener);
+            if (excludeTestFile != null) {
                 mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
-                pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener, false);
+                pushTestFile(excludeTestFile, mDeviceExcludeFile, listener, false);
                 if (mUseTestStorage) {
                     pushTestFile(
-                            mExcludeTestFile,
+                            excludeTestFile,
                             mTestStorageInternalDir + mDeviceExcludeFile,
                             listener,
                             true);
@@ -727,5 +730,25 @@ public class AndroidJUnitTest extends InstrumentationTest
         // We approximate the runtime of each shard to be equal since we can't know.
         shard.mRuntimeHint = mRuntimeHint / shardCount;
         return shard;
+    }
+
+    private File findFilterFile(File filter, ITestInvocationListener listener) {
+        if (filter == null) {
+            return null;
+        }
+        if (filter.isAbsolute()) {
+            return filter;
+        }
+        File filterSearched = SearchArtifactUtil.searchFile(filter.getName(), true);
+        if (filterSearched == null) {
+            String message = String.format("Filter file %s wasn't found.", filter);
+            reportEarlyFailure(listener, message);
+            throw new IllegalArgumentException(message);
+        }
+        if (filterSearched.length() == 0) {
+            // Shouldn't happen anymore
+            return null;
+        }
+        return filterSearched;
     }
 }
