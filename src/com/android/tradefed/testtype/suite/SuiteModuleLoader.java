@@ -697,7 +697,7 @@ public class SuiteModuleLoader {
             throw new HarnessRuntimeException(
                     "Failed to create filter file", e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
-        if (filterFile.length() == 0) {
+        if (!filterFile.exists() || filterFile.length() == 0) {
             FileUtil.deleteFile(filterFile);
             return null;
         }
