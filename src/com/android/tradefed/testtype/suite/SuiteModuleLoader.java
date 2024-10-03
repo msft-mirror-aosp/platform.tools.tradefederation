@@ -45,12 +45,12 @@ import com.android.tradefed.testtype.suite.params.NegativeHandler;
 import com.android.tradefed.testtype.suite.params.NotMultiAbiHandler;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.StreamUtil;
 
 import com.google.common.base.Strings;
 import com.google.common.net.UrlEscapers;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -175,7 +175,11 @@ public class SuiteModuleLoader {
         for (File configFile : listConfigFiles) {
             toRun.putAll(
                     loadOneConfig(
-                            configFile.getName(), configFile.getAbsolutePath(), abis, suiteTag));
+                            configFile.getParentFile(),
+                            configFile.getName(),
+                            configFile.getAbsolutePath(),
+                            abis,
+                            suiteTag));
         }
         return toRun;
     }
@@ -235,7 +239,7 @@ public class SuiteModuleLoader {
             List<String> configs, Set<IAbi> abis, String suiteTag) {
         LinkedHashMap<String, IConfiguration> toRun = new LinkedHashMap<>();
         for (String configName : configs) {
-            toRun.putAll(loadOneConfig(configName, configName, abis, suiteTag));
+            toRun.putAll(loadOneConfig(null, configName, configName, abis, suiteTag));
         }
         return toRun;
     }
@@ -246,6 +250,7 @@ public class SuiteModuleLoader {
      * restrictive behavior.
      *
      * @param test The {@link IRemoteTest} that is being considered.
+     * @param moduleDir The directory of the module being created
      * @param abi The Abi we are currently working on.
      * @param moduleId The id of the module (usually abi + module name).
      * @param includeFilters The formatted and parsed include filters.
@@ -253,6 +258,7 @@ public class SuiteModuleLoader {
      */
     public void addFiltersToTest(
             IRemoteTest test,
+            File moduleDir,
             IAbi abi,
             String moduleId,
             Map<String, LinkedHashSet<SuiteTestFilter>> includeFilters,
@@ -267,10 +273,10 @@ public class SuiteModuleLoader {
         LinkedHashSet<SuiteTestFilter> mdIncludes = getFilterList(includeFilters, moduleId);
         LinkedHashSet<SuiteTestFilter> mdExcludes = getFilterList(excludeFilters, moduleId);
         if (!mdIncludes.isEmpty()) {
-            addTestIncludes((ITestFilterReceiver) test, mdIncludes, moduleId);
+            addTestIncludes(moduleDir, (ITestFilterReceiver) test, mdIncludes, moduleId);
         }
         if (!mdExcludes.isEmpty()) {
-            addTestExcludes((ITestFilterReceiver) test, mdExcludes, moduleId);
+            addTestExcludes(moduleDir, (ITestFilterReceiver) test, mdExcludes, moduleId);
         }
     }
 
@@ -278,6 +284,7 @@ public class SuiteModuleLoader {
      * Load a single config location (file or on TF classpath). It can results in several {@link
      * IConfiguration}. If a single configuration get expanded in different ways.
      *
+     * @param moduleDir The name of the module directory being created
      * @param configName The actual config name only. (no path)
      * @param configFullName The fully qualified config name. (with path, if any).
      * @param abis The set of all abis that needs to run.
@@ -285,7 +292,11 @@ public class SuiteModuleLoader {
      * @return A map of loaded configuration.
      */
     private LinkedHashMap<String, IConfiguration> loadOneConfig(
-            String configName, String configFullName, Set<IAbi> abis, String suiteTag) {
+            File moduleDir,
+            String configName,
+            String configFullName,
+            Set<IAbi> abis,
+            String suiteTag) {
         LinkedHashMap<String, IConfiguration> toRun = new LinkedHashMap<>();
         final String name = configName.replace(CONFIG_EXT, "");
         final String[] pathArg = new String[] {configFullName};
@@ -418,7 +429,14 @@ public class SuiteModuleLoader {
                                             ConfigurationDescriptor.ACTIVE_PARAMETER_KEY,
                                             param.getParameterIdentifier());
                             param.addParameterSpecificConfig(paramConfig);
-                            setUpConfig(name, nameWithParam, baseId, fullId, paramConfig, abi);
+                            setUpConfig(
+                                    moduleDir,
+                                    name,
+                                    nameWithParam,
+                                    baseId,
+                                    fullId,
+                                    paramConfig,
+                                    abi);
                             param.applySetup(paramConfig);
                             toRun.put(fullId, paramConfig);
                         }
@@ -452,7 +470,8 @@ public class SuiteModuleLoader {
                         paramConfig
                                 .getConfigurationDescription()
                                 .addMetadata(ITestSuite.ACTIVE_MAINLINE_PARAMETER_KEY, param);
-                        setUpConfig(name, nameWithParam, baseId, fullId, paramConfig, abi);
+                        setUpConfig(
+                                moduleDir, name, nameWithParam, baseId, fullId, paramConfig, abi);
                         handler.applySetup(paramConfig);
                         toRun.put(fullId, paramConfig);
                     }
@@ -468,7 +487,7 @@ public class SuiteModuleLoader {
                     // Always add the base regular configuration to the execution.
                     // Do not pass the nameWithParam in because it would cause the module args be
                     // injected into config twice if we pass nameWithParam using name.
-                    setUpConfig(name, null, baseId, baseId, config, abi);
+                    setUpConfig(moduleDir, name, null, baseId, baseId, config, abi);
                     toRun.put(baseId, config);
                 }
             }
@@ -606,10 +625,13 @@ public class SuiteModuleLoader {
     }
 
     private void addTestIncludes(
-            ITestFilterReceiver test, Collection<SuiteTestFilter> includes, String moduleId) {
+            File moduleDir,
+            ITestFilterReceiver test,
+            Collection<SuiteTestFilter> includes,
+            String moduleId) {
         if (test instanceof ITestFileFilterReceiver) {
             String escapedFileName = escapeFilterFileName(moduleId);
-            File includeFile = createFilterFile(escapedFileName, ".include", includes);
+            File includeFile = createFilterFile(escapedFileName, ".include", moduleDir, includes);
             if (includeFile != null) {
                 ((ITestFileFilterReceiver) test).setIncludeTestFile(includeFile);
             }
@@ -625,10 +647,13 @@ public class SuiteModuleLoader {
     }
 
     private void addTestExcludes(
-            ITestFilterReceiver test, Collection<SuiteTestFilter> excludes, String moduleId) {
+            File moduleDir,
+            ITestFilterReceiver test,
+            Collection<SuiteTestFilter> excludes,
+            String moduleId) {
         if (test instanceof ITestFileFilterReceiver) {
             String escapedFileName = escapeFilterFileName(moduleId);
-            File excludeFile = createFilterFile(escapedFileName, ".exclude", excludes);
+            File excludeFile = createFilterFile(escapedFileName, ".exclude", moduleDir, excludes);
             if (excludeFile != null) {
                 ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFile);
             }
@@ -647,27 +672,30 @@ public class SuiteModuleLoader {
     }
 
     private File createFilterFile(
-            String prefix, String suffix, Collection<SuiteTestFilter> filters) {
+            String prefix, String suffix, File moduleDir, Collection<SuiteTestFilter> filters) {
         if (filters.isEmpty()) {
             return null;
         }
         File filterFile = null;
-        PrintWriter out = null;
         try {
-            filterFile = FileUtil.createTempFile(prefix, suffix);
-            out = new PrintWriter(filterFile);
-            for (SuiteTestFilter filter : filters) {
-                String filterTest = filter.getTest();
-                if (filterTest != null) {
-                    out.println(filterTest);
-                }
+            if (moduleDir == null) {
+                filterFile = FileUtil.createTempFile(prefix, suffix);
+            } else {
+                filterFile = new File(moduleDir, prefix + suffix);
             }
-            out.flush();
+            try (FileOutputStream stream = new FileOutputStream(filterFile);
+                    PrintWriter out = new PrintWriter(stream, true)) {
+                for (SuiteTestFilter filter : filters) {
+                    String filterTest = filter.getTest();
+                    if (filterTest != null) {
+                        out.println(filterTest);
+                    }
+                }
+                out.flush();
+            }
         } catch (IOException e) {
             throw new HarnessRuntimeException(
                     "Failed to create filter file", e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
-        } finally {
-            StreamUtil.close(out);
         }
         if (filterFile.length() == 0) {
             FileUtil.deleteFile(filterFile);
@@ -885,6 +913,7 @@ public class SuiteModuleLoader {
     /**
      * Setup the options for the module configuration.
      *
+     * @param moduleDir The directory of the module being created
      * @param name The base name of the module
      * @param nameWithParam The id of the parameterized mainline module (module name + parameters)
      * @param id The base id name of the module.
@@ -894,6 +923,7 @@ public class SuiteModuleLoader {
      * @throws ConfigurationException
      */
     private void setUpConfig(
+            File moduleDir,
             String name,
             String nameWithParam,
             String id,
@@ -942,7 +972,7 @@ public class SuiteModuleLoader {
                     preparerSetter.setOptionValue(def.name, def.key, def.value);
                 }
             }
-            addFiltersToTest(test, abi, fullId, mIncludeFilters, mExcludeFilters);
+            addFiltersToTest(test, moduleDir, abi, fullId, mIncludeFilters, mExcludeFilters);
             if (test instanceof IAbiReceiver) {
                 ((IAbiReceiver) test).setAbi(abi);
             }
