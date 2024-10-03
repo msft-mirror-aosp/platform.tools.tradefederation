@@ -172,13 +172,22 @@ public class SuiteModuleLoader {
             List<File> listConfigFiles, Set<IAbi> abis, String suiteTag) {
         LinkedHashMap<String, IConfiguration> toRun = new LinkedHashMap<>();
         for (File configFile : listConfigFiles) {
-            toRun.putAll(
+            Map<String, IConfiguration> loadedConfigs =
                     loadOneConfig(
                             configFile.getParentFile(),
                             configFile.getName(),
                             configFile.getAbsolutePath(),
                             abis,
-                            suiteTag));
+                            suiteTag);
+            // store the module dir path for each config
+            for (IConfiguration loadedConfig : loadedConfigs.values()) {
+                loadedConfig
+                        .getConfigurationDescription()
+                        .addMetadata(
+                                ConfigurationDescriptor.MODULE_DIR_PATH_KEY,
+                                configFile.getParentFile().getAbsolutePath());
+            }
+            toRun.putAll(loadedConfigs);
         }
         return toRun;
     }
