@@ -50,7 +50,6 @@ import com.google.common.base.Strings;
 import com.google.common.net.UrlEscapers;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -249,16 +248,16 @@ public class SuiteModuleLoader {
      * does not implements {@link ITestFileFilterReceiver}. This can be overriden to create a more
      * restrictive behavior.
      *
+     * @param moduleDir The module directory
      * @param test The {@link IRemoteTest} that is being considered.
-     * @param moduleDir The directory of the module being created
      * @param abi The Abi we are currently working on.
      * @param moduleId The id of the module (usually abi + module name).
      * @param includeFilters The formatted and parsed include filters.
      * @param excludeFilters The formatted and parsed exclude filters.
      */
     public void addFiltersToTest(
-            IRemoteTest test,
             File moduleDir,
+            IRemoteTest test,
             IAbi abi,
             String moduleId,
             Map<String, LinkedHashSet<SuiteTestFilter>> includeFilters,
@@ -284,7 +283,6 @@ public class SuiteModuleLoader {
      * Load a single config location (file or on TF classpath). It can results in several {@link
      * IConfiguration}. If a single configuration get expanded in different ways.
      *
-     * @param moduleDir The name of the module directory being created
      * @param configName The actual config name only. (no path)
      * @param configFullName The fully qualified config name. (with path, if any).
      * @param abis The set of all abis that needs to run.
@@ -430,12 +428,12 @@ public class SuiteModuleLoader {
                                             param.getParameterIdentifier());
                             param.addParameterSpecificConfig(paramConfig);
                             setUpConfig(
-                                    moduleDir,
                                     name,
                                     nameWithParam,
                                     baseId,
                                     fullId,
                                     paramConfig,
+                                    moduleDir,
                                     abi);
                             param.applySetup(paramConfig);
                             toRun.put(fullId, paramConfig);
@@ -471,7 +469,7 @@ public class SuiteModuleLoader {
                                 .getConfigurationDescription()
                                 .addMetadata(ITestSuite.ACTIVE_MAINLINE_PARAMETER_KEY, param);
                         setUpConfig(
-                                moduleDir, name, nameWithParam, baseId, fullId, paramConfig, abi);
+                                name, nameWithParam, baseId, fullId, paramConfig, moduleDir, abi);
                         handler.applySetup(paramConfig);
                         toRun.put(fullId, paramConfig);
                     }
@@ -487,7 +485,7 @@ public class SuiteModuleLoader {
                     // Always add the base regular configuration to the execution.
                     // Do not pass the nameWithParam in because it would cause the module args be
                     // injected into config twice if we pass nameWithParam using name.
-                    setUpConfig(moduleDir, name, null, baseId, baseId, config, abi);
+                    setUpConfig(name, null, baseId, baseId, config, moduleDir, abi);
                     toRun.put(baseId, config);
                 }
             }
@@ -683,8 +681,7 @@ public class SuiteModuleLoader {
             } else {
                 filterFile = new File(moduleDir, prefix + suffix);
             }
-            try (FileOutputStream stream = new FileOutputStream(filterFile);
-                    PrintWriter out = new PrintWriter(stream, true)) {
+            try (PrintWriter out = new PrintWriter(filterFile)) {
                 for (SuiteTestFilter filter : filters) {
                     String filterTest = filter.getTest();
                     if (filterTest != null) {
@@ -696,6 +693,9 @@ public class SuiteModuleLoader {
         } catch (IOException e) {
             throw new HarnessRuntimeException(
                     "Failed to create filter file", e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+        }
+        if (!filterFile.exists()) {
+            return null;
         }
         if (filterFile.length() == 0) {
             FileUtil.deleteFile(filterFile);
@@ -913,7 +913,6 @@ public class SuiteModuleLoader {
     /**
      * Setup the options for the module configuration.
      *
-     * @param moduleDir The directory of the module being created
      * @param name The base name of the module
      * @param nameWithParam The id of the parameterized mainline module (module name + parameters)
      * @param id The base id name of the module.
@@ -923,12 +922,12 @@ public class SuiteModuleLoader {
      * @throws ConfigurationException
      */
     private void setUpConfig(
-            File moduleDir,
             String name,
             String nameWithParam,
             String id,
             String fullId,
             IConfiguration config,
+            File moduleDir,
             IAbi abi)
             throws ConfigurationException {
         List<OptionDef> optionsToInject = new ArrayList<>();
@@ -972,7 +971,7 @@ public class SuiteModuleLoader {
                     preparerSetter.setOptionValue(def.name, def.key, def.value);
                 }
             }
-            addFiltersToTest(test, moduleDir, abi, fullId, mIncludeFilters, mExcludeFilters);
+            addFiltersToTest(moduleDir, test, abi, fullId, mIncludeFilters, mExcludeFilters);
             if (test instanceof IAbiReceiver) {
                 ((IAbiReceiver) test).setAbi(abi);
             }

@@ -26,7 +26,7 @@ public class RunOnPrivateProfileParameterHandler extends ProfileParameterHandler
         IModuleParameterHandler {
 
     private static final String REQUIRE_RUN_ON_PRIVATE_PROFILE_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnPrivateProfile";
+            "com.android.bedstead.multiuser.annotations.RequireRunOnPrivateProfile";
 
     public RunOnPrivateProfileParameterHandler() {
         super(REQUIRE_RUN_ON_PRIVATE_PROFILE_NAME, new RunOnPrivateProfileTargetPreparer(),

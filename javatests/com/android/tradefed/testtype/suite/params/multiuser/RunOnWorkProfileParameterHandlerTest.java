@@ -39,7 +39,7 @@ import java.util.Set;
 public class RunOnWorkProfileParameterHandlerTest {
 
     private static final String REQUIRE_RUN_ON_WORK_PROFILE_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnWorkProfile";
+            "com.android.bedstead.enterprise.annotations.RequireRunOnWorkProfile";
     private static final String EXISTING_ANNOTATION_FILTER = "existing.annotation.filter";
 
     private RunOnWorkProfileParameterHandler mHandler;
