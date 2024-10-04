@@ -504,9 +504,24 @@ public class AndroidJUnitTest extends InstrumentationTest
                         || !notClassArg.isEmpty()
                         || !packageArg.isEmpty()
                         || !notPackageArg.isEmpty())) {
+            StringBuilder sb = new StringBuilder();
+            if (!classArg.isEmpty()) {
+                sb.append("classArg: " + classArg);
+            }
+            if (!notClassArg.isEmpty()) {
+                sb.append("notClassArg: " + notClassArg);
+            }
+            if (!packageArg.isEmpty()) {
+                sb.append("packageArg: " + packageArg);
+            }
+            if (!notPackageArg.isEmpty()) {
+                sb.append("notPackageArg: " + notPackageArg);
+            }
             throw new IllegalArgumentException(
-                    "Mixed filter types found. AndroidJUnitTest does not support mixing both regex"
-                            + " and class/method/package filters.");
+                    String.format(
+                            "Mixed filter types found. AndroidJUnitTest does not support mixing"
+                                    + " both regex [%s] and class/method/package filters: [%s]",
+                            regexArg, sb.toString()));
         }
         if (!classArg.isEmpty()) {
             runner.addInstrumentationArg(INCLUDE_CLASS_INST_ARGS_KEY,
