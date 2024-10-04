@@ -735,7 +735,9 @@ public class SuiteModuleLoader {
         for (String arg : args) {
             int moduleSep = arg.indexOf(":");
             if (moduleSep == -1) {
-                throw new RuntimeException("Expected delimiter ':' for module or class.");
+                throw new HarnessRuntimeException(
+                        "Expected delimiter ':' for module or class.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             String moduleName = arg.substring(0, moduleSep);
             String remainder = arg.substring(moduleSep + 1);
@@ -746,8 +748,9 @@ public class SuiteModuleLoader {
             }
             int optionNameSep = remainder.indexOf(":");
             if (optionNameSep == -1) {
-                throw new RuntimeException(
-                        "Expected delimiter ':' between option name and values.");
+                throw new HarnessRuntimeException(
+                        "Expected delimiter ':' between option name and values.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             String optionName = remainder.substring(0, optionNameSep);
             Pattern pattern = Pattern.compile("\\{(.*)\\}(.*)");
