@@ -26,7 +26,7 @@ public class RunOnCloneProfileParameterHandler extends ProfileParameterHandler
         implements IModuleParameterHandler {
 
     private static final String REQUIRE_RUN_ON_CLONE_PROFILE_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnCloneProfile";
+            "com.android.bedstead.multiuser.annotations.RequireRunOnCloneProfile";
 
     public RunOnCloneProfileParameterHandler() {
         super(

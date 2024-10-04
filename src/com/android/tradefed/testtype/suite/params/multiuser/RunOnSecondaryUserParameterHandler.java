@@ -32,7 +32,7 @@ import java.util.Set;
 public class RunOnSecondaryUserParameterHandler implements IModuleParameterHandler {
 
     private static final String REQUIRE_RUN_ON_SECONDARY_USER_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnSecondaryUser";
+            "com.android.bedstead.multiuser.annotations.RequireRunOnSecondaryUser";
 
     @Override
     public String getParameterIdentifier() {
