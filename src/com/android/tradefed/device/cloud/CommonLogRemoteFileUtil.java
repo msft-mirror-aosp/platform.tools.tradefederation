@@ -56,6 +56,10 @@ public class CommonLogRemoteFileUtil {
     /** The directory where to find Oxygen device logs. */
     public static final String OXYGEN_CUTTLEFISH_LOG_DIR =
             "/tmp/cfbase/3/cuttlefish/instances/cvd-1/logs/";
+
+    /** cvd fetch log */
+    public static final String OXYGEN_CUTTLEFISH_FETCH_LOG = "/tmp/cfbase/3/fetch.log";
+
     /**
      * The directory where to find Oxygen device runtime logs. Only use this if
      * OXYGEN_CUTTLEFISH_LOG_DIR is not found.
@@ -147,6 +151,9 @@ public class CommonLogRemoteFileUtil {
         OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_EMULATOR_LOG_DIR, null, LogDataType.DIR));
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(OXYGEN_CUTTLEFISH_LOG_DIR, null, LogDataType.DIR));
+        OXYGEN_LOG_FILES.add(
+                new KnownLogFileEntry(
+                        OXYGEN_CUTTLEFISH_FETCH_LOG, null, LogDataType.CUTTLEFISH_LOG));
         OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_GOLDFISH_LOG_DIR, null, LogDataType.DIR));
         NETSIM_LOG_FILES.add(new KnownLogFileEntry(NETSIM_LOG_DIR, null, LogDataType.DIR));
         NETSIM_LOG_FILES.add(new KnownLogFileEntry(NETSIM_USER_LOG_DIR, null, LogDataType.DIR));

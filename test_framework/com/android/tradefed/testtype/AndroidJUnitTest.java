@@ -139,16 +139,6 @@ public class AndroidJUnitTest extends InstrumentationTest
             requiredForRerun = true)
     private Set<String> mExcludeAnnotation = new LinkedHashSet<>();
 
-    @Option(name = "test-file-include-filter",
-            description="A file containing a list of line separated test classes and optionally"
-            + " methods to include")
-    private File mIncludeTestFile = null;
-
-    @Option(name = "test-file-exclude-filter",
-            description="A file containing a list of line separated test classes and optionally"
-            + " methods to exclude")
-    private File mExcludeTestFile = null;
-
     @Option(name = "test-filter-dir",
             description="The device directory path to which the test filtering files are pushed")
     private String mTestFilterDir = "/data/local/tmp/ajur";
@@ -186,6 +176,8 @@ public class AndroidJUnitTest extends InstrumentationTest
     // Default to true as it is harmless if not supported.
     private boolean mNewRunListenerOrderMode = true;
 
+    private File mInternalIncludeTestFile = null;
+    private File mInternalExcludeTestFile = null;
     private String mDeviceIncludeFile = null;
     private String mDeviceExcludeFile = null;
     private int mTotalShards = 0;
@@ -265,13 +257,13 @@ public class AndroidJUnitTest extends InstrumentationTest
     /** {@inheritDoc} */
     @Override
     public void setIncludeTestFile(File testFile) {
-        mIncludeTestFile = testFile;
+        mInternalIncludeTestFile = testFile;
     }
 
     /** {@inheritDoc} */
     @Override
     public File getIncludeTestFile() {
-        return mIncludeTestFile;
+        return mInternalIncludeTestFile;
     }
 
     /**
@@ -279,13 +271,13 @@ public class AndroidJUnitTest extends InstrumentationTest
      */
     @Override
     public void setExcludeTestFile(File testFile) {
-        mExcludeTestFile = testFile;
+        mInternalExcludeTestFile = testFile;
     }
 
     /** {@inheritDoc} */
     @Override
     public File getExcludeTestFile() {
-        return mExcludeTestFile;
+        return mInternalExcludeTestFile;
     }
 
     /**
@@ -374,30 +366,32 @@ public class AndroidJUnitTest extends InstrumentationTest
 
         boolean pushedFile = false;
         try (CloseableTraceScope filter = new CloseableTraceScope("push_filter_files")) {
-            // if mIncludeTestFile is set, perform filtering with this file
-            if (mIncludeTestFile != null && mIncludeTestFile.length() > 0) {
+            // if mInternalIncludeTestFile is set, perform filtering with this file
+            if (mInternalIncludeTestFile != null && mInternalIncludeTestFile.length() > 0) {
                 mDeviceIncludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + INCLUDE_FILE;
-                pushTestFile(mIncludeTestFile, mDeviceIncludeFile, listener);
+                pushTestFile(mInternalIncludeTestFile, mDeviceIncludeFile, listener, false);
                 if (mUseTestStorage) {
                     pushTestFile(
-                            mIncludeTestFile,
+                            mInternalIncludeTestFile,
                             mTestStorageInternalDir + mDeviceIncludeFile,
-                            listener);
+                            listener,
+                            true);
                 }
                 pushedFile = true;
                 // If an explicit include file filter is provided, do not use the package
                 setTestPackageName(null);
             }
 
-            // if mExcludeTestFile is set, perform filtering with this file
-            if (mExcludeTestFile != null && mExcludeTestFile.length() > 0) {
+            // if mInternalExcludeTestFile is set, perform filtering with this file
+            if (mInternalExcludeTestFile != null && mInternalExcludeTestFile.length() > 0) {
                 mDeviceExcludeFile = mTestFilterDir.replaceAll("/$", "") + "/" + EXCLUDE_FILE;
-                pushTestFile(mExcludeTestFile, mDeviceExcludeFile, listener);
+                pushTestFile(mInternalExcludeTestFile, mDeviceExcludeFile, listener, false);
                 if (mUseTestStorage) {
                     pushTestFile(
-                            mExcludeTestFile,
+                            mInternalExcludeTestFile,
                             mTestStorageInternalDir + mDeviceExcludeFile,
-                            listener);
+                            listener,
+                            true);
                 }
                 pushedFile = true;
             }
@@ -502,9 +496,24 @@ public class AndroidJUnitTest extends InstrumentationTest
                         || !notClassArg.isEmpty()
                         || !packageArg.isEmpty()
                         || !notPackageArg.isEmpty())) {
+            StringBuilder sb = new StringBuilder();
+            if (!classArg.isEmpty()) {
+                sb.append("classArg: " + classArg);
+            }
+            if (!notClassArg.isEmpty()) {
+                sb.append("notClassArg: " + notClassArg);
+            }
+            if (!packageArg.isEmpty()) {
+                sb.append("packageArg: " + packageArg);
+            }
+            if (!notPackageArg.isEmpty()) {
+                sb.append("notPackageArg: " + notPackageArg);
+            }
             throw new IllegalArgumentException(
-                    "Mixed filter types found. AndroidJUnitTest does not support mixing both regex"
-                            + " and class/method/package filters.");
+                    String.format(
+                            "Mixed filter types found. AndroidJUnitTest does not support mixing"
+                                    + " both regex [%s] and class/method/package filters: [%s]",
+                            regexArg, sb.toString()));
         }
         if (!classArg.isEmpty()) {
             runner.addInstrumentationArg(INCLUDE_CLASS_INST_ARGS_KEY,
@@ -564,7 +573,8 @@ public class AndroidJUnitTest extends InstrumentationTest
      * @param destination the path on the device to which testFile is pushed
      * @param listener {@link ITestInvocationListener} to report failures.
      */
-    private void pushTestFile(File testFile, String destination, ITestInvocationListener listener)
+    private void pushTestFile(
+            File testFile, String destination, ITestInvocationListener listener, boolean skipLog)
             throws DeviceNotAvailableException {
         if (!testFile.canRead() || !testFile.isFile()) {
             String message = String.format("Cannot read test file %s", testFile.getAbsolutePath());
@@ -595,6 +605,9 @@ public class AndroidJUnitTest extends InstrumentationTest
         } catch (DeviceNotAvailableException e) {
             reportEarlyFailure(listener, e.getMessage());
             throw e;
+        }
+        if (skipLog) {
+            return;
         }
         try (FileInputStreamSource source = new FileInputStreamSource(testFile)) {
             listener.testLog("filter-" + testFile.getName(), LogDataType.TEXT, source);
@@ -718,6 +731,8 @@ public class AndroidJUnitTest extends InstrumentationTest
         shard.mTotalShards = shardCount;
         shard.mIsSharded = true;
         shard.setAbi(getAbi());
+        shard.mInternalExcludeTestFile = mInternalExcludeTestFile;
+        shard.mInternalIncludeTestFile = mInternalIncludeTestFile;
         // We approximate the runtime of each shard to be equal since we can't know.
         shard.mRuntimeHint = mRuntimeHint / shardCount;
         return shard;

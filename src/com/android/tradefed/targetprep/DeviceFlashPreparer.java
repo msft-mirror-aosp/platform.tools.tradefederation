@@ -696,6 +696,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mWipeAfterApplySnapshot = wipeAfterApplySnapshot;
     }
 
+    public void setUseIncrementalNewFlow(boolean useIncrementalNewFlow) {
+        mNewIncrementalFlow = useIncrementalNewFlow;
+    }
+
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
         mAllowUnzippedBaseline = allowUnzipBaseline;
     }

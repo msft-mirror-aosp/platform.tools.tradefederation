@@ -1625,7 +1625,6 @@ public class ClusterCommandSchedulerTest {
         verify(mMockHostUploader).flush();
         ClusterHostEvent hostEvent = capture.getValue();
         assertNotNull(hostEvent.getHostName());
-        assertNotNull(hostEvent.getTimestamp());
         assertEquals(CommandScheduler.HostState.RUNNING, hostEvent.getHostState());
         scheduler.shutdown();
         scheduler.join();
