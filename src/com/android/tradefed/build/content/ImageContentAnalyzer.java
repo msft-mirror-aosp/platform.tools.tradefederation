@@ -86,18 +86,6 @@ public class ImageContentAnalyzer {
                                                     || AnalysisMethod.DEVICE_IMAGE.equals(
                                                             c.analysisMethod())))
                             .collect(Collectors.toList());
-            // Handle invalidation should it be set for a device image.
-            for (ContentAnalysisContext context : buildKeyAnalysis) {
-                if (AnalysisMethod.DEVICE_IMAGE.equals(context.analysisMethod())
-                        && context.abortAnalysis()) {
-                    CLog.w(
-                            "Analysis was aborted: %s for %s",
-                            context.abortReason(), context.contentEntry());
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
-                    return null;
-                }
-            }
             ContentAnalysisResults results = new ContentAnalysisResults();
             for (ContentAnalysisContext context : buildKeyAnalysis) {
                 switch (context.analysisMethod()) {
@@ -162,6 +150,14 @@ public class ImageContentAnalyzer {
 
     // Analyze the target files as proxy for the device image
     private long deviceImageAnalysis(ContentAnalysisContext context) {
+        if (context.abortAnalysis()) {
+            CLog.w(
+                    "Analysis was aborted for build key %s: %s",
+                    context.contentEntry(), context.abortReason());
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
+            return 1; // In case of abort, skew toward image changing
+        }
         try {
             List<ArtifactFileDescriptor> diffs =
                     TestContentAnalyzer.analyzeContentDiff(

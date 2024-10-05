@@ -420,7 +420,19 @@ public class IncrementalImageUtil {
         try (CloseableTraceScope ignored = new CloseableTraceScope("update_device")) {
             // Once block comparison is successful, log the information
             logTargetInformation(targetDirectory);
-            logPatchesInformation(workDir);
+            long totalPatchSizes = logPatchesInformation(workDir);
+            // if we have more than 2.5GB we will overflow super partition size to /data and we
+            // can't use the feature
+            if (totalPatchSizes > 2300000000L) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Patches too large.");
+                throw new TargetSetupError(
+                        String.format(
+                                "Total patch size is %s bytes. Too large to use the feature."
+                                        + " falling back",
+                                totalPatchSizes),
+                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            }
 
             mDevice.executeShellV2Command("mkdir -p /data/ndb");
             mDevice.executeShellV2Command("rm -rf /data/ndb/*.patch");
@@ -484,6 +496,9 @@ public class IncrementalImageUtil {
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Failed apply-update");
+                    // Clean state if apply-update fails
+                    mDevice.executeShellV2Command("snapshotctl unmap-snapshots");
+                    mDevice.executeShellV2Command("snapshotctl delete-snapshots");
                     throw new TargetSetupError(
                             String.format(
                                     "Failed to apply-update.\nstdout:%s\nstderr:%s",
@@ -793,17 +808,20 @@ public class IncrementalImageUtil {
         return true;
     }
 
-    private void logPatchesInformation(File patchesDirectory) {
+    private long logPatchesInformation(File patchesDirectory) {
+        long totalPatchesSize = 0L;
         for (File patch : patchesDirectory.listFiles()) {
             if (patch == null) {
                 CLog.w("Something went wrong listing %s", patchesDirectory);
-                return;
+                return 0L;
             }
+            totalPatchesSize += patch.length();
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationGroupMetricKey.INCREMENTAL_FLASHING_PATCHES_SIZE,
                     patch.getName(),
                     patch.length());
         }
+        return totalPatchesSize;
     }
 
     private void logTargetInformation(File targetDirectory) {
