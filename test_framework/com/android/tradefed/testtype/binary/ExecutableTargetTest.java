@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.binary;
 
+import com.android.ddmlib.MultiLineReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -24,6 +25,7 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
+import com.android.tradefed.testtype.GTestResultParser;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -51,6 +53,30 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
 
     @Option(name = "skip-binary-check", description = "Skip the binary check in findBinary().")
     private boolean mSkipBinaryCheck = false;
+
+    @Option(name = "parse-gtest", description = "Parse test outputs in GTest format")
+    private boolean mParseGTest = false;
+
+    @Override
+    protected boolean doesRunBinaryGenerateTestResults() {
+        return mParseGTest;
+    }
+
+    @Override
+    protected boolean doesRunBinaryGenerateTestRuns() {
+        // when using the GTestParser testRun events are triggered
+        // by the TEST_RUN_MARKER in stdout
+        // so we should not generate testRuns on the RunBinary event
+        return !mParseGTest;
+    }
+
+    @Override
+    public boolean getCollectTestsOnly() {
+        if (super.getCollectTestsOnly()) {
+            throw new UnsupportedOperationException("collect-tests-only mode not support");
+        }
+        return false;
+    }
 
     /** {@inheritDoc} */
     @Override
@@ -128,7 +154,18 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
      */
     protected void checkCommandResult(
             CommandResult result, ITestInvocationListener listener, TestDescription description) {
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+        if (mParseGTest) {
+            MultiLineReceiver parser;
+            // the parser automatically reports the test result back to the infra through the
+            // listener.
+            parser =
+                    new GTestResultParser(
+                            description.getTestName(), listener, true
+                            /** allowRustTestName */
+                            );
+            parser.processNewLines(result.getStdout().split("\n"));
+            parser.done();
+        } else if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             String error_message;
             error_message =
                     String.format(
