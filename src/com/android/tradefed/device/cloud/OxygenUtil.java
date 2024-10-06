@@ -235,6 +235,8 @@ public class OxygenUtil {
             List<String> cmdArgs =
                     Arrays.asList(
                             SystemUtil.getRunningJavaBinaryPath().getAbsolutePath(),
+                            "-Xmx256m",
+                            "-XX:G1HeapWastePercent=5",
                             "-jar",
                             file.getAbsolutePath());
             return new OxygenClient(cmdArgs);

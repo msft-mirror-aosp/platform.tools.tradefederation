@@ -116,26 +116,29 @@ public class GoogleBenchmarkResultParserTest {
 
         // Test 1
         HashMap<String, Metric> resultTest1 = capture.getAllValues().get(0);
-        assertEquals(4, resultTest1.size());
-        assertEquals("5", resultTest1.get("cpu_time").getMeasurements().getSingleString());
-        assertEquals("5", resultTest1.get("real_time").getMeasurements().getSingleString());
+        assertEquals(5, resultTest1.size());
+        assertEquals("5", resultTest1.get("cpu_time_ns").getMeasurements().getSingleString());
+        assertEquals("5", resultTest1.get("real_time_ns").getMeasurements().getSingleString());
+        assertEquals("ns", resultTest1.get("time_unit").getMeasurements().getSingleString());
         assertEquals("BM_one", resultTest1.get("name").getMeasurements().getSingleString());
         assertEquals(
                 "109451958", resultTest1.get("iterations").getMeasurements().getSingleString());
 
         // Test 2
         HashMap<String, Metric> resultTest2 = capture.getAllValues().get(1);
-        assertEquals(4, resultTest2.size());
-        assertEquals("11", resultTest2.get("cpu_time").getMeasurements().getSingleString());
-        assertEquals("1", resultTest2.get("real_time").getMeasurements().getSingleString());
+        assertEquals(5, resultTest2.size());
+        assertEquals("11", resultTest2.get("cpu_time_ns").getMeasurements().getSingleString());
+        assertEquals("1", resultTest2.get("real_time_ns").getMeasurements().getSingleString());
+        assertEquals("ns", resultTest1.get("time_unit").getMeasurements().getSingleString());
         assertEquals("BM_two", resultTest2.get("name").getMeasurements().getSingleString());
         assertEquals("50906784", resultTest2.get("iterations").getMeasurements().getSingleString());
 
         // Test 3
         HashMap<String, Metric> resultTest3 = capture.getAllValues().get(2);
-        assertEquals(5, resultTest3.size());
-        assertEquals("60", resultTest3.get("cpu_time").getMeasurements().getSingleString());
-        assertEquals("60", resultTest3.get("real_time").getMeasurements().getSingleString());
+        assertEquals(6, resultTest3.size());
+        assertEquals("60", resultTest3.get("cpu_time_ns").getMeasurements().getSingleString());
+        assertEquals("60", resultTest3.get("real_time_ns").getMeasurements().getSingleString());
+        assertEquals("ns", resultTest1.get("time_unit").getMeasurements().getSingleString());
         assertEquals(
                 "BM_string_strlen/64", resultTest3.get("name").getMeasurements().getSingleString());
         assertEquals("10499948", resultTest3.get("iterations").getMeasurements().getSingleString());
@@ -162,9 +165,10 @@ public class GoogleBenchmarkResultParserTest {
                 .testEnded((TestDescription) Mockito.any(), capture.capture());
 
         HashMap<String, Metric> results = capture.getAllValues().get(0);
-        assertEquals(4, results.size());
-        assertEquals("5", results.get("cpu_time").getMeasurements().getSingleString());
-        assertEquals("5", results.get("real_time").getMeasurements().getSingleString());
+        assertEquals(5, results.size());
+        assertEquals("5", results.get("cpu_time_ns").getMeasurements().getSingleString());
+        assertEquals("5", results.get("real_time_ns").getMeasurements().getSingleString());
+        assertEquals("ns", results.get("time_unit").getMeasurements().getSingleString());
         assertEquals("BM_one", results.get("name").getMeasurements().getSingleString());
         assertEquals("109451958", results.get("iterations").getMeasurements().getSingleString());
     }
@@ -262,8 +266,8 @@ public class GoogleBenchmarkResultParserTest {
 
         HashMap<String, Metric> results = capture.getValue();
         assertEquals(5, results.size());
-        assertEquals("19361", results.get("cpu_time").getMeasurements().getSingleString());
-        assertEquals("44930", results.get("real_time").getMeasurements().getSingleString());
+        assertEquals("19361", results.get("cpu_time_ns").getMeasurements().getSingleString());
+        assertEquals("44930", results.get("real_time_ns").getMeasurements().getSingleString());
         assertEquals("BM_addInts", results.get("name").getMeasurements().getSingleString());
         assertEquals("36464", results.get("iterations").getMeasurements().getSingleString());
         assertEquals("ns", results.get("time_unit").getMeasurements().getSingleString());
@@ -290,8 +294,8 @@ public class GoogleBenchmarkResultParserTest {
 
         HashMap<String, Metric> results = capture.getValue();
         assertEquals(5, results.size());
-        assertEquals("19361", results.get("cpu_time").getMeasurements().getSingleString());
-        assertEquals("44930", results.get("real_time").getMeasurements().getSingleString());
+        assertEquals("19361", results.get("cpu_time_ns").getMeasurements().getSingleString());
+        assertEquals("44930", results.get("real_time_ns").getMeasurements().getSingleString());
         assertEquals("BM_addInts", results.get("name").getMeasurements().getSingleString());
         assertEquals("0", results.get("iterations").getMeasurements().getSingleString());
         assertEquals("ns", results.get("time_unit").getMeasurements().getSingleString());

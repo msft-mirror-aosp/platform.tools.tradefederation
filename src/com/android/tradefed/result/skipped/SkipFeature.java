@@ -16,6 +16,7 @@
 package com.android.tradefed.result.skipped;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.IRemoteFeature;
@@ -81,7 +82,7 @@ public class SkipFeature
         FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
         if (mConfig != null) {
             // Currently only support presubmit
-            boolean presubmit = "WORK_NODE".equals(mInfo.getContext().getAttribute("trigger"));
+            boolean presubmit = InvocationContext.isPresubmit(mInfo.getContext());
             if (mConfig.getSkipManager().reportSkippedModule()) {
                 MultiPartResponse.Builder multiPartBuilder = MultiPartResponse.newBuilder();
                 multiPartBuilder.addResponsePart(
