@@ -1396,6 +1396,16 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                         dismissed = true;
                         break;
                     } else {
+                        // abort the check if package service is unavailable
+                        if (dumpsysCmdOut.getStderr() != null
+                                && dumpsysCmdOut
+                                        .getStderr()
+                                        .contains("Can't find service: package")) {
+                            CLog.d(
+                                    "package service is not available. Skip checking setup wizard"
+                                            + " dismissal.");
+                            break;
+                        }
                         // Log the package cmd output for debugging purpose
                         CLog.d("Package cmd output: %s", pkgCmdOut.getStdout());
                         CLog.d("Package cmd stderr: %s", pkgCmdOut.getStderr());
@@ -1406,6 +1416,12 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     break;
                 }
             } else {
+                // abort the check if window service is unavailable
+                if (dumpsysCmdOut.getStderr() != null
+                        && dumpsysCmdOut.getStderr().contains("Can't find service: window")) {
+                    CLog.d("window service is not available. Skip checking setupwizard dismissal.");
+                    break;
+                }
                 // Log the dumpsys cmd output for debugging purpose
                 CLog.d("Dumpsys cmd output: %s", dumpsysCmdOut.getStdout());
                 CLog.d("Dumpsys cmd stderr: %s", dumpsysCmdOut.getStderr());
