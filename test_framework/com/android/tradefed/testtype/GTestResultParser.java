@@ -105,6 +105,8 @@ public class GTestResultParser extends MultiLineReceiver {
     private boolean mTestInProgress = false;
     private CloseableTraceScope mMethodScope = null;
     private boolean mTestRunInProgress = false;
+    private boolean mAllowRustTestName = false;
+
     private final String mTestRunName;
     private final Collection<ITestInvocationListener> mTestListeners;
 
@@ -253,6 +255,21 @@ public class GTestResultParser extends MultiLineReceiver {
     }
 
     /**
+     * Creates the GTestResultParser.
+     *
+     * @param testRunName the test run name to provide to {@link
+     *     ITestInvocationListener#testRunStarted(String, int)}
+     * @param listeners informed of test results as the tests are executing
+     * @param allowRustTestName allow test names to not follow the '::' separation pattern
+     */
+    public GTestResultParser(
+            String testRunName,
+            Collection<ITestInvocationListener> listeners,
+            boolean allowRustTestName) {
+        this(testRunName, listeners);
+    }
+
+    /**
      * Creates the GTestResultParser for a single listener.
      *
      * @param testRunName the test run name to provide to {@link
@@ -261,6 +278,20 @@ public class GTestResultParser extends MultiLineReceiver {
      */
     public GTestResultParser(String testRunName, ITestInvocationListener listener) {
         this(testRunName, Arrays.asList(listener));
+    }
+
+    /**
+     * Creates the GTestResultParser for a single listener.
+     *
+     * @param testRunName the test run name to provide to {@link
+     *     ITestInvocationListener#testRunStarted(String, int)}
+     * @param listener informed of test results as the tests are executing
+     * @param allowRustTestName allow test names to not follow the '.' separated pattern
+     */
+    public GTestResultParser(
+            String testRunName, ITestInvocationListener listener, boolean allowRustTestName) {
+        this(testRunName, listener);
+        mAllowRustTestName = allowRustTestName;
     }
 
     /**
@@ -519,6 +550,12 @@ public class GTestResultParser extends MultiLineReceiver {
         }
 
         String[] testId = identifier.split("\\.");
+        if (testId.length < 2) {
+            if (mAllowRustTestName) {
+                // split from the last `::`
+                testId = identifier.split("::(?!.*::.*)");
+            }
+        }
         if (testId.length < 2) {
             CLog.e("Could not detect the test class and test name, received: %s", identifier);
             returnInfo.mTestClassName = null;
