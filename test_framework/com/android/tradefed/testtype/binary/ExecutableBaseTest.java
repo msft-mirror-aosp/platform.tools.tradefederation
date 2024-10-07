@@ -146,6 +146,10 @@ public abstract class ExecutableBaseTest
         return false;
     }
 
+    protected boolean doesRunBinaryGenerateTestRuns() {
+        return true;
+    }
+
     protected boolean isTestFailed(String testName) {
         return mTestRunResultListener.isTestFailed(testName);
     }
@@ -217,8 +221,9 @@ public abstract class ExecutableBaseTest
         long startTimeMs = System.currentTimeMillis();
 
         try {
-            listener.testRunStarted(testRunName, testDescriptions.length);
-
+            if (doesRunBinaryGenerateTestRuns()) {
+                listener.testRunStarted(testRunName, testDescriptions.length);
+            }
             for (TestDescription description : testDescriptions) {
                 String testName = description.getTestName();
                 String cmd = testCommands.get(testName);
@@ -267,8 +272,10 @@ public abstract class ExecutableBaseTest
                 }
             }
         } finally {
-            listener.testRunEnded(
-                    System.currentTimeMillis() - startTimeMs, new HashMap<String, Metric>());
+            if (doesRunBinaryGenerateTestRuns()) {
+                listener.testRunEnded(
+                        System.currentTimeMillis() - startTimeMs, new HashMap<String, Metric>());
+            }
         }
     }
 
