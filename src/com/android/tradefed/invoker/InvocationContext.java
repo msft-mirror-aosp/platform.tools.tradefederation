@@ -32,6 +32,7 @@ import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.UniqueMultiMap;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.ImmutableSet;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -40,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * Generic implementation of a {@link IInvocationContext}.
@@ -451,5 +453,11 @@ public class InvocationContext implements IInvocationContext {
             context.mModuleContext = InvocationContext.fromProto(protoContext.getModuleContext());
         }
         return context;
+    }
+
+    /** Returns whether we detect presubmit based on trigger type. */
+    public static boolean isPresubmit(IInvocationContext context) {
+        Set<String> presubmitTrigger = ImmutableSet.of("WORK_NODE", "TREEHUGGER");
+        return presubmitTrigger.contains(context.getAttribute("trigger"));
     }
 }

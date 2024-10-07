@@ -289,7 +289,7 @@ public class GceManager {
         long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignore = new CloseableTraceScope("startMultiDevicesGce")) {
             OxygenClient oxygenClient =
-                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+                    OxygenUtil.createOxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             List<String> buildTargets = new ArrayList<>();
             List<String> buildBranches = new ArrayList<>();
             List<String> buildIds = new ArrayList<>();
@@ -316,9 +316,7 @@ public class GceManager {
                             getTestDeviceOptions().getExtraOxygenArgs(),
                             attributes,
                             getTestDeviceOptions().getGceCmdTimeout());
-            gceAvdInfos =
-                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
-                            res, mDeviceOptions.getRemoteAdbPort());
+            gceAvdInfos = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions);
             mGceAvdInfo = gceAvdInfos.get(0);
             return gceAvdInfos;
         } finally {
@@ -338,19 +336,11 @@ public class GceManager {
      */
     private GceAvdInfo startGceWithOxygenClient(
             ITestLogger logger, MultiMap<String, String> attributes) throws TargetSetupError {
-        if (getTestDeviceOptions().useOxygenationDevice()) {
-            // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
-            // Lease an oxygenation device with additional options passed in when
-            // use-oxygenation-device is set.
-            // For now, return failure with exceptions first.
-            throw new TargetSetupError(
-                    "OxygenClient: Leasing an oxygenation device is not supported for now.");
-        }
         long startTime = System.currentTimeMillis();
         long fetchTime = 0;
         try {
             OxygenClient oxygenClient =
-                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+                    OxygenUtil.createOxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             String buildTarget =
                     mBuildInfo.getBuildAttributes().containsKey("build_target")
                             ? mBuildInfo.getBuildAttributes().get("build_target")
@@ -366,7 +356,8 @@ public class GceManager {
                             getTestDeviceOptions().getGceDriverParams(),
                             getTestDeviceOptions().getExtraOxygenArgs(),
                             attributes,
-                            getTestDeviceOptions().getGceCmdTimeout());
+                            getTestDeviceOptions().getGceCmdTimeout(),
+                            getTestDeviceOptions().useOxygenationDevice());
 
             // Retry lease up to 2x if error code is in list of error codes
             int iteration = 1;
@@ -387,7 +378,8 @@ public class GceManager {
                                 getTestDeviceOptions().getGceDriverParams(),
                                 getTestDeviceOptions().getExtraOxygenArgs(),
                                 attributes,
-                                getTestDeviceOptions().getGceCmdTimeout());
+                                getTestDeviceOptions().getGceCmdTimeout(),
+                                getTestDeviceOptions().useOxygenationDevice());
                 // Update Oxygen lease attempt metrics
                 if (res.getStatus() == CommandStatus.SUCCESS) {
                     InvocationMetricLogger.addInvocationMetrics(
@@ -398,11 +390,8 @@ public class GceManager {
                 }
                 iteration++;
             }
+            mGceAvdInfo = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions).get(0);
 
-            mGceAvdInfo =
-                    GceAvdInfo.parseGceInfoFromOxygenClientOutput(
-                                    res, mDeviceOptions.getRemoteAdbPort())
-                            .get(0);
             // Lease may time out, skip remaining logic if lease failed.
             if (mGceAvdInfo.hostAndPort() == null) {
                 CLog.w("Failed to lease a device: %s", mGceAvdInfo);
@@ -426,17 +415,15 @@ public class GceManager {
                     hOUtil =
                             new HostOrchestratorUtil(
                                     getTestDeviceOptions().useOxygenationDevice(),
-                                    getTestDeviceOptions()
-                                            .getExtraOxygenArgs()
-                                            .containsKey("use_cvd"),
-                                    getTestDeviceOptions().getSshPrivateKeyPath(),
-                                    getTestDeviceOptions().getInstanceUser(),
+                                    getTestDeviceOptions().getExtraOxygenArgs(),
                                     mGceAvdInfo.instanceName(),
                                     mGceAvdInfo.hostAndPort() != null
                                             ? mGceAvdInfo.hostAndPort().getHost()
                                             : null,
                                     mGceAvdInfo.getOxygenationDeviceId(),
-                                    getTestDeviceOptions().getAvdDriverBinary());
+                                    OxygenUtil.getTargetRegion(getTestDeviceOptions()),
+                                    getTestDeviceOptions().getOxygenAccountingUser(),
+                                    oxygenClient);
                     bootSuccess = hOUtil.deviceBootCompleted(timeout);
                 } else {
                     final String remoteFile =
@@ -467,33 +454,8 @@ public class GceManager {
 
                 if (!bootSuccess) {
                     if (logger != null) {
-                        if (hOUtil != null) {
-                            File cvdLogsDir = hOUtil.pullCvdHostLogs();
-                            if (cvdLogsDir != null) {
-                                GceManager.logDirectory(
-                                        cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
-                                FileUtil.recursiveDelete(cvdLogsDir);
-                            } else {
-                                CLog.i(
-                                        "CVD Logs is null, no logs collected from host"
-                                                + " orchestrator.");
-                            }
-                            File tempFile =
-                                    hOUtil.collectLogByCommand(
-                                            "host_kernel",
-                                            HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                            logger.testLog(
-                                    "host_kernel",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                            FileUtil.deleteFile(tempFile);
-                            tempFile =
-                                    hOUtil.collectLogByCommand(
-                                            "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                            logger.testLog(
-                                    "host_orchestrator",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
+                        if (getTestDeviceOptions().useCvdCF()) {
+                            CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvdInfo, hOUtil, logger);
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
@@ -521,6 +483,15 @@ public class GceManager {
                         System.currentTimeMillis() - startTime);
             }
         }
+    }
+
+    public static void logAndDeleteFile(File tempFile, String dataName, ITestLogger logger) {
+        if (tempFile == null || logger == null) {
+            CLog.i("Skip logging due to either null file or null logger...");
+            return;
+        }
+        logger.testLog(dataName, LogDataType.CUTTLEFISH_LOG, new FileInputStreamSource(tempFile));
+        FileUtil.deleteFile(tempFile);
     }
 
     /**
@@ -781,13 +752,6 @@ public class GceManager {
      */
     private boolean shutdownGceWithOxygen() {
         try {
-            if (getTestDeviceOptions().useOxygenationDevice()) {
-                // TODO(b/322726982): Flesh out this section when the oxygen client is supported.
-                // Release an oxygenation device with additional options passed in when
-                // use-oxygenation-device is set.
-                // For now, return false first.
-                return false;
-            }
             // If gceAvdInfo is missing info, then it means the device wasn't get leased
             // successfully.
             // In such case, there is no need to release the device.
@@ -798,7 +762,7 @@ public class GceManager {
                 return true;
             }
             OxygenClient oxygenClient =
-                    new OxygenClient(getTestDeviceOptions().getAvdDriverBinary());
+                    OxygenUtil.createOxygenClient(getTestDeviceOptions().getAvdDriverBinary());
             CommandResult res =
                     oxygenClient.release(
                             mGceAvdInfo.instanceName(),
@@ -806,7 +770,8 @@ public class GceManager {
                             OxygenUtil.getTargetRegion(getTestDeviceOptions()),
                             getTestDeviceOptions().getOxygenAccountingUser(),
                             getTestDeviceOptions().getExtraOxygenArgs(),
-                            getTestDeviceOptions().getGceCmdTimeout());
+                            getTestDeviceOptions().getGceCmdTimeout(),
+                            getTestDeviceOptions().useOxygenationDevice());
             if (!res.getStatus().equals(CommandStatus.SUCCESS)) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.OXYGEN_DEVICE_RELEASE_FAILURE_COUNT, 1);

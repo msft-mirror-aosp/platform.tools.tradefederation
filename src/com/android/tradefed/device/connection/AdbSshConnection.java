@@ -281,33 +281,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 if (mGceAvd.getSkipDeviceLogCollection()) {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (getDevice().getOptions().useCvdCF()) {
-                    createHostOrchestratorUtil(mGceAvd);
-                    File cvdLogsDir = mHOUtil.pullCvdHostLogs();
-                    if (cvdLogsDir != null) {
-                        GceManager.logDirectory(
-                                cvdLogsDir, null, getLogger(), LogDataType.CUTTLEFISH_LOG);
-                        FileUtil.recursiveDelete(cvdLogsDir);
-                    } else {
-                        CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
-                    }
-                    File tempFile =
-                            mHOUtil.collectLogByCommand(
-                                    "host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                    getLogger()
-                            .testLog(
-                                    "host_kernel",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                    FileUtil.deleteFile(tempFile);
-                    tempFile =
-                            mHOUtil.collectLogByCommand(
-                                    "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                    getLogger()
-                            .testLog(
-                                    "host_orchestrator",
-                                    LogDataType.CUTTLEFISH_LOG,
-                                    new FileInputStreamSource(tempFile));
-                    FileUtil.deleteFile(tempFile);
+                    mHOUtil = createHostOrchestratorUtil(mGceAvd);
+                    CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvd, mHOUtil, getLogger());
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
@@ -449,7 +424,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         createGceTunnelMonitor(getDevice(), buildInfo, mGceAvd, getDevice().getOptions());
-        createHostOrchestratorUtil(mGceAvd);
+        mHOUtil = createHostOrchestratorUtil(mGceAvd);
     }
 
     /** Create an ssh tunnel, connect to it, and keep the connection alive. */
@@ -459,7 +434,14 @@ public class AdbSshConnection extends AdbTcpConnection {
             GceAvdInfo gceAvdInfo,
             TestDeviceOptions deviceOptions) {
         if (deviceOptions.useOxygenationDevice()) {
-            mGceTunnelMonitor = new GceLHPTunnelMonitor();
+            mGceTunnelMonitor =
+                    new GceLHPTunnelMonitor(
+                            device,
+                            buildInfo,
+                            gceAvdInfo.instanceName(),
+                            gceAvdInfo.getOxygenationDeviceId(),
+                            gceAvdInfo.hostAndPort().getHost(),
+                            deviceOptions);
         } else {
             mGceTunnelMonitor =
                     new GceSshTunnelMonitor(
@@ -799,10 +781,16 @@ public class AdbSshConnection extends AdbTcpConnection {
 
         if (!CommandStatus.SUCCESS.equals(restoreRes.getStatus())) {
             CLog.e("%s", restoreRes.getStderr());
+            DeviceErrorIdentifier identifier =
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT;
+            if (restoreRes.getStderr().contains("Not enough space remaining in fs containing")) {
+                identifier =
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT_NOT_ENOUGH_SPACE;
+            }
             throw new TargetSetupError(
                     String.format("failed to restore device: %s", restoreRes.getStderr()),
                     getDevice().getDeviceDescriptor(),
-                    DeviceErrorIdentifier.DEVICE_FAILED_TO_RESTORE_SNAPSHOT);
+                    identifier);
         }
         try {
             waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
@@ -959,25 +947,27 @@ public class AdbSshConnection extends AdbTcpConnection {
     }
 
     /** Helper to create host orchestrator utility. */
-    private void createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+    HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
         if (mHOUtil != null) {
             CLog.i("Host Orchestrator Util has been initialized...");
-            return;
+            return mHOUtil;
         }
         if (getDevice().getOptions().useCvdCF()) {
             CLog.i("Creating host orchestrator utility...");
             mHOUtil =
                     new HostOrchestratorUtil(
                             getDevice().getOptions().useOxygenationDevice(),
-                            getDevice().getOptions().getExtraOxygenArgs().containsKey("use_cvd"),
-                            getDevice().getOptions().getSshPrivateKeyPath(),
-                            getDevice().getOptions().getInstanceUser(),
+                            getDevice().getOptions().getExtraOxygenArgs(),
                             gceAvdInfo.instanceName(),
                             gceAvdInfo.hostAndPort() != null
                                     ? gceAvdInfo.hostAndPort().getHost()
                                     : null,
                             gceAvdInfo.getOxygenationDeviceId(),
-                            getDevice().getOptions().getAvdDriverBinary());
+                            OxygenUtil.getTargetRegion(getDevice().getOptions()),
+                            getDevice().getOptions().getOxygenAccountingUser(),
+                            OxygenUtil.createOxygenClient(
+                                    getDevice().getOptions().getAvdDriverBinary()));
         }
+        return mHOUtil;
     }
 }

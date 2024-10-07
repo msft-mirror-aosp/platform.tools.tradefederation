@@ -39,7 +39,7 @@ import java.util.Set;
 public class RunOnPrivateProfileParameterHandlerTest {
 
     private static final String REQUIRE_RUN_ON_PRIVATE_PROFILE_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnPrivateProfile";
+            "com.android.bedstead.multiuser.annotations.RequireRunOnPrivateProfile";
     private static final String EXISTING_ANNOTATION_FILTER = "existing.annotation.filter";
 
     private RunOnPrivateProfileParameterHandler mHandler;

@@ -535,20 +535,14 @@ public class FileUtil {
             throw new IOException(String.format("Could not create directory %s",
                     destDir.getAbsolutePath()));
         }
-        Arrays.asList(sourceDir.listFiles()).parallelStream()
-                .forEach(
-                        childFile -> {
-                            try {
-                                File destChild = new File(destDir, childFile.getName());
-                                if (childFile.isDirectory()) {
-                                    recursiveHardlink(childFile, destChild, ignoreExistingFile);
-                                } else if (childFile.isFile()) {
-                                    hardlinkFile(childFile, destChild, ignoreExistingFile);
-                                }
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
+        for (File childFile : sourceDir.listFiles()) {
+            File destChild = new File(destDir, childFile.getName());
+            if (childFile.isDirectory()) {
+                recursiveHardlink(childFile, destChild, ignoreExistingFile);
+            } else if (childFile.isFile()) {
+                hardlinkFile(childFile, destChild, ignoreExistingFile);
+            }
+        }
     }
 
     /**
@@ -731,14 +725,13 @@ public class FileUtil {
         // Based on empirical testing File.getUsableSpace is a low cost operation (~ 100 us for
         // local disk, ~ 100 ms for network disk). Therefore call it every time tmp file is
         // created
-        long usableSpace = 0L;
         File toCheck = file;
         if (!file.isDirectory() && file.getParentFile() != null) {
             // If the given file is not a directory it might not work properly so using the parent
             // in that case.
             toCheck = file.getParentFile();
         }
-        usableSpace = toCheck.getUsableSpace();
+        long usableSpace = toCheck.getUsableSpace();
 
         long minDiskSpace = mMinDiskSpaceMb * 1024 * 1024;
         if (usableSpace < minDiskSpace) {

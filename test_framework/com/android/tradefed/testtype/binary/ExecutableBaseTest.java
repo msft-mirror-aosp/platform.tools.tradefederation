@@ -27,7 +27,9 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IAbi;
@@ -110,6 +112,7 @@ public abstract class ExecutableBaseTest
     private Set<String> mIncludeFilters = new LinkedHashSet<>();
     private Set<String> mExcludeFilters = new LinkedHashSet<>();
     private IConfiguration mConfiguration = null;
+    private TestRunResultListener mTestRunResultListener;
 
     /**
      * Get test commands.
@@ -141,6 +144,14 @@ public abstract class ExecutableBaseTest
 
     protected boolean doesRunBinaryGenerateTestResults() {
         return false;
+    }
+
+    protected boolean doesRunBinaryGenerateTestRuns() {
+        return true;
+    }
+
+    protected boolean isTestFailed(String testName) {
+        return mTestRunResultListener.isTestFailed(testName);
     }
 
     /** {@inheritDoc} */
@@ -194,6 +205,8 @@ public abstract class ExecutableBaseTest
     @Override
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
+        mTestRunResultListener = new TestRunResultListener();
+        listener = new ResultForwarder(listener, mTestRunResultListener);
         setTestInfo(testInfo);
         String moduleId = getModuleId(testInfo.getContext());
         Map<String, String> testCommands = getAllTestCommands();
@@ -208,53 +221,61 @@ public abstract class ExecutableBaseTest
         long startTimeMs = System.currentTimeMillis();
 
         try {
-            listener.testRunStarted(testRunName, testDescriptions.length);
-
+            if (doesRunBinaryGenerateTestRuns()) {
+                listener.testRunStarted(testRunName, testDescriptions.length);
+            }
             for (TestDescription description : testDescriptions) {
                 String testName = description.getTestName();
                 String cmd = testCommands.get(testName);
                 String path = findBinary(cmd);
-                try {
-                    if (path == null) {
+
+                FailureDescription abortDescription = shouldAbortRun(description);
+
+                if (abortDescription != null) {
+                    listener.testRunFailed(abortDescription);
+                    break;
+                } else if (path == null) {
+                    listener.testStarted(description);
+                    listener.testFailed(
+                            description,
+                            FailureDescription.create(
+                                            String.format(NO_BINARY_ERROR, cmd),
+                                            FailureStatus.TEST_FAILURE)
+                                    .setErrorIdentifier(
+                                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND));
+                    listener.testEnded(description, new HashMap<String, Metric>());
+                } else {
+                    try {
+                        if (!doesRunBinaryGenerateTestResults()) {
+                            listener.testStarted(description);
+                        }
+
+                        if (!getCollectTestsOnly()) {
+                            // Do not actually run the test if we are dry running it.
+                            runBinary(path, listener, description);
+                        }
+                    } catch (IOException e) {
                         listener.testFailed(
                                 description,
-                                FailureDescription.create(
-                                                String.format(NO_BINARY_ERROR, cmd),
-                                                FailureStatus.TEST_FAILURE)
-                                        .setErrorIdentifier(
-                                                InfraErrorIdentifier
-                                                        .CONFIGURED_ARTIFACT_NOT_FOUND));
-                    } else {
-                        try {
-                            if (!doesRunBinaryGenerateTestResults()) {
-                                listener.testStarted(description);
-                            }
-
-                            if (!getCollectTestsOnly()) {
-                                // Do not actually run the test if we are dry running it.
-                                runBinary(path, listener, description);
-                            }
-                        } catch (IOException e) {
-                            listener.testFailed(
-                                    description,
-                                    FailureDescription.create(StreamUtil.getStackTrace(e)));
-                            if (doesRunBinaryGenerateTestResults()) {
-                                // We can't rely on the `testEnded()` call in the finally
-                                // clause if `runBinary()` is responsible for generating test
-                                // results, therefore we call it here.
-                                listener.testEnded(description, new HashMap<String, Metric>());
-                            }
+                                FailureDescription.create(StreamUtil.getStackTrace(e)));
+                        if (doesRunBinaryGenerateTestResults()) {
+                            // We can't rely on the `testEnded()` call in the finally
+                            // clause if `runBinary()` is responsible for generating test
+                            // results, therefore we call it here.
+                            listener.testEnded(description, new HashMap<String, Metric>());
                         }
-                    }
-                } finally {
-                    if (!doesRunBinaryGenerateTestResults()) {
-                        listener.testEnded(description, new HashMap<String, Metric>());
+                    } finally {
+                        if (!doesRunBinaryGenerateTestResults()) {
+                            listener.testEnded(description, new HashMap<String, Metric>());
+                        }
                     }
                 }
             }
         } finally {
-            listener.testRunEnded(
-                    System.currentTimeMillis() - startTimeMs, new HashMap<String, Metric>());
+            if (doesRunBinaryGenerateTestRuns()) {
+                listener.testRunEnded(
+                        System.currentTimeMillis() - startTimeMs, new HashMap<String, Metric>());
+            }
         }
     }
 
@@ -277,6 +298,16 @@ public abstract class ExecutableBaseTest
                     && !mIncludeFilters.contains(description.toString());
         }
         return false;
+    }
+
+    /**
+     * Check if the testRun should end early.
+     *
+     * @param description The test in progress.
+     * @return FailureDescription if the run loop should terminate.
+     */
+    public FailureDescription shouldAbortRun(TestDescription description) {
+        return null;
     }
 
     /**
@@ -447,8 +478,7 @@ public abstract class ExecutableBaseTest
      *
      * @return a Map{@link LinkedHashMap}<String, String> of testCommands.
      */
-    @VisibleForTesting
-    Map<String, String> getAllTestCommands() {
+    protected Map<String, String> getAllTestCommands() {
         Map<String, String> testCommands = new LinkedHashMap<>(mTestCommands);
         for (String binary : mBinaryPaths) {
             testCommands.put(new File(binary).getName(), binary);

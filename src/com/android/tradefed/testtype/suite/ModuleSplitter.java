@@ -185,17 +185,22 @@ public class ModuleSplitter {
                                             clonePreparersMap(suitePreparersPerDevice),
                                             clonePreparers(config.getMultiTargetPreparers()),
                                             config);
+                            module.setIntraModuleInformation(shardedTests.size(), i);
                             currentList.add(module);
                         }
                     } else {
                         // We create independent modules with each sharded test.
+                        int i = 0;
                         for (IRemoteTest moduleTest : shardedTests) {
-                            addModuleToListFromSingleTest(
-                                    currentList,
-                                    moduleTest,
-                                    moduleName,
-                                    config,
-                                    suitePreparersPerDevice);
+                            ModuleDefinition module =
+                                    addModuleToListFromSingleTest(
+                                            currentList,
+                                            moduleTest,
+                                            moduleName,
+                                            config,
+                                            suitePreparersPerDevice);
+                            module.setIntraModuleInformation(shardedTests.size(), i);
+                            i++;
                         }
                     }
                     continue;
@@ -212,7 +217,7 @@ public class ModuleSplitter {
      * Helper to add a new {@link ModuleDefinition} to our list of Modules from a single {@link
      * IRemoteTest}.
      */
-    private static void addModuleToListFromSingleTest(
+    private static ModuleDefinition addModuleToListFromSingleTest(
             List<ModuleDefinition> currentList,
             IRemoteTest test,
             String moduleName,
@@ -229,6 +234,7 @@ public class ModuleSplitter {
                         clonePreparers(config.getMultiTargetPreparers()),
                         config);
         currentList.add(module);
+        return module;
     }
 
     /**

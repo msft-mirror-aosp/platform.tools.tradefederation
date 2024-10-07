@@ -25,7 +25,6 @@ public class VersionParser {
 
     public static final String DEFAULT_IMPLEMENTATION_VERSION = "default";
     private static final String VERSION_FILE = "version.txt";
-    private static final String TF_MAIN_JAR = "/tradefed.jar";
 
     public static String fetchVersion() {
         return getPackageVersion();

@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.rust;
 
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
 import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
 
 import com.android.annotations.VisibleForTesting;
@@ -22,6 +23,8 @@ import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.cache.ExecutableActionResult;
+import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -33,10 +36,13 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.ResultForwarder;
+import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.util.CacheClientFactory;
+import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -78,7 +84,9 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                             + " process.")
     private boolean mInheritEnvVars = true;
 
+    private File mCoverageDir;
     private IBuildInfo mBuildInfo;
+    private TestRunResultListener mTestRunResultListener;
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -89,6 +97,8 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     public final void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         try {
+            mTestRunResultListener = new TestRunResultListener();
+            listener = new ResultForwarder(listener, mTestRunResultListener);
             List<File> rustFilesList = findFiles();
             for (File file : rustFilesList) {
                 if (!file.exists()) {
@@ -162,7 +172,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                         }
                     }
                 }
-
             }
             if (res == null) {
                 throw new RuntimeException(
@@ -175,6 +184,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     private void runSingleRustFile(ITestInvocationListener listener, File file) {
         CLog.d("Run single Rust File: %s", file.getAbsolutePath());
+        String runName = file.getName();
         List<Invocation> invocations = generateInvocations(file);
 
         Set<String> foundTests = new HashSet<>();
@@ -184,7 +194,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 FailureDescription failure =
                         FailureDescription.create(
                                 "Could not count the number of tests", FailureStatus.TEST_FAILURE);
-                listener.testRunStarted(file.getName(), 0);
+                listener.testRunStarted(runName, 0);
                 listener.testRunFailed(failure);
                 listener.testRunEnded(0, new HashMap<String, Metric>());
                 CLog.e(failure.getErrorMessage());
@@ -194,16 +204,39 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         int testCount = foundTests.size();
         CLog.d("Total test count: %d", testCount);
         long startTimeMs = System.currentTimeMillis();
-        listener.testRunStarted(file.getName(), testCount, 0, startTimeMs);
+        listener.testRunStarted(runName, testCount, 0, startTimeMs);
         if (testCount > 0) {
             for (Invocation invocation : invocations) {
+                File profdata = null;
                 try {
-                    runTest(listener, invocation, file.getName());
+                    runTest(listener, invocation, runName);
+                    if (isClangCoverageEnabled()) {
+                        Set<String> profraws = FileUtil.findFiles(mCoverageDir, ".*\\.profraw");
+                        ClangProfileIndexer indexer =
+                                new ClangProfileIndexer(
+                                        getConfiguration()
+                                                .getCoverageOptions()
+                                                .getLlvmProfdataPath());
+                        profdata = FileUtil.createTempFile(runName, ".profdata");
+                        indexer.index(profraws, profdata);
+
+                        try (FileInputStreamSource source =
+                                new FileInputStreamSource(profdata, true)) {
+                            listener.testLog(runName, LogDataType.CLANG_COVERAGE, source);
+                        }
+                    }
                 } catch (IOException e) {
                     listener.testRunFailed(e.getMessage());
                     long testTimeMs = System.currentTimeMillis() - startTimeMs;
                     listener.testRunEnded(testTimeMs, new HashMap<String, Metric>());
                     throw new RuntimeException(e);
+                } finally {
+                    if (isClangCoverageEnabled()) {
+                        FileUtil.deleteFile(profdata);
+                        FileUtil.recursiveDelete(mCoverageDir);
+                        mCoverageDir = null;
+                    }
+                    profdata = null;
                 }
             }
         }
@@ -212,7 +245,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     }
 
     private boolean countTests(Invocation invocation, Set<String> foundTests) {
-        CommandResult listResult = runInvocation(invocation, false, "--list");
+        CommandResult listResult = runInvocation(invocation, null, getRunUtil(), "--list");
         // TODO: Do we want to handle non-standard test harnesses without a
         // --list param? Currently we will report 0 tests, which will cause an
         // overall failure, but we don't know how to parse arbitrary test
@@ -231,8 +264,10 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     }
 
     private CommandResult runInvocation(
-            final Invocation invocation, boolean enableCache, final String... extraArgs) {
-        IRunUtil runUtil = getRunUtil();
+            final Invocation invocation,
+            ICacheClient cacheClient,
+            IRunUtil runUtil,
+            final String... extraArgs) {
         runUtil.setWorkingDir(invocation.workingDir);
         runUtil.unsetEnvVariable(
                 "TERM"); // Environment TERM can affect output format and fail parser
@@ -250,33 +285,43 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
         }
+        if (isClangCoverageEnabled()) {
+            try {
+                mCoverageDir = FileUtil.createTempDir("clang");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            runUtil.setEnvVariable(
+                    "LLVM_PROFILE_FILE", mCoverageDir.getAbsolutePath() + "/clang-%m.profraw");
+        }
+
         runUtil.setEnvVariable(
                 "PATH",
                 buildPathWithRelativePaths(
                         invocation.workingDir, Collections.singleton("adb"), "/usr/bin"));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
-        String instanceName =
-                enableCache
-                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
-                        : null;
-        return Strings.isNullOrEmpty(instanceName)
+        return cacheClient == null
                 ? runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]))
                 : runUtil.runTimedCmdWithOutputMonitor(
-                        mTestTimeout,
-                        0,
-                        null,
-                        null,
-                        CacheClientFactory.createCacheClient(
-                                CurrentInvocation.getWorkFolder(), instanceName),
-                        command.toArray(new String[0]));
+                        mTestTimeout, 0, null, null, cacheClient, command.toArray(new String[0]));
     }
 
     private void runTest(
             ITestInvocationListener listener, final Invocation invocation, final String runName)
             throws IOException {
 
-        CommandResult result = runInvocation(invocation, mEnableCache);
+        String instanceName =
+                mEnableCache
+                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
+                        : null;
+        ICacheClient cacheClient =
+                Strings.isNullOrEmpty(instanceName)
+                        ? null
+                        : getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
+
+        IRunUtil runUtil = getRunUtil();
+        CommandResult result = runInvocation(invocation, cacheClient, runUtil);
 
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             String message =
@@ -291,19 +336,21 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             CLog.e(message);
         }
 
-        File resultFile = null;
+        File stdoutFile = null;
+        File stderrFile = null;
         try {
-            resultFile = FileUtil.createTempFile("rust-res", ".txt");
+            stdoutFile = FileUtil.createTempFile("rust-stdout", ".txt");
+            stderrFile = FileUtil.createTempFile("rust-stderr", ".txt");
             if (result.getStderr().length() > 0) {
-                FileUtil.writeToFile(result.getStderr(), resultFile);
-                try (FileInputStreamSource data = new FileInputStreamSource(resultFile)) {
+                FileUtil.writeToFile(result.getStderr(), stderrFile);
+                try (FileInputStreamSource data = new FileInputStreamSource(stderrFile)) {
                     listener.testLog(
                             String.format(RUST_LOG_STDERR_FORMAT, runName), LogDataType.TEXT, data);
                 }
             }
             if (result.getStdout().length() > 0) {
-                FileUtil.writeToFile(result.getStdout(), resultFile);
-                try (FileInputStreamSource data = new FileInputStreamSource(resultFile)) {
+                FileUtil.writeToFile(result.getStdout(), stdoutFile);
+                try (FileInputStreamSource data = new FileInputStreamSource(stdoutFile)) {
                     listener.testLog(
                             String.format(RUST_LOG_STDOUT_FORMAT, runName), LogDataType.TEXT, data);
                 }
@@ -311,17 +358,34 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             IShellOutputReceiver parser = createParser(listener, runName);
             parser.addOutput(result.getStdout().getBytes(), 0, result.getStdout().length());
             parser.flush();
+            if (!result.isCached() && !mTestRunResultListener.isTestRunFailed(runName)) {
+                runUtil.uploadCache(
+                        cacheClient,
+                        ExecutableActionResult.create(
+                                result.getExitCode(), stdoutFile, stderrFile));
+            }
         } catch (RuntimeException e) {
             listener.testRunFailed(
                     String.format("Failed to parse the rust test output: %s", e.getMessage()));
             CLog.e(e);
         } finally {
-            FileUtil.deleteFile(resultFile);
+            FileUtil.deleteFile(stdoutFile);
+            FileUtil.deleteFile(stderrFile);
         }
     }
 
     @VisibleForTesting
     IRunUtil getRunUtil() {
         return new RunUtil(mInheritEnvVars);
+    }
+
+    @VisibleForTesting
+    ICacheClient getCacheClient(File workFolder, String instanceName) {
+        return CacheClientFactory.createCacheClient(workFolder, instanceName);
+    }
+
+    private boolean isClangCoverageEnabled() {
+        return getConfiguration().getCoverageOptions().isCoverageEnabled()
+                && getConfiguration().getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 }

@@ -1,4 +1,5 @@
 /*
+ *
  * Copyright 2018 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,8 +39,6 @@ import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.RunUtil;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 
 import java.io.BufferedReader;
@@ -117,15 +116,19 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     private static final String HFP_HF_PROPERTY = "bluetooth.profile.hfp.hf.enabled";
     private static final String HFP_AG_PROPERTY = "bluetooth.profile.hfp.ag.enabled";
 
-    private static final String GET_BLUETOOTH_FLAG =
-            "device_config get bluetooth com.android.bluetooth.flags";
-    private static final String JAVA_BLUETOOTH_FLAG =
-            "device_config put bluetooth com.android.bluetooth.flags";
     private static final String NATIVE_BLUETOOTH_FLAG =
             "setprop persist.device_config.aconfig_flags.bluetooth.com.android.bluetooth.flags";
 
-    private static final HashMap<String, ArrayList<String>> flagsConfig = new HashMap();
-    private static final HashMap<String, Boolean> defaultFlagsValue = new HashMap<>();
+    public class TestFlagConfiguration {
+        List<FlagConfig> flags;
+
+        public class FlagConfig {
+            List<String> flags;
+            List<String> tests;
+        }
+    }
+
+    private TestFlagConfiguration testFlagConfiguration;
 
     private IRunUtil mRunUtil = new RunUtil();
 
@@ -220,12 +223,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         excludeFilters.clear();
     }
 
-    public HashMap<String, ArrayList<String>> getConfigFlags() {
-        return flagsConfig;
-    }
-
-    public HashMap<String, Boolean> getFlagsDefaultValues() {
-        return defaultFlagsValue;
+    public TestFlagConfiguration getTestFlagConfiguration() {
+        return testFlagConfiguration;
     }
 
     private int shardIndex = 0;
@@ -504,83 +503,65 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                 for (String testName : profileTests) {
                     toggleA2dpSinkIfNeeded(testDevice, testName);
                     toggleHfpHfIfNeeded(testDevice, testName);
-                    Set<String> flags = flagsToEnable(testDevice, testName);
-                    if (flags.isEmpty()) {
-                        runPtsBotTest(profile, testName, testInfo, listener);
-                    } else {
-                        for (String flag : flags) {
-                            setBluetoothFlag(testDevice, flag, true);
+                    boolean matchingFlagConfig = false;
+                    boolean unflagged = false;
+                    for (TestFlagConfiguration.FlagConfig flagConfig :
+                            testFlagConfiguration.flags) {
+                        if (flagConfig.tests.stream().anyMatch(testName::startsWith)) {
+                            matchingFlagConfig = true;
+                            flagConfig.flags.forEach(flag -> enableBluetoothFlag(testDevice, flag));
                             runPtsBotTest(profile, testName, testInfo, listener);
-                            restoreFlagIfNeeded(testDevice, flag, testName);
+                            flagConfig.flags.forEach(
+                                    flag -> restoreBluetoothFlag(testDevice, flag));
+
+                            if (flagConfig.flags.stream().anyMatch("unflagged"::equals)) {
+                                unflagged = true;
+                            }
                         }
                     }
+                    if (!matchingFlagConfig || unflagged) {
+                        runPtsBotTest(profile, testName, testInfo, listener);
+                    }
+                    long endTimestamp = System.currentTimeMillis();
+                    listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
                 }
-                long endTimestamp = System.currentTimeMillis();
-                listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
             } else {
                 CLog.i("No tests applicable for %s", profile);
             }
         }
     }
 
-    private Set<String> flagsToEnable(ITestDevice testDevice, String testName) {
-        Set<String> flagsSet = new LinkedHashSet<>();
-        flagsConfig.forEach(
-                (flag, prefixes) -> {
-                    if (prefixes.stream().anyMatch(testName::startsWith)) {
-                        CLog.i("flagsToEnable: " + flag);
-                        flagsSet.add(flag);
-                    }
-                });
-
-        return flagsSet;
-    }
-
-    private void restoreFlagIfNeeded(ITestDevice testDevice, String flag, String testName) {
-        if (defaultFlagsValue.containsKey(flag)) {
-            setBluetoothFlag(testDevice, flag, defaultFlagsValue.get(flag));
-        }
-    }
-
-    private void setBluetoothFlag(ITestDevice testDevice, String flag, boolean flag_value) {
-        CLog.i("setBluetoothFlag: " + flag + " " + flag_value);
+    private void shell(ITestDevice testDevice, String cmd) {
         try {
-            String set_native_flag_cmd =
-                    String.format("%s.%s %s", NATIVE_BLUETOOTH_FLAG, flag, flag_value);
-            CommandResult native_result = testDevice.executeShellV2Command(set_native_flag_cmd);
-            if (native_result.getExitCode() != 0) {
-                CLog.e(
-                        "Failed to set native flag: "
-                                + set_native_flag_cmd
-                                + ": "
-                                + native_result.getStderr());
-            }
-
-            String set_java_flag_cmd =
-                    String.format("%s.%s %s", JAVA_BLUETOOTH_FLAG, flag, flag_value);
-            CommandResult java_result = testDevice.executeShellV2Command(set_java_flag_cmd);
-            if (java_result.getExitCode() != 0) {
-                CLog.e(
-                        "Failed to set java flag: "
-                                + set_java_flag_cmd
-                                + ": "
-                                + java_result.getStderr());
+            CommandResult cmdResult = testDevice.executeShellV2Command(cmd);
+            if (cmdResult.getExitCode() != 0) {
+                CLog.e("Failed to run_cmd: " + cmdResult.getStderr());
             }
         } catch (DeviceNotAvailableException e) {
-            CLog.e("setBluetoothFlag error: " + e);
+            CLog.e("Device not available: " + e);
         }
     }
 
-    public boolean getBluetoothFlag(ITestDevice testDevice, String flag) {
-        CLog.i("getBluetoothFlag: " + flag);
-        try {
-            String get_flag = String.format("%s.%s", GET_BLUETOOTH_FLAG, flag);
-            CommandResult get_flag_result = testDevice.executeShellV2Command(get_flag);
-            return Boolean.valueOf(get_flag_result.getStdout());
-        } catch (DeviceNotAvailableException e) {
-            CLog.e("getBluetoothFlag error: " + e);
-        }
-        return false;
+    private void enableBluetoothFlag(ITestDevice testDevice, String flag) {
+        String setNativeFlagCmd = String.format("%s.%s true", NATIVE_BLUETOOTH_FLAG, flag);
+        shell(testDevice, setNativeFlagCmd);
+
+        String overrideFlagCmd =
+                String.format(
+                        "device_config override bluetooth com.android.bluetooth.flags.%s true",
+                        flag);
+        shell(testDevice, overrideFlagCmd);
+    }
+
+    private void restoreBluetoothFlag(ITestDevice testDevice, String flag) {
+        String clearOverrideCmd =
+                String.format(
+                        "device_config clear_override bluetooth com.android.bluetooth.flags.%s",
+                        flag);
+        shell(testDevice, clearOverrideCmd);
+
+        String restoreNativeFlagCmd = String.format("%s.%s \\\"\\\"", NATIVE_BLUETOOTH_FLAG, flag);
+        shell(testDevice, restoreNativeFlagCmd);
     }
 
     public void initFlagsConfig(ITestDevice testDevice, File testConfigFile) {
@@ -588,23 +569,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         try {
             Gson gson = new Gson();
             FileReader reader = new FileReader(testConfigFile);
-            JsonObject configJsonObject = gson.fromJson(reader, JsonObject.class);
-            JsonObject flagsJsonObject = configJsonObject.getAsJsonObject("flags");
-            if (flagsJsonObject == null) {
-                CLog.e("initFlagsConfig: \"flags\" json object does not exist !");
+            testFlagConfiguration = gson.fromJson(reader, TestFlagConfiguration.class);
+            List<TestFlagConfiguration.FlagConfig> flags = testFlagConfiguration.flags;
+            if (flags.isEmpty()) {
                 return;
-            }
-            for (String flag : flagsJsonObject.keySet()) {
-                // Construct the map
-                JsonArray testsJsonArray = flagsJsonObject.getAsJsonArray(flag);
-                ArrayList<String> tests = new ArrayList<String>();
-                for (int i = 0; i < testsJsonArray.size(); i++) {
-                    tests.add(testsJsonArray.get(i).getAsString());
-                }
-                flagsConfig.put(flag, tests);
-
-                // Fill in the default flags values
-                defaultFlagsValue.put(flag, getBluetoothFlag(testDevice, flag));
             }
         } catch (IOException | JsonSyntaxException e) {
             CLog.e("Error initFlagsConfig: " + e);

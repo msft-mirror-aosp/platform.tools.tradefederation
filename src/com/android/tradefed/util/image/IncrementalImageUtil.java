@@ -43,6 +43,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -89,6 +90,8 @@ public class IncrementalImageUtil {
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
+    private final boolean mWipeAfterApplySnapshot;
+    private boolean mNewFlow;
     private final SnapuserdWaitPhase mWaitPhase;
 
     private boolean mAllowSameBuildFlashing = false;
@@ -108,7 +111,10 @@ public class IncrementalImageUtil {
             File createSnapshot,
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
+            MultiMap<String, String> allowedbranchTransition,
             boolean applySnapshot,
+            boolean wipeAfterApply,
+            boolean newFlow,
             SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
@@ -133,8 +139,17 @@ public class IncrementalImageUtil {
             return null;
         }
         if (!tracker.branch.equals(build.getBuildBranch())) {
-            CLog.d("Newer build is not on the same branch.");
-            return null;
+            if (applySnapshot
+                    && wipeAfterApply
+                    && allowedbranchTransition.containsKey(tracker.branch)
+                    && allowedbranchTransition
+                            .get(tracker.branch)
+                            .contains(build.getBuildBranch())) {
+                CLog.d("Allowing transition from %s => %s", tracker.branch, build.getBuildBranch());
+            } else {
+                CLog.d("Newer build is not on the same branch.");
+                return null;
+            }
         }
         boolean crossRelease = false;
         if (!tracker.flavor.equals(build.getBuildFlavor())) {
@@ -156,9 +171,12 @@ public class IncrementalImageUtil {
 
         String splTarget = getSplVersion(build);
         String splBaseline = device.getProperty("ro.build.version.security_patch");
-        if (splTarget != null && !splBaseline.equals(splTarget)) {
-            CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
-            return null;
+        // When we wipe, do not consider security_patch
+        if (!wipeAfterApply) {
+            if (splTarget != null && !splBaseline.equals(splTarget)) {
+                CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
+                return null;
+            }
         }
         if (crossRelease) {
             InvocationMetricLogger.addInvocationMetrics(
@@ -194,6 +212,8 @@ public class IncrementalImageUtil {
                 build.getDeviceImageFile(),
                 createSnapshot,
                 applySnapshot,
+                wipeAfterApply,
+                newFlow,
                 waitPhase);
     }
 
@@ -205,12 +225,16 @@ public class IncrementalImageUtil {
             File targetImage,
             File createSnapshot,
             boolean applySnapshot,
+            boolean wipeAfterApply,
+            boolean newFlow,
             SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
         mSrcBaseband = baseband;
         mApplySnapshot = applySnapshot;
+        mWipeAfterApplySnapshot = wipeAfterApply;
+        mNewFlow = newFlow;
         mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
@@ -305,6 +329,10 @@ public class IncrementalImageUtil {
         mAllowUnzipBaseline = true;
     }
 
+    public boolean useUpdatedFlow() {
+        return mNewFlow;
+    }
+
     /** Returns whether device is currently using snapshots or not. */
     public static boolean isSnapshotInUse(ITestDevice device) throws DeviceNotAvailableException {
         CommandResult dumpOutput = device.executeShellV2Command("snapshotctl dump");
@@ -313,6 +341,21 @@ public class IncrementalImageUtil {
             return false;
         }
         return true;
+    }
+
+    public void updateDeviceWithNewFlow(File currentBootloader, File currentRadio)
+            throws DeviceNotAvailableException, TargetSetupError {
+        if (!mNewFlow || !mApplySnapshot || !mWipeAfterApplySnapshot) {
+            mNewFlow = false;
+            return;
+        }
+        // If device isn't online, we can't use the new flow
+        if (!TestDeviceState.ONLINE.equals(mDevice.getDeviceState())) {
+            mNewFlow = false;
+            return;
+        }
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.INCREMENTAL_NEW_FLOW, 1);
+        updateDevice(currentBootloader, currentRadio);
     }
 
     /** Updates the device using the snapshot logic. */
@@ -368,14 +411,28 @@ public class IncrementalImageUtil {
         }
         // We need a few seconds after boot complete for update_engine to finish
         // TODO: we could improve by listening to some update_engine messages.
-        RunUtil.getDefault().sleep(5000L);
+        if (!mNewFlow) {
+            RunUtil.getDefault().sleep(5000L);
+        }
         File srcDirectory = mParallelSetup.getSrcDirectory();
         File targetDirectory = mParallelSetup.getTargetDirectory();
         File workDir = mParallelSetup.getWorkDir();
         try (CloseableTraceScope ignored = new CloseableTraceScope("update_device")) {
             // Once block comparison is successful, log the information
             logTargetInformation(targetDirectory);
-            logPatchesInformation(workDir);
+            long totalPatchSizes = logPatchesInformation(workDir);
+            // if we have more than 2.5GB we will overflow super partition size to /data and we
+            // can't use the feature
+            if (totalPatchSizes > 2300000000L) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Patches too large.");
+                throw new TargetSetupError(
+                        String.format(
+                                "Total patch size is %s bytes. Too large to use the feature."
+                                        + " falling back",
+                                totalPatchSizes),
+                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            }
 
             mDevice.executeShellV2Command("mkdir -p /data/ndb");
             mDevice.executeShellV2Command("rm -rf /data/ndb/*.patch");
@@ -430,12 +487,18 @@ public class IncrementalImageUtil {
             CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
 
             if (mApplySnapshot) {
-                CommandResult mapOutput =
-                        mDevice.executeShellV2Command("snapshotctl apply-update /data/ndb/");
+                String applyCommand = "snapshotctl apply-update /data/ndb/";
+                if (mWipeAfterApplySnapshot) {
+                    applyCommand += " -w";
+                }
+                CommandResult mapOutput = mDevice.executeShellV2Command(applyCommand);
                 CLog.d("stdout: %s, stderr: %s", mapOutput.getStdout(), mapOutput.getStderr());
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Failed apply-update");
+                    // Clean state if apply-update fails
+                    mDevice.executeShellV2Command("snapshotctl unmap-snapshots");
+                    mDevice.executeShellV2Command("snapshotctl delete-snapshots");
                     throw new TargetSetupError(
                             String.format(
                                     "Failed to apply-update.\nstdout:%s\nstderr:%s",
@@ -457,8 +520,28 @@ public class IncrementalImageUtil {
                             InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
                 }
             }
-            mDevice.rebootIntoBootloader();
+            try {
+                mDevice.rebootIntoBootloader();
+            } catch (DeviceNotAvailableException e) {
+                if (mNewFlow) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FIRST_BOOTLOADER_REBOOT_FAIL, 1);
+                }
+                throw e;
+            }
+
             if (mApplySnapshot) {
+                if (mWipeAfterApplySnapshot) {
+                    CommandResult cancelResults =
+                            mDevice.executeFastbootCommand("snapshot-update", "cancel");
+                    CLog.d("Cancel status: %s", cancelResults.getStatus());
+                    CLog.d("Cancel stdout: %s", cancelResults.getStdout());
+                    CLog.d("Cancel stderr: %s", cancelResults.getStderr());
+                    CommandResult wipeResults = mDevice.executeFastbootCommand("-w");
+                    CLog.d("wipe status: %s", wipeResults.getStatus());
+                    CLog.d("wipe stdout: %s", wipeResults.getStdout());
+                    CLog.d("wipe stderr: %s", wipeResults.getStderr());
+                }
                 updateBootloaderAndBasebandIfNeeded(
                         targetDirectory, currentBootloader, currentRadio);
             }
@@ -725,17 +808,28 @@ public class IncrementalImageUtil {
         return true;
     }
 
-    private void logPatchesInformation(File patchesDirectory) {
+    private long logPatchesInformation(File patchesDirectory) {
+        long totalPatchesSize = 0L;
         for (File patch : patchesDirectory.listFiles()) {
+            if (patch == null) {
+                CLog.w("Something went wrong listing %s", patchesDirectory);
+                return 0L;
+            }
+            totalPatchesSize += patch.length();
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationGroupMetricKey.INCREMENTAL_FLASHING_PATCHES_SIZE,
                     patch.getName(),
                     patch.length());
         }
+        return totalPatchesSize;
     }
 
     private void logTargetInformation(File targetDirectory) {
         for (File patch : targetDirectory.listFiles()) {
+            if (patch == null) {
+                CLog.w("Something went wrong listing target %s", targetDirectory);
+                return;
+            }
             if (DYNAMIC_PARTITIONS_TO_DIFF.contains(patch.getName())) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationGroupMetricKey.INCREMENTAL_FLASHING_TARGET_SIZE,

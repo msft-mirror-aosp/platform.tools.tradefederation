@@ -47,6 +47,7 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
@@ -180,6 +181,16 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mApplySnapshot = false;
 
     @Option(
+            name = "wipe-after-apply-snapshot",
+            description = "Whether to issue a wipe after applying snapshots.")
+    private boolean mWipeAfterApplySnapshot = false;
+
+    @Option(
+            name = "use-new-incremental-update-flow",
+            description = "A new update flow possible with latest incremental features.")
+    private boolean mNewIncrementalFlow = false;
+
+    @Option(
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
@@ -197,6 +208,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
+    private MultiMap<String, String> mAllowedBranchTransition = new MultiMap<>();
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -339,7 +351,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mCreateSnapshotBinary,
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
+                                mAllowedBranchTransition,
                                 mApplySnapshot,
+                                mWipeAfterApplySnapshot,
+                                mNewIncrementalFlow,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
@@ -568,8 +583,14 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         // could be an AppBuildInfo and return app build id. Need to be more explicit that we
         // check for the device build here.
         if (!mSkipPostFlashBuildIdCheck) {
-            checkBuildAttribute(deviceBuild.getDeviceBuildId(), device.getBuildId(),
-                    device.getSerialNumber());
+            String dbid = deviceBuild.getDeviceBuildId();
+            if (IDeviceBuildInfo.UNKNOWN_BUILD_ID.equals(dbid)) {
+                // if the device build isn't set, use the build id instead
+                // this happens when device image download is skipped, which could happen when
+                // other kinds of build artifact is used instead for "flashing", e.g. OTA package
+                dbid = deviceBuild.getBuildId();
+            }
+            checkBuildAttribute(dbid, device.getBuildId(), device.getSerialNumber());
         }
     }
 
@@ -671,11 +692,23 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mApplySnapshot = applySnapshot;
     }
 
+    public void setWipeAfterApplySnapshot(boolean wipeAfterApplySnapshot) {
+        mWipeAfterApplySnapshot = wipeAfterApplySnapshot;
+    }
+
+    public void setUseIncrementalNewFlow(boolean useIncrementalNewFlow) {
+        mNewIncrementalFlow = useIncrementalNewFlow;
+    }
+
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
         mAllowUnzippedBaseline = allowUnzipBaseline;
     }
 
     public void setIgnoreHostOptions(boolean ignoreHostOptions) {
         mIgnoreHostOptions = ignoreHostOptions;
+    }
+
+    public void addBranchTransitionInIncremental(String origin, String destination) {
+        mAllowedBranchTransition.put(origin, destination);
     }
 }

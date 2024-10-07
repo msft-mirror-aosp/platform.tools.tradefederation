@@ -56,8 +56,8 @@ import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.postprocessor.IPostProcessor;
-import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FailureDescription;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
@@ -66,6 +66,8 @@ import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
+import com.android.tradefed.result.proto.ModuleProtoResultReporter;
+import com.android.tradefed.result.skipped.SkipContext;
 import com.android.tradefed.result.skipped.SkipFeature;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStrategy;
@@ -85,9 +87,12 @@ import com.android.tradefed.testtype.IReportNotExecuted;
 import com.android.tradefed.testtype.IRuntimeHintProvider;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestCollector;
+import com.android.tradefed.testtype.suite.SuiteResultCacheUtil.CacheResultDescriptor;
 import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.AbiUtils;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.SearchArtifactUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
@@ -97,10 +102,10 @@ import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -414,7 +419,8 @@ public abstract class ITestSuite
     // Current modules to run, null if not started to run yet.
     private List<ModuleDefinition> mRunModules = null;
     private ModuleDefinition mModuleInProgress = null;
-    private Set<String> mUnchangedModules = null;
+    private SkipContext mSkipContext = null;
+
     // Logger to be used to files.
     private ITestLogger mCurrentLogger = null;
     // Whether or not we are currently in split
@@ -849,10 +855,9 @@ public abstract class ITestSuite
                     mRunModules);
         }
 
-        if (mUnchangedModules == null) {
-            mUnchangedModules = SkipFeature.getUnchangedModules();
+        if (mSkipContext == null) {
+            mSkipContext = SkipFeature.getSkipContext();
         }
-        Set<String> unchangedModulesNames = mUnchangedModules;
         /** Run all the module, make sure to reduce the list to release resources as we go. */
         try {
             while (!mRunModules.isEmpty()) {
@@ -920,6 +925,42 @@ public abstract class ITestSuite
                             }
                         }
                     }
+                    File moduleConfig = dumpModuleConfig(module);
+                    String baseModuleName =
+                            module.getModuleInvocationContext()
+                                    .getConfigurationDescriptor()
+                                    .getModuleName();
+                    ModuleProtoResultReporter moduleReporter = null;
+                    CacheResultDescriptor cacheDescriptor = null;
+                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName, true);
+                    if (moduleDir == null) {
+                        InvocationMetricLogger.addInvocationMetrics(
+                                InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
+                    }
+                    if (mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
+                            && moduleDir != null
+                            && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
+                                    != null) {
+                        cacheDescriptor =
+                                SuiteResultCacheUtil.lookUpModuleResults(
+                                        mMainConfiguration,
+                                        module,
+                                        moduleConfig,
+                                        moduleDir,
+                                        mSkipContext);
+                        if (!cacheDescriptor.isCacheHit()) {
+                            try {
+                                File protoResults =
+                                        FileUtil.createTempFile("module-results", ".proto");
+                                moduleReporter =
+                                        new ModuleProtoResultReporter(testInfo.getContext());
+                                moduleReporter.setOutputFile(protoResults);
+                                moduleListeners.add(moduleReporter);
+                            } catch (IOException e) {
+                                CLog.e(e);
+                            }
+                        }
+                    }
                     module.getModuleInvocationContext()
                             .addInvocationAttribute(
                                     MODULE_START_TIME, Long.toString(System.currentTimeMillis()));
@@ -928,22 +969,23 @@ public abstract class ITestSuite
                     // Trigger module start on module level listener too
                     new ResultForwarder(moduleListeners)
                             .testModuleStarted(module.getModuleInvocationContext());
+                    if (moduleConfig != null) {
+                        try (InputStreamSource source =
+                                new FileInputStreamSource(moduleConfig, false)) {
+                            listener.testLog(
+                                    "module-configuration", LogDataType.HARNESS_CONFIG, source);
+                        }
+                    }
                     TestInformation moduleInfo =
                             TestInformation.createModuleTestInfo(
                                     testInfo, module.getModuleInvocationContext());
-                    logModuleConfig(listener, module);
                     boolean moduleRan = true;
                     try {
-                        if (unchangedModulesNames.contains(
-                                module.getModuleInvocationContext()
-                                        .getConfigurationDescriptor()
-                                        .getModuleName())) {
+                        if (mSkipContext.shouldSkipModule(baseModuleName)) {
                             moduleRan = false;
                             CLog.d(
-                                "Skipping module '%s' due to no changes in artifacts.",
-                                module.getModuleInvocationContext()
-                                    .getConfigurationDescriptor()
-                                    .getModuleName());
+                                    "Skipping module '%s' due to no changes in artifacts.",
+                                    baseModuleName);
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
                                             ModuleDefinition.MODULE_SKIPPED,
@@ -951,6 +993,16 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
+                        } else if (cacheDescriptor != null
+                                && cacheDescriptor.isCacheHit()
+                                && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                && mSkipContext.shouldUseCache()) {
+                            CLog.d("Reporting cached results for module %s", module.getId());
+                            // TODO: Include pointer to base results
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(
+                                            ModuleDefinition.MODULE_SKIPPED,
+                                            cacheDescriptor.getDetails());
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
@@ -960,6 +1012,23 @@ public abstract class ITestSuite
                                         MODULE_END_TIME, Long.toString(System.currentTimeMillis()));
                         // Trigger module end on module level listener too
                         new ResultForwarder(moduleListeners).testModuleEnded();
+                        if (mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
+                                && moduleReporter != null) {
+                            File protoResults = moduleReporter.getOutputFile();
+                            if (!moduleReporter.stopCaching()) {
+                                SuiteResultCacheUtil.uploadModuleResults(
+                                        mMainConfiguration,
+                                        testInfo,
+                                        module,
+                                        moduleConfig,
+                                        protoResults,
+                                        moduleDir,
+                                        mSkipContext);
+                            }
+                            FileUtil.deleteFile(protoResults);
+                            moduleListeners.remove(moduleReporter);
+                        }
+                        FileUtil.deleteFile(moduleConfig);
                         // clear out module invocation context since we are now done with module
                         // execution
                         listenerWithCollectors.testModuleEnded();
@@ -1011,25 +1080,39 @@ public abstract class ITestSuite
     }
 
     /** Log the module configuration. */
-    private void logModuleConfig(ITestLogger logger, ModuleDefinition module) {
-        try (StringWriter configXmlWriter = new StringWriter();
-                PrintWriter wrapperWriter = new PrintWriter(configXmlWriter)) {
-            module.getModuleConfiguration()
-                    .dumpXml(
-                            wrapperWriter,
-                            new ArrayList<String>(Configuration.NON_MODULE_OBJECTS),
-                            true,
-                            false);
-            wrapperWriter.flush();
-            // Specified UTF-8 encoding for an abundance of caution, but its possible we could want
-            // something else in the future
-            byte[] configXmlByteArray = configXmlWriter.toString().getBytes("UTF-8");
-            try (InputStreamSource source = new ByteArrayInputStreamSource(configXmlByteArray)) {
-                logger.testLog("module-configuration", LogDataType.HARNESS_CONFIG, source);
+    private File dumpModuleConfig(ModuleDefinition module) {
+        boolean restore = false;
+        try {
+            File configFile =
+                    FileUtil.createTempFile(
+                            module.getModuleConfiguration()
+                                    .getConfigurationDescription()
+                                    .getModuleName(),
+                            ".xml",
+                            CurrentInvocation.getWorkFolder());
+            if (module.getModuleConfiguration().getTests().isEmpty()) {
+                module.getModuleConfiguration().setTests(module.getTests());
+                restore = true;
+            }
+            try (FileOutputStream stream = new FileOutputStream(configFile);
+                    PrintWriter pw = new PrintWriter(stream, true)) {
+                module.getModuleConfiguration()
+                        .dumpXml(
+                                pw,
+                                new ArrayList<String>(Configuration.NON_MODULE_OBJECTS),
+                                true,
+                                false);
+                pw.flush();
+                return configFile;
+            } finally {
+                if (restore) {
+                    module.getModuleConfiguration().setTests(new ArrayList<>());
+                }
             }
         } catch (RuntimeException | IOException e) {
             CLog.e(e);
         }
+        return null;
     }
 
     /**
@@ -1364,6 +1447,7 @@ public abstract class ITestSuite
             // to carry these extra data.
             cleanUpSuiteSetup();
 
+            SkipContext skipContext = SkipFeature.getSkipContext();
             // create an association of one ITestSuite <=> one ModuleDefinition as the smallest
             // execution unit supported.
             List<IRemoteTest> splitTests = new ArrayList<>();
@@ -1372,6 +1456,7 @@ public abstract class ITestSuite
                 OptionCopier.copyOptionsNoThrow(this, suite);
                 suite.mIsSharded = true;
                 suite.mDirectModule = m;
+                suite.setSkipContext(skipContext);
                 splitTests.add(suite);
             }
             // return the list of ITestSuite with their ModuleDefinition assigned
@@ -1848,7 +1933,7 @@ public abstract class ITestSuite
         return mIntraModuleSharding;
     }
 
-    public void setUnchangedModules(Set<String> unchangedModules) {
-        mUnchangedModules = unchangedModules;
+    public void setSkipContext(SkipContext skipContext) {
+        mSkipContext = skipContext;
     }
 }

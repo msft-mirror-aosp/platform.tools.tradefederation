@@ -103,7 +103,7 @@ public class GTest extends GTestBase implements IDeviceTest {
     @Option(
             name = "force-no-test-error",
             description = "Whether to throw an error if no test binary is found to execute.")
-    private boolean mForceNoTestError = true;
+    private boolean mForceNoTestError = false;
 
     /** Whether any incomplete test is found in the current run. */
     private boolean mIncompleteTestFound = false;
@@ -252,7 +252,7 @@ public class GTest extends GTestBase implements IDeviceTest {
         }
 
         // filter out files excluded by the exclusion regex, for example .so files
-        List<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
+        Set<String> fileExclusionFilterRegex = getFileExclusionFilterRegex();
         for (String regex : fileExclusionFilterRegex) {
             if (fullPath.matches(regex)) {
                 CLog.i("File %s matches exclusion file regex %s, skipping", fullPath, regex);
