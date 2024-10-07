@@ -522,9 +522,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                     if (!matchingFlagConfig || unflagged) {
                         runPtsBotTest(profile, testName, testInfo, listener);
                     }
-                    long endTimestamp = System.currentTimeMillis();
-                    listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
                 }
+                long endTimestamp = System.currentTimeMillis();
+                listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
             } else {
                 CLog.i("No tests applicable for %s", profile);
             }
