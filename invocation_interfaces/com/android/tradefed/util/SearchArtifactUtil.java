@@ -19,6 +19,7 @@ package com.android.tradefed.util;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.invoker.ExecutionFiles;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -54,46 +55,38 @@ public class SearchArtifactUtil {
      * Searches for a test artifact/dependency file from the test directory.
      *
      * @param fileName The name of the file to look for.
-     * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
-     *     search.
      * @return The found artifact file or null if none.
      */
-    public static File searchFile(String fileName, boolean targetFirst) {
-        return searchFile(fileName, targetFirst, null, null, null, null);
+    public static File searchFile(String fileName) {
+        return searchFile(fileName, null, null, null, null);
     }
 
     /**
      * Searches for a test artifact/dependency file from the test directory.
      *
      * @param fileName The name of the file to look for.
-     * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
-     *     search.
      * @param testInfo The {@link TestInformation} of the current test when available.
      * @return The found artifact file or null if none.
      */
-    public static File searchFile(String fileName, boolean targetFirst, TestInformation testInfo) {
-        return searchFile(fileName, targetFirst, null, null, null, testInfo);
+    public static File searchFile(String fileName, TestInformation testInfo) {
+        return searchFile(fileName, null, null, null, testInfo);
     }
 
     /**
      * Searches for a test artifact/dependency file from the test directory.
      *
      * @param fileName The name of the file to look for.
-     * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
-     *     search.
      * @param abi The {@link IAbi} to match the file.
      * @return The found artifact file or null if none.
      */
-    public static File searchFile(String fileName, boolean targetFirst, IAbi abi) {
-        return searchFile(fileName, targetFirst, abi, null, null, null);
+    public static File searchFile(String fileName, IAbi abi) {
+        return searchFile(fileName, abi, null, null, null);
     }
 
     /**
      * Searches for a test artifact/dependency file from the test directory.
      *
      * @param fileName The name of the file to look for.
-     * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
-     *     search.
      * @param altDirs Alternative search paths, in addition to the default search paths.
      * @param altDirBehavior how alternative search paths should be used against default paths: as
      *     fallback, or as override; if unspecified, fallback will be used
@@ -101,18 +94,15 @@ public class SearchArtifactUtil {
      */
     public static File searchFile(
             String fileName,
-            boolean targetFirst,
             List<File> altDirs,
             AltDirBehavior altDirBehavior) {
-        return searchFile(fileName, targetFirst, null, altDirs, altDirBehavior, null);
+        return searchFile(fileName, null, altDirs, altDirBehavior, null);
     }
 
     /**
      * Searches for a test artifact/dependency file from the test directory.
      *
      * @param fileName The name of the file to look for.
-     * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
-     *     search.
      * @param abi The {@link IAbi} to match the file.
      * @param altDirs Alternative search paths, in addition to the default search paths.
      * @param altDirBehavior how alternative search paths should be used against default paths: as
@@ -121,13 +111,12 @@ public class SearchArtifactUtil {
      */
     public static File searchFile(
             String fileName,
-            boolean targetFirst,
             IAbi abi,
             List<File> altDirs,
             AltDirBehavior altDirBehavior,
             TestInformation testInfo) {
         List<File> searchDirectories =
-                singleton.getSearchDirectories(targetFirst, altDirs, altDirBehavior, testInfo);
+                singleton.getSearchDirectories(altDirs, altDirBehavior, testInfo);
 
         // Search in the test directories
         for (File dir : searchDirectories) {
@@ -174,12 +163,12 @@ public class SearchArtifactUtil {
     /** Returns the list of search locations in correct order. */
     @VisibleForTesting
     List<File> getSearchDirectories(
-            boolean targetFirst,
             List<File> altDirs,
             AltDirBehavior altDirBehavior,
             TestInformation testInfo) {
         List<File> dirs = new LinkedList<>();
         ExecutionFiles executionFiles = singleton.getExecutionFiles(testInfo);
+        boolean targetFirst = !isModulePrioritizingHostConfig();
         if (executionFiles != null) {
             // Add host/testcases or target/testcases directory first
             FilesKey hostOrTarget = FilesKey.HOST_TESTS_DIRECTORY;
@@ -328,13 +317,11 @@ public class SearchArtifactUtil {
      * Finds the module directory that matches the given module name
      *
      * @param moduleName The name of the module.
-     * @param targetFirst Whether we are favoring target-side vs. host-side for the search.
      * @return the module directory. Can be null.
      */
-    public static File findModuleDir(String moduleName, boolean targetFirst) {
+    public static File findModuleDir(String moduleName) {
         try (CloseableTraceScope ignored = new CloseableTraceScope("findModuleDir")) {
-            List<File> searchDirectories =
-                    singleton.getSearchDirectories(targetFirst, null, null, null);
+            List<File> searchDirectories = singleton.getSearchDirectories(null, null, null);
             for (File searchDirectory : searchDirectories) {
                 try {
                     File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
@@ -405,5 +392,21 @@ public class SearchArtifactUtil {
 
     private static boolean fileExists(File file) {
         return file != null && file.exists();
+    }
+
+    @VisibleForTesting
+    /** Returns whether the current config is prioritizing host configs over target configs. */
+    public boolean isModulePrioritizingHostConfig() {
+        IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
+        if (moduleContext != null) {
+            List<String> prioritizeHostConfig =
+                    moduleContext
+                            .getConfigurationDescriptor()
+                            .getMetaData(ConfigurationDescriptor.PRIORITIZE_HOST_CONFIG_KEY);
+            if (prioritizeHostConfig != null && !prioritizeHostConfig.isEmpty()) {
+                return Boolean.parseBoolean(prioritizeHostConfig.get(0));
+            }
+        }
+        return false;
     }
 }
