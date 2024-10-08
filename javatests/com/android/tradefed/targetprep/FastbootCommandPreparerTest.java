@@ -16,9 +16,10 @@
 
 package com.android.tradefed.targetprep;
 
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -93,13 +94,12 @@ public final class FastbootCommandPreparerTest {
 
         mPreparer.setUp(mMockTestInfo);
 
-        verify(mMockDevice, times(1)).rebootIntoBootloader();
-        verify(mMockDevice, times(1))
-                  .executeFastbootCommand(
-                      eq("command"),
-                      eq(testFile1.getAbsolutePath()),
-                      eq("$EXTRA_FILE(test_file2)"));
-        verify(mMockDevice, times(1)).reboot();
+        verify(mMockDevice).rebootIntoBootloader();
+        verify(mMockDevice).executeFastbootCommand(
+                           eq("command"),
+                           eq(testFile1.getAbsolutePath()),
+                           eq("$EXTRA_FILE(test_file2)"));
+        verify(mMockDevice).reboot();
     }
 
     @Test
@@ -125,12 +125,73 @@ public final class FastbootCommandPreparerTest {
 
         mPreparer.tearDown(mMockTestInfo, null);
 
-        verify(mMockDevice, times(1)).rebootIntoBootloader();
-        verify(mMockDevice, times(1))
-                  .executeFastbootCommand(
-                      eq("command"),
-                      eq(testFile1.getAbsolutePath()),
-                      eq("$EXTRA_FILE(test_file2)"));
-        verify(mMockDevice, times(1)).reboot();
+        verify(mMockDevice).rebootIntoBootloader();
+        verify(mMockDevice).executeFastbootCommand(
+                           eq("command"),
+                           eq(testFile1.getAbsolutePath()),
+                           eq("$EXTRA_FILE(test_file2)"));
+        verify(mMockDevice).reboot();
+    }
+
+    @Test
+    public void testSetUp_fastbootdMode() throws Exception {
+        OptionSetter optionSetter = new OptionSetter(mPreparer);
+        optionSetter.setOptionValue("fastboot-mode", "FASTBOOTD");
+        optionSetter.setOptionValue("command", "command");
+
+        mPreparer.setUp(mMockTestInfo);
+
+        verify(mMockDevice).rebootIntoFastbootd();
+        verify(mMockDevice).executeFastbootCommand(eq("command"));
+        verify(mMockDevice).reboot();
+    }
+
+    @Test
+    public void testTearDown_fastbootMode() throws Exception {
+        OptionSetter optionSetter = new OptionSetter(mPreparer);
+        optionSetter.setOptionValue("fastboot-mode", "FASTBOOTD");
+        optionSetter.setOptionValue("teardown-command", "command");
+
+        mPreparer.tearDown(mMockTestInfo, null);
+
+        verify(mMockDevice).rebootIntoFastbootd();
+        verify(mMockDevice).executeFastbootCommand(eq("command"));
+        verify(mMockDevice).reboot();
+    }
+
+    @Test
+    public void testSetUp_stayFastboot() throws Exception {
+        OptionSetter optionSetter = new OptionSetter(mPreparer);
+        optionSetter.setOptionValue("stay-fastboot", "true");
+        optionSetter.setOptionValue("command", "command");
+
+        mPreparer.setUp(mMockTestInfo);
+        verify(mMockDevice, never()).reboot();
+    }
+
+    @Test
+    public void testTearDown_stayFastboot() throws Exception {
+        OptionSetter optionSetter = new OptionSetter(mPreparer);
+        optionSetter.setOptionValue("stay-fastboot", "true");
+        optionSetter.setOptionValue("teardown-command", "command");
+
+        mPreparer.tearDown(mMockTestInfo, null);
+        verify(mMockDevice, never()).reboot();
+    }
+
+    @Test
+    public void testSetUp_withErrors() throws Exception {
+        OptionSetter optionSetter = new OptionSetter(mPreparer);
+        optionSetter.setOptionValue("command", "command");
+
+        when(mMockDevice.getDeviceDescriptor()).thenReturn(null);
+
+        // Verify that failed commands will throw exception during setup
+        fastbootResult = new CommandResult(CommandStatus.FAILED);
+        fastbootResult.setExitCode(1);
+        when(mMockDevice.executeFastbootCommand(any())).thenReturn(fastbootResult);
+        assertThrows(TargetSetupError.class, () -> {
+            mPreparer.setUp(mMockTestInfo);
+        });
     }
 }
