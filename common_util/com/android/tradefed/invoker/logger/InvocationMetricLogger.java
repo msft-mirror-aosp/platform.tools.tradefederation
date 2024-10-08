@@ -403,6 +403,7 @@ public class InvocationMetricLogger {
 
         // Test caching metrics
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
+        DEVICE_IMAGE_HASH("device_image_hash", false),
 
         // Module level caching
         MODULE_RESULTS_CHECKING_CACHE("module_results_checking_cache", true),
