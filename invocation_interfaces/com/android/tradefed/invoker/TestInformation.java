@@ -194,7 +194,7 @@ public class TestInformation {
             throws FileNotFoundException {
         File dependency = null;
         try {
-            dependency = SearchArtifactUtil.searchFile(fileName, this);
+            dependency = SearchArtifactUtil.searchFile(fileName, targetFirst, this);
         } catch (Exception e) {
             // TODO: handle error when migration is complete.
             CLog.e(e);
