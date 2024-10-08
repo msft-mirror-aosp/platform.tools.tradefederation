@@ -1,0 +1,12 @@
+[==========] Running 4 tests from 1 test suite.
+
+[ RUN      ] test_class1::tests::test_case1
+[       OK ] test_class1::tests::test_case1 (10 ms)
+[ RUN      ] test_class1::tests::test_case2
+[       OK ] test_class1::tests::test_case2 (20 ms)
+[ RUN      ] test_class2::tests::test_case1
+[       OK ] test_class2::tests::test_case1 (100 ms)
+[ RUN      ] test_class2::tests::test_case2
+[       OK ] test_class2::tests::test_case2 (200 ms)
+[==========] 4 tests ran (330 ms total).
+[  PASSED  ] 4 tests.

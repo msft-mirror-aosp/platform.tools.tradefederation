@@ -1595,6 +1595,11 @@ public class NativeDevice
             throws DeviceNotAvailableException {
         boolean skipContentProvider = false;
         int userId = getCurrentUserCompatible(remoteFilePath);
+        if (userId == INVALID_USER_ID) {
+            throw new HarnessRuntimeException(
+                    "Device didn't return a valid user id. It might have gone into a bad state.",
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
         if (evaluateContentProviderNeeded) {
             skipContentProvider = userId == 0;
         }
