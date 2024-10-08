@@ -460,4 +460,10 @@ public class InvocationContext implements IInvocationContext {
         Set<String> presubmitTrigger = ImmutableSet.of("WORK_NODE", "TREEHUGGER");
         return presubmitTrigger.contains(context.getAttribute("trigger"));
     }
+
+    /** Returns whether we detect on demand test invocation based on trigger type. */
+    public static boolean isOnDemand(IInvocationContext context) {
+        Set<String> abtdTrigger = ImmutableSet.of("TRYBOT", "ABTD");
+        return abtdTrigger.contains(context.getAttribute("trigger"));
+    }
 }
