@@ -172,13 +172,22 @@ public class SuiteModuleLoader {
             List<File> listConfigFiles, Set<IAbi> abis, String suiteTag) {
         LinkedHashMap<String, IConfiguration> toRun = new LinkedHashMap<>();
         for (File configFile : listConfigFiles) {
-            toRun.putAll(
+            Map<String, IConfiguration> loadedConfigs =
                     loadOneConfig(
                             configFile.getParentFile(),
                             configFile.getName(),
                             configFile.getAbsolutePath(),
                             abis,
-                            suiteTag));
+                            suiteTag);
+            // store the module dir path for each config
+            for (IConfiguration loadedConfig : loadedConfigs.values()) {
+                loadedConfig
+                        .getConfigurationDescription()
+                        .addMetadata(
+                                ConfigurationDescriptor.MODULE_DIR_PATH_KEY,
+                                configFile.getParentFile().getAbsolutePath());
+            }
+            toRun.putAll(loadedConfigs);
         }
         return toRun;
     }
@@ -735,7 +744,9 @@ public class SuiteModuleLoader {
         for (String arg : args) {
             int moduleSep = arg.indexOf(":");
             if (moduleSep == -1) {
-                throw new RuntimeException("Expected delimiter ':' for module or class.");
+                throw new HarnessRuntimeException(
+                        "Expected delimiter ':' for module or class.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             String moduleName = arg.substring(0, moduleSep);
             String remainder = arg.substring(moduleSep + 1);
@@ -746,8 +757,9 @@ public class SuiteModuleLoader {
             }
             int optionNameSep = remainder.indexOf(":");
             if (optionNameSep == -1) {
-                throw new RuntimeException(
-                        "Expected delimiter ':' between option name and values.");
+                throw new HarnessRuntimeException(
+                        "Expected delimiter ':' between option name and values.",
+                        InfraErrorIdentifier.OPTION_CONFIGURATION_ERROR);
             }
             String optionName = remainder.substring(0, optionNameSep);
             Pattern pattern = Pattern.compile("\\{(.*)\\}(.*)");
