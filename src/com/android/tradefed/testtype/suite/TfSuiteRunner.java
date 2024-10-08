@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype.suite;
 
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.ConfigurationUtil;
@@ -134,6 +135,15 @@ public class TfSuiteRunner extends ITestSuite {
             try {
                 IConfiguration testConfig =
                         configFactory.createConfigurationFromArgs(new String[]{configName});
+                // Store the module dir path
+                File moduleDir = new File(configName).getParentFile();
+                if (moduleDir != null && moduleDir.exists()) {
+                    testConfig
+                            .getConfigurationDescription()
+                            .addMetadata(
+                                    ConfigurationDescriptor.MODULE_DIR_PATH_KEY,
+                                    moduleDir.getAbsolutePath());
+                }
                 if (testConfig.getConfigurationDescription().getSuiteTags().contains(mSuiteTag)) {
                     // If this config supports running against different ABIs we need to queue up
                     // multiple instances of this config.
