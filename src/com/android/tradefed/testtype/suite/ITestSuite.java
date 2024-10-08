@@ -1017,6 +1017,8 @@ public abstract class ITestSuite
                                     .addInvocationAttribute(
                                             ModuleDefinition.MODULE_SKIPPED,
                                             cacheDescriptor.getDetails());
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(ModuleDefinition.SPARSE_MODULE, "true");
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
