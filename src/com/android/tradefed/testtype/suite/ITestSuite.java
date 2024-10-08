@@ -946,7 +946,7 @@ public abstract class ITestSuite
                                     .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
                     CacheResultDescriptor cacheDescriptor = null;
-                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName);
+                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName, true);
                     if (moduleDir == null) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
@@ -1195,6 +1195,7 @@ public abstract class ITestSuite
      * @param moduleInfo The {@link TestInformation} for the module.
      * @param listener The {@link ITestInvocationListener} where to report results
      * @param moduleListeners The {@link ITestInvocationListener}s that runs at the module level.
+     * @param failureListener special listener that we add to collect information on failures.
      * @throws DeviceNotAvailableException
      */
     private void runSingleModule(
