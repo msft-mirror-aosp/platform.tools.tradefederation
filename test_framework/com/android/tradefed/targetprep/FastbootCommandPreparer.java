@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.targetprep;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -22,9 +23,11 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
-
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Target preparer that triggers fastboot and sends fastboot commands.
@@ -33,6 +36,10 @@ import java.util.List;
  */
 @OptionClass(alias = "fastboot-command-preparer")
 public final class FastbootCommandPreparer extends BaseTargetPreparer {
+
+    /** Placeholder to be replaced with real file path in commands */
+    private static final Pattern EXTRA_FILE_PATTERSTRING =
+            Pattern.compile("\\$EXTRA_FILE\\(([^()]+)\\)");
 
     private enum FastbootMode {
         BOOTLOADER,
@@ -69,8 +76,10 @@ public final class FastbootCommandPreparer extends BaseTargetPreparer {
     public void setUp(TestInformation testInformation)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
         if (!mFastbootCommands.isEmpty()) {
+            final IBuildInfo buildInfo = testInformation.getBuildInfo();
             final ITestDevice device = testInformation.getDevice();
             enterFastboot(device);
+            replaceExtraFile(mFastbootCommands, buildInfo);
             for (String cmd : mFastbootCommands) {
                 final CommandResult result = device.executeFastbootCommand(cmd.split("\\s+"));
                 if (result.getExitCode() != 0) {
@@ -92,7 +101,9 @@ public final class FastbootCommandPreparer extends BaseTargetPreparer {
             throws DeviceNotAvailableException {
         if (!mFastbootTearDownCommands.isEmpty()) {
             final ITestDevice device = testInformation.getDevice();
+            final IBuildInfo buildInfo = testInformation.getBuildInfo();
             enterFastboot(device);
+            replaceExtraFile(mFastbootTearDownCommands, buildInfo);
             for (String cmd : mFastbootTearDownCommands) {
                 device.executeFastbootCommand(cmd.split("\\s+"));
             }
@@ -111,6 +122,31 @@ public final class FastbootCommandPreparer extends BaseTargetPreparer {
     private void exitFastboot(ITestDevice device) throws DeviceNotAvailableException {
         if (!mStayFastboot) {
             device.reboot();
+        }
+    }
+
+    /**
+     * For each command in the list, replace placeholder (if any) with the file name indicated in
+     * the build information
+     *
+     * @param commands list of host commands
+     * @param buildInfo build artifact information
+     */
+    private void replaceExtraFile(final List<String> commands, IBuildInfo buildInfo) {
+        for (int i = 0; i < commands.size(); i++) {
+            Matcher matcher = EXTRA_FILE_PATTERSTRING.matcher(commands.get(i));
+            StringBuffer command = new StringBuffer();
+
+            while (matcher.find()) {
+                String fileName = matcher.group(1);
+                File file = buildInfo.getFile(fileName);
+                if (file == null || !file.exists()) {
+                    continue;
+                }
+                matcher.appendReplacement(command, file.getPath());
+            }
+            matcher.appendTail(command);
+            commands.set(i, command.toString());
         }
     }
 }
