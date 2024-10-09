@@ -983,7 +983,13 @@ public abstract class ITestSuite
                     // Trigger module start on module level listener too
                     new ResultForwarder(moduleListeners)
                             .testModuleStarted(module.getModuleInvocationContext());
-                    if (moduleConfig != null) {
+                    boolean applyCachedResults =
+                            cacheDescriptor != null
+                                    && cacheDescriptor.isCacheHit()
+                                    && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                    && mSkipContext.shouldUseCache();
+                    // TODO(b/372243975): report logs even while applying caching
+                    if (moduleConfig != null && !applyCachedResults) {
                         try (InputStreamSource source =
                                 new FileInputStreamSource(moduleConfig, false)) {
                             listener.testLog(
@@ -1007,16 +1013,14 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheDescriptor != null
-                                && cacheDescriptor.isCacheHit()
-                                && mMainConfiguration.getCommandOptions().reportCacheResults()
-                                && mSkipContext.shouldUseCache()) {
+                        } else if (applyCachedResults) {
                             CLog.d("Reporting cached results for module %s", module.getId());
-                            // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
                                             ModuleDefinition.MODULE_SKIPPED,
                                             cacheDescriptor.getDetails());
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(ModuleDefinition.SPARSE_MODULE, "true");
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
