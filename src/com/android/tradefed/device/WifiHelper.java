@@ -691,7 +691,31 @@ public class WifiHelper implements IWifiHelper {
      */
     @Override
     public boolean disconnectFromNetwork() throws DeviceNotAvailableException {
+        if (mUseV2) {
+            return disconnectFromNetworkV2();
+        }
         if (!asBool(runWifiUtil("disconnectFromNetwork"))) {
+            return false;
+        }
+        if (!disableWifi()) {
+            CLog.e("Failed to disable wifi");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean disconnectFromNetworkV2() throws DeviceNotAvailableException {
+        String networkId = getWifiInfo().get("netId");
+        if (Strings.isNullOrEmpty(networkId)) {
+            CLog.d("Failed to get network id.");
+            return false;
+        }
+        CommandResult forgetNetwork =
+                mDevice.executeShellV2Command(
+                        String.format("cmd -w wifi forget-network %s", networkId));
+        if (!CommandStatus.SUCCESS.equals(forgetNetwork.getStatus())
+                || !forgetNetwork.getStdout().contains("Forget successful")) {
+            CLog.d("forget-network command failed (netId=%s).", networkId);
             return false;
         }
         if (!disableWifi()) {
