@@ -75,6 +75,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -92,6 +93,18 @@ public class TradefedSandbox implements ISandbox {
     public static final String SANDBOX_ENABLED = "SANDBOX_ENABLED";
 
     private static final String SANDBOX_JVM_OPTIONS_ENV_VAR_KEY = "TF_SANDBOX_JVM_OPTIONS";
+
+    // Target name to map to lab specific downloads.
+    public static final String EXTRA_TARGET_LAB = "lab";
+
+    public static final String GENERAL_TESTS_ZIP = "general-tests.zip";
+    private static final Map<String, String> EXTRA_TARGETS = new HashMap<>();
+
+    static {
+        // TODO: Replace by SandboxOptions
+        EXTRA_TARGETS.put(EXTRA_TARGET_LAB, GENERAL_TESTS_ZIP);
+        EXTRA_TARGETS.put("cts", "android-cts.zip");
+    }
 
     private File mStdoutFile = null;
     private File mStderrFile = null;
@@ -693,5 +706,18 @@ public class TradefedSandbox implements ISandbox {
 
     private File getWorkFolder() {
         return CurrentInvocation.getWorkFolder();
+    }
+
+    /**
+     * Given the test config name, match the extra build targets from Sandbox's extra build targets.
+     */
+    public static Set<String> matchSandboxExtraBuildTargetByConfigName(String configName) {
+        Set<String> extraBuildTarget = new HashSet<>();
+        for (Entry<String, String> possibleTargets : EXTRA_TARGETS.entrySet()) {
+            if (configName.contains(possibleTargets.getKey())) {
+                extraBuildTarget.add(possibleTargets.getValue());
+            }
+        }
+        return extraBuildTarget;
     }
 }
