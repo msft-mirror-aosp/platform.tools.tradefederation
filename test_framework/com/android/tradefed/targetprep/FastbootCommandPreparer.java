@@ -29,11 +29,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Target preparer that triggers fastboot and sends fastboot commands.
- *
- * <p>TODO(b/122592575): Add tests for this preparer.
- */
+/** Target preparer that triggers fastboot and sends fastboot commands. */
 @OptionClass(alias = "fastboot-command-preparer")
 public final class FastbootCommandPreparer extends BaseTargetPreparer {
 
@@ -48,7 +44,9 @@ public final class FastbootCommandPreparer extends BaseTargetPreparer {
 
     @Option(
             name = "fastboot-mode",
-            description = "True to boot the device into bootloader mode, false for fastbootd mode.")
+            description =
+                    "'BOOTLOADER' to boot the device into bootloader mode, "
+                            + "'FASTBOOTD' for fastbootd mode.")
     private FastbootMode mFastbootMode = FastbootMode.BOOTLOADER;
 
     @Option(
