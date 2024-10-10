@@ -71,6 +71,7 @@ public class ImageContentAnalyzer {
             if (presubmitMode) {
                 for (ContentAnalysisContext context : contexts) {
                     if (context.contentInformation() != null
+                            && context.contentInformation().currentBuildId != null
                             && !context.contentInformation().currentBuildId.startsWith("P")) {
                         activeContexts.remove(context);
                         CLog.d(
