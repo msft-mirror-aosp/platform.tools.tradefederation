@@ -3382,7 +3382,12 @@ public class NativeDevice
         mLastConnectedWifiSsid = null;
         mLastConnectedWifiPsk = null;
 
-        IWifiHelper wifi = createWifiHelper();
+        IWifiHelper wifi = null;
+        if (!getOptions().useCmdWifiCommands() || !enableAdbRoot() || getApiLevel() < 31) {
+            wifi = createWifiHelper(false);
+        } else {
+            wifi = createWifiHelper(true);
+        }
         return wifi.disconnectFromNetwork();
     }
 
