@@ -333,6 +333,55 @@ public class GTestResultParserTest extends GTestParserTestBase {
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
+    /**
+     * Tests the parser for a test run output following the rust test naming convention, using `::`
+     * as the test class and name separator
+     */
+    @Test
+    public void testParseRunTestNames() throws Exception {
+        String[] contents = readInFile(GTEST_OUTPUT_FILE_15);
+        ITestInvocationListener mockRunListener = mock(ITestInvocationListener.class);
+
+        GTestResultParser resultParser =
+                new GTestResultParser(
+                        TEST_MODULE_NAME, mockRunListener, true
+                        /** allowRustTestName */
+                        );
+        resultParser.processNewLines(contents);
+        resultParser.flush();
+        TestDescription class1_test1 = new TestDescription("test_class1::tests", "test_case1");
+        TestDescription class1_test2 = new TestDescription("test_class1::tests", "test_case2");
+        TestDescription class2_test1 = new TestDescription("test_class2::tests", "test_case1");
+        TestDescription class2_test2 = new TestDescription("test_class2::tests", "test_case2");
+        verify(mockRunListener).testRunStarted(TEST_MODULE_NAME, 4);
+        verify(mockRunListener).testStarted(Mockito.eq(class1_test1), Mockito.anyLong());
+        verify(mockRunListener)
+                .testEnded(
+                        Mockito.eq(class1_test1),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(mockRunListener).testStarted(Mockito.eq(class1_test2), Mockito.anyLong());
+        verify(mockRunListener)
+                .testEnded(
+                        Mockito.eq(class1_test2),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(mockRunListener).testStarted(Mockito.eq(class2_test1), Mockito.anyLong());
+        verify(mockRunListener)
+                .testEnded(
+                        Mockito.eq(class2_test1),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(mockRunListener).testStarted(Mockito.eq(class2_test2), Mockito.anyLong());
+        verify(mockRunListener)
+                .testEnded(
+                        Mockito.eq(class2_test2),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
+        verify(mockRunListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
     @Test
     public void testParse_interrupted() throws Exception {
         String[] contents = readInFile(GTEST_OUTPUT_FILE_13);

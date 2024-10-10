@@ -69,6 +69,12 @@ public class KernelTargetTest extends ExecutableTargetTest {
     @Option(name = "parse-ktap", description = "Parse test outputs in KTAP format")
     private boolean mParseKTAP = false;
 
+    @Option(
+            name = "ktap-result-parser-resolution",
+            description = "Parser resolution for KTap results if test outputs are in KTAP format.")
+    private KTapResultParser.ParseResolution mKTapResultParserResolution =
+            KTapResultParser.ParseResolution.AGGREGATED_SUITE;
+
     @Override
     protected boolean doesRunBinaryGenerateTestResults() {
         return mParseKTAP;
@@ -170,7 +176,7 @@ public class KernelTargetTest extends ExecutableTargetTest {
                         listener,
                         description.getTestName(),
                         List.of(result.getStdout()),
-                        KTapResultParser.ParseResolution.AGGREGATED_SUITE);
+                        mKTapResultParserResolution);
             } catch (RuntimeException exception) {
                 CLog.e("KTAP parse error: %s", exception.toString());
                 listener.testStarted(description);

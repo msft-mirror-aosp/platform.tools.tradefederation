@@ -110,6 +110,7 @@ public class ArtifactsAnalyzer {
                         if (!analysisResults.hasSharedFolderChanges()) {
                             finalReport.addUnchangedModules(analysisResults.getUnchangedModules());
                         }
+                        finalReport.addImageDigestMapping(analysisResults.getImageToDigest());
                     }
                 } catch (RuntimeException e) {
                     CLog.e(e);

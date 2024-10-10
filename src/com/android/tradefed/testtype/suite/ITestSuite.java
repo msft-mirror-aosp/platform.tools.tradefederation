@@ -21,6 +21,7 @@ import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
@@ -392,6 +393,13 @@ public abstract class ITestSuite
     @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
     private boolean mStageRemoteFile = true;
 
+    @Option(
+            name = "prioritize-host-config",
+            description =
+                    "If there are duplicate test configs for host/target, prioritize the host"
+                            + " config, otherwise use the target config.")
+    private boolean mPrioritizeHostConfig = false;
+
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
         FULLY_ISOLATED; // Test received a fresh device.
@@ -684,6 +692,12 @@ public abstract class ITestSuite
                 ValidateSuiteConfigHelper.validateConfig(config.getValue());
                 Map<String, List<ITargetPreparer>> preparersPerDevice =
                         getPreparerPerDevice(config.getValue());
+                // add the prioritize-host-config value in the module config
+                config.getValue()
+                        .getConfigurationDescription()
+                        .addMetadata(
+                                ConfigurationDescriptor.PRIORITIZE_HOST_CONFIG_KEY,
+                                String.valueOf(mPrioritizeHostConfig));
                 ModuleDefinition module =
                         new ModuleDefinition(
                                 config.getKey(),
@@ -969,7 +983,13 @@ public abstract class ITestSuite
                     // Trigger module start on module level listener too
                     new ResultForwarder(moduleListeners)
                             .testModuleStarted(module.getModuleInvocationContext());
-                    if (moduleConfig != null) {
+                    boolean applyCachedResults =
+                            cacheDescriptor != null
+                                    && cacheDescriptor.isCacheHit()
+                                    && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                    && mSkipContext.shouldUseCache();
+                    // TODO(b/372243975): report logs even while applying caching
+                    if (moduleConfig != null && !applyCachedResults) {
                         try (InputStreamSource source =
                                 new FileInputStreamSource(moduleConfig, false)) {
                             listener.testLog(
@@ -993,16 +1013,14 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheDescriptor != null
-                                && cacheDescriptor.isCacheHit()
-                                && mMainConfiguration.getCommandOptions().reportCacheResults()
-                                && mSkipContext.shouldUseCache()) {
+                        } else if (applyCachedResults) {
                             CLog.d("Reporting cached results for module %s", module.getId());
-                            // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
                                             ModuleDefinition.MODULE_SKIPPED,
                                             cacheDescriptor.getDetails());
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(ModuleDefinition.SPARSE_MODULE, "true");
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
@@ -1935,5 +1953,20 @@ public abstract class ITestSuite
 
     public void setSkipContext(SkipContext skipContext) {
         mSkipContext = skipContext;
+    }
+
+    /* Return a {@link boolean} for the setting of prioritize-host-config.*/
+    boolean getPrioritizeHostConfig() {
+        return mPrioritizeHostConfig;
+    }
+
+    /**
+     * Set option prioritize-host-config.
+     *
+     * @param prioritizeHostConfig true to prioritize host config, i.e., run host test if possible.
+     */
+    @com.google.common.annotations.VisibleForTesting
+    protected void setPrioritizeHostConfig(boolean prioritizeHostConfig) {
+        mPrioritizeHostConfig = prioritizeHostConfig;
     }
 }
