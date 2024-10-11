@@ -1719,17 +1719,8 @@ public class NativeDevice
                 }
             }
             CLog.d("Using 'ls' to check doesFileExist(%s)", deviceFilePath);
-            CommandResult result =
-                    executeShellV2Command(String.format("ls \"%s\"", deviceFilePath));
-            if (CommandStatus.SUCCESS.equals(result.getStatus())
-                    && !result.getStdout().contains("No such file or directory")) {
-                return true;
-            } else {
-                CLog.d(
-                        "File %s does not exist.\nstdout: %s\nstderr: %s",
-                        deviceFilePath, result.getStdout(), result.getStderr());
-                return false;
-            }
+            String lsGrep = executeShellCommand(String.format("ls \"%s\"", deviceFilePath));
+            return !lsGrep.contains("No such file or directory");
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DOES_FILE_EXISTS_TIME,
