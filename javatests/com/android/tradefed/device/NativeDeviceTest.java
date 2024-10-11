@@ -470,12 +470,6 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean doesFileExist(String deviceFilePath, int userId)
-                            throws DeviceNotAvailableException {
-                        return true;
-                    }
-
-                    @Override
                     public int getCurrentUser() throws DeviceNotAvailableException {
                         return 0;
                     }
@@ -521,12 +515,6 @@ public class NativeDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "drwxr-xr-x root     root    somedirectory";
-                    }
-
-                    @Override
-                    public boolean doesFileExist(String deviceFilePath, int userId)
-                            throws DeviceNotAvailableException {
-                        return true;
                     }
 
                     @Override
@@ -602,12 +590,6 @@ public class NativeDeviceTest {
                     }
 
                     @Override
-                    public boolean doesFileExist(String deviceFilePath, int userId)
-                            throws DeviceNotAvailableException {
-                        return true;
-                    }
-
-                    @Override
                     protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         if (mFirstPull) {
@@ -679,12 +661,6 @@ public class NativeDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "-rwxr-xr-x root     root    somefile";
-                    }
-
-                    @Override
-                    public boolean doesFileExist(String deviceFilePath, int userId)
-                            throws DeviceNotAvailableException {
-                        return true;
                     }
 
                     @Override
