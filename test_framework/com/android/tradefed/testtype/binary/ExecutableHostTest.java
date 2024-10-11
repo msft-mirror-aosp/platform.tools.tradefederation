@@ -15,7 +15,7 @@
  */
 package com.android.tradefed.testtype.binary;
 
-import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -156,8 +156,7 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         File adbBinary = AdbUtils.getAdbToUpdate(getTestInfo(), getAdbPath());
         runUtil.setEnvVariable(
                 "PATH",
-                buildPathWithRelativePaths(
-                        workingDir,
+                buildPath(
                         Collections.singleton(
                                 adbBinary != null ? adbBinary.getAbsolutePath() : "adb"),
                         String.format(
