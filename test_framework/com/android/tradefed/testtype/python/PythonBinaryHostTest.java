@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.python;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
 import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
@@ -165,6 +166,11 @@ public class PythonBinaryHostTest
     private boolean mInheritEnvVars = true;
 
     @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
+
+    @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
@@ -249,7 +255,7 @@ public class PythonBinaryHostTest
             testDir = mTestInfo.executionFiles().get(FilesKey.TESTS_DIRECTORY);
         }
         List<String> ldLibraryPath = new ArrayList<>();
-        if (testDir != null && testDir.exists()) {
+        if (!mUseMinimalSharedLibs && testDir != null && testDir.exists()) {
             List<String> libPaths =
                     Arrays.asList("lib", "lib64", "host/testcases/lib", "host/testcases/lib64");
             for (String path : libPaths) {
@@ -331,6 +337,9 @@ public class PythonBinaryHostTest
         getRunUtil().setEnvVariablePriority(EnvPriority.SET);
         getRunUtil().setEnvVariable("PATH", path);
 
+        if (mUseMinimalSharedLibs) {
+            mLdLibraryPath = buildMinimalLdLibraryPath(workingDir, Arrays.asList("shared_libs"));
+        }
         if (mLdLibraryPath != null) {
             getRunUtil().setEnvVariable(LD_LIBRARY_PATH, mLdLibraryPath);
         }
