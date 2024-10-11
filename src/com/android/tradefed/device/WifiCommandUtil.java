@@ -28,15 +28,18 @@ import java.util.regex.Pattern;
 /** A utility class that can parse wifi command outputs. */
 public class WifiCommandUtil {
 
-    public static final Pattern SSID_PATTERN =
+    private static final Pattern SSID_PATTERN =
             Pattern.compile(".*WifiInfo:.*SSID:\\s*\"([^,]*)\".*");
-    public static final Pattern BSSID_PATTERN = Pattern.compile(".*WifiInfo:.*BSSID:\\s*([^,]*).*");
-    public static final Pattern LINK_SPEED_PATTERN =
+    private static final Pattern BSSID_PATTERN =
+            Pattern.compile(".*WifiInfo:.*BSSID:\\s*([^,]*).*");
+    private static final Pattern LINK_SPEED_PATTERN =
             Pattern.compile(
                     ".*WifiInfo:.*(?<!\\bTx\\s\\b|\\bRx\\s\\b)Link speed:\\s*([^,]*)Mbps.*");
-    public static final Pattern RSSI_PATTERN = Pattern.compile(".*WifiInfo:.*RSSI:\\s*([^,]*).*");
-    public static final Pattern MAC_ADDRESS_PATTERN =
+    private static final Pattern RSSI_PATTERN = Pattern.compile(".*WifiInfo:.*RSSI:\\s*([^,]*).*");
+    private static final Pattern MAC_ADDRESS_PATTERN =
             Pattern.compile(".*WifiInfo:.*MAC:\\s*([^,]*).*");
+    private static final Pattern NETWORK_ID_PATTERN =
+            Pattern.compile(".*WifiInfo:.*Net ID:\\s*([^,]*).*");
 
     /** Represents a wifi network containing its related info. */
     public static class ScanResult {
@@ -149,6 +152,11 @@ public class WifiCommandUtil {
         Matcher macAddressMatcher = MAC_ADDRESS_PATTERN.matcher(input);
         if (macAddressMatcher.find()) {
             wifiInfo.put("macAddress", macAddressMatcher.group(1));
+        }
+
+        Matcher networkIdMatcher = NETWORK_ID_PATTERN.matcher(input);
+        if (networkIdMatcher.find()) {
+            wifiInfo.put("netId", networkIdMatcher.group(1));
         }
 
         return wifiInfo;

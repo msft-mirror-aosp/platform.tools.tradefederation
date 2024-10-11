@@ -1719,8 +1719,17 @@ public class NativeDevice
                 }
             }
             CLog.d("Using 'ls' to check doesFileExist(%s)", deviceFilePath);
-            String lsGrep = executeShellCommand(String.format("ls \"%s\"", deviceFilePath));
-            return !lsGrep.contains("No such file or directory");
+            CommandResult result =
+                    executeShellV2Command(String.format("ls \"%s\"", deviceFilePath));
+            if (CommandStatus.SUCCESS.equals(result.getStatus())
+                    && !result.getStdout().contains("No such file or directory")) {
+                return true;
+            } else {
+                CLog.d(
+                        "File %s does not exist.\nstdout: %s\nstderr: %s",
+                        deviceFilePath, result.getStdout(), result.getStderr());
+                return false;
+            }
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DOES_FILE_EXISTS_TIME,
@@ -3382,7 +3391,12 @@ public class NativeDevice
         mLastConnectedWifiSsid = null;
         mLastConnectedWifiPsk = null;
 
-        IWifiHelper wifi = createWifiHelper();
+        IWifiHelper wifi = null;
+        if (!getOptions().useCmdWifiCommands() || !enableAdbRoot() || getApiLevel() < 31) {
+            wifi = createWifiHelper(false);
+        } else {
+            wifi = createWifiHelper(true);
+        }
         return wifi.disconnectFromNetwork();
     }
 
