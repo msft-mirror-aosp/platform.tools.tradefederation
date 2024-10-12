@@ -15,7 +15,7 @@
  */
 package com.android.tradefed.testtype.binary;
 
-import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -26,6 +26,7 @@ import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
@@ -54,8 +55,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Test runner for executable running on the host. The runner implements {@link IDeviceTest} since
@@ -152,14 +154,17 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         }
         runUtil.setEnvVariable(LD_LIBRARY_PATH, ldLibraryPath);
 
+        Set<String> tools = new HashSet<>();
         // Update Tradefed adb on $PATH of binary
         File adbBinary = AdbUtils.getAdbToUpdate(getTestInfo(), getAdbPath());
+        tools.add(adbBinary != null ? adbBinary.getAbsolutePath() : "adb");
+        if (getTestInfo().getDevice() instanceof IManagedTestDevice) {
+            tools.add(((IManagedTestDevice) getTestInfo().getDevice()).getFastbootPath());
+        }
         runUtil.setEnvVariable(
                 "PATH",
-                buildPathWithRelativePaths(
-                        workingDir,
-                        Collections.singleton(
-                                adbBinary != null ? adbBinary.getAbsolutePath() : "adb"),
+                buildPath(
+                        tools,
                         String.format(
                                 "%s:/usr/bin",
                                 SystemUtil.getRunningJavaBinaryPath()

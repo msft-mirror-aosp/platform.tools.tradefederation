@@ -24,6 +24,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.skipped.AnalysisHeuristic;
 import com.android.tradefed.testtype.suite.SuiteResultCacheUtil;
 
+import build.bazel.remote.execution.v2.Digest;
+
 import com.google.api.client.util.Joiner;
 
 import java.util.ArrayList;
@@ -69,6 +71,7 @@ public class ImageContentAnalyzer {
             if (presubmitMode) {
                 for (ContentAnalysisContext context : contexts) {
                     if (context.contentInformation() != null
+                            && context.contentInformation().currentBuildId != null
                             && !context.contentInformation().currentBuildId.startsWith("P")) {
                         activeContexts.remove(context);
                         CLog.d(
@@ -112,9 +115,13 @@ public class ImageContentAnalyzer {
                             CLog.d("device image '%s' has changed.", context.contentEntry());
                             results.addDeviceImageChanges(changeCount);
                         }
+                        Digest imageDigest = DeviceMerkleTree.buildFromContext(context);
+                        if (imageDigest != null) {
+                            InvocationMetricLogger.addInvocationMetrics(
+                                    InvocationMetricKey.DEVICE_IMAGE_HASH, imageDigest.getHash());
+                        }
                         results.addImageDigestMapping(
-                                SuiteResultCacheUtil.DEVICE_IMAGE_KEY,
-                                DeviceMerkleTree.buildFromContext(context));
+                                SuiteResultCacheUtil.DEVICE_IMAGE_KEY, imageDigest);
                         break;
                     default:
                         break;
