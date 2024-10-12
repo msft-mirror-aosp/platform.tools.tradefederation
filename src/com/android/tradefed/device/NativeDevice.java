@@ -1719,8 +1719,7 @@ public class NativeDevice
                 }
             }
             CLog.d("Using 'ls' to check doesFileExist(%s)", deviceFilePath);
-            CommandResult result =
-                    executeShellV2Command(String.format("ls \"%s\"", deviceFilePath));
+            CommandResult result = executeShellV2Command(String.format("ls '%s'", deviceFilePath));
             if (CommandStatus.SUCCESS.equals(result.getStatus())
                     && !result.getStdout().contains("No such file or directory")) {
                 return true;
