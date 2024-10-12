@@ -2893,6 +2893,10 @@ public class TestDevice extends NativeDevice {
         final String hugePagesFlag = builder.mHugePages ? "--hugepages" : "";
         final String nameFlag =
                 Strings.isNullOrEmpty(builder.mName) ? "" : "--name " + builder.mName;
+        final String dumpDt =
+                Strings.isNullOrEmpty(builder.mDumpDt)
+                        ? ""
+                        : "--dump-device-tree " + builder.mDumpDt;
 
         List<String> args =
                 new ArrayList<>(
@@ -2917,7 +2921,8 @@ public class TestDevice extends NativeDevice {
                                 outApkIdsigPath,
                                 builder.mInstanceImg,
                                 "--config-path",
-                                builder.mConfigPath));
+                                builder.mConfigPath,
+                                dumpDt));
         if (isVirtFeatureEnabled("com.android.kvm.LLPVM_CHANGES")) {
             args.add("--instance-id-file");
             args.add(builder.mInstanceIdFile);
@@ -3261,6 +3266,7 @@ public class TestDevice extends NativeDevice {
         private String mInstanceImg; // Path to instance_img file
         private boolean mHugePages;
         private String mName;
+        private String mDumpDt;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3280,6 +3286,7 @@ public class TestDevice extends NativeDevice {
             mInstanceIdFile = null;
             mInstanceImg = null;
             mName = null;
+            mDumpDt = null;
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -3303,6 +3310,16 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder debugLevel(String debugLevel) {
             mDebugLevel = debugLevel;
+            return this;
+        }
+
+        /**
+         * Sets path where device tree blob will be dumped.
+         *
+         * <p>Supported values: null and "path".
+         */
+        public MicrodroidBuilder dumpDt(String dumpDt) {
+            mDumpDt = dumpDt;
             return this;
         }
 
