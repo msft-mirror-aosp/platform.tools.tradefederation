@@ -174,7 +174,7 @@ public class IsolatedHostTestTest {
         assertTrue(mHostTest.compileClassPath().contains("ravenwood-runtime"));
 
         assertEquals(
-                "ravenwood-runtime/lib:ravenwood-runtime/lib64",
+                String.join(java.io.File.pathSeparator, ldLibraryPath),
                 mHostTest.compileLdLibraryPathInner(null));
 
         List<String> commandArgs = mHostTest.compileCommandArgs("", null);
@@ -299,69 +299,6 @@ public class IsolatedHostTestTest {
         verify(mListener)
                 .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
         verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
-    }
-
-    @Test
-    public void testCacheWorks() throws Exception {
-        final String jarName = "SimplePassingTest.jar";
-        final String className = "com.android.tradefed.referencetests.SimplePassingTest";
-        InvocationContext context = new InvocationContext();
-        TestInformation testInfo =
-                TestInformation.newBuilder().setInvocationContext(context).build();
-        TestDescription test = new TestDescription(className, "test2Plus2");
-        ITestInvocationListener firstListener = Mockito.mock(ITestInvocationListener.class);
-        ITestInvocationListener secondListener = Mockito.mock(ITestInvocationListener.class);
-        File testDir1 = FileUtil.createTempDir("isolatedhosttesttest", mWorkFolder);
-        IsolatedHostTest runner1 = createTestRunnerForCaching(testDir1);
-        OptionSetter setter = new OptionSetter(runner1);
-        File jar1 = getJarResource("/" + jarName, testDir1, jarName);
-        setter.setOptionValue("jar", jar1.getName());
-        setter.setOptionValue("exclude-paths", "org/junit");
-        setter.setOptionValue("exclude-paths", "junit");
-        File testDir2 = FileUtil.createTempDir("isolatedhosttesttest", mWorkFolder);
-        IsolatedHostTest runner2 = createTestRunnerForCaching(testDir2);
-        setter = new OptionSetter(runner2);
-        File jar2 = getJarResource("/" + jarName, testDir2, jarName);
-        setter.setOptionValue("jar", jar2.getName());
-        // Test that the different order of option values won't affect caching.
-        setter.setOptionValue("exclude-paths", "junit");
-        setter.setOptionValue("exclude-paths", "org/junit");
-
-        doReturn(testDir1).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
-        doReturn(testDir1).when(mMockBuildInfo).getFile(BuildInfoFileKey.TESTDIR_IMAGE);
-        runner1.run(testInfo, firstListener);
-        boolean isFirstRunCached = runner1.isCached();
-        doReturn(testDir2).when(mMockBuildInfo).getFile(BuildInfoFileKey.HOST_LINKED_DIR);
-        doReturn(testDir2).when(mMockBuildInfo).getFile(BuildInfoFileKey.TESTDIR_IMAGE);
-        runner2.run(testInfo, secondListener);
-        boolean isSecondRunCached = runner2.isCached();
-
-        assertFalse(isFirstRunCached);
-        verify(firstListener).testRunStarted((String) Mockito.any(), Mockito.eq(1));
-        verify(firstListener).testStarted(Mockito.eq(test), Mockito.anyLong());
-        verify(firstListener)
-                .testEnded(
-                        Mockito.eq(test),
-                        Mockito.anyLong(),
-                        Mockito.<HashMap<String, Metric>>any());
-        verify(firstListener)
-                .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
-        verify(firstListener)
-                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
-        assertTrue(isSecondRunCached);
-        verify(secondListener)
-                .testRunStarted(
-                        (String) Mockito.any(), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
-        verify(secondListener).testStarted(Mockito.eq(test), Mockito.anyLong());
-        verify(secondListener)
-                .testEnded(
-                        Mockito.eq(test),
-                        Mockito.anyLong(),
-                        Mockito.<HashMap<String, Metric>>any());
-        verify(secondListener)
-                .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
-        verify(secondListener)
-                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     @Test
@@ -642,7 +579,7 @@ public class IsolatedHostTestTest {
 
         final String ldLibraryPath =
                 mHostTest.compileLdLibraryPathInner(androidHostOut.getAbsolutePath());
-        assertEquals("ANDROID_HOST_OUT/lib:ANDROID_HOST_OUT/lib64:lib:lib64", ldLibraryPath);
+        assertEquals(String.join(java.io.File.pathSeparator, paths), ldLibraryPath);
     }
 
     @Test

@@ -765,6 +765,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
         ProcessBuilder builder = new ProcessBuilder(command);
 
+        builder.environment().put("PYTHONDONTWRITEBYTECODE", "1");
         if (binTempDir != null) builder.environment().put("XDG_CACHE_HOME", binTempDir.getPath());
         if (pythonHome != null) builder.environment().put("PYTHONHOME", pythonHome.getPath());
 
