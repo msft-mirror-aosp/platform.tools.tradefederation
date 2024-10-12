@@ -1247,12 +1247,12 @@ public class RunUtil implements IRunUtil {
         return commandResult;
     }
 
-    public static String toRelative(File start, String target) {
+    private static String toRelative(File start, String target) {
         File targetFile = new File(target);
         return targetFile.exists() ? toRelative(start, targetFile) : target;
     }
 
-    public static String toRelative(File start, File target) {
+    private static String toRelative(File start, File target) {
         String relPath = start.toPath().relativize(target.toPath()).toString();
         return relPath.length() != 0 ? relPath : ".";
     }
@@ -1261,6 +1261,7 @@ public class RunUtil implements IRunUtil {
         return System.getProperty("path.separator");
     }
 
+    // TODO(b/372552948): Delete unused caching code.
     /**
      * Links the {@code target} to a place under {@code destRoot}.
      *
@@ -1273,7 +1274,7 @@ public class RunUtil implements IRunUtil {
      * @return the symlink
      * @throws IOException if the target file fails to be linked.
      */
-    public static File linkFile(File destRoot, String relToRoot, File target) throws IOException {
+    private static File linkFile(File destRoot, String relToRoot, File target) throws IOException {
         if (target.getAbsolutePath().startsWith(destRoot.getAbsolutePath())) {
             return target;
         }

@@ -6045,7 +6045,7 @@ public class TestDeviceTest {
     public void testDoesFileExists() throws Exception {
         TestDevice testDevice =
                 new TestableTestDeviceV2()
-                        .injectShellV2Command("ls \"/data/local/tmp/file\"", "file");
+                        .injectShellV2Command("ls '/data/local/tmp/file\'", "file");
 
         assertTrue(testDevice.doesFileExist("/data/local/tmp/file"));
     }
@@ -6056,9 +6056,8 @@ public class TestDeviceTest {
         TestDevice testDevice =
                 new TestableTestDeviceV2()
                         .injectShellV2Command(
-                                "ls \"/data/local/tmp/file\"",
+                                "ls '/data/local/tmp/file'",
                                 "ls: cannot access 'file': No such file or directory\n");
-
         assertFalse(testDevice.doesFileExist("/data/local/tmp/file"));
     }
 
