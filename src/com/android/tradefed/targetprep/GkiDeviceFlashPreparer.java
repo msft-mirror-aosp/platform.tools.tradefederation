@@ -182,9 +182,15 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private boolean mPostRebootDeviceIntoUserSpace = true;
 
     @Option(
+            name = "wipe-device-before-gki-flash",
+            description = "Whether to wipe device before GKI boot image flash.")
+    private boolean mShouldWipeDeviceBeforeFlash = true;
+
+    @Deprecated
+    @Option(
             name = "wipe-device-after-gki-flash",
-            description = "Whether to wipe device after GKI boot image flash.")
-    private boolean mShouldWipeDevice = true;
+            description = "deprecated, use option wipe-device-before-gki-flash instead.")
+    private boolean mShouldWipeDevice = false;
 
     @Option(name = "disable-verity", description = "Whether to disable-verity.")
     private boolean mShouldDisableVerity = false;
@@ -314,6 +320,10 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         // Don't allow interruptions during flashing operations.
         getRunUtil().allowInterrupt(false);
         try {
+            if (mShouldWipeDeviceBeforeFlash) {
+                executeFastbootCmd(device, "-w");
+            }
+
             if (buildInfo.getFile(mVendorBootImageName) != null) {
                 File vendorBootImg =
                         getRequestedFile(
@@ -330,8 +340,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mVendorKernelBootImageFileName,
                                 buildInfo.getFile(mVendorKernelBootImageName),
                                 tmpDir);
-                executeFastbootCmd(device, "flash", "vendor_kernel_boot",
-                                vendorKernelBootImg.getAbsolutePath());
+                executeFastbootCmd(
+                        device,
+                        "flash",
+                        "vendor_kernel_boot",
+                        vendorKernelBootImg.getAbsolutePath());
             }
             if (buildInfo.getFile(mInitramfsImageName) != null) {
                 File initramfsImg =
@@ -381,9 +394,6 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                 executeFastbootCmd(device, "flash", "system_dlkm", systemDlkmImg.getAbsolutePath());
             }
 
-            if (mShouldWipeDevice) {
-                executeFastbootCmd(device, "-w");
-            }
         } finally {
             getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
             // Allow interruption at the end no matter what.
