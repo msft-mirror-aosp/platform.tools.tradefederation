@@ -50,6 +50,12 @@ public class ConfigurationDescriptor implements Serializable, Cloneable {
     /** Metadata key for a config parameterization, optional. */
     public static final String ACTIVE_PARAMETER_KEY = "active-parameter";
 
+    /** Metadata key for a config to specify if it is prioritizing host config. */
+    public static final String PRIORITIZE_HOST_CONFIG_KEY = "prioritize-host-config";
+
+    /** Metadata key for a config to specify the module dir path when it's a module config. */
+    public static final String MODULE_DIR_PATH_KEY = "module-dir-path";
+
     @Option(name = "test-suite-tag", description = "A membership tag to suite. Can be repeated.")
     private List<String> mSuiteTags = new ArrayList<>();
 
