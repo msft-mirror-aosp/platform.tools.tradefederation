@@ -619,11 +619,15 @@ public class IncrementalImageUtil {
                         mDevice.executeShellV2Command(
                                 "snapshotctl revert-snapshots", 60L, TimeUnit.SECONDS, 0);
                 if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
-                    CLog.d(
-                            "Failed revert-snapshots. stdout: %s, stderr: %s",
-                            revertOutput.getStdout(), revertOutput.getStderr());
+                    String failedMessage =
+                            String.format(
+                                    "Failed revert-snapshots. stdout: %s, stderr: %s",
+                                    revertOutput.getStdout(), revertOutput.getStderr());
+                    CLog.d(failedMessage);
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+                    // Invalidate the device since it failed the revert
+                    throw new DeviceDisconnectedException(failedMessage, mDevice.getSerialNumber());
                 }
                 if (mSourceDirectory != null) {
                     // flash all static partition in bootloader
