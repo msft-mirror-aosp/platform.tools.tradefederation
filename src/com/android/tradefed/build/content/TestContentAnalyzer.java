@@ -308,6 +308,11 @@ public class TestContentAnalyzer {
         ContentAnalysisResults results = new ContentAnalysisResults();
         List<ArtifactFileDescriptor> diffs = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
+        if (!context.commonLocations().isEmpty()) {
+            results.addImageDigestMapping(
+                    context.contentEntry() + "_common_location",
+                    ContentMerkleTree.buildCommonLocationFromContext(context));
+        }
         List<ArtifactFileDescriptor> diff =
                 analyzeContentDiff(context.contentInformation(), context.contentEntry());
         if (diff == null) {
