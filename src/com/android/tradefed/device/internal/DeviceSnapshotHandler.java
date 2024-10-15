@@ -60,6 +60,63 @@ public class DeviceSnapshotHandler {
     }
 
     /**
+     * Calls delete snapshot of the given device.
+     *
+     * @param device The device to delete a snapshot. Needed to get user.
+     * @param snapshotId Snapshot ID to delete.
+     * @return True if deleting snapshot was successful, false otherwise.
+     * @throws DeviceNotAvailableException
+     */
+    public void deleteSnapshot(ITestDevice device, String snapshotId)
+            throws DeviceNotAvailableException {
+        if (device.getIDevice() instanceof StubDevice) {
+            CLog.d(
+                    "Device '%s' is a stub device. skipping deleting snapshot.",
+                    device.getSerialNumber());
+            return;
+        }
+        FeatureResponse response;
+        try {
+            Map<String, String> args = new HashMap<>();
+            args.put(DeviceSnapshotFeature.SNAPSHOT_ID, snapshotId);
+            args.put(DeviceSnapshotFeature.DEVICE_NAME, mContext.getDeviceName(device));
+            args.put(DeviceSnapshotFeature.DELETE_FLAG, "true");
+            response =
+                    mClient.triggerFeature(
+                            DeviceSnapshotFeature.DEVICE_SNAPSHOT_FEATURE_NAME, args);
+            CLog.d(
+                    "Response from deleting snapshot(%s) request: %s",
+                    snapshotId, response.getResponse());
+        } finally {
+            mClient.close();
+        }
+        if (response.hasErrorInfo()) {
+            String trace = response.getErrorInfo().getErrorTrace();
+            // Handle if it's an exception error.
+            Object o = null;
+            try {
+                o = SerializationUtil.deserialize(trace);
+            } catch (IOException | RuntimeException e) {
+                CLog.e("Failed to deserialize delete snapshot error response: %s", e.getMessage());
+            }
+            if (o instanceof DeviceNotAvailableException) {
+                throw (DeviceNotAvailableException) o;
+            } else if (o instanceof IHarnessException) {
+                IHarnessException exception = (IHarnessException) o;
+                throw new HarnessRuntimeException("Exception while deleting snapshot.", exception);
+            } else if (o instanceof Exception) {
+                throw new HarnessRuntimeException(
+                        "Exception while deleting snapshot.",
+                        (Exception) o,
+                        InfraErrorIdentifier.UNDETERMINED);
+            }
+            throw new HarnessRuntimeException(
+                    "Exception while deleting snapshot. Unserialized error response: " + trace,
+                    InfraErrorIdentifier.UNDETERMINED);
+        }
+    }
+
+    /**
      * Calls snapshot of the given device.
      *
      * @param device The device to snapshot.
