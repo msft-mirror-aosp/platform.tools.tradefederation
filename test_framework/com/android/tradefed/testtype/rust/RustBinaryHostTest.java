@@ -16,7 +16,7 @@
 package com.android.tradefed.testtype.rust;
 
 import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
-import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.IShellOutputReceiver;
@@ -295,10 +295,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                     "LLVM_PROFILE_FILE", mCoverageDir.getAbsolutePath() + "/clang-%m.profraw");
         }
 
-        runUtil.setEnvVariable(
-                "PATH",
-                buildPathWithRelativePaths(
-                        invocation.workingDir, Collections.singleton("adb"), "/usr/bin"));
+        runUtil.setEnvVariable("PATH", buildPath(Collections.singleton("adb"), ".:/usr/bin"));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
         return cacheClient == null
