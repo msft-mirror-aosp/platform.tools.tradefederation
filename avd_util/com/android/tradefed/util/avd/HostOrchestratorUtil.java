@@ -368,6 +368,12 @@ public class HostOrchestratorUtil {
         return new CommandResult(CommandStatus.EXCEPTION);
     }
 
+    /** Attempt to delete snapshot of a Cuttlefish instance via Host Orchestrator. */
+    public CommandResult deleteSnapshotGce(String snapshotId) {
+        // TODO(b/339304559): Flesh out this section when the host orchestrator is supported.
+        return new CommandResult(CommandStatus.EXCEPTION);
+    }
+
     /**
      * Create Host Orchestrator Tunnel with a given port number.
      *
