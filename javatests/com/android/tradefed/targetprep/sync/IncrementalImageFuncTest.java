@@ -112,6 +112,7 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                         mApplySnapshot,
                         false,
                         false,
+                        false,
                         SnapuserdWaitPhase.BLOCK_AFTER_UPDATE);
         try {
             updateUtil.updateDevice(null, null);
