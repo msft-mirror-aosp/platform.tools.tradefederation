@@ -256,6 +256,7 @@ public class InvocationMetricLogger {
         // CAS downloader metrics
         CAS_VERSION("cas_version", false),
         CAS_DOWNLOAD_ERRORS("cas_download_errors", true),
+        CAS_DOWNLOAD_ERROR_FILES("cas_download_error_files", true),
         // Name of files downloaded by CAS downloader.
         CAS_DOWNLOAD_FILES("cas_download_files", true),
         CAS_DOWNLOAD_FILE_SUCCESS_COUNT("cas_download_file_success_count", true),
