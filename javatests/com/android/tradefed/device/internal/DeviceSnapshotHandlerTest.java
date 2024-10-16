@@ -215,4 +215,60 @@ public class DeviceSnapshotHandlerTest {
                                 "0");
         assertEquals("2", count);
     }
+
+    @Test
+    public void testDeleteSnapshot() throws Exception {
+        FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
+        when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
+
+        mHandler.snapshotDevice(mMockDevice, "random_id");
+    }
+
+    @Test
+    public void testDeleteSnapshot_error() throws Exception {
+        FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
+        responseBuilder.setErrorInfo(ErrorInfo.newBuilder().setErrorTrace("random error"));
+        when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
+
+        try {
+            mHandler.deleteSnapshot(mMockDevice, "random_id");
+            fail("Should have thrown an exception");
+        } catch (HarnessRuntimeException expected) {
+            // Expected
+            assertTrue(expected.getMessage().contains("random error"));
+        }
+    }
+
+    @Test
+    public void testDeleteSnapshot_dnae() throws Exception {
+        DeviceNotAvailableException e = new DeviceNotAvailableException("dnae", "serial");
+        FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
+        responseBuilder.setErrorInfo(
+                ErrorInfo.newBuilder().setErrorTrace(SerializationUtil.serializeToString(e)));
+        when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
+
+        try {
+            mHandler.deleteSnapshot(mMockDevice, "random_id");
+            fail("Should have thrown an exception");
+        } catch (DeviceNotAvailableException expected) {
+            // Expected
+        }
+    }
+
+    @Test
+    public void testDeleteSnapshot_runtime() throws Exception {
+        Exception e = new RuntimeException("runtime");
+        FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
+        responseBuilder.setErrorInfo(
+                ErrorInfo.newBuilder().setErrorTrace(SerializationUtil.serializeToString(e)));
+        when(mMockClient.triggerFeature(any(), any())).thenReturn(responseBuilder.build());
+
+        try {
+            mHandler.deleteSnapshot(mMockDevice, "random_id");
+            fail("Should have thrown an exception");
+        } catch (HarnessRuntimeException expected) {
+            // Expected
+            assertTrue(expected.getCause() instanceof RuntimeException);
+        }
+    }
 }
