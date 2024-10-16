@@ -47,6 +47,7 @@ public class DeviceSnapshotFeature
     public static final String DEVICE_NAME = "device_name";
     public static final String SNAPSHOT_ID = "snapshot_id";
     public static final String RESTORE_FLAG = "restore_flag";
+    public static final String DELETE_FLAG = "delete_flag";
 
     private IConfiguration mConfig;
     private TestInformation mTestInformation;
@@ -104,8 +105,11 @@ public class DeviceSnapshotFeature
                 String user = info.getInstanceUser();
 
                 String snapshotId = request.getArgsMap().get(SNAPSHOT_ID);
+                boolean deleteFlag = Boolean.parseBoolean(request.getArgsMap().get(DELETE_FLAG));
                 boolean restoreFlag = Boolean.parseBoolean(request.getArgsMap().get(RESTORE_FLAG));
-                if (restoreFlag) {
+                if (deleteFlag) {
+                    deleteSnapshot(responseBuilder, connection, user, snapshotId);
+                } else if (restoreFlag) {
                     restoreSnapshot(responseBuilder, connection, user, offset, snapshotId);
                 } else {
                     snapshot(responseBuilder, connection, user, offset, snapshotId);
@@ -210,6 +214,43 @@ public class DeviceSnapshotFeature
         }
     }
 
+    private void deleteSnapshot(
+            FeatureResponse.Builder responseBuilder,
+            AbstractConnection connection,
+            String user,
+            String snapshotId)
+            throws DeviceNotAvailableException, TargetSetupError {
+        String response =
+                String.format(
+                        "Attempting delete device snapshot on %s (%s) to %s.",
+                        mTestInformation.getDevice().getSerialNumber(),
+                        mTestInformation.getDevice().getClass().getSimpleName(),
+                        snapshotId);
+        try {
+            long startTime = System.currentTimeMillis();
+            CommandResult result = deleteSnapshotGce(connection, user, snapshotId);
+            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                throw new DeviceNotAvailableException(
+                        String.format(
+                                "Failed to delete snapshot on device: %s. status:%s\n"
+                                        + "stdout: %s\n"
+                                        + "stderr:%s",
+                                mTestInformation.getDevice().getSerialNumber(),
+                                result.getStatus(),
+                                result.getStdout(),
+                                result.getStderr()),
+                        mTestInformation.getDevice().getSerialNumber(),
+                        DeviceErrorIdentifier.DEVICE_FAILED_TO_DELETE_SNAPSHOT);
+            }
+            response +=
+                    String.format(
+                            " Deleting snapshot finished in %d ms.",
+                            System.currentTimeMillis() - startTime);
+        } finally {
+            responseBuilder.setResponse(response);
+        }
+    }
+
     private GceAvdInfo getAvdInfo(ITestDevice device, AbstractConnection connection) {
         if (connection instanceof AdbSshConnection) {
             return ((AdbSshConnection) connection).getAvdInfo();
@@ -239,6 +280,16 @@ public class DeviceSnapshotFeature
         }
         CommandResult res = new CommandResult(CommandStatus.EXCEPTION);
         res.setStderr("Incorrect connection type while attempting device restore");
+        return res;
+    }
+
+    private CommandResult deleteSnapshotGce(
+            AbstractConnection connection, String user, String snapshotId) throws TargetSetupError {
+        if (connection instanceof AdbSshConnection) {
+            return ((AdbSshConnection) connection).deleteSnapshotGce(user, snapshotId);
+        }
+        CommandResult res = new CommandResult(CommandStatus.EXCEPTION);
+        res.setStderr("Incorrect connection type while attempting device delete");
         return res;
     }
 }
