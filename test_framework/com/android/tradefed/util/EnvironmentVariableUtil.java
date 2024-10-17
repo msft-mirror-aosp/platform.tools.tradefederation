@@ -51,8 +51,29 @@ public class EnvironmentVariableUtil {
         }
 
         paths.add(addition);
-        return paths.stream()
-                .distinct()
-                .collect(Collectors.joining(System.getProperty("path.separator")));
+        return paths.stream().distinct().collect(Collectors.joining(getPathSeparator()));
+    }
+
+    /**
+     * Builds the value of LD_LIBRARY_PATH that uses the shared libs inside module folder.
+     *
+     * @param moduleDir The root of module folder.
+     * @param subDirs The sub-directories that are relative to the root of module folder.
+     * @return The value of LD_LIBRARY_PATH.
+     */
+    public static String buildMinimalLdLibraryPath(File moduleDir, List<String> subDirs) {
+        List<String> paths = new ArrayList<>();
+        paths.add(moduleDir.getAbsolutePath());
+        paths.addAll(
+                subDirs.stream()
+                        .map(d -> new File(moduleDir, d))
+                        .filter(f -> f.exists())
+                        .map(f -> f.getAbsolutePath())
+                        .collect(Collectors.toList()));
+        return paths.stream().distinct().collect(Collectors.joining(getPathSeparator()));
+    }
+
+    private static String getPathSeparator() {
+        return System.getProperty("path.separator");
     }
 }
