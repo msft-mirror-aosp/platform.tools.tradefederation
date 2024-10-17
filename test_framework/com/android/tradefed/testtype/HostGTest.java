@@ -17,6 +17,7 @@
 package com.android.tradefed.testtype;
 
 import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
 
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
@@ -56,6 +57,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -86,6 +88,11 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                     "Whether the subprocess should inherit environment variables from the main"
                             + " process.")
     private boolean mInheritEnvVars = true;
+
+    @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
 
     /** Whether any incomplete test is found in the current run. */
     private boolean mIncompleteTestFound = false;
@@ -165,7 +172,11 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         runUtil.setEnvVariable("PATH", path);
 
         // Update LD_LIBRARY_PATH
-        String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(gtestFile);
+        String ldLibraryPath =
+                mUseMinimalSharedLibs
+                        ? buildMinimalLdLibraryPath(
+                                gtestFile.getParentFile(), Arrays.asList("shared_libs"))
+                        : TestRunnerUtil.getLdLibraryPath(gtestFile);
         if (ldLibraryPath != null) {
             runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
         }

@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
+
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.cache.ExecutableAction;
@@ -206,6 +208,11 @@ public class IsolatedHostTest
     private boolean mInheritEnvVars = true;
 
     @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
+
+    @Option(
             name = "do-not-swallow-runner-errors",
             description =
                     "Whether the subprocess should not swallow runner errors. This should be set"
@@ -275,7 +282,11 @@ public class IsolatedHostTest
             CLog.v(String.join(" ", cmdArgs));
             RunUtil runner = new RunUtil(mInheritEnvVars);
 
-            String ldLibraryPath = this.compileLdLibraryPath();
+            String ldLibraryPath =
+                    mUseMinimalSharedLibs
+                            ? buildMinimalLdLibraryPath(
+                                    mWorkDir, Arrays.asList("lib", "lib64", "shared_libs"))
+                            : this.compileLdLibraryPath();
             if (ldLibraryPath != null) {
                 runner.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
