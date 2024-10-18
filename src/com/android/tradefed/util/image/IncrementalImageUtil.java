@@ -25,6 +25,7 @@ import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.SnapuserdWaitPhase;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -608,6 +609,9 @@ public class IncrementalImageUtil {
                 }
             }
             try {
+                if (mNewFlow && mDevice instanceof TestDevice) {
+                    ((TestDevice) mDevice).setFirstBootloaderReboot();
+                }
                 mDevice.rebootIntoBootloader();
             } catch (DeviceNotAvailableException e) {
                 if (mNewFlow) {
