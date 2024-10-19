@@ -33,7 +33,7 @@ public class DumpsysPackageReceiverTest {
     public void testParse_classic() throws Exception {
         final String[] froyoPkgTxt = new String[] {"Packages:",
                 "Package [com.android.soundrecorder] (462f6b38):",
-                "targetSdk=8",
+                "targetSdk=8 codePath=/data/app/~~XXmm==/com.app.android==",
                 "versionName=3.1.36 (88)",
                 "pkgFlags=0x1 installStatus=1 enabled=0"};
 
@@ -45,6 +45,7 @@ public class DumpsysPackageReceiverTest {
         assertTrue(pkg.isSystemApp());
         assertFalse(pkg.isUpdatedSystemApp());
         assertEquals("3.1.36 (88)", pkg.getVersionName());
+        assertEquals("/data/app/~~XXmm==/com.app.android==", pkg.getCodePath());
     }
 
     /**
