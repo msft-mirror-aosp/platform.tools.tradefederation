@@ -25,6 +25,7 @@ import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.SnapuserdWaitPhase;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -364,7 +365,6 @@ public class IncrementalImageUtil {
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.INCREMENTAL_NEW_FLOW, 1);
         // If enable, push the bootloader from userspace like OTA
         if (mUpdateBootloaderFromUserspace) {
-            // TODO: Don't do that in case of retry isolation re-entry
             updateBootloaderFromUserspace(currentBootloader);
         }
         updateDevice(currentBootloader, currentRadio);
@@ -424,7 +424,7 @@ public class IncrementalImageUtil {
             try {
                 bootloaderDir =
                         FileUtil.createTempDir("bootloader", CurrentInvocation.getWorkFolder());
-                ZipUtil2.extractZip(currentBootloader, bootloaderDir);
+                FastbootPack.unpack(currentBootloader, bootloaderDir, null, false);
             } catch (IOException e) {
                 throw new TargetSetupError(
                         e.getMessage(), e, InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
@@ -449,7 +449,7 @@ public class IncrementalImageUtil {
                 CommandResult writeRes =
                         mDevice.executeShellV2Command(
                                 String.format(
-                                        "dd if=/data/nbd/bootloader/%s of=/dev/block/by-name/%s%s",
+                                        "dd if=/data/bootloader/%s of=/dev/block/by-name/%s%s",
                                         write.getName(),
                                         FileUtil.getBaseName(write.getName()),
                                         bootSuffix));
@@ -609,6 +609,9 @@ public class IncrementalImageUtil {
                 }
             }
             try {
+                if (mNewFlow && mDevice instanceof TestDevice) {
+                    ((TestDevice) mDevice).setFirstBootloaderReboot();
+                }
                 mDevice.rebootIntoBootloader();
             } catch (DeviceNotAvailableException e) {
                 if (mNewFlow) {

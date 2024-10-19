@@ -209,6 +209,7 @@ public class TestDevice extends NativeDevice {
         String cid;
     }
 
+    private boolean mFirstBootloaderReboot = false;
     private boolean mWaitForSnapuserd = false;
     private SnapuserdWaitPhase mWaitPhase = null;
     private long mSnapuserNotificationTimestamp = 0L;
@@ -1316,9 +1317,14 @@ public class TestDevice extends NativeDevice {
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
         getConnection().notifyAdbRebootCalled();
-        if (!TestDeviceState.ONLINE.equals(getDeviceState())
-                || !doAdbFrameworkReboot(rebootMode, reason)) {
-            super.doAdbReboot(rebootMode, reason);
+        try {
+            if (mFirstBootloaderReboot
+                    || (!TestDeviceState.ONLINE.equals(getDeviceState())
+                            || !doAdbFrameworkReboot(rebootMode, reason))) {
+                super.doAdbReboot(rebootMode, reason);
+            }
+        } finally {
+            mFirstBootloaderReboot = false;
         }
     }
 
@@ -2404,6 +2410,7 @@ public class TestDevice extends NativeDevice {
     /** {@inheritDoc} */
     @Override
     public void postInvocationTearDown(Throwable exception) {
+        mFirstBootloaderReboot = false;
         super.postInvocationTearDown(exception);
         // If wifi was installed and it's a real device, attempt to clean it.
         if (mWasWifiHelperInstalled) {
@@ -2734,6 +2741,10 @@ public class TestDevice extends NativeDevice {
             }
         }
         return null;
+    }
+
+    public void setFirstBootloaderReboot() {
+        mFirstBootloaderReboot = true;
     }
 
     /**
