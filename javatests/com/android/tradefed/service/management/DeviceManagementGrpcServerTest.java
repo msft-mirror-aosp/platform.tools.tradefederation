@@ -39,6 +39,7 @@ import com.proto.tradefed.device.ReserveDeviceRequest;
 import com.proto.tradefed.device.ReserveDeviceResponse;
 
 import io.grpc.Server;
+import io.grpc.Status;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 
@@ -260,16 +261,14 @@ public class DeviceManagementGrpcServerTest {
                 .thenReturn(createDescriptor("serial1", DeviceAllocationState.Available));
         ITestDevice mockedDevice = Mockito.mock(ITestDevice.class);
         when(mMockDeviceManager.allocateDevice(Mockito.any())).thenReturn(mockedDevice);
-        when(mReserveDeviceResponseObserver.isCancelled()).thenReturn(false).thenReturn(true);
-        // Allocate a device
-        mServer.reserveDevice(
-                ReserveDeviceRequest.newBuilder().setDeviceId("serial1").build(),
-                mReserveDeviceResponseObserver);
-        verify(mReserveDeviceResponseObserver).onNext(mReserveDeviceResponseCaptor.capture());
-        ReserveDeviceResponse reservation = mReserveDeviceResponseCaptor.getValue();
-        assertThat(reservation.getResult()).isEqualTo(ReserveDeviceResponse.Result.UNKNOWN);
-        String reservationId = reservation.getReservationId();
-        assertThat(reservationId).isEmpty();
+    Mockito.doThrow(
+            Status.CANCELLED.withDescription("call already cancelled.").asRuntimeException())
+        .when(mReserveDeviceResponseObserver)
+        .onNext(Mockito.any());
+    // Allocate a device
+    mServer.reserveDevice(
+        ReserveDeviceRequest.newBuilder().setDeviceId("serial1").build(),
+        mReserveDeviceResponseObserver);
         verify(mMockDeviceManager).allocateDevice(Mockito.any());
         verify(mMockDeviceManager).freeDevice(mockedDevice, FreeDeviceState.AVAILABLE);
     }
