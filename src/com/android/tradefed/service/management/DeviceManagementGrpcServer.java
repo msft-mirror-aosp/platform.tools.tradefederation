@@ -31,6 +31,7 @@ import com.proto.tradefed.device.StopLeasingResponse;
 
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 
@@ -234,20 +235,17 @@ public class DeviceManagementGrpcServer extends DeviceManagementImplBase {
                 mSerialToReservation.put(serial, new ReservationInformation(device, reservationId));
             }
         }
-        // Double check isCancelled because the client may cancel the RPC when allocating device.
-        if (serverCallStreamObserver.isCancelled()) {
-            CLog.d("The client call is cancelled.");
+
+        try {
+            responseObserver.onNext(responseBuilder.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            CLog.w("The client call is cancelled. %s", e.getMessage());
             if (responseBuilder.getResult().equals(Result.SUCCEED)
-                    && !responseBuilder.getReservationId().isEmpty()) {
+                && !responseBuilder.getReservationId().isEmpty()) {
                 releaseReservationInternal(responseBuilder.getReservationId());
             }
-            responseBuilder
-                    .clear()
-                    .setResult(Result.UNKNOWN)
-                    .setMessage("The device reservation RPC is cancelled by client.");
         }
-        responseObserver.onNext(responseBuilder.build());
-        responseObserver.onCompleted();
     }
 
     @Override

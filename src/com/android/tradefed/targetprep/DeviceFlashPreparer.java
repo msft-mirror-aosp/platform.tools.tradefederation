@@ -191,6 +191,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mNewIncrementalFlow = false;
 
     @Option(
+            name = "update-bootloader-in-userspace",
+            description = "Allow to update bootloader in userspace in new flow of incremental.")
+    private boolean mUpdateBootloaderFromUserspace = false;
+
+    @Option(
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
@@ -355,6 +360,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mApplySnapshot,
                                 mWipeAfterApplySnapshot,
                                 mNewIncrementalFlow,
+                                mUpdateBootloaderFromUserspace,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
@@ -698,6 +704,10 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     public void setUseIncrementalNewFlow(boolean useIncrementalNewFlow) {
         mNewIncrementalFlow = useIncrementalNewFlow;
+    }
+
+    public void setUpdateBootloaderFromUserspace(boolean updateBootloaderFromUserspace) {
+        mUpdateBootloaderFromUserspace = updateBootloaderFromUserspace;
     }
 
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
