@@ -1051,8 +1051,10 @@ public abstract class ITestSuite
                         // execution
                         listenerWithCollectors.testModuleEnded();
                         mModuleInProgress = null;
-                        // Following modules will not be isolated if no action is taken
-                        CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                        if (!applyCachedResults) {
+                            // Following modules will not be isolated if no action is taken
+                            CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                        }
                     }
                     if (moduleRan) {
                         // Module isolation routine

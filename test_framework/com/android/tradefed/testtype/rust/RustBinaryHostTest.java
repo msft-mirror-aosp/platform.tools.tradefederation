@@ -16,6 +16,7 @@
 package com.android.tradefed.testtype.rust;
 
 import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
 import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
@@ -83,6 +84,11 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                     "Whether the subprocess should inherit environment variables from the main"
                             + " process.")
     private boolean mInheritEnvVars = true;
+
+    @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
 
     private File mCoverageDir;
     private IBuildInfo mBuildInfo;
@@ -278,8 +284,12 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 ldLibraryPathSetInEnv = true;
             }
         }
-        // Update LD_LIBRARY_PATH if it's not set already through command line args.
-        if (!ldLibraryPathSetInEnv) {
+        if (mUseMinimalSharedLibs) {
+            runUtil.setEnvVariable(
+                    "LD_LIBRARY_PATH",
+                    buildMinimalLdLibraryPath(invocation.workingDir, Arrays.asList("shared_libs")));
+        } else if (!ldLibraryPathSetInEnv) {
+            // Update LD_LIBRARY_PATH if it's not set already through command line args.
             String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(new File(invocation.command[0]));
             if (ldLibraryPath != null) {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
