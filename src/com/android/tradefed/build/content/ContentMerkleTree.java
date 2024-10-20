@@ -27,22 +27,34 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
-/** Compute a MerkleTree from the device content information. */
-public class DeviceMerkleTree {
+/** Compute a MerkleTree from the content information. */
+public class ContentMerkleTree {
 
-    /** Builds a merkle tree and returns the root digest from the device content information */
-    public static Digest buildFromContext(ContentAnalysisContext context) {
+    /** Builds a merkle tree and returns the root digest from the common location information */
+    public static Digest buildCommonLocationFromContext(ContentAnalysisContext context) {
         try {
             ArtifactDetails currentContent =
                     ArtifactDetails.parseFile(
                             context.contentInformation().currentContent, context.contentEntry());
             Directory.Builder rootBuilder = Directory.newBuilder();
             List<ArtifactFileDescriptor> allFiles = currentContent.details;
-            ImageContentAnalyzer.normalizeDeviceImage(allFiles);
+            List<ArtifactFileDescriptor> commonFiles =
+                    allFiles.parallelStream()
+                            .filter(
+                                    p -> {
+                                        for (String common : context.commonLocations()) {
+                                            if (p.path.startsWith(common)) {
+                                                return true;
+                                            }
+                                        }
+                                        return false;
+                                    })
+                            .collect(Collectors.toList());
             // Sort to ensure final messages are identical
             Collections.sort(
-                    allFiles,
+                    commonFiles,
                     new Comparator<ArtifactFileDescriptor>() {
                         @Override
                         public int compare(
@@ -50,7 +62,7 @@ public class DeviceMerkleTree {
                             return arg0.path.compareTo(arg1.path);
                         }
                     });
-            for (ArtifactFileDescriptor afd : currentContent.details) {
+            for (ArtifactFileDescriptor afd : commonFiles) {
                 Digest digest =
                         Digest.newBuilder().setHash(afd.digest).setSizeBytes(afd.size).build();
                 rootBuilder.addFiles(
@@ -61,7 +73,7 @@ public class DeviceMerkleTree {
             }
             Directory root = rootBuilder.build();
             Digest d = DigestCalculator.compute(root);
-            CLog.d("Digest for '%s' is '%s'", context.contentEntry(), d);
+            CLog.d("Digest for common location of '%s' is '%s'", context.contentEntry(), d);
             return d;
         } catch (IOException | RuntimeException e) {
             CLog.e(e);
