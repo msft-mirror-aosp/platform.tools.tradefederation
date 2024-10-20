@@ -85,6 +85,7 @@ public final class PythonBinaryHostTestTest {
     @Mock ITestInvocationListener mMockListener;
     private File mFakeAdb;
     private File mFakeAapt;
+    private File mFakeAapt2;
     private File mPythonBinary;
     private File mOutputFile;
     private File mModuleDir;
@@ -96,6 +97,7 @@ public final class PythonBinaryHostTestTest {
 
         mFakeAdb = FileUtil.createTempFile("adb-python-tests", "");
         mFakeAapt = FileUtil.createTempFile("aapt-python-tests", "");
+        mFakeAapt2 = FileUtil.createTempFile("aapt2-python-tests", "");
 
         mTest =
                 new PythonBinaryHostTest() {
@@ -105,13 +107,18 @@ public final class PythonBinaryHostTestTest {
                     }
 
                     @Override
-                    File getAdb() {
-                        return mFakeAdb;
+                    String getAdb() {
+                        return mFakeAdb.getAbsolutePath();
                     }
 
                     @Override
-                    File getAapt() {
-                        return mFakeAapt;
+                    String getAapt() {
+                        return mFakeAapt.getAbsolutePath();
+                    }
+
+                    @Override
+                    String getAapt2() {
+                        return mFakeAapt2.getAbsolutePath();
                     }
 
                     @Override
@@ -139,6 +146,7 @@ public final class PythonBinaryHostTestTest {
     public void tearDown() throws Exception {
         FileUtil.deleteFile(mFakeAdb);
         FileUtil.deleteFile(mFakeAapt);
+        FileUtil.deleteFile(mFakeAapt2);
         FileUtil.deleteFile(mPythonBinary);
         FileUtil.deleteFile(mOutputFile);
         FileUtil.recursiveDelete(mModuleDir);
@@ -222,7 +230,10 @@ public final class PythonBinaryHostTestTest {
             mTest.run(mTestInfo, mMockListener);
             mTest.run(mTestInfo, mMockListener);
 
-            verify(mMockRunUtil, times(2)).setEnvVariable("PATH", ".:runtime_deps:/usr/bin");
+            verify(mMockRunUtil, times(2))
+                    .setEnvVariable(
+                            "PATH",
+                            String.format("%s:%s:/usr/bin", mFakeAdb.getParent(), mModuleDir));
             verify(mMockRunUtil, times(2))
                     .setEnvVariable(Mockito.eq("LD_LIBRARY_PATH"), Mockito.any());
             verify(mMockListener, times(2))

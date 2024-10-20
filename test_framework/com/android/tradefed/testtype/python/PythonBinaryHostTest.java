@@ -15,6 +15,9 @@
  */
 package com.android.tradefed.testtype.python;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
@@ -47,7 +50,6 @@ import com.android.tradefed.testtype.TestTimeoutEnforcer;
 import com.android.tradefed.util.AdbUtils;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.DeviceActionUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
@@ -164,6 +166,11 @@ public class PythonBinaryHostTest
     private boolean mInheritEnvVars = true;
 
     @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
+
+    @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
             description = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_DESCRIPTION)
     private Duration mTestCaseTimeout = Duration.ofSeconds(0L);
@@ -248,7 +255,7 @@ public class PythonBinaryHostTest
             testDir = mTestInfo.executionFiles().get(FilesKey.TESTS_DIRECTORY);
         }
         List<String> ldLibraryPath = new ArrayList<>();
-        if (testDir != null && testDir.exists()) {
+        if (!mUseMinimalSharedLibs && testDir != null && testDir.exists()) {
             List<String> libPaths =
                     Arrays.asList("lib", "lib64", "host/testcases/lib", "host/testcases/lib64");
             for (String path : libPaths) {
@@ -313,39 +320,26 @@ public class PythonBinaryHostTest
         File workingDir = pyFile.getParentFile();
         getRunUtil().setWorkingDir(workingDir);
         // Set the parent dir on the PATH
-        String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
-        // Link adb and aapt to working dir as default dependencies.
-        String runtimeDepsFolderName = "runtime_deps";
-        try {
-            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAdb());
-        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-            CLog.e("Failed to link adb to working dir %s", workingDir);
-            CLog.e(e);
-        }
-        try {
-            // This is for backward compatibility. Nowaday we only use aapt2, but in some older
-            // branches, such as git_tm-dev, aapt is still required.
-            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt());
-        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-            CLog.e("Failed to link aapt to working dir %s", workingDir);
-            CLog.e(e);
-        }
-        try {
-            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt2());
-        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-            CLog.e("Failed to link aapt2 to working dir %s", workingDir);
-            CLog.e(e);
-        }
         // Bundle binaries / dependencies have priorities over existing PATH
-        paths.addAll(toRelative(workingDir, findAllSubdir(workingDir, new ArrayList<>())));
+        paths.addAll(findAllSubdir(pyFile.getParentFile(), new ArrayList<>()));
         paths.addAll(mAdditionalPaths);
         paths.add("/usr/bin");
-        String path = paths.stream().distinct().collect(Collectors.joining(separator));
+        // Adding aapt for backward compatibility. Nowaday we only use aapt2, but in some older
+        // branches, such as git_tm-dev, aapt is still required.
+        String path =
+                buildPath(
+                        Set.of(getAdb(), getAapt(), getAapt2()),
+                        paths.stream()
+                                .distinct()
+                                .collect(Collectors.joining(System.getProperty("path.separator"))));
         CLog.d("Using updated $PATH: %s", path);
         getRunUtil().setEnvVariablePriority(EnvPriority.SET);
         getRunUtil().setEnvVariable("PATH", path);
 
+        if (mUseMinimalSharedLibs) {
+            mLdLibraryPath = buildMinimalLdLibraryPath(workingDir, Arrays.asList("shared_libs"));
+        }
         if (mLdLibraryPath != null) {
             getRunUtil().setEnvVariable(LD_LIBRARY_PATH, mLdLibraryPath);
         }
@@ -549,18 +543,18 @@ public class PythonBinaryHostTest
     }
 
     @VisibleForTesting
-    File getAapt() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.findExecutableOnPath("aapt");
+    String getAapt() {
+        return "aapt";
     }
 
     @VisibleForTesting
-    File getAapt2() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.findExecutableOnPath("aapt2");
+    String getAapt2() {
+        return "aapt2";
     }
 
     @VisibleForTesting
-    File getAdb() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.findExecutableOnPath("adb");
+    String getAdb() {
+        return "adb";
     }
 
     @VisibleForTesting
@@ -582,13 +576,6 @@ public class PythonBinaryHostTest
             }
         }
         return subDir;
-    }
-
-    private static List<String> toRelative(File start, List<String> paths) {
-        return paths.stream()
-                .map(p -> RunUtil.toRelative(start, p))
-                .sorted()
-                .collect(Collectors.toList());
     }
 
     private void reportFailure(

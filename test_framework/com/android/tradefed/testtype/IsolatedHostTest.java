@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.testtype;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
+
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.cache.ExecutableAction;
@@ -79,7 +81,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
@@ -207,6 +208,11 @@ public class IsolatedHostTest
     private boolean mInheritEnvVars = true;
 
     @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
+
+    @Option(
             name = "do-not-swallow-runner-errors",
             description =
                     "Whether the subprocess should not swallow runner errors. This should be set"
@@ -271,25 +277,16 @@ public class IsolatedHostTest
             }
             artifactsDir = FileUtil.createTempDir("robolectric-screenshot-artifacts");
             Set<File> classpathFiles = this.getClasspathFiles();
-            if (cacheClient != null) {
-                Map<String, File> nameToSymlink = new HashMap<>();
-                for (File f : classpathFiles) {
-                    if (nameToSymlink.containsKey(f.getName())) {
-                        throw new RuntimeException(
-                                "Jar files with same name have not been supported when caching is"
-                                        + " enabled. Please file a feature request!");
-                    }
-                    nameToSymlink.put(f.getName(), linkFileToWorkingDir("classpath", f));
-                }
-                classpathFiles = new HashSet<>(nameToSymlink.values());
-            }
             String classpath = this.compileClassPath(classpathFiles);
-            List<String> cmdArgs =
-                    this.compileCommand(classpath, artifactsDir, cacheClient != null);
+            List<String> cmdArgs = this.compileCommandArgs(classpath, artifactsDir);
             CLog.v(String.join(" ", cmdArgs));
             RunUtil runner = new RunUtil(mInheritEnvVars);
 
-            String ldLibraryPath = this.compileLdLibraryPath();
+            String ldLibraryPath =
+                    mUseMinimalSharedLibs
+                            ? buildMinimalLdLibraryPath(
+                                    mWorkDir, Arrays.asList("lib", "lib64", "shared_libs"))
+                            : this.compileLdLibraryPath();
             if (ldLibraryPath != null) {
                 runner.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
@@ -300,7 +297,7 @@ public class IsolatedHostTest
             mSubprocessLog = FileUtil.createTempFile("subprocess-logs", "");
             runner.setRedirectStderrToStdout(true);
 
-            List<String> testJarAbsPaths = getJarPaths(mJars, cacheClient != null);
+            List<String> testJarAbsPaths = getJarPaths(mJars);
             TestParameters.Builder paramsBuilder =
                     TestParameters.newBuilder()
                             .addAllTestClasses(new TreeSet(mClasses))
@@ -493,10 +490,6 @@ public class IsolatedHostTest
 
     /** Assembles the command arguments to execute the subprocess runner. */
     public List<String> compileCommandArgs(String classpath, File artifactsDir) {
-        return compileCommand(classpath, artifactsDir, false);
-    }
-
-    private List<String> compileCommand(String classpath, File artifactsDir, boolean enableCache) {
         List<String> cmdArgs = new ArrayList<>();
 
         File javaExec;
@@ -512,9 +505,6 @@ public class IsolatedHostTest
                                 mJdkFolder.getAbsolutePath()));
             }
             CLog.v("Using java executable at %s", javaExec.getAbsolutePath());
-        }
-        if (enableCache) {
-            javaExec = linkFileToWorkingDir("java_binary", javaExec);
         }
         cmdArgs.add(javaExec.getAbsolutePath());
         if (isCoverageEnabled()) {
@@ -784,7 +774,7 @@ public class IsolatedHostTest
         // add it to LD_LIBRARY_PATH.
         String libs[] = {"lib", "lib64"};
 
-        Set<File> result = new LinkedHashSet<>();
+        Set<String> result = new LinkedHashSet<>();
 
         for (String dir : dirs) {
             File path = new File(dir);
@@ -796,17 +786,14 @@ public class IsolatedHostTest
                 File libFile = new File(path, lib);
 
                 if (libFile.isDirectory()) {
-                    result.add(libFile);
+                    result.add(libFile.getAbsolutePath());
                 }
             }
         }
         if (result.isEmpty()) {
             return null;
         }
-        return result.stream()
-                .map(f -> RunUtil.toRelative(mWorkDir, f))
-                .sorted()
-                .collect(Collectors.joining(java.io.File.pathSeparator));
+        return String.join(java.io.File.pathSeparator, result);
     }
 
     private List<String> compileRobolectricOptions(File artifactsDir) {
@@ -1011,18 +998,14 @@ public class IsolatedHostTest
      * implementation, but somewhat difficult to extract well due to the various method calls it
      * uses.
      */
-    private List<String> getJarPaths(Set<String> jars, boolean enableCache)
-            throws FileNotFoundException {
+    private List<String> getJarPaths(Set<String> jars) throws FileNotFoundException {
         Set<String> output = new HashSet<>();
 
         for (String jar : jars) {
-            output.add(
-                    enableCache
-                            ? RunUtil.toRelative(mWorkDir, FileUtil.findFile(mWorkDir, jar))
-                            : getJarFile(jar, mBuildInfo).getAbsolutePath());
+            output.add(getJarFile(jar, mBuildInfo).getAbsolutePath());
         }
 
-        return output.stream().sorted().collect(Collectors.toList());
+        return output.stream().collect(Collectors.toList());
     }
 
     /**
@@ -1261,16 +1244,5 @@ public class IsolatedHostTest
     @VisibleForTesting
     ICacheClient getCacheClient(File workFolder, String instanceName) {
         return CacheClientFactory.createCacheClient(workFolder, instanceName);
-    }
-
-    /** Links a target file to another place under {@code mWorkDir}. */
-    private File linkFileToWorkingDir(String relToWorkingDir, File target) {
-        try {
-            return RunUtil.linkFile(mWorkDir, relToWorkingDir, target);
-        } catch (IOException e) {
-            CLog.e("Failed to symlink %s.", target);
-            CLog.e(e);
-            return target;
-        }
     }
 }
