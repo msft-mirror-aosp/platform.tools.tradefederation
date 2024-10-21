@@ -102,7 +102,7 @@ public class SuiteResultCacheUtil {
             return;
         }
         String moduleId = module.getId();
-        // TODO: Ensure we have the link to the results
+        long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("upload_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
@@ -131,6 +131,13 @@ public class SuiteResultCacheUtil {
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MODULE_CACHE_UPLOAD_ERROR, 1);
+        } finally {
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.MODULE_CACHE_UPLOAD_TIME,
+                    startTime,
+                    System.currentTimeMillis());
         }
     }
 
@@ -157,6 +164,7 @@ public class SuiteResultCacheUtil {
             return new CacheResultDescriptor(false, null);
         }
         String moduleId = module.getId();
+        long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
@@ -207,6 +215,13 @@ public class SuiteResultCacheUtil {
             }
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MODULE_CACHE_DOWNLOAD_ERROR, 1);
+        } finally {
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.MODULE_CACHE_DOWNLOAD_TIME,
+                    startTime,
+                    System.currentTimeMillis());
         }
         return new CacheResultDescriptor(false, null);
     }
