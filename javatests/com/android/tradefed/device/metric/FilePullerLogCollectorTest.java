@@ -250,6 +250,32 @@ public class FilePullerLogCollectorTest {
         assertTrue(collector.isPostProcessed());
     }
 
+    /** Test that files are collected with a data type matching the log-data-type option. */
+    @Test
+    public void testLogDataTypeOption() throws Exception {
+        OptionSetter setter = new OptionSetter(mCollector);
+        setter.setOptionValue("log-data-type", "CONNDIAG");
+        when(mMockDevice.getDeviceState()).thenReturn(TestDeviceState.ONLINE);
+        ITestInvocationListener listener = mCollector.init(mContext, mMockListener);
+        TestDescription test = new TestDescription("class", "test");
+        Map<String, String> metrics = new HashMap<>();
+        metrics.put("log1", "/data/local/tmp/log1.txt");
+
+        ArgumentCaptor<HashMap<String, Metric>> capture = ArgumentCaptor.forClass(HashMap.class);
+
+        when(mMockDevice.getIDevice()).thenReturn(mMockIDevice);
+        when(mMockDevice.pullFile(Mockito.eq("/data/local/tmp/log1.txt"), Mockito.eq(0)))
+                .thenReturn(new File("file"));
+
+        listener.testRunStarted("runName", 1);
+        listener.testStarted(test, 0L);
+        listener.testEnded(test, 50L, TfMetricProtoUtil.upgradeConvert(metrics));
+        listener.testRunEnded(100L, new HashMap<String, Metric>());
+
+        verify(mMockListener)
+                .testLog(Mockito.eq("file"), Mockito.eq(LogDataType.CONNDIAG), Mockito.any());
+    }
+
     private static class PostProcessingFilePullerLogCollector extends FilePullerLogCollector {
         private boolean mIsPostProcessed = false;
 
