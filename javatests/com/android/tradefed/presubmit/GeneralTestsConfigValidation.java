@@ -148,6 +148,7 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             "hidl_test.config",
                             "hidl_test_java.config",
                             "fmq_test.config"));
+
     /** List of configs to exclude until b/277261121 is fixed. */
     private static final Set<String> EXEMPTED_KERNEL_MODULES =
             new HashSet<>(
@@ -467,7 +468,7 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                         // See if binary files exists
                         File file32 = FileUtil.findFile(config.getParentFile(), path + "32");
                         File file64 = FileUtil.findFile(config.getParentFile(), path + "64");
-                        if (file32 == null || file64 == null) {
+                        if (file32 == null && file64 == null) {
                             throw new ConfigurationException(
                                     String.format(
                                             "File %s wasn't found in module dependencies while it's"
@@ -477,6 +478,27 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                                                     + " field if it's a binary file or under 'data'"
                                                     + " field for all other files.",
                                             path, config.getName()));
+                        } else if (file32 == null || file64 == null) {
+                            // if either binary is missing, make sure the config
+                            // specifies it in the metadata
+                            List<String> parameters =
+                                    c.getConfigurationDescription()
+                                            .getMetaData(ITestSuite.PARAMETER_KEY);
+                            if (parameters == null
+                                    || !parameters.contains(
+                                            ModuleParameters.NOT_MULTI_ABI.toString())) {
+                                String missingVersion = file32 == null ? "32" : "64";
+                                throw new ConfigurationException(
+                                        String.format(
+                                                "File %s is missing a binary version in module"
+                                                    + " dependencies while it's expected to be"
+                                                    + " pushed as part of %s. Make  sure that it's"
+                                                    + " added in the Android.bp file of the module"
+                                                    + " under 'data_device_bins_both' field or that"
+                                                    + " the module specifies the parameter"
+                                                    + " 'not_multi_abi'. Missing version: %s",
+                                                path, config.getName(), missingVersion));
+                            }
                         }
                     }
                 }
