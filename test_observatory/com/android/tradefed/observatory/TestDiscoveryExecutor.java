@@ -204,7 +204,10 @@ public class TestDiscoveryExecutor {
             return configurationFactory.createPartialConfigurationFromArgs(
                     args,
                     new DryRunKeyStore(),
-                    Set.of(Configuration.TEST_TYPE_NAME, Configuration.TARGET_PREPARER_TYPE_NAME),
+                    Set.of(
+                            Configuration.BUILD_PROVIDER_TYPE_NAME,
+                            Configuration.TEST_TYPE_NAME,
+                            Configuration.TARGET_PREPARER_TYPE_NAME),
                     null);
         }
     }
