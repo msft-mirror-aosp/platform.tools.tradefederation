@@ -23,6 +23,16 @@ import java.util.Set;
  */
 public interface IDiscoverDependencies {
 
-    /** Returns a list of named dependencies that are needed to execute the object. */
-    Set<String> reportDependencies();
+    /**
+     * Returns a list of named dependencies that are needed to execute the object.
+     * Return <code>null</code> if not provided.
+     */
+    default Set<String> reportDependencies() {
+        return null;
+    }
+
+    /** Returns a String of test zip regex. Return <code>null</code> if not provided. */
+    default String reportTestZipFileFilter() {
+        return null;
+    }
 }
