@@ -24,21 +24,17 @@ import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
-import com.android.tradefed.result.ResultForwarder;
-import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
@@ -50,8 +46,6 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TestRunnerUtil;
-
-import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.IOException;
@@ -74,11 +68,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     private Set<String> mBinaryNames = new HashSet<>();
 
     @Option(
-            name = "enable-cache",
-            description = "Used to enable/disable caching for specific modules.")
-    private boolean mEnableCache = false;
-
-    @Option(
             name = "inherit-env-vars",
             description =
                     "Whether the subprocess should inherit environment variables from the main"
@@ -92,7 +81,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     private File mCoverageDir;
     private IBuildInfo mBuildInfo;
-    private TestRunResultListener mTestRunResultListener;
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -103,8 +91,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     public final void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         try {
-            mTestRunResultListener = new TestRunResultListener();
-            listener = new ResultForwarder(listener, mTestRunResultListener);
             List<File> rustFilesList = findFiles();
             for (File file : rustFilesList) {
                 if (!file.exists()) {
@@ -251,7 +237,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     }
 
     private boolean countTests(Invocation invocation, Set<String> foundTests) {
-        CommandResult listResult = runInvocation(invocation, null, getRunUtil(), "--list");
+        CommandResult listResult = runInvocation(invocation, getRunUtil(), "--list");
         // TODO: Do we want to handle non-standard test harnesses without a
         // --list param? Currently we will report 0 tests, which will cause an
         // overall failure, but we don't know how to parse arbitrary test
@@ -271,7 +257,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     private CommandResult runInvocation(
             final Invocation invocation,
-            ICacheClient cacheClient,
             IRunUtil runUtil,
             final String... extraArgs) {
         runUtil.setWorkingDir(invocation.workingDir);
@@ -308,27 +293,14 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         runUtil.setEnvVariable("PATH", buildPath(Collections.singleton("adb"), ".:/usr/bin"));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
-        return cacheClient == null
-                ? runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]))
-                : runUtil.runTimedCmdWithOutputMonitor(
-                        mTestTimeout, 0, null, null, cacheClient, command.toArray(new String[0]));
+        return runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]));
     }
 
     private void runTest(
             ITestInvocationListener listener, final Invocation invocation, final String runName)
             throws IOException {
-
-        String instanceName =
-                mEnableCache
-                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
-                        : null;
-        ICacheClient cacheClient =
-                Strings.isNullOrEmpty(instanceName)
-                        ? null
-                        : getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
-
         IRunUtil runUtil = getRunUtil();
-        CommandResult result = runInvocation(invocation, cacheClient, runUtil);
+        CommandResult result = runInvocation(invocation, runUtil);
 
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             String message =
@@ -365,12 +337,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             IShellOutputReceiver parser = createParser(listener, runName);
             parser.addOutput(result.getStdout().getBytes(), 0, result.getStdout().length());
             parser.flush();
-            if (!result.isCached() && !mTestRunResultListener.isTestRunFailed(runName)) {
-                runUtil.uploadCache(
-                        cacheClient,
-                        ExecutableActionResult.create(
-                                result.getExitCode(), stdoutFile, stderrFile));
-            }
         } catch (RuntimeException e) {
             listener.testRunFailed(
                     String.format("Failed to parse the rust test output: %s", e.getMessage()));

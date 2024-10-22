@@ -24,8 +24,6 @@ import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.cache.ICacheClient;
-import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
@@ -39,7 +37,6 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ResourceUtil;
-import com.android.tradefed.util.RunUtilTest;
 
 import org.junit.After;
 import org.junit.Before;
@@ -69,7 +66,6 @@ public class IsolatedHostTestTest {
     private ServerSocket mMockServer;
     private File mMockTestDir;
     private File mWorkFolder;
-    private final ICacheClient mFakeCacheClient = new RunUtilTest.FakeCacheClient();
 
     /**
      * (copied and altered from JarHostTestTest) Helper to read a file from the res/testtype
@@ -619,33 +615,5 @@ public class IsolatedHostTestTest {
         verify(mListener)
                 .testLog((String) Mockito.any(), Mockito.eq(LogDataType.TEXT), Mockito.any());
         verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
-    }
-
-    private IsolatedHostTest createTestRunnerForCaching(File testDir) throws Exception {
-        IsolatedHostTest hostTest =
-                new IsolatedHostTest() {
-                    @Override
-                    String getEnvironment(String key) {
-                        return null;
-                    }
-
-                    @Override
-                    ICacheClient getCacheClient(File workFolder, String instanceName) {
-                        return mFakeCacheClient;
-                    }
-                };
-        hostTest.setBuild(mMockBuildInfo);
-        hostTest.setServer(mMockServer);
-        hostTest.setWorkDir(testDir);
-        OptionSetter runnerSetter = new OptionSetter(hostTest);
-        runnerSetter.setOptionValue("enable-cache", "true");
-        runnerSetter.setOptionValue("inherit-env-vars", "false");
-        CommandOptions commandOptions = new CommandOptions();
-        OptionSetter commandOptionsSetter = new OptionSetter(commandOptions);
-        commandOptionsSetter.setOptionValue("remote-cache-instance-name", "test_instance");
-        IConfiguration config = new Configuration("config", "Test config");
-        config.setCommandOptions(commandOptions);
-        hostTest.setConfiguration(config);
-        return hostTest;
     }
 }
