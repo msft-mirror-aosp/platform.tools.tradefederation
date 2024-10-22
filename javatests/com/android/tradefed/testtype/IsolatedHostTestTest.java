@@ -137,6 +137,9 @@ public class IsolatedHostTestTest {
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
 
         List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertTrue(commandArgs.contains("-Drobolectric.offline=true"));
+        assertTrue(commandArgs.contains("-Drobolectric.logging=stdout"));
+        assertTrue(commandArgs.contains("-Drobolectric.resourcesMode=BINARY"));
         assertTrue(
                 commandArgs.stream()
                         .anyMatch(
@@ -194,6 +197,9 @@ public class IsolatedHostTestTest {
         doReturn(Inet4Address.getByName("localhost")).when(mMockServer).getInetAddress();
 
         List<String> commandArgs = mHostTest.compileCommandArgs("", null);
+        assertFalse(commandArgs.contains("-Drobolectric.offline=true"));
+        assertFalse(commandArgs.contains("-Drobolectric.logging=stdout"));
+        assertFalse(commandArgs.contains("-Drobolectric.resourcesMode=BINARY"));
         assertFalse(
                 commandArgs.stream().anyMatch(s -> s.contains("-Drobolectric.dependency.dir=")));
     }
@@ -234,6 +240,29 @@ public class IsolatedHostTestTest {
                         mHostTest.getCoverageExecFile().getAbsolutePath());
         assertTrue(commandArgs.contains(javaAgent));
         FileUtil.deleteFile(mHostTest.getCoverageExecFile());
+    }
+
+    /**
+     * TODO(murj) need to figure out a strategy with jdesprez on how to test the classpath
+     * determination functionality.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testRobolectricResourcesClasspathPositive() throws Exception {
+        OptionSetter setter = new OptionSetter(mHostTest);
+        setter.setOptionValue("use-robolectric-resources", "true");
+    }
+
+    /**
+     * TODO(murj) same as above
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testRobolectricResourcesClasspathNegative() throws Exception {
+        OptionSetter setter = new OptionSetter(mHostTest);
+        setter.setOptionValue("use-robolectric-resources", "false");
     }
 
     private OptionSetter setUpSimpleMockJarTest(String jarName) throws Exception {
