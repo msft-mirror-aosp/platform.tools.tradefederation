@@ -39,6 +39,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.incremental.IIncrementalSetup;
+import com.android.tradefed.targetprep.incremental.TestAppInstallSetupIncrementalHelper;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IAbiReceiver;
 import com.android.tradefed.util.AaptParser;
@@ -82,7 +84,7 @@ import java.util.stream.Stream;
  */
 @OptionClass(alias = "tests-zip-app")
 public class TestAppInstallSetup extends BaseTargetPreparer
-        implements IAbiReceiver, IDiscoverDependencies {
+        implements IAbiReceiver, IDiscoverDependencies, IIncrementalSetup {
 
     /** The mode the apk should be install in. */
     private enum InstallMode {
@@ -224,6 +226,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     private Set<String> mPackagesInstalled = new HashSet<>();
     private TestInformation mTestInfo;
     @VisibleForTesting protected IncrementalInstallSession incrementalInstallSession;
+    private TestAppInstallSetupIncrementalHelper mIncrementalSetupHelper = null;
 
     protected void setTestInformation(TestInformation testInfo) {
         mTestInfo = testInfo;
@@ -478,6 +481,12 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         if (mCleanup && !(e instanceof DeviceNotAvailableException)) {
             for (String packageName : mPackagesInstalled) {
                 try {
+                    if (
+                        mIncrementalSetupHelper != null
+                            && mIncrementalSetupHelper.handlePackageCleanup(
+                                packageName, getDevice(), mUserId, mInstallForAllUsers)) {
+                        continue;
+                    }
                     uninstallPackage(getDevice(), packageName);
                 } catch (TargetSetupError tse) {
                     CLog.e(tse);
@@ -505,6 +514,16 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         return mCleanup;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public void setIncrementalSetupEnabled(boolean shouldEnable) {
+        if (shouldEnable) {
+            mIncrementalSetupHelper = new TestAppInstallSetupIncrementalHelper();
+        } else {
+            mIncrementalSetupHelper = null;
+        }
+    }
+
     /**
      * Attempt to install an package or split package on the device.
      *
@@ -513,6 +532,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
      */
     protected void installer(TestInformation testInfo, Map<File, String> appFilesAndPackages)
             throws TargetSetupError, DeviceNotAvailableException {
+
         ITestDevice device = testInfo.getDevice();
 
         // TODO(hzalek): Consider changing resolveApkFiles's return to a Multimap to avoid building
@@ -526,6 +546,13 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         }
 
         for (Map.Entry<String, List<File>> e : Multimaps.asMap(packageToFiles).entrySet()) {
+            if (
+                mIncrementalSetupHelper != null
+                    && mIncrementalSetupHelper.handleTestAppsPreinstall(
+                        e.getKey(), e.getValue(), getDevice())) {
+                continue;
+            }
+
             if (mIncrementalInstallation) {
                 CLog.d(
                         "Performing incremental installation of apk %s with %s ...",
