@@ -407,6 +407,10 @@ public class InvocationMetricLogger {
         DEVICE_IMAGE_HASH("device_image_hash", false),
 
         // Module level caching
+        MODULE_CACHE_UPLOAD_ERROR("module_cache_upload_error", true),
+        MODULE_CACHE_UPLOAD_TIME("module_cache_upload_time", true),
+        MODULE_CACHE_DOWNLOAD_ERROR("module_cache_download_error", true),
+        MODULE_CACHE_DOWNLOAD_TIME("module_cache_download_time", true),
         MODULE_RESULTS_CHECKING_CACHE("module_results_checking_cache", true),
         MODULE_RESULTS_CACHE_HIT("module_results_cache_hit", true),
         MODULE_CACHE_HIT_ID("module_cache_hit_id", true),
