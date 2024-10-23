@@ -23,20 +23,17 @@ import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.DeviceBuildInfo;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
-import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.ClangProfileIndexer;
@@ -47,8 +44,6 @@ import com.android.tradefed.util.IRunUtil.EnvPriority;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ShellOutputReceiverStream;
 import com.android.tradefed.util.TestRunnerUtil;
-
-import com.google.common.base.Strings;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -78,11 +73,6 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
     private boolean mUseUpdatedShardRetry = true;
 
     @Option(
-            name = "enable-cache",
-            description = "Used to enable/disable caching for specific modules.")
-    private boolean mEnableCache = false;
-
-    @Option(
             name = "inherit-env-vars",
             description =
                     "Whether the subprocess should inherit environment variables from the main"
@@ -99,8 +89,6 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
 
     /** List of tests that failed in the current test run when test run was complete. */
     private Set<String> mCurFailedTests = new LinkedHashSet<>();
-
-    private TestRunResultListener mTestRunResultListener;
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -156,11 +144,6 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         // Set the working dir to the folder containing the binary to execute from the same path.
         runUtil.setWorkingDir(gtestFile.getParentFile());
 
-        String instanceName =
-                mEnableCache
-                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
-                        : null;
-
         String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
         paths.add("/usr/bin");
@@ -198,19 +181,13 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
         // command output will just be ignored.
         CommandResult result = null;
         File stdout = null;
-        ICacheClient cacheClient =
-                Strings.isNullOrEmpty(instanceName)
-                        ? null
-                        : getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
         try {
             stdout =
                     FileUtil.createTempFile(
                             String.format("%s-output", gtestFile.getName()), ".txt");
             try (ShellOutputReceiverStream stream =
                     new ShellOutputReceiverStream(receiver, new FileOutputStream(stdout))) {
-                result =
-                        runUtil.runTimedCmdWithOutputMonitor(
-                                timeoutMs, 0, stream, null, cacheClient, cmds);
+                result = runUtil.runTimedCmdWithOutputMonitor(timeoutMs, 0, stream, null, cmds);
             } catch (IOException e) {
                 throw new RuntimeException(
                         "Should never happen, ShellOutputReceiverStream.close is a no-op", e);
@@ -231,19 +208,12 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                 // Ignore
             }
             if (stdout != null && stdout.length() > 0L) {
-
-                try (FileInputStreamSource source = new FileInputStreamSource(stdout)) {
+                try (FileInputStreamSource source = new FileInputStreamSource(stdout, true)) {
                     logger.testLog(
                             String.format("%s-output", gtestFile.getName()),
                             LogDataType.TEXT,
                             source);
                 }
-            }
-            if (!result.isCached()
-                    && !mTestRunResultListener.isTestRunFailed(gtestFile.getName())) {
-                runUtil.uploadCache(
-                        cacheClient,
-                        ExecutableActionResult.create(result.getExitCode(), stdout, null));
             }
             FileUtil.deleteFile(stdout);
 
@@ -355,7 +325,6 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
     public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException { // DNAE is part of IRemoteTest.
         try {
-            mTestRunResultListener = new TestRunResultListener();
             // Reset flags that are used to track results of current test run.
             mIncompleteTestFound = false;
             mCurFailedTests = new LinkedHashSet<>();
@@ -414,7 +383,7 @@ public class HostGTest extends GTestBase implements IBuildReceiver {
                     continue;
                 }
 
-                listener = getGTestListener(listener, mTestRunResultListener);
+                listener = getGTestListener(listener);
                 // TODO: Need to support XML test output based on isEnableXmlOutput
                 IShellOutputReceiver resultParser =
                         createResultParser(gTestFile.getName(), listener);
