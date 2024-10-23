@@ -21,7 +21,6 @@ import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
@@ -29,7 +28,6 @@ import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FailureDescription;
@@ -49,8 +47,6 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TestRunnerUtil;
-
-import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -81,11 +77,6 @@ public class ExecutableHostTest extends ExecutableBaseTest {
                         + " execute with that relative location."
     )
     private boolean mExecuteRelativeToScript = false;
-
-    @Option(
-            name = "enable-cache",
-            description = "Used to enable/disable caching for specific modules.")
-    private boolean mEnableCache = false;
 
     @Option(
             name = "inherit-env-vars",
@@ -194,31 +185,15 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         }
         File stdout = FileUtil.createTempFile(scriptName + LOG_STDOUT_TAG, ".txt");
         File stderr = FileUtil.createTempFile(scriptName + LOG_STDERR_TAG, ".txt");
-        ICacheClient cacheClient = null;
 
         try (FileOutputStream stdoutStream = new FileOutputStream(stdout);
                 FileOutputStream stderrStream = new FileOutputStream(stderr); ) {
-            String instanceName =
-                    mEnableCache
-                            ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
-                            : null;
-            if (!Strings.isNullOrEmpty(instanceName)) {
-                cacheClient = getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
-            }
             CommandResult res =
-                    cacheClient == null
-                            ? runUtil.runTimedCmd(
-                                    getTimeoutPerBinaryMs(),
-                                    stdoutStream,
-                                    stderrStream,
-                                    command.toArray(new String[0]))
-                            : runUtil.runTimedCmdWithOutputMonitor(
-                                    getTimeoutPerBinaryMs(),
-                                    0,
-                                    stdoutStream,
-                                    stderrStream,
-                                    cacheClient,
-                                    command.toArray(new String[0]));
+                    runUtil.runTimedCmd(
+                            getTimeoutPerBinaryMs(),
+                            stdoutStream,
+                            stderrStream,
+                            command.toArray(new String[0]));
             if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
                 FailureStatus status = FailureStatus.TEST_FAILURE;
                 // Everything should be outputted in stdout with our redirect above.
@@ -233,10 +208,6 @@ public class ExecutableHostTest extends ExecutableBaseTest {
                 listener.testFailed(
                         description,
                         FailureDescription.create(errorMessage).setFailureStatus(status));
-            } else if (!res.isCached() && !isTestFailed(description.getTestName())) {
-                runUtil.uploadCache(
-                        cacheClient,
-                        ExecutableActionResult.create(res.getExitCode(), stdout, stderr));
             }
         } finally {
             logFile(stdout, listener);
