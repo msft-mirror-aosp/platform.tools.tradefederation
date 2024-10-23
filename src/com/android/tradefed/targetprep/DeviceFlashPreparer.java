@@ -47,7 +47,6 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
@@ -55,6 +54,8 @@ import com.android.tradefed.util.image.IncrementalImageUtil;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
@@ -213,7 +214,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
-    private MultiMap<String, String> mAllowedBranchTransition = new MultiMap<>();
+    private Set<String> mAllowedTransition = new HashSet<>();
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -356,7 +357,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mCreateSnapshotBinary,
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
-                                mAllowedBranchTransition,
+                                mAllowedTransition,
                                 mApplySnapshot,
                                 mWipeAfterApplySnapshot,
                                 mNewIncrementalFlow,
@@ -718,7 +719,13 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mIgnoreHostOptions = ignoreHostOptions;
     }
 
+    @Deprecated
     public void addBranchTransitionInIncremental(String origin, String destination) {
-        mAllowedBranchTransition.put(origin, destination);
+        mAllowedTransition.add(origin);
+        mAllowedTransition.add(destination);
+    }
+
+    public void addAllowedBranchForTransitionInIncremental(String branch) {
+        mAllowedTransition.add(branch);
     }
 }

@@ -122,13 +122,16 @@ public class RustBenchmarkResultParser extends MultiLineReceiver {
                     for (ITestInvocationListener listener : mListeners) {
                         listener.testFailed(
                                 mLastTestId, String.join("\n", mTrackLogsSinceLastStart));
-                        listener.testEnded(mLastTestId, new HashMap<String, Metric>());
+                        listener.testEnded(
+                                mLastTestId,
+                                System.currentTimeMillis(),
+                                new HashMap<String, Metric>());
                     }
                     mLastTestId = null;
                 }
                 mLastTestId = new TestDescription(mCurrentTestFile, startMatcher.group(1));
                 for (ITestInvocationListener listener : mListeners) {
-                    listener.testStarted(mLastTestId);
+                    listener.testStarted(mLastTestId, System.currentTimeMillis());
                 }
                 mTrackLogsSinceLastStart.clear();
                 mAnyTestSeen = true;
@@ -137,7 +140,10 @@ public class RustBenchmarkResultParser extends MultiLineReceiver {
                 if (mLastTestId != null) {
                     for (ITestInvocationListener listener : mListeners) {
                         // TODO(qtr): Report metrics.
-                        listener.testEnded(mLastTestId, new HashMap<String, Metric>());
+                        listener.testEnded(
+                                mLastTestId,
+                                System.currentTimeMillis(),
+                                new HashMap<String, Metric>());
                     }
                     mLastTestId = null;
                 } else {
@@ -168,7 +174,8 @@ public class RustBenchmarkResultParser extends MultiLineReceiver {
         if (mLastTestId != null) {
             for (ITestInvocationListener listener : mListeners) {
                 listener.testFailed(mLastTestId, String.join("\n", mTrackLogsSinceLastStart));
-                listener.testEnded(mLastTestId, new HashMap<String, Metric>());
+                listener.testEnded(
+                        mLastTestId, System.currentTimeMillis(), new HashMap<String, Metric>());
                 listener.testRunFailed(mCurrentTestFile + " execution failed.");
             }
         }
