@@ -158,6 +158,7 @@ public class StreamProtoReceiver implements Closeable {
     /** Internal receiver thread class with a socket. */
     private class EventReceiverThread extends Thread {
         private ServerSocket mSocket;
+        private Socket mClient;
         private CountDownLatch mCountDown;
 
         public EventReceiverThread() throws IOException {
@@ -179,22 +180,24 @@ public class StreamProtoReceiver implements Closeable {
             if (mSocket != null) {
                 mSocket.close();
             }
+            if (mClient != null) {
+                mClient.close();
+            }
         }
 
         @Override
         public void run() {
-            Socket client = null;
             try {
-                client = mSocket.accept();
+                mClient = mSocket.accept();
                 TestRecord received = null;
-                while ((received = TestRecord.parseDelimitedFrom(client.getInputStream()))
+                while ((received = TestRecord.parseDelimitedFrom(mClient.getInputStream()))
                         != null) {
                     parse(received);
                 }
             } catch (IOException e) {
                 CLog.e(e);
             } finally {
-                StreamUtil.close(client);
+                StreamUtil.close(mClient);
                 mCountDown.countDown();
             }
             CLog.d("ProtoEventReceiverThread done.");
