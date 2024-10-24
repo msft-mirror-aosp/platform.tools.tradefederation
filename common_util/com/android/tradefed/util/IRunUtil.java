@@ -17,8 +17,6 @@
 package com.android.tradefed.util;
 
 import com.android.annotations.Nullable;
-import com.android.tradefed.cache.ExecutableActionResult;
-import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.result.error.ErrorIdentifier;
 
 import java.io.File;
@@ -152,30 +150,6 @@ public interface IRunUtil {
             final long idleOutputTimeout,
             OutputStream stdout,
             OutputStream stderr,
-            final String... command);
-
-    /**
-     * Helper method to execute a system command with caching.
-     *
-     * <p>If {@code cacheClient} is specified, the caching will be enabled. If the cache is
-     * available, the cached result will be returned. Otherwise, {@link
-     * IRunUtil#runTimedCmdWithOutputMonitor( long, long, OutputStream, OutputStream, String...)}
-     * will be used to execute the command and the result will be uploaded for caching.
-     *
-     * @param timeout timeout maximum time to wait in ms. 0 means no timeout.
-     * @param idleOutputTimeout maximum time to wait in ms for output on the output streams.
-     * @param stdout {@link OutputStream} where the std output will be redirected. Can be null.
-     * @param stderr {@link OutputStream} where the error output will be redirected. Can be null.
-     * @param cacheClient an instance of {@link ICacheClient} used to handle caching.
-     * @param command the specified system command and optionally arguments to exec.
-     * @return a {@link CommandResult} containing result from command run.
-     */
-    public CommandResult runTimedCmdWithOutputMonitor(
-            final long timeout,
-            final long idleOutputTimeout,
-            OutputStream stdout,
-            OutputStream stderr,
-            ICacheClient cacheClient,
             final String... command);
 
     /**
@@ -538,12 +512,4 @@ public interface IRunUtil {
         SET,
         UNSET
     }
-
-    /**
-     * Uploads the last {@link ExecutableActionResult} ran with a cacheClient.
-     *
-     * @param cacheClient The {@link ICacheClient} used to upload the result.
-     * @param actionResult The {@link ExecutableActionResult} to upload.
-     */
-    public void uploadCache(ICacheClient cacheClient, ExecutableActionResult actionResult);
 }
