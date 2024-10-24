@@ -256,6 +256,7 @@ public class InvocationMetricLogger {
         // CAS downloader metrics
         CAS_VERSION("cas_version", false),
         CAS_DOWNLOAD_ERRORS("cas_download_errors", true),
+        CAS_DOWNLOAD_ERROR_FILES("cas_download_error_files", true),
         // Name of files downloaded by CAS downloader.
         CAS_DOWNLOAD_FILES("cas_download_files", true),
         CAS_DOWNLOAD_FILE_SUCCESS_COUNT("cas_download_file_success_count", true),
@@ -362,6 +363,8 @@ public class InvocationMetricLogger {
                 "incremental_snapuserd_write_blocking_time", true),
         INCREMENTAL_FALLBACK_REASON("incremental_fallback_reason", true),
         INCREMENTAL_RECOVERY_FALLBACK("incremental_recovery_fallback", true),
+        INCREMENTAL_FIRST_BOOTLOADER_REBOOT_FAIL("incremental_first_bootloader_reboot_fail", true),
+        INCREMENTAL_NEW_FLOW("incremental_new_flow", true),
         DEVICE_IMAGE_CACHE_MISMATCH("device_image_cache_mismatch", true),
         DEVICE_IMAGE_CACHE_ORIGIN("device_image_cache_origin", true),
 
@@ -401,9 +404,19 @@ public class InvocationMetricLogger {
 
         // Test caching metrics
         CACHED_MODULE_RESULTS_COUNT("cached_module_results_count", true),
+        DEVICE_IMAGE_HASH("device_image_hash", false),
 
         // Module level caching
+        MODULE_CACHE_UPLOAD_ERROR("module_cache_upload_error", true),
+        MODULE_CACHE_UPLOAD_TIME("module_cache_upload_time", true),
+        MODULE_CACHE_DOWNLOAD_ERROR("module_cache_download_error", true),
+        MODULE_CACHE_DOWNLOAD_TIME("module_cache_download_time", true),
+        MODULE_RESULTS_CHECKING_CACHE("module_results_checking_cache", true),
         MODULE_RESULTS_CACHE_HIT("module_results_cache_hit", true),
+        MODULE_CACHE_HIT_ID("module_cache_hit_id", true),
+        MODULE_CACHE_MISS_ID("module_cache_miss_id", true),
+        MODULE_CACHE_NO_DIR("module_cache_no_dir", true),
+        MODULE_RESULTS_CACHE_DEVICE_MISMATCH("module_results_cache_device_mismatch", true),
         ;
 
         private final String mKeyName;

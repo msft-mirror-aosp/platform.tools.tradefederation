@@ -1564,7 +1564,7 @@ public class DeviceSetupTest {
         when(mMockDevice.executeShellV2Command("dumpsys window displays | grep mCurrentFocus"))
                 .thenReturn(successResult);
         when(mMockDevice.executeShellV2Command(
-                        "adb shell cmd package resolve-activity -c android.intent.category.HOME -a"
+                        "cmd package resolve-activity -c android.intent.category.HOME -a"
                                 + " android.intent.action.MAIN"))
                 .thenReturn(successResult);
     }

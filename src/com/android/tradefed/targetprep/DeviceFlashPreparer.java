@@ -54,6 +54,8 @@ import com.android.tradefed.util.image.IncrementalImageUtil;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
@@ -190,6 +192,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mNewIncrementalFlow = false;
 
     @Option(
+            name = "update-bootloader-in-userspace",
+            description = "Allow to update bootloader in userspace in new flow of incremental.")
+    private boolean mUpdateBootloaderFromUserspace = false;
+
+    @Option(
             name = "snapuserd-wait-phase",
             description =
                     "Only applicable to apply-snapshot, blocks snapuserd until a specified phase.")
@@ -207,6 +214,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
+    private Set<String> mAllowedTransition = new HashSet<>();
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -349,9 +357,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mCreateSnapshotBinary,
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
+                                mAllowedTransition,
                                 mApplySnapshot,
                                 mWipeAfterApplySnapshot,
                                 mNewIncrementalFlow,
+                                mUpdateBootloaderFromUserspace,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
@@ -580,8 +590,14 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         // could be an AppBuildInfo and return app build id. Need to be more explicit that we
         // check for the device build here.
         if (!mSkipPostFlashBuildIdCheck) {
-            checkBuildAttribute(deviceBuild.getDeviceBuildId(), device.getBuildId(),
-                    device.getSerialNumber());
+            String dbid = deviceBuild.getDeviceBuildId();
+            if (IDeviceBuildInfo.UNKNOWN_BUILD_ID.equals(dbid)) {
+                // if the device build isn't set, use the build id instead
+                // this happens when device image download is skipped, which could happen when
+                // other kinds of build artifact is used instead for "flashing", e.g. OTA package
+                dbid = deviceBuild.getBuildId();
+            }
+            checkBuildAttribute(dbid, device.getBuildId(), device.getSerialNumber());
         }
     }
 
@@ -687,11 +703,29 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mWipeAfterApplySnapshot = wipeAfterApplySnapshot;
     }
 
+    public void setUseIncrementalNewFlow(boolean useIncrementalNewFlow) {
+        mNewIncrementalFlow = useIncrementalNewFlow;
+    }
+
+    public void setUpdateBootloaderFromUserspace(boolean updateBootloaderFromUserspace) {
+        mUpdateBootloaderFromUserspace = updateBootloaderFromUserspace;
+    }
+
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
         mAllowUnzippedBaseline = allowUnzipBaseline;
     }
 
     public void setIgnoreHostOptions(boolean ignoreHostOptions) {
         mIgnoreHostOptions = ignoreHostOptions;
+    }
+
+    @Deprecated
+    public void addBranchTransitionInIncremental(String origin, String destination) {
+        mAllowedTransition.add(origin);
+        mAllowedTransition.add(destination);
+    }
+
+    public void addAllowedBranchForTransitionInIncremental(String branch) {
+        mAllowedTransition.add(branch);
     }
 }

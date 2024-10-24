@@ -16,6 +16,8 @@
 
 package com.android.tradefed.targetprep;
 
+import static com.android.tradefed.targetprep.VisibleBackgroundUserPreparer.INVALID_DISPLAY;
+
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -437,6 +439,11 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             description = "Number of times to retry to dismiss setup wizard.")
     private int mDismissSetupWizardRetry = 2;
 
+    @Option(
+            name = "check-launcher-package-name",
+            description = "Check the launcher package name to verify setup wizard is dismissed.")
+    private boolean mCheckLauncherPackageName = true;
+
     private Map<String, String> mPreviousSystemSettings = new HashMap<>();
     private Map<String, String> mPreviousSecureSettings = new HashMap<>();
     private Map<String, String> mPreviousGlobalSettings = new HashMap<>();
@@ -525,6 +532,13 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
     private static final String PERSIST_PREFIX = "persist.";
     private static final String MEMTAG_BOOTCTL = "arm64.memtag.bootctl";
 
+    @Option(
+            name = "enable-testing-secondary-user-on-secondary-display",
+            description = "Enable testing secondary user on secondary display")
+    private boolean mEnableTestingSecondaryUserOnSecondaryDisplay = false;
+
+    private int mTestRunningDisplayId;
+
     private static final List<String> PROPERTIES_NEEDING_REBOOT =
             List.of(
                     // MEMTAG_BOOTCTL stores a value in the misc partition that gets applied on
@@ -544,6 +558,25 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
             throws DeviceNotAvailableException, BuildError, TargetSetupError {
         ITestDevice device = getDevice(testInfo);
         CLog.i("Performing setup on %s", device.getSerialNumber());
+
+        mTestRunningDisplayId = INVALID_DISPLAY;
+        // When testing with a visible background user,
+        // it is necessary to use the displayId being tested.
+        if (mEnableTestingSecondaryUserOnSecondaryDisplay
+                && device.isVisibleBackgroundUsersSupported()) {
+            int testRunningUserId = UserHelper.getRunTestsAsUser(testInfo);
+            CommandResult displayIdByUser = device.executeShellV2Command(
+                    "cmd car_service get-display-by-user " + testRunningUserId);
+            if (CommandStatus.SUCCESS.equals(displayIdByUser.getStatus())
+                    && !Strings.isNullOrEmpty(displayIdByUser.getStdout())) {
+                try {
+                    mTestRunningDisplayId = Integer.parseInt(displayIdByUser.getStdout().trim());
+                    CLog.d("Running test on displayId: %d", mTestRunningDisplayId);
+                } catch (Exception e) {
+                    CLog.e("Failed to parse the displayId due to " + e);
+                }
+            }
+        }
 
         if (mForceRoot && device.getOptions().isEnableAdbRoot()) {
             if (!device.enableAdbRoot()) {
@@ -1049,6 +1082,14 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
         }
     }
 
+    private String getInputKeyEventCommand(int keycode) {
+        String inputKeyEventCommand = "input keyevent " + keycode;
+        if (mTestRunningDisplayId != INVALID_DISPLAY) {
+            inputKeyEventCommand = "input -d " + mTestRunningDisplayId + " keyevent " + keycode;
+        }
+        return inputKeyEventCommand;
+    }
+
     /**
      * Handles screen always on settings.
      * <p>
@@ -1074,7 +1115,8 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                         CLog.d("Output of dismiss-keyguard: %s", res);
                     } else {
                         // send MENU press in case keyguard needs to be dismissed again
-                        CommandResult inputKey = device.executeShellV2Command("input keyevent 82");
+                        CommandResult inputKey =
+                                device.executeShellV2Command(getInputKeyEventCommand(82));
                         CLog.d("Output of input keyevent 82: %s", inputKey);
                     }
                     // send HOME press in case keyguard was already dismissed, so we bring device
@@ -1084,7 +1126,8 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     // instead of the home screen
                     if ((device instanceof TestDevice)
                             && !device.hasFeature("android.hardware.type.watch")) {
-                        CommandResult inputKey = device.executeShellV2Command("input keyevent 3");
+                        CommandResult inputKey =
+                                device.executeShellV2Command(getInputKeyEventCommand(3));
                         CLog.d("Output of input keyevent 3: %s", inputKey);
                     }
                     break;
@@ -1338,25 +1381,52 @@ public class DeviceSetup extends BaseTargetPreparer implements IExternalDependen
                     device.executeShellV2Command("dumpsys window displays | grep mCurrentFocus");
             if (CommandStatus.SUCCESS.equals(dumpsysCmdOut.getStatus())
                     && !dumpsysCmdOut.getStdout().contains("setupwizard")) {
-                // Additionally check the launcher package name
-                CommandResult pkgCmdOut =
-                        device.executeShellV2Command(
-                                "adb shell cmd package resolve-activity"
-                                        + " -c android.intent.category.HOME"
-                                        + " -a android.intent.action.MAIN");
-                if (CommandStatus.SUCCESS.equals(pkgCmdOut.getStatus())
-                        && !pkgCmdOut
-                                .getStdout()
-                                .contains("packageName=com.google.android.setupwizard")) {
+                if (mCheckLauncherPackageName) {
+                    // Additionally check the launcher package name
+                    CommandResult pkgCmdOut =
+                            device.executeShellV2Command(
+                                    "cmd package resolve-activity"
+                                            + " -c android.intent.category.HOME"
+                                            + " -a android.intent.action.MAIN");
+                    if (CommandStatus.SUCCESS.equals(pkgCmdOut.getStatus())
+                            && !pkgCmdOut
+                                    .getStdout()
+                                    .contains("packageName=com.google.android.setupwizard")) {
+                        CLog.d("Setup wizard is dismissed.");
+                        dismissed = true;
+                        break;
+                    } else {
+                        // abort the check if package service is unavailable
+                        if (dumpsysCmdOut.getStderr() != null
+                                && dumpsysCmdOut
+                                        .getStderr()
+                                        .contains("Can't find service: package")) {
+                            CLog.d(
+                                    "package service is not available. Skip checking setup wizard"
+                                            + " dismissal.");
+                            break;
+                        }
+                        // Log the package cmd output for debugging purpose
+                        CLog.d("Package cmd output: %s", pkgCmdOut.getStdout());
+                        CLog.d("Package cmd stderr: %s", pkgCmdOut.getStderr());
+                    }
+                } else {
                     CLog.d("Setup wizard is dismissed.");
-                    CLog.d("Dumpsys cmd output: %s", dumpsysCmdOut.getStdout());
-                    CLog.d("Package cmd output: %s", pkgCmdOut.getStdout());
                     dismissed = true;
                     break;
                 }
             } else {
-                RunUtil.getDefault().sleep(2 * 1000);
+                // abort the check if window service is unavailable
+                if (dumpsysCmdOut.getStderr() != null
+                        && dumpsysCmdOut.getStderr().contains("Can't find service: window")) {
+                    CLog.d("window service is not available. Skip checking setupwizard dismissal.");
+                    break;
+                }
+                // Log the dumpsys cmd output for debugging purpose
+                CLog.d("Dumpsys cmd output: %s", dumpsysCmdOut.getStdout());
+                CLog.d("Dumpsys cmd stderr: %s", dumpsysCmdOut.getStderr());
             }
+            RunUtil.getDefault().sleep(2 * 1000);
         }
         if (!dismissed) {
             CLog.w(

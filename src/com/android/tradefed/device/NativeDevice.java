@@ -29,7 +29,6 @@ import com.android.ddmlib.SyncService;
 import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.ITestRunListener;
-import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.ConfigurationException;
@@ -59,6 +58,7 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.SnapshotInputStreamSource;
 import com.android.tradefed.result.StubTestRunListener;
+import com.android.tradefed.result.ddmlib.RemoteAndroidTestRunner;
 import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -1287,6 +1287,16 @@ public class NativeDevice
                     : userRunTimeOption;
             ((RemoteAndroidTestRunner) runner).setRunOptions(updated);
             return original;
+        } else if (runner instanceof com.android.ddmlib.testrunner.RemoteAndroidTestRunner) {
+            // Support a backward compatible runners through the interface
+            String original =
+                    ((com.android.ddmlib.testrunner.RemoteAndroidTestRunner) runner)
+                            .getRunOptions();
+            String userRunTimeOption = String.format("--user %s", Integer.toString(userId));
+            String updated =
+                    (original != null) ? (original + " " + userRunTimeOption) : userRunTimeOption;
+            ((com.android.ddmlib.testrunner.RemoteAndroidTestRunner) runner).setRunOptions(updated);
+            return original;
         } else {
             throw new IllegalStateException(String.format("%s runner does not support multi-user",
                     runner.getClass().getName()));
@@ -1301,10 +1311,14 @@ public class NativeDevice
      */
     private void resetUserRunTimeOptionToRunner(final IRemoteAndroidTestRunner runner,
             String oldRunTimeOptions) {
+        if (oldRunTimeOptions == null) {
+            return;
+        }
         if (runner instanceof RemoteAndroidTestRunner) {
-            if (oldRunTimeOptions != null) {
-                ((RemoteAndroidTestRunner) runner).setRunOptions(oldRunTimeOptions);
-            }
+            ((RemoteAndroidTestRunner) runner).setRunOptions(oldRunTimeOptions);
+        } else if (runner instanceof com.android.ddmlib.testrunner.RemoteAndroidTestRunner) {
+            ((com.android.ddmlib.testrunner.RemoteAndroidTestRunner) runner)
+                    .setRunOptions(oldRunTimeOptions);
         } else {
             throw new IllegalStateException(String.format("%s runner does not support multi-user",
                     runner.getClass().getName()));
@@ -1581,6 +1595,11 @@ public class NativeDevice
             throws DeviceNotAvailableException {
         boolean skipContentProvider = false;
         int userId = getCurrentUserCompatible(remoteFilePath);
+        if (userId == INVALID_USER_ID) {
+            throw new HarnessRuntimeException(
+                    "Device didn't return a valid user id. It might have gone into a bad state.",
+                    DeviceErrorIdentifier.DEVICE_UNEXPECTED_RESPONSE);
+        }
         if (evaluateContentProviderNeeded) {
             skipContentProvider = userId == 0;
         }
@@ -1598,7 +1617,8 @@ public class NativeDevice
         InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.PUSH_FILE_COUNT, 1);
         try {
             if (!skipContentProvider) {
-                if (isSdcardOrEmulated(remoteFilePath)) {
+                // Skip Content provider for user 0
+                if (isSdcardOrEmulated(remoteFilePath) && userId != 0) {
                     ContentProviderHandler handler = getContentProvider(userId);
                     if (handler != null) {
                         return handler.pushFile(localFile, remoteFilePath);
@@ -1699,8 +1719,16 @@ public class NativeDevice
                 }
             }
             CLog.d("Using 'ls' to check doesFileExist(%s)", deviceFilePath);
-            String lsGrep = executeShellCommand(String.format("ls \"%s\"", deviceFilePath));
-            return !lsGrep.contains("No such file or directory");
+            CommandResult result = executeShellV2Command(String.format("ls '%s'", deviceFilePath));
+            if (CommandStatus.SUCCESS.equals(result.getStatus())
+                    && !result.getStdout().contains("No such file or directory")) {
+                return true;
+            } else {
+                CLog.d(
+                        "File %s does not exist.\nstdout: %s\nstderr: %s",
+                        deviceFilePath, result.getStdout(), result.getStderr());
+                return false;
+            }
         } finally {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.DOES_FILE_EXISTS_TIME,
@@ -3362,7 +3390,12 @@ public class NativeDevice
         mLastConnectedWifiSsid = null;
         mLastConnectedWifiPsk = null;
 
-        IWifiHelper wifi = createWifiHelper();
+        IWifiHelper wifi = null;
+        if (!getOptions().useCmdWifiCommands() || !enableAdbRoot() || getApiLevel() < 31) {
+            wifi = createWifiHelper(false);
+        } else {
+            wifi = createWifiHelper(true);
+        }
         return wifi.disconnectFromNetwork();
     }
 

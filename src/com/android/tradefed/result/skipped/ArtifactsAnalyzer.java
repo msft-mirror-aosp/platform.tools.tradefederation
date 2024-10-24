@@ -23,11 +23,13 @@ import com.android.tradefed.build.content.ImageContentAnalyzer;
 import com.android.tradefed.build.content.TestContentAnalyzer;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
+import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.testtype.suite.SuiteResultCacheUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.SystemUtil;
 
@@ -82,7 +84,7 @@ public class ArtifactsAnalyzer {
         }
         BuildAnalysis finalReport = BuildAnalysis.mergeReports(reports);
         CLog.d("Build analysis report: %s", finalReport.toString());
-        boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+        boolean presubmit = InvocationContext.isPresubmit(information.getContext());
         // Do the analysis regardless
         if (finalReport.hasTestsArtifacts()) {
             if (mTestArtifactsAnalysisContent.isEmpty()) {
@@ -108,6 +110,7 @@ public class ArtifactsAnalyzer {
                         if (!analysisResults.hasSharedFolderChanges()) {
                             finalReport.addUnchangedModules(analysisResults.getUnchangedModules());
                         }
+                        finalReport.addImageDigestMapping(analysisResults.getImageToDigest());
                     }
                 } catch (RuntimeException e) {
                     CLog.e(e);
@@ -134,8 +137,7 @@ public class ArtifactsAnalyzer {
             deviceImageChanged =
                     !"true".equals(build.getBuildAttributes().get(DEVICE_IMAGE_NOT_CHANGED));
             if (context != null) {
-                boolean presubmit =
-                        "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+                boolean presubmit = InvocationContext.isPresubmit(information.getContext());
                 boolean hasOneDeviceAnalysis =
                         context.stream()
                                 .anyMatch(
@@ -147,6 +149,7 @@ public class ArtifactsAnalyzer {
                 ContentAnalysisResults res = analyze.evaluate();
                 if (res == null) {
                     deviceImageChanged = true;
+                    imageToDigest.put(SuiteResultCacheUtil.DEVICE_IMAGE_KEY, null);
                 } else {
                     imageToDigest.putAll(res.getImageToDigest());
                     if (hasOneDeviceAnalysis) {
