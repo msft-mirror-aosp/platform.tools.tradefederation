@@ -131,6 +131,7 @@ public final class IsolationRunner {
 
         try {
             for (Class<?> klass : klasses) {
+                System.out.println("INFO: IsolationRunner: Starting class: " + klass);
                 IsolationResultForwarder list = new IsolationResultForwarder(output);
                 JUnitCore runnerCore = new JUnitCore();
                 runnerCore.addListener(list);
@@ -181,6 +182,7 @@ public final class IsolationRunner {
                 } else if (req.getRunner() instanceof IgnoredClassRunner) {
                     // Do nothing since class was ignored
                 } else {
+                    System.out.println("INFO: IsolationRunner: Executing class: " + klass);
                     Runner checkRunner = req.getRunner();
 
                     if (params.getDryRun()) {
@@ -212,6 +214,8 @@ public final class IsolationRunner {
     }
 
     private List<Class<?>> getClasses(TestParameters params) {
+        System.out.println("INFO: IsolationRunner: Excluded paths:");
+        params.getExcludePathsList().stream().forEach(path -> System.out.println(path));
         return HostUtils.getJUnitClasses(
                 new HashSet<>(params.getTestClassesList()),
                 new HashSet<>(params.getTestJarAbsPathsList()),
