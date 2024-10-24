@@ -37,7 +37,6 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.RunUtilTest;
 
 import com.google.common.truth.Truth;
 
@@ -57,7 +56,6 @@ import java.util.List;
 /** Unit tests for {@link RustBinaryHostTest}. */
 @RunWith(JUnit4.class)
 public class RustBinaryHostTestTest {
-    private RunUtilTest.FakeCacheClient mFakeCacheClient;
     private RustBinaryHostTest mTest;
     private TestInformation mTestInfo;
     private File mModuleDir;
@@ -81,18 +79,11 @@ public class RustBinaryHostTestTest {
         context.addDeviceBuildInfo("device", mMockBuildInfo);
         mTestInfo = TestInformation.newBuilder().setInvocationContext(context).build();
         mModuleDir = FileUtil.createTempDir("rust-module");
-        mFakeCacheClient = new RunUtilTest.FakeCacheClient();
     }
 
     @After
     public void tearDown() throws Exception {
         FileUtil.recursiveDelete(mModuleDir);
-        mFakeCacheClient.getAllCache().values().stream()
-                .forEach(
-                        a -> {
-                            FileUtil.deleteFile(a.stdOut());
-                            FileUtil.deleteFile(a.stdErr());
-                        });
     }
 
     private CommandResult newCommandResult(CommandStatus status, String stderr, String stdout) {
