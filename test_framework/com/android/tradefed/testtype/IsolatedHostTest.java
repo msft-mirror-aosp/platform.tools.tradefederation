@@ -759,7 +759,18 @@ public class IsolatedHostTest
         boolean runStarted = false;
         boolean success = true;
         while (true) {
-            RunnerReply reply = RunnerReply.parseDelimitedFrom(input);
+            RunnerReply reply = null;
+            try {
+                reply = RunnerReply.parseDelimitedFrom(input);
+            } catch (SocketTimeoutException ste) {
+                if (currentTest != null) {
+                    // Subprocess has hard crashed
+                    listener.testFailed(currentTest, StreamUtil.getStackTrace(ste));
+                    listener.testEnded(
+                            currentTest, System.currentTimeMillis(), new HashMap<String, Metric>());
+                }
+                throw ste;
+            }
             if (reply == null) {
                 if (currentTest != null) {
                     // Subprocess has hard crashed
