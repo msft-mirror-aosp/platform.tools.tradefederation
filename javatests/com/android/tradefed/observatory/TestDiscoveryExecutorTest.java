@@ -65,14 +65,16 @@ public class TestDiscoveryExecutorTest {
     private Configuration mMockedConfiguration;
     private TestDiscoveryExecutor mTestDiscoveryExecutor;
 
+    private TestDiscoveryUtil mTestDiscoveryUtil;
+
     @Before
     public void setUp() throws Exception {
         mMockConfigFactory = Mockito.spy((ConfigurationFactory) ConfigurationFactory.getInstance());
         mMockedConfiguration = Mockito.mock(Configuration.class);
-        mTestDiscoveryExecutor =
-                new TestDiscoveryExecutor() {
+        mTestDiscoveryUtil =
+                new TestDiscoveryUtil() {
                     @Override
-                    IConfigurationFactory getConfigurationFactory() {
+                    public IConfigurationFactory getConfigurationFactory() {
                         return mMockConfigFactory;
                     }
 
@@ -81,6 +83,7 @@ public class TestDiscoveryExecutorTest {
                         return "not-null";
                     }
                 };
+        mTestDiscoveryExecutor = new TestDiscoveryExecutor(mTestDiscoveryUtil);
         doReturn(mMockedConfiguration)
                 .when(mMockConfigFactory)
                 .createPartialConfigurationFromArgs(
@@ -259,10 +262,10 @@ public class TestDiscoveryExecutorTest {
                     mediaConfig);
             File secondNotRunConfig = new File(rootDir, "another.config");
             FileUtil.writeToFile("<configuration></configuration>", secondNotRunConfig);
-            mTestDiscoveryExecutor =
-                    new TestDiscoveryExecutor() {
+            mTestDiscoveryUtil =
+                    new TestDiscoveryUtil() {
                         @Override
-                        IConfigurationFactory getConfigurationFactory() {
+                        public IConfigurationFactory getConfigurationFactory() {
                             return mMockConfigFactory;
                         }
 
@@ -271,6 +274,7 @@ public class TestDiscoveryExecutorTest {
                             return rootDir.getAbsolutePath();
                         }
                     };
+            mTestDiscoveryExecutor = new TestDiscoveryExecutor(mTestDiscoveryUtil);
 
             // Mock to return some include filters
             BaseTestSuite test1 = new BaseTestSuite();
@@ -316,10 +320,10 @@ public class TestDiscoveryExecutorTest {
                     multiConfig);
             File secondNotRunConfig = new File(rootDir, "another.config");
             FileUtil.writeToFile("<configuration></configuration>", secondNotRunConfig);
-            mTestDiscoveryExecutor =
-                    new TestDiscoveryExecutor() {
+            mTestDiscoveryUtil =
+                    new TestDiscoveryUtil() {
                         @Override
-                        IConfigurationFactory getConfigurationFactory() {
+                        public IConfigurationFactory getConfigurationFactory() {
                             return mMockConfigFactory;
                         }
 
@@ -328,6 +332,7 @@ public class TestDiscoveryExecutorTest {
                             return rootDir.getAbsolutePath();
                         }
                     };
+            mTestDiscoveryExecutor = new TestDiscoveryExecutor(mTestDiscoveryUtil);
 
             // Mock to return some include filters
             BaseTestSuite test1 = new BaseTestSuite();
