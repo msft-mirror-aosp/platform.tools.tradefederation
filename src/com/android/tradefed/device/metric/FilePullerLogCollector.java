@@ -15,7 +15,9 @@
  */
 package com.android.tradefed.device.metric;
 
+import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
@@ -30,6 +32,10 @@ import java.io.File;
  */
 @OptionClass(alias = "file-puller-log-collector")
 public class FilePullerLogCollector extends FilePullerDeviceMetricCollector {
+    @Option(
+            name = "log-data-type",
+            description = "Type to assign to pulled logs (default: autodetect from extension)")
+    private String mLogDataType;
 
     @Override
     public final void processMetricFile(String key, File metricFile, DeviceMetricData runData) {
@@ -37,36 +43,49 @@ public class FilePullerLogCollector extends FilePullerDeviceMetricCollector {
             postProcessMetricFile(key, metricFile, runData);
         } finally {
             try (InputStreamSource source = new FileInputStreamSource(metricFile, true)) {
-                // Try to infer the type. This will be improved eventually, see todo on the class.
-                LogDataType type = LogDataType.TEXT;
-                String ext = FileUtil.getExtension(metricFile.getName()).toLowerCase();
-                if (".hprof".equals(ext)) {
-                    type = LogDataType.HPROF;
-                } else if (".mp4".equals(ext)) {
-                    type = LogDataType.MP4;
-                } else if (".pb".equals(ext)) {
-                    type = LogDataType.PB;
-                } else if (".png".equals(ext)) {
-                    type = LogDataType.PNG;
-                } else if (".perfetto-trace".equals(ext)) {
-                    type = LogDataType.PERFETTO;
-                } else if (".zip".equals(ext)) {
-                    type = LogDataType.ZIP;
-                } else if (".uix".equals(ext)) {
-                    type = LogDataType.UIX;
-                } else if (".textproto".equals(ext)
-                        && FileUtil.getBaseName(metricFile.getName()).contains("_goldResult")) {
-                    type = LogDataType.GOLDEN_RESULT_PROTO;
-                } else if (".trace".equals(ext)) {
-                    type = LogDataType.TRACE;
-                } else if (".log".equals(ext)) {
-                    type = LogDataType.BT_SNOOP_LOG;
-                } else if (".json".equals(ext)) {
-                    type = LogDataType.JSON;
-                }
+                LogDataType type = guessLogDataType(metricFile);
+
                 testLog(FileUtil.getBaseName(metricFile.getName()), type, source);
             }
         }
+    }
+
+    private LogDataType guessLogDataType(File metricFile) {
+        if (mLogDataType != null && mLogDataType.length() > 0) {
+            try {
+                return LogDataType.valueOf(mLogDataType);
+            } catch (IllegalArgumentException e) {
+                CLog.e("Invalid log-data-type option: " + mLogDataType);
+            }
+        }
+
+        // Try to infer the type. This will be improved eventually, see todo on the class.
+        String ext = FileUtil.getExtension(metricFile.getName()).toLowerCase();
+        if (".hprof".equals(ext)) {
+            return LogDataType.HPROF;
+        } else if (".mp4".equals(ext)) {
+            return LogDataType.MP4;
+        } else if (".pb".equals(ext)) {
+            return LogDataType.PB;
+        } else if (".png".equals(ext)) {
+            return LogDataType.PNG;
+        } else if (".perfetto-trace".equals(ext)) {
+            return LogDataType.PERFETTO;
+        } else if (".zip".equals(ext)) {
+            return LogDataType.ZIP;
+        } else if (".uix".equals(ext)) {
+            return LogDataType.UIX;
+        } else if (".textproto".equals(ext)
+                && FileUtil.getBaseName(metricFile.getName()).contains("_goldResult")) {
+            return LogDataType.GOLDEN_RESULT_PROTO;
+        } else if (".trace".equals(ext)) {
+            return LogDataType.TRACE;
+        } else if (".log".equals(ext)) {
+            return LogDataType.BT_SNOOP_LOG;
+        } else if (".json".equals(ext)) {
+            return LogDataType.JSON;
+        }
+        return LogDataType.TEXT;
     }
 
     @Override

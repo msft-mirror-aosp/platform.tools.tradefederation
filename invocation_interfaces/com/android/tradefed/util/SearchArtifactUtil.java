@@ -183,6 +183,13 @@ public class SearchArtifactUtil {
             AltDirBehavior altDirBehavior,
             TestInformation testInfo) {
         List<File> dirs = new LinkedList<>();
+        // Prioritize the module directory retrieved from the config obj, as this is the ideal place
+        // for all test artifacts.
+        File moduleDir = getModuleDirFromConfig();
+        if (moduleDir != null) {
+            dirs.add(moduleDir);
+        }
+
         ExecutionFiles executionFiles = singleton.getExecutionFiles(testInfo);
         if (executionFiles != null) {
             // Add host/testcases or target/testcases directory first
