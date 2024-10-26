@@ -81,6 +81,7 @@ public class TestDiscoveryInvoker {
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
+    public static final String TEST_ZIP_REGEXES_LIST_KEY = "TestZipRegexes";
     public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
     public static final String NO_POSSIBLE_TEST_DISCOVERY_KEY = "NoPossibleTestDiscovery";
     public static final String TEST_MAPPING_ZIP_FILE = "TF_TEST_MAPPING_ZIP_FILE";
@@ -89,6 +90,7 @@ public class TestDiscoveryInvoker {
 
     public static final String OUTPUT_FILE = "DISCOVERY_OUTPUT_FILE";
     public static final String DISCOVERY_TRACE_FILE = "DISCOVERY_TRACE_FILE";
+    public static final String BWYN_DISCOVER_TEST_ZIP = "BWYN_DISCOVER_TEST_ZIP";
 
     private static final long DISCOVERY_TIMEOUT_MS = 180000L;
 

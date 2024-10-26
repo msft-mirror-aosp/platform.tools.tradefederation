@@ -126,6 +126,7 @@ public class SubprocessTestResultsParser implements Closeable {
      */
     private class EventReceiverThread extends Thread {
         private ServerSocket mSocket;
+        private Socket mClient;
         // initial state: 1 permit available, joins that don't wait for connection will succeed
         private Semaphore mSemaphore = new Semaphore(1);
         private boolean mShouldParse = true;
@@ -155,6 +156,9 @@ public class SubprocessTestResultsParser implements Closeable {
             if (mSocket != null) {
                 mSocket.close();
             }
+            if (mClient != null) {
+                mClient.close();
+            }
         }
 
         /**
@@ -167,12 +171,11 @@ public class SubprocessTestResultsParser implements Closeable {
 
         @Override
         public void run() {
-            Socket client = null;
             BufferedReader in = null;
             try {
-                client = mSocket.accept();
+                mClient = mSocket.accept();
                 mSemaphore.acquire(); // connected: 0 permits available, all joins will wait
-                in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                in = new BufferedReader(new InputStreamReader(mClient.getInputStream()));
                 String event = null;
                 while ((event = in.readLine()) != null) {
                     try {
