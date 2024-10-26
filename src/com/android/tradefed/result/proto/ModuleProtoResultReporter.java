@@ -40,15 +40,18 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     public static final String INVOCATION_ID_KEY = "invocation_id";
     private boolean mStopCache = false;
     private String mInvocationId = null;
+    private boolean mGranularResults = false;
 
     public ModuleProtoResultReporter() {
         setPeriodicWriting(false);
         setDelimitedOutput(false);
     }
 
-    public ModuleProtoResultReporter(IInvocationContext mainInvocationContext) {
+    public ModuleProtoResultReporter(
+            IInvocationContext mainInvocationContext, boolean granularResults) {
         this();
         copyAttributes(mainInvocationContext);
+        mGranularResults = granularResults;
     }
 
     @Override
@@ -68,7 +71,9 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
     @Override
     public void processTestCaseEnded(TestRecord testCaseRecord) {
-        super.processTestCaseEnded(testCaseRecord);
+        if (mGranularResults) {
+            super.processTestCaseEnded(testCaseRecord);
+        }
         if (testCaseRecord.getStatus().equals(TestStatus.FAIL)) {
             mStopCache = true;
         }
@@ -76,7 +81,9 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
     @Override
     public void processTestRunEnded(TestRecord runRecord, boolean moduleInProgress) {
-        super.processTestRunEnded(runRecord, moduleInProgress);
+        if (mGranularResults) {
+            super.processTestRunEnded(runRecord, moduleInProgress);
+        }
         if (runRecord.hasDebugInfo()) {
             mStopCache = true;
         }

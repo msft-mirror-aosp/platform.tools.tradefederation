@@ -48,6 +48,8 @@ public class OtaUpdateDeviceFlasher implements IDeviceFlasher {
     private static final long APPLY_OTA_PACKAGE_TIMEOUT_MINS = 25;
     protected static final String IN_ZIP_SCRIPT_PATH =
             String.join(File.separator, "bin", "update_device");
+    protected static final String UPDATE_SUCCESS_OUTPUT =
+            "onPayloadApplicationComplete(ErrorCode::kSuccess (0)";
 
     private UserDataFlashOption mUserDataFlashOptions = null;
     private File mUpdateDeviceScript = null;
@@ -164,9 +166,11 @@ public class OtaUpdateDeviceFlasher implements IDeviceFlasher {
                                 TimeUnit.MINUTES.toMillis(APPLY_OTA_PACKAGE_TIMEOUT_MINS),
                                 cmd.toArray(new String[] {}));
         mOtaCommandStatus = result.getStatus();
+        String stdErr = result.getStderr();
         CLog.v("OTA script stdout: " + result.getStdout());
-        CLog.v("OTA script stderr: " + result.getStderr());
-        if (!CommandStatus.SUCCESS.equals(mOtaCommandStatus)) {
+        CLog.v("OTA script stderr: " + stdErr);
+        if (!CommandStatus.SUCCESS.equals(mOtaCommandStatus)
+                || !stdErr.contains(UPDATE_SUCCESS_OUTPUT)) {
             throw new TargetSetupError(
                     String.format(
                             "Failed to apply OTA update to device. Exit Code: %d, Command Status:"
