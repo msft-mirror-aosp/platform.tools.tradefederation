@@ -402,7 +402,7 @@ public class TestDeviceOptions {
     @Option(
             name = "use-cmd-wifi",
             description = "Feature flag to switch the wifi connection to using cmd commands.")
-    private boolean mUseCmdWifi = false;
+    private boolean mUseCmdWifi = true;
 
     @Option(name = "cmd-wifi-virtual", description = "Whether to use cmd wifi for virtual devices.")
     private boolean mCmdWifiVirtual = true;

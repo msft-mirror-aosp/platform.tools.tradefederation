@@ -19,6 +19,7 @@ package com.android.tradefed.util;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.invoker.ExecutionFiles;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -153,7 +154,10 @@ public class SearchArtifactUtil {
                 return file;
             } else {
                 // fallback to staging from remote zip files.
-                File stagingDir = getWorkFolder(testInfo);
+                File stagingDir = getModuleDirFromConfig();
+                if (stagingDir == null) {
+                    stagingDir = getWorkFolder(testInfo);
+                }
                 if (fileExists(stagingDir)) {
                     buildInfo.stageRemoteFile(fileName, stagingDir);
                     // multiple matching files can be staged. So do a search with module name and
@@ -179,6 +183,13 @@ public class SearchArtifactUtil {
             AltDirBehavior altDirBehavior,
             TestInformation testInfo) {
         List<File> dirs = new LinkedList<>();
+        // Prioritize the module directory retrieved from the config obj, as this is the ideal place
+        // for all test artifacts.
+        File moduleDir = getModuleDirFromConfig();
+        if (moduleDir != null) {
+            dirs.add(moduleDir);
+        }
+
         ExecutionFiles executionFiles = singleton.getExecutionFiles(testInfo);
         if (executionFiles != null) {
             // Add host/testcases or target/testcases directory first
@@ -321,6 +332,24 @@ public class SearchArtifactUtil {
             CLog.e(e);
         }
         CLog.w("Failed to find test file %s from directory %s.", filename, searchDirectory);
+        return null;
+    }
+
+    /** Returns the module directory if present, when called inside a module scope. */
+    public static File getModuleDirFromConfig() {
+        IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
+        if (moduleContext != null) {
+            List<String> moduleDirPath =
+                    moduleContext
+                            .getConfigurationDescriptor()
+                            .getMetaData(ConfigurationDescriptor.MODULE_DIR_PATH_KEY);
+            if (moduleDirPath != null && !moduleDirPath.isEmpty()) {
+                File moduleDir = new File(moduleDirPath.get(0));
+                if (moduleDir.exists()) {
+                    return moduleDir;
+                }
+            }
+        }
         return null;
     }
 
