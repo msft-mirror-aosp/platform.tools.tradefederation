@@ -966,8 +966,10 @@ public abstract class ITestSuite
                             try {
                                 File protoResults =
                                         FileUtil.createTempFile("module-results", ".proto");
+                                // Do not report granular results until we need them they consume a
+                                // lot of memory
                                 moduleReporter =
-                                        new ModuleProtoResultReporter(testInfo.getContext());
+                                        new ModuleProtoResultReporter(testInfo.getContext(), false);
                                 moduleReporter.setOutputFile(protoResults);
                                 moduleListeners.add(moduleReporter);
                             } catch (IOException e) {
