@@ -24,6 +24,7 @@ import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
 import static com.google.common.truth.Truth.assertThat;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.atLeastOnce;
@@ -515,6 +516,55 @@ public class TestAppInstallSetupTest {
         mPrep.setUp(mTestInfo);
 
         Mockito.verify(mMockIncrementalInstallSessionBuilder).build();
+    }
+
+    // TODO(ihcinihsdk): Change the behavior of this test when the actual incremental setup is
+    // implemented.
+    @Test
+    public void testSetup_incrementalSetupEnabled_throwException() throws Exception {
+        when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
+                .thenReturn(null);
+        when(mMockTestDevice.installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true)))
+                .thenReturn(null);
+        mPrep.setIncrementalSetupEnabled(true);
+
+        assertThrows(
+            UnsupportedOperationException.class,
+            () -> mPrep.setUp(mTestInfo));
+
+        Mockito.verify(mMockTestDevice, times(0))
+            .installPackage(Mockito.any(), Mockito.anyBoolean());
+        Mockito.verify(mMockTestDevice, times(0))
+            .installPackages(Mockito.any(), Mockito.anyBoolean());
+    }
+
+    @Test
+    public void testSetup_incrementalSetupDisabledExplicitly_noOp() throws Exception {
+        when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
+                .thenReturn(null);
+        when(mMockTestDevice.installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true)))
+                .thenReturn(null);
+        mPrep.setIncrementalSetupEnabled(false);
+
+        mPrep.setUp(mTestInfo);
+
+        Mockito.verify(mMockTestDevice).installPackage(Mockito.eq(fakeApk), Mockito.eq(true));
+        Mockito.verify(mMockTestDevice)
+            .installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true));
+    }
+
+    @Test
+    public void testSetup_incrementalSetupDisabledByDefault_noOp() throws Exception {
+        when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
+                .thenReturn(null);
+        when(mMockTestDevice.installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true)))
+                .thenReturn(null);
+
+        mPrep.setUp(mTestInfo);
+
+        Mockito.verify(mMockTestDevice).installPackage(Mockito.eq(fakeApk), Mockito.eq(true));
+        Mockito.verify(mMockTestDevice)
+            .installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true));
     }
 
     @Test

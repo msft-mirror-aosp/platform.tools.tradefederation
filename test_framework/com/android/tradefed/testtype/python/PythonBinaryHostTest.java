@@ -19,19 +19,14 @@ import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLi
 import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
-import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.GlobalConfiguration;
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -41,7 +36,6 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.ResultForwarder;
-import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -85,8 +79,7 @@ import javax.annotation.Nullable;
  * exclude-filter will still be executed.
  */
 @OptionClass(alias = "python-host")
-public class PythonBinaryHostTest
-        implements IRemoteTest, ITestFilterReceiver, IConfigurationReceiver {
+public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
 
     protected static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     protected static final String LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
@@ -154,11 +147,6 @@ public class PythonBinaryHostTest
     private boolean mUseTestOutputFile = false;
 
     @Option(
-            name = "enable-cache",
-            description = "Used to enable/disable caching for specific modules.")
-    private boolean mEnableCache = false;
-
-    @Option(
             name = "inherit-env-vars",
             description =
                     "Whether the subprocess should inherit environment variables from the main"
@@ -187,8 +175,6 @@ public class PythonBinaryHostTest
 
     private TestInformation mTestInfo;
     private IRunUtil mRunUtil;
-    private IConfiguration mConfiguration = new Configuration("", "");
-    private TestRunResultListener mTestRunResultListener;
 
     /** {@inheritDoc} */
     @Override
@@ -238,17 +224,9 @@ public class PythonBinaryHostTest
         return mExcludeFilters;
     }
 
-    /** {@inheritDoc} */
-    @Override
-    public void setConfiguration(IConfiguration configuration) {
-        mConfiguration = configuration;
-    }
-
     @Override
     public final void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        mTestRunResultListener = new TestRunResultListener();
-        listener = new ResultForwarder(listener, mTestRunResultListener);
         mTestInfo = testInfo;
         File testDir = mTestInfo.executionFiles().get(FilesKey.HOST_TESTS_DIRECTORY);
         if (testDir == null || !testDir.exists()) {
@@ -399,15 +377,6 @@ public class PythonBinaryHostTest
         PythonUnitTestResultParser pythonParser =
                 new PythonUnitTestResultParser(
                         Arrays.asList(receiver), "python-run", mIncludeFilters, mExcludeFilters);
-        String instanceName =
-                mEnableCache
-                        ? mConfiguration.getCommandOptions().getRemoteCacheInstanceName()
-                        : null;
-        ICacheClient cacheClient =
-                Strings.isNullOrEmpty(instanceName)
-                        ? null
-                        : getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
-
         CommandResult result = null;
         File stderrFile = null;
         File stdoutFile = null;
@@ -418,21 +387,12 @@ public class PythonBinaryHostTest
             } else {
                 try (FileOutputStream fileOutputParser = new FileOutputStream(stderrFile)) {
                     result =
-                            cacheClient == null
-                                    ? getRunUtil()
-                                            .runTimedCmd(
-                                                    mTestTimeout,
-                                                    null,
-                                                    fileOutputParser,
-                                                    commandLine.toArray(new String[0]))
-                                    : getRunUtil()
-                                            .runTimedCmdWithOutputMonitor(
-                                                    mTestTimeout,
-                                                    0,
-                                                    null,
-                                                    fileOutputParser,
-                                                    cacheClient,
-                                                    commandLine.toArray(new String[0]));
+                            getRunUtil()
+                                    .runTimedCmd(
+                                            mTestTimeout,
+                                            null,
+                                            fileOutputParser,
+                                            commandLine.toArray(new String[0]));
                     fileOutputParser.flush();
                 }
             }
@@ -463,13 +423,6 @@ public class PythonBinaryHostTest
             }
             String testOutput = FileUtil.readStringFromFile(testOutputFile);
             pythonParser.processNewLines(testOutput.split("\n"));
-            if (!result.isCached() && !mTestRunResultListener.isTestRunFailed(runName)) {
-                getRunUtil()
-                        .uploadCache(
-                                cacheClient,
-                                ExecutableActionResult.create(
-                                        result.getExitCode(), stdoutFile, stderrFile));
-            }
         } catch (RuntimeException e) {
             StringBuilder message = new StringBuilder();
             String stderr = "";

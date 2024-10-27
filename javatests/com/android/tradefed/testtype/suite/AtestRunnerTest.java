@@ -17,8 +17,13 @@ package com.android.tradefed.testtype.suite;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.IConfiguration;
@@ -27,6 +32,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.targetprep.ITargetPreparer;
+import com.android.tradefed.targetprep.incremental.IIncrementalSetup;
 import com.android.tradefed.testtype.Abi;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -72,6 +78,7 @@ public class AtestRunnerTest {
 
     private AbiAtestRunner mRunner;
     private OptionSetter setter;
+    private IConfiguration mConfig;
     private IDeviceBuildInfo mBuildInfo;
     private ITestDevice mMockDevice;
     private String classA = "fully.qualified.classA";
@@ -98,6 +105,7 @@ public class AtestRunnerTest {
         mMockDevice = mock(ITestDevice.class);
         mRunner.setBuild(mBuildInfo);
         mRunner.setDevice(mMockDevice);
+        mConfig = mock(IConfiguration.class);
 
         when(mBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
 
@@ -292,9 +300,98 @@ public class AtestRunnerTest {
         assertEquals(1, listeners.size());
     }
 
+    @Test
+    public void testIncrementalSetup_defaultNoChangeExpectedForTargetPreparers() throws Exception {
+        List<ITargetPreparer> targetPreparers = new ArrayList<>();
+        PseudoTargetPreparer preparer = spy(new PseudoTargetPreparer());
+        targetPreparers.add(preparer);
+        when(mConfig.getName()).thenReturn("custom-configuration");
+        when(mConfig.getTargetPreparers()).thenReturn(targetPreparers);
+
+        LinkedHashMap<String, IConfiguration> pseudoConfigMap = new LinkedHashMap<>();
+        pseudoConfigMap.put("pseudo-config", mConfig);
+        AbiAtestRunner runner = spy(mRunner);
+        doReturn(pseudoConfigMap).when(runner).loadingStrategy(any(), any(), any(), any());
+
+        OptionSetter setter = new OptionSetter(runner);
+
+        LinkedHashMap<String, IConfiguration> configMap = runner.loadTests();
+
+        assertEquals(1, configMap.size());
+        IConfiguration config = configMap.get("pseudo-config");
+        for (ITargetPreparer targetPreparer : config.getTargetPreparers()) {
+            verify((IIncrementalSetup) targetPreparer, times(0))
+                .setIncrementalSetupEnabled(false);
+            verify((IIncrementalSetup) targetPreparer, times(0))
+                .setIncrementalSetupEnabled(true);
+        }
+    }
+
+    @Test
+    public void testIncrementalSetup_disabledForTargetPreparers() throws Exception {
+        List<ITargetPreparer> targetPreparers = new ArrayList<>();
+        PseudoTargetPreparer preparer = spy(new PseudoTargetPreparer());
+        targetPreparers.add(preparer);
+        when(mConfig.getName()).thenReturn("custom-configuration");
+        when(mConfig.getTargetPreparers()).thenReturn(targetPreparers);
+
+        LinkedHashMap<String, IConfiguration> pseudoConfigMap = new LinkedHashMap<>();
+        pseudoConfigMap.put("pseudo-config", mConfig);
+        AbiAtestRunner runner = spy(mRunner);
+        doReturn(pseudoConfigMap).when(runner).loadingStrategy(any(), any(), any(), any());
+
+        OptionSetter setter = new OptionSetter(runner);
+        setter.setOptionValue("incremental-setup", "NO");
+
+        LinkedHashMap<String, IConfiguration> configMap = runner.loadTests();
+
+        assertEquals(1, configMap.size());
+        IConfiguration config = configMap.get("pseudo-config");
+        for (ITargetPreparer targetPreparer : config.getTargetPreparers()) {
+            verify((IIncrementalSetup) targetPreparer).setIncrementalSetupEnabled(false);
+            verify((IIncrementalSetup) targetPreparer, times(0))
+                .setIncrementalSetupEnabled(true);
+        }
+    }
+
+    @Test
+    public void testIncrementalSetup_enabledForTargetPreparers() throws Exception {
+        List<ITargetPreparer> targetPreparers = new ArrayList<>();
+        PseudoTargetPreparer preparer = spy(new PseudoTargetPreparer());
+        targetPreparers.add(preparer);
+        when(mConfig.getName()).thenReturn("custom-configuration");
+        when(mConfig.getTargetPreparers()).thenReturn(targetPreparers);
+
+        LinkedHashMap<String, IConfiguration> pseudoConfigMap = new LinkedHashMap<>();
+        pseudoConfigMap.put("pseudo-config", mConfig);
+        AbiAtestRunner runner = spy(mRunner);
+        doReturn(pseudoConfigMap).when(runner).loadingStrategy(any(), any(), any(), any());
+
+        OptionSetter setter = new OptionSetter(runner);
+        setter.setOptionValue("incremental-setup", "YES");
+
+        LinkedHashMap<String, IConfiguration> configMap = runner.loadTests();
+
+        assertEquals(1, configMap.size());
+        IConfiguration config = configMap.get("pseudo-config");
+        for (ITargetPreparer targetPreparer : config.getTargetPreparers()) {
+            verify((IIncrementalSetup) targetPreparer).setIncrementalSetupEnabled(true);
+            verify((IIncrementalSetup) targetPreparer, times(0))
+                .setIncrementalSetupEnabled(false);
+        }
+    }
+
     private String createModuleConfig(File dir, String moduleName) throws IOException {
         File moduleConfig = new File(dir, moduleName + SuiteModuleLoader.CONFIG_EXT);
         FileUtil.writeToFile(TEST_CONFIG, moduleConfig);
         return moduleConfig.getAbsolutePath();
+    }
+
+    /** A pseudo target preparer which is optimizable with incremental setup. */
+    private static class PseudoTargetPreparer implements ITargetPreparer, IIncrementalSetup {
+        @Override
+        public void setIncrementalSetupEnabled(boolean shouldEnable) {
+            // Intentionally left empty.
+        }
     }
 }
