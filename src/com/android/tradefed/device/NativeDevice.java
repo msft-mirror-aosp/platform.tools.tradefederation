@@ -4469,24 +4469,8 @@ public class NativeDevice
         return null;
     }
 
-    /** {@inheritDoc} */
-    @Override
-    public String getFastbootSerialNumber() {
-        if (mFastbootSerialNumber != null) {
-            return mFastbootSerialNumber;
-        }
-
-        // Only devices which use TCP adb have different fastboot serial number because IPv6
-        // link-local address will be used in fastboot mode.
-        if (!isAdbTcp()) {
-            mFastbootSerialNumber = getSerialNumber();
-            CLog.i(
-                    "Device %s's fastboot serial number is %s",
-                    getSerialNumber(), mFastbootSerialNumber);
-            return mFastbootSerialNumber;
-        }
-
-        mFastbootSerialNumber = getSerialNumber();
+    @Nullable
+    private String getLinkLocalIpv6FastbootSerial() {
         byte[] macEui48Bytes;
 
         try {
@@ -4501,15 +4485,12 @@ public class NativeDevice
         } catch (DeviceNotAvailableException e) {
             CLog.e("Device %s isn't available when get fastboot serial number", getSerialNumber());
             CLog.e(e);
-            return getSerialNumber();
+            return null;
         }
 
         String net_interface = getHostOptions().getNetworkInterface();
         if (net_interface == null || macEui48Bytes == null) {
-            CLog.i(
-                    "Device %s's fastboot serial number is %s",
-                    getSerialNumber(), mFastbootSerialNumber);
-            return mFastbootSerialNumber;
+            return null;
         }
 
         // Create a link-local Inet6Address from the MAC address. The EUI-48 MAC address
@@ -4529,11 +4510,39 @@ public class NativeDevice
 
         try {
             String host_addr = Inet6Address.getByAddress(null, addr, 0).getHostAddress();
-            mFastbootSerialNumber = "tcp:" + host_addr.split("%")[0] + "%" + net_interface;
+            return "tcp:" + host_addr.split("%")[0] + "%" + net_interface;
         } catch (UnknownHostException e) {
             CLog.w("Failed to get %s's IPv6 link-local address", getSerialNumber());
             CLog.w(e);
         }
+
+        return null;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String getFastbootSerialNumber() {
+        if (mFastbootSerialNumber != null) {
+            return mFastbootSerialNumber;
+        }
+
+        // Only devices which use TCP adb have different fastboot serial number because IPv6
+        // link-local address will be used in fastboot mode.
+        if (!isAdbTcp()) {
+            mFastbootSerialNumber = getSerialNumber();
+            CLog.i(
+                    "Device %s's fastboot serial number is %s",
+                    getSerialNumber(), mFastbootSerialNumber);
+            return mFastbootSerialNumber;
+        }
+
+        mFastbootSerialNumber = getLinkLocalIpv6FastbootSerial();
+        if (mFastbootSerialNumber != null) {
+            return mFastbootSerialNumber;
+        }
+
+        // Fallback to the same serial over TCP. Used for emulator cases (i.e Cuttlefish).
+        mFastbootSerialNumber = "tcp:" + getSerialNumber();
 
         CLog.i(
                 "Device %s's fastboot serial number is %s",
