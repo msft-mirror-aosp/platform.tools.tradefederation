@@ -153,6 +153,7 @@ public class DeviceImageTracker {
                 CLog.d("Tracking device image as directory: %s", copyInCacheDeviceImage);
                 FileUtil.recursiveHardlink(deviceImage, copyInCacheDeviceImage);
             } else {
+                CLog.d("Tracking device image: %s", copyInCacheDeviceImage);
                 FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
             }
             FileUtil.hardlinkFile(bootloader, copyInCacheBootloader);

@@ -92,10 +92,6 @@ public class RemoteAndroidDevice extends TestDevice {
         return null;
     }
 
-    @Override
-    public String getFastbootSerialNumber() {
-        return "tcp:" + getSerialNumber();
-    }
 
     @Override
     public DeviceDescriptor getDeviceDescriptor(boolean shortDescriptor) {

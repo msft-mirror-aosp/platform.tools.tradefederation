@@ -58,6 +58,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.TerminalBuilder;
 
@@ -1039,6 +1040,9 @@ public class Console extends Thread {
             try {
                 return mConsoleReader.readLine(getConsolePrompt());
             } catch (EndOfFileException e) {
+                return null;
+            } catch (UserInterruptException e) {
+                printLine("\nInterrupted by User.Exiting.");
                 return null;
             }
         } else {
