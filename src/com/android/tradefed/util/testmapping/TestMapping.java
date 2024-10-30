@@ -713,7 +713,11 @@ public class TestMapping {
             Set<String> targetNames = getTestMappingSources(zipFile);
             validateSources(baseNames, targetNames, zipName);
             baseNames.addAll(targetNames);
-            ZipUtil2.extractZip(zipFile, baseDir);
+            if (zipFile.isDirectory()) {
+                FileUtil.recursiveHardlink(zipFile, baseDir);
+            } else {
+                ZipUtil2.extractZip(zipFile, baseDir);
+            }
         }
     }
 
@@ -743,26 +747,47 @@ public class TestMapping {
     @VisibleForTesting
     Set<String> getTestMappingSources(File zipFile) {
         Set<String> fileNames = new HashSet<>();
-        Enumeration<? extends ZipArchiveEntry> entries = null;
-        ZipFile f = null;
-        try {
-            f = new ZipFile(zipFile);
-            entries = f.getEntries();
-        } catch (IOException e) {
-            throw new RuntimeException(
-                    String.format(
-                            "IO exception (%s) when accessing test_mappings.zip (%s)",
-                            e.getMessage(), zipFile),
-                    e);
-        } finally {
-            ZipUtil2.closeZip(f);
-        }
-        while (entries.hasMoreElements()) {
-            ZipArchiveEntry entry = entries.nextElement();
-            // TODO: Temporarily exclude disabled-presubmit-test file. We'll need to revisit if that
-            // file is used on the older branch/target, if no, remove that file.
-            if (!entry.isDirectory() && !entry.getName().equals(DISABLED_PRESUBMIT_TESTS_FILE)) {
-                fileNames.add(entry.getName());
+        if (zipFile.isDirectory()) {
+            Path zipFileDir = Paths.get(zipFile.getAbsolutePath());
+            try (Stream<Path> stream = Files.walk(zipFileDir, FileVisitOption.FOLLOW_LINKS)) {
+                stream.filter(path -> path.getFileName().toString().equals(TEST_MAPPING))
+                        .forEach(
+                                path ->
+                                        fileNames.add(
+                                                zipFileDir
+                                                        .relativize(path.toAbsolutePath())
+                                                        .toString()));
+
+            } catch (IOException e) {
+                throw new RuntimeException(
+                        String.format(
+                                "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
+                                e.getMessage(), zipFile.getAbsolutePath()),
+                        e);
+            }
+        } else {
+            Enumeration<? extends ZipArchiveEntry> entries = null;
+            ZipFile f = null;
+            try {
+                f = new ZipFile(zipFile);
+                entries = f.getEntries();
+            } catch (IOException e) {
+                throw new RuntimeException(
+                        String.format(
+                                "IO exception (%s) when accessing test_mappings.zip (%s)",
+                                e.getMessage(), zipFile),
+                        e);
+            } finally {
+                ZipUtil2.closeZip(f);
+            }
+            while (entries.hasMoreElements()) {
+                ZipArchiveEntry entry = entries.nextElement();
+                // TODO: Temporarily exclude disabled-presubmit-test file. We'll need to revisit if
+                // that file is used on the older branch/target, if no, remove that file.
+                if (!entry.isDirectory()
+                        && !entry.getName().equals(DISABLED_PRESUBMIT_TESTS_FILE)) {
+                    fileNames.add(entry.getName());
+                }
             }
         }
         return fileNames;
