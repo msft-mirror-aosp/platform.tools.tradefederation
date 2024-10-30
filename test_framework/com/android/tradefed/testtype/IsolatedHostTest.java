@@ -589,7 +589,7 @@ public class IsolatedHostTest
 
     /** Add all files under {@code File} sorted by filename to {@code paths}. */
     private static void addAllFilesUnder(Set<File> paths, File parentDirectory) {
-        var files = parentDirectory.listFiles((f) -> f.isFile());
+        var files = parentDirectory.listFiles((f) -> f.isFile() && f.getName().endsWith(".jar"));
         Arrays.sort(files, Comparator.comparing(File::getName));
 
         for (File file : files) {
