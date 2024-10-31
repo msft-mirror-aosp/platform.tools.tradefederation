@@ -23,12 +23,15 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -98,7 +101,8 @@ public class OxygenClient {
                                     Collectors.toMap(data -> data[0], data -> data[1]),
                                     Collections::<String, String>unmodifiableMap));
 
-    protected IRunUtil getRunUtil() {
+    @VisibleForTesting
+    IRunUtil getRunUtil() {
         return mRunUtil;
     }
 
@@ -108,7 +112,8 @@ public class OxygenClient {
      * @param cmdArgs a {@link List<String>} of commands to run Oxygen client.
      * @param runUtil a {@link IRunUtil} to execute commands.
      */
-    public OxygenClient(List<String> cmdArgs, IRunUtil runUtil) {
+    @VisibleForTesting
+    OxygenClient(List<String> cmdArgs, IRunUtil runUtil) {
         mCmdArgs.addAll(cmdArgs);
         mRunUtil = runUtil;
     }
@@ -426,16 +431,20 @@ public class OxygenClient {
         oxygenClientArgs.add("-device_id");
         oxygenClientArgs.add(oxygenationDeviceId);
         try {
+            DateFormat dateFormat = new SimpleDateFormat("MM/dd/yy HH:mm:SS");
             CLog.i(
                     "Building %s tunnel from oxygen client with command %s...",
                     mode, oxygenClientArgs.toString());
-            tunnelLog.write(String.format("\n=== Beginning ===\n").getBytes());
             tunnelLog.write(
-                    String.format("\n=== Session id: %s, Server URL: %s===\n", sessionId, serverUrl)
+                    String.format(
+                                    "\n===[%s]Session id: %s, Server URL: %s===\n",
+                                    dateFormat.format(System.currentTimeMillis()),
+                                    sessionId,
+                                    serverUrl)
                             .getBytes());
             lhpTunnel = getRunUtil().runCmdInBackground(oxygenClientArgs, tunnelLog);
             // TODO(b/363861223): reduce the waiting time when LHP is stable.
-            getRunUtil().sleep(15 * 1000);
+            getRunUtil().sleep(30 * 1000);
         } catch (IOException e) {
             CLog.d("Failed connecting to remote GCE using %s over LHP, %s", mode, e.getMessage());
         }

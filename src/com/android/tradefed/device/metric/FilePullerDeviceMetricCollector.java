@@ -31,7 +31,8 @@ import java.io.IOException;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -47,12 +48,12 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
             name = "pull-pattern-keys",
             description =
                     "The pattern key name to be pull from the device as a file. Can be repeated.")
-    private Set<String> mKeys = new HashSet<>();
+    private Set<String> mKeys = new LinkedHashSet<>();
 
     @Option(
             name = "directory-keys",
             description = "Path to the directory on the device that contains the metrics.")
-    protected Set<String> mDirectoryKeys = new HashSet<>();
+    protected Set<String> mDirectoryKeys = new LinkedHashSet<>();
 
     @Option(name = "compress-directories",
             description = "Compress multiple files in the matching directory into zip file")
@@ -72,7 +73,8 @@ public abstract class FilePullerDeviceMetricCollector extends BaseDeviceMetricCo
                         + " synchronous."
     )
     private boolean mCollectOnRunEndedOnly = true;
-    public Map<String, String> mTestCaseMetrics = new HashMap<String, String>();
+
+    public Map<String, String> mTestCaseMetrics = new LinkedHashMap<String, String>();
 
     @Override
     public void onTestEnd(DeviceMetricData testData, Map<String, Metric> currentTestCaseMetrics)

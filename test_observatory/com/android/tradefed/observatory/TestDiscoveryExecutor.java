@@ -16,13 +16,10 @@
 
 package com.android.tradefed.observatory;
 
-import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.DdmPreferences;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
-import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationFactory;
 import com.android.tradefed.invoker.tracing.ActiveTrace;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracingLogger;
@@ -68,17 +65,10 @@ import java.util.stream.Collectors;
  * <p>
  */
 public class TestDiscoveryExecutor {
-
-    IConfigurationFactory getConfigurationFactory() {
-        return ConfigurationFactory.getInstance();
-    }
-
     private boolean mReportPartialFallback = false;
     private boolean mReportNoPossibleDiscovery = false;
 
-    private static boolean hasOutputResultFile() {
-        return System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null;
-    }
+    private static TestDiscoveryUtil mTestDiscoveryUtil;
 
     /**
      * An TradeFederation entry point that will use command args to discover test artifact
@@ -91,6 +81,14 @@ public class TestDiscoveryExecutor {
      *
      * <p>Expected arguments: [commands options] (config to run)
      */
+    public TestDiscoveryExecutor() {
+        mTestDiscoveryUtil = new TestDiscoveryUtil();
+    }
+
+    public TestDiscoveryExecutor(TestDiscoveryUtil testDiscoveryUtil) {
+        mTestDiscoveryUtil = testDiscoveryUtil;
+    }
+
     public static void main(String[] args) {
         long pid = ProcessHandle.current().pid();
         long tid = Thread.currentThread().getId();
@@ -100,7 +98,7 @@ public class TestDiscoveryExecutor {
         TestDiscoveryExecutor testDiscoveryExecutor = new TestDiscoveryExecutor();
         try (CloseableTraceScope ignored = new CloseableTraceScope("main_discovery")) {
             String testModules = testDiscoveryExecutor.discoverDependencies(args);
-            if (hasOutputResultFile()) {
+            if (mTestDiscoveryUtil.hasOutputResultFile()) {
                 FileUtil.writeToFile(
                         testModules, new File(System.getenv(TestDiscoveryInvoker.OUTPUT_FILE)));
             }
@@ -144,9 +142,9 @@ public class TestDiscoveryExecutor {
     public String discoverDependencies(String[] args)
             throws TestDiscoveryException, ConfigurationException, JSONException {
         // Create IConfiguration base on command line args.
-        IConfiguration config = getConfiguration(args);
+        IConfiguration config = mTestDiscoveryUtil.getConfiguration(args);
 
-        if (hasOutputResultFile()) {
+        if (mTestDiscoveryUtil.hasOutputResultFile()) {
             DdmPreferences.setLogLevel(LogLevel.VERBOSE.getStringValue());
             Log.setLogOutput(LogRegistry.getLogRegistry());
             StdoutLogger logger = new StdoutLogger();
@@ -186,26 +184,9 @@ public class TestDiscoveryExecutor {
                 return j.toString();
             }
         } finally {
-            if (hasOutputResultFile()) {
+            if (mTestDiscoveryUtil.hasOutputResultFile()) {
                 LogRegistry.getLogRegistry().unregisterLogger();
             }
-        }
-    }
-
-    /**
-     * Retrieve configuration base on command line args.
-     *
-     * @param args the command line args of the test.
-     * @return A {@link IConfiguration} which constructed based on command line args.
-     */
-    private IConfiguration getConfiguration(String[] args) throws ConfigurationException {
-        try (CloseableTraceScope ignored = new CloseableTraceScope("create_configuration")) {
-            IConfigurationFactory configurationFactory = getConfigurationFactory();
-            return configurationFactory.createPartialConfigurationFromArgs(
-                    args,
-                    new DryRunKeyStore(),
-                    Set.of(Configuration.TEST_TYPE_NAME, Configuration.TARGET_PREPARER_TYPE_NAME),
-                    null);
         }
     }
 
@@ -250,7 +231,8 @@ public class TestDiscoveryExecutor {
                     includeFilters.addAll(suiteIncludeFilters);
                 } else if (!moduleMetadataIncludeFilters.isEmpty()) {
                     String rootDirPath =
-                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                            mTestDiscoveryUtil.getEnvironment(
+                                    TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
                     boolean throwException = true;
                     if (rootDirPath != null) {
                         File rootDir = new File(rootDirPath);
@@ -274,7 +256,8 @@ public class TestDiscoveryExecutor {
                 } else if (MultiDeviceModuleStrategy.ONLY_MULTI_DEVICES.equals(
                         ((BaseTestSuite) test).getMultiDeviceStrategy())) {
                     String rootDirPath =
-                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                            mTestDiscoveryUtil.getEnvironment(
+                                    TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
                     boolean throwException = true;
                     if (rootDirPath != null) {
                         File rootDir = new File(rootDirPath);
@@ -296,7 +279,8 @@ public class TestDiscoveryExecutor {
                     }
                 } else if (!Strings.isNullOrEmpty(((BaseTestSuite) test).getRunSuiteTag())) {
                     String rootDirPath =
-                            getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+                            mTestDiscoveryUtil.getEnvironment(
+                                    TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
                     boolean throwException = true;
                     if (rootDirPath != null) {
                         File rootDir = new File(rootDirPath);
@@ -326,7 +310,7 @@ public class TestDiscoveryExecutor {
                 mReportNoPossibleDiscovery = true;
             }
             // Extract test module names from included filters.
-            if (hasOutputResultFile()) {
+            if (mTestDiscoveryUtil.hasOutputResultFile()) {
                 System.out.println(String.format("include filters: %s", includeFilters));
             }
             Set<String> moduleOnlyIncludeFilters =
@@ -371,7 +355,9 @@ public class TestDiscoveryExecutor {
      */
     private Set<String> findExtraConfigsParents(Set<String> moduleNames) {
         Set<String> parentModules = Collections.synchronizedSet(new HashSet<>());
-        String rootDirPath = getEnvironment(TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
+        String rootDirPath =
+                mTestDiscoveryUtil.getEnvironment(
+                        TestDiscoveryInvoker.ROOT_DIRECTORY_ENV_VARIABLE_KEY);
         if (rootDirPath == null) {
             CLog.w("root dir env not set.");
             return parentModules;
@@ -455,7 +441,8 @@ public class TestDiscoveryExecutor {
                                     f -> {
                                         try {
                                             IConfiguration c =
-                                                    getConfigurationFactory()
+                                                    mTestDiscoveryUtil
+                                                            .getConfigurationFactory()
                                                             .createPartialConfigurationFromArgs(
                                                                     new String[] {
                                                                         f.getAbsolutePath()
@@ -493,7 +480,8 @@ public class TestDiscoveryExecutor {
                                     f -> {
                                         try {
                                             IConfiguration c =
-                                                    getConfigurationFactory()
+                                                    mTestDiscoveryUtil
+                                                            .getConfigurationFactory()
                                                             .createPartialConfigurationFromArgs(
                                                                     new String[] {
                                                                         f.getAbsolutePath()
@@ -549,10 +537,5 @@ public class TestDiscoveryExecutor {
             System.err.println(e);
         }
         return null;
-    }
-
-    @VisibleForTesting
-    protected String getEnvironment(String var) {
-        return System.getenv(var);
     }
 }

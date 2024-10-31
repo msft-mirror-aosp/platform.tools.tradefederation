@@ -338,9 +338,7 @@ public class ArtRunTest
             }
 
             // If the test is a Checker test, run Checker and check its output.
-            // Do not run Checker tests in code coverage runs, as the Checker assumption might fail
-            // because of the added instrumentation code (see b/356852324).
-            if (mRunTestName.contains("-checker-") && !isJavaCoverageEnabled()) {
+            if (mRunTestName.contains("-checker-")) {
                 Optional<String> checkerError = executeCheckerTest(testInfo, listener);
                 checkerError.ifPresent(errors::add);
             }
@@ -509,6 +507,13 @@ public class ArtRunTest
             if (dex2oatResult.getStatus() != CommandStatus.SUCCESS) {
                 throw new AdbShellCommandException(
                         "Error while running dex2oat: %s", dex2oatResult.getStderr());
+            }
+
+            // Skip pulling the CFG file and running the Checker script if Java
+            // code coverage is enabled, as the Checker assumptions might fail
+            // because of the added instrumentation code (see b/356852324).
+            if (isJavaCoverageEnabled()) {
+                return Optional.empty();
             }
 
             tmpCheckerLocalDir =

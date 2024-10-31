@@ -57,7 +57,8 @@ public class KUnitModuleTestTest {
     private final CommandResult mSuccessResult;
     private final CommandResult mFailedResult;
 
-    private static final String MODULE_01 = "kunit-module-01.ko";
+    private static final String MODULE_01_KO = "kunit-module-01.ko";
+    private static final String MODULE_01 = "kunit-module-01";
     private static final String MODULE_NAME_01 = "kunit_module_01";
     private static final String KTAP_RESULTS_01 =
             "KTAP version 1\n"
@@ -76,7 +77,8 @@ public class KUnitModuleTestTest {
                     + "  ok 2 example_test_2\n"
                     + "ok 1 main_test_01\n";
 
-    private static final String MODULE_02 = "kunit-module-02.ko";
+    private static final String MODULE_02_KO = "kunit-module-02.ko";
+    private static final String MODULE_02 = "kunit-module-02";
     private static final String MODULE_NAME_02 = "kunit_module_02";
     private static final String KTAP_RESULTS_02 =
             "KTAP version 1\n"
@@ -129,8 +131,8 @@ public class KUnitModuleTestTest {
         mKUnitModuleTest.setDevice(mMockDevice);
 
         OptionSetter setter = new OptionSetter(mKUnitModuleTest);
-        setter.setOptionValue("binary", MODULE_NAME_01, MODULE_01);
-        setter.setOptionValue("binary", MODULE_NAME_02, MODULE_02);
+        setter.setOptionValue("binary", MODULE_NAME_01, MODULE_01_KO);
+        setter.setOptionValue("binary", MODULE_NAME_02, MODULE_02_KO);
         setter.setOptionValue("ktap-result-parser-resolution", "AGGREGATED_SUITE");
 
         // For 2 modules: first rmmod call expect fail, second rmmod call expect pass
@@ -195,13 +197,13 @@ public class KUnitModuleTestTest {
 
         // First module loads successfully
         when(mMockDevice.executeShellV2Command(
-                        startsWith(String.format(KUnitModuleTest.INSMOD_COMMAND_FMT, MODULE_01)),
+                        startsWith(String.format(KUnitModuleTest.INSMOD_COMMAND_FMT, MODULE_01_KO)),
                         anyLong(),
                         any()))
                 .thenReturn(mSuccessResult);
         // Second module set fail on load
         when(mMockDevice.executeShellV2Command(
-                        startsWith(String.format(KUnitModuleTest.INSMOD_COMMAND_FMT, MODULE_02)),
+                        startsWith(String.format(KUnitModuleTest.INSMOD_COMMAND_FMT, MODULE_02_KO)),
                         anyLong(),
                         any()))
                 .thenReturn(mFailedResult);

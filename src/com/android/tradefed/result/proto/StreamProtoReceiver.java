@@ -29,6 +29,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -155,16 +157,58 @@ public class StreamProtoReceiver implements Closeable {
         mEventReceiver.start();
     }
 
+    /** Internal thread class that will be parsing the test records asynchronously using a queue. */
+    private class EventParsingThread extends Thread {
+        private Queue<TestRecord> mTestRecordQueue;
+        private boolean mLastTestReceived = false;
+
+        public EventParsingThread(Queue<TestRecord> testRecordQueue) {
+            super("ProtoEventParsingThread");
+            setDaemon(true);
+            this.mTestRecordQueue = testRecordQueue;
+        }
+
+        public void notifyLastTestReceived() {
+            mLastTestReceived = true;
+        }
+
+        @Override
+        public void run() {
+            while (!(mLastTestReceived && mTestRecordQueue.isEmpty())) {
+                // if thread is interrupted, skip parsing events.
+                if (isInterrupted()) {
+                    CLog.d(
+                            "EventProcessingThread was interrupted. Skip parsing events. Skipped"
+                                    + " test record count: %d.",
+                            mTestRecordQueue.size());
+                    break;
+                }
+                if (!mTestRecordQueue.isEmpty()) {
+                    TestRecord currentTestRecord;
+                    synchronized (mTestRecordQueue) {
+                        currentTestRecord = mTestRecordQueue.poll();
+                    }
+                    parse(currentTestRecord);
+                }
+            }
+        }
+    }
+
     /** Internal receiver thread class with a socket. */
     private class EventReceiverThread extends Thread {
         private ServerSocket mSocket;
+        private Socket mClient;
         private CountDownLatch mCountDown;
+        private Queue<TestRecord> mTestRecordQueue;
+        EventParsingThread mEventParsingThread;
 
         public EventReceiverThread() throws IOException {
             super("ProtoEventReceiverThread");
             setDaemon(true);
             mSocket = new ServerSocket(DEFAULT_AVAILABLE_PORT);
             mCountDown = new CountDownLatch(1);
+            mTestRecordQueue = new LinkedList<>();
+            mEventParsingThread = new EventParsingThread(mTestRecordQueue);
         }
 
         protected int getLocalPort() {
@@ -179,22 +223,40 @@ public class StreamProtoReceiver implements Closeable {
             if (mSocket != null) {
                 mSocket.close();
             }
+            if (mClient != null) {
+                mClient.close();
+            }
+            if (mEventParsingThread.isAlive()) {
+                mEventParsingThread.interrupt();
+            }
         }
 
         @Override
         public void run() {
-            Socket client = null;
             try {
-                client = mSocket.accept();
+                mClient = mSocket.accept();
+                mEventParsingThread.start();
                 TestRecord received = null;
-                while ((received = TestRecord.parseDelimitedFrom(client.getInputStream()))
+                while ((received = TestRecord.parseDelimitedFrom(mClient.getInputStream()))
                         != null) {
-                    parse(received);
+                    synchronized (mTestRecordQueue) {
+                        mTestRecordQueue.add(received);
+                    }
+                }
+                // notify EventParsingThread of last test received so it can finish listening.
+                mEventParsingThread.notifyLastTestReceived();
+                // wait for the event parsing thread to finish
+                try {
+                    mEventParsingThread.join();
+                } catch (InterruptedException e) {
+                    // if EventReceiverThread is interrupted, interrupt the EventParsingThread
+                    mEventParsingThread.interrupt();
                 }
             } catch (IOException e) {
                 CLog.e(e);
+                mEventParsingThread.interrupt();
             } finally {
-                StreamUtil.close(client);
+                StreamUtil.close(mClient);
                 mCountDown.countDown();
             }
             CLog.d("ProtoEventReceiverThread done.");

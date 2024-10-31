@@ -15,14 +15,6 @@
  */
 package com.android.tradefed.testtype.binary;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -37,6 +29,15 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /** Test runner for running KUnit test modules on device. */
 @OptionClass(alias = "kunit-module-test")
@@ -54,6 +55,11 @@ public class KUnitModuleTest extends ExecutableTargetTest {
             String.format("%s/kunit", NativeDevice.DEBUGFS_PATH);
     public static final String KUNIT_RESULTS_FMT =
             String.format("%s/%%s/results", KUNIT_DEBUGFS_PATH);
+
+    /** Remove `.ko` extension if present */
+    private static String removeKoExtension(String s) {
+        return s.endsWith(".ko") ? s.substring(0, s.length() - 3) : s;
+    }
 
     /**
      * Return module name as it's displayed after loading.
@@ -76,10 +82,7 @@ public class KUnitModuleTest extends ExecutableTargetTest {
         }
 
         // Remove `.ko` extension if present
-        moduleName =
-                moduleName.endsWith(".ko")
-                        ? moduleName.substring(0, moduleName.length() - 3)
-                        : moduleName;
+        moduleName = removeKoExtension(moduleName);
 
         // Replace all '-' with '_'
         return moduleName.replace('-', '_');
@@ -97,6 +100,16 @@ public class KUnitModuleTest extends ExecutableTargetTest {
             throw new UnsupportedOperationException("collect-tests-only mode not support");
         }
         return false;
+    }
+
+    @Override
+    protected Map<String, String> getAllTestCommands() {
+        Map<String, String> originalTestCommands = super.getAllTestCommands();
+        Map<String, String> modifiedTestCommands = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : originalTestCommands.entrySet()) {
+            modifiedTestCommands.put(removeKoExtension(entry.getKey()), entry.getValue());
+        }
+        return modifiedTestCommands;
     }
 
     @Override
@@ -193,7 +206,8 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                         listener,
                         description.getTestName(),
                         ktapResultsList,
-                        mKTapResultParserResolution);
+                        mKTapResultParserResolution,
+                        true);
             } catch (RuntimeException exception) {
                 CLog.e("KTAP parse error: %s", exception.toString());
                 listener.testStarted(description);
