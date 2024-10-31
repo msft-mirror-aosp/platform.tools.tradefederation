@@ -227,6 +227,11 @@ public class TestDeviceOptions {
             description = "Use the new Connection descriptor for devices.")
     private boolean mEnableConnectionFeature = true;
 
+    @Option(
+            name = "adb-connect-wait-time",
+            description = "maximum time in ms to wait for a ADB connection.",
+            isTimeVal = true)
+    protected long mAdbConnectWaitTime = 2 * 60 * 1000;
     // ====================== Options Related to Virtual Devices ======================
     @Option(
             name = INSTANCE_TYPE_OPTION,
@@ -402,7 +407,7 @@ public class TestDeviceOptions {
     @Option(
             name = "use-cmd-wifi",
             description = "Feature flag to switch the wifi connection to using cmd commands.")
-    private boolean mUseCmdWifi = false;
+    private boolean mUseCmdWifi = true;
 
     @Option(name = "cmd-wifi-virtual", description = "Whether to use cmd wifi for virtual devices.")
     private boolean mCmdWifiVirtual = true;
@@ -1012,6 +1017,11 @@ public class TestDeviceOptions {
     /** Return whether or not we should use the new connection feature. */
     public boolean shouldUseConnection() {
         return mEnableConnectionFeature;
+    }
+
+    /** Return the timeout value in ms to be applied to ADB connection. */
+    public long getAdbConnectWaitTime() {
+        return mAdbConnectWaitTime;
     }
 
     public void setUseConnection(boolean useConnection) {

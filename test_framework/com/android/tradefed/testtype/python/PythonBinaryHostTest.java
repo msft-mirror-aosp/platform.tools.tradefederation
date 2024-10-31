@@ -15,20 +15,18 @@
  */
 package com.android.tradefed.testtype.python;
 
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
+
 import com.android.annotations.VisibleForTesting;
-import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
-import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.GlobalConfiguration;
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
@@ -38,7 +36,6 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.ResultForwarder;
-import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -47,7 +44,6 @@ import com.android.tradefed.testtype.TestTimeoutEnforcer;
 import com.android.tradefed.util.AdbUtils;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.CommandResult;
-import com.android.tradefed.util.DeviceActionUtil;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
@@ -83,8 +79,7 @@ import javax.annotation.Nullable;
  * exclude-filter will still be executed.
  */
 @OptionClass(alias = "python-host")
-public class PythonBinaryHostTest
-        implements IRemoteTest, ITestFilterReceiver, IConfigurationReceiver {
+public class PythonBinaryHostTest implements IRemoteTest, ITestFilterReceiver {
 
     protected static final String ANDROID_SERIAL_VAR = "ANDROID_SERIAL";
     protected static final String LD_LIBRARY_PATH = "LD_LIBRARY_PATH";
@@ -152,16 +147,16 @@ public class PythonBinaryHostTest
     private boolean mUseTestOutputFile = false;
 
     @Option(
-            name = "enable-cache",
-            description = "Used to enable/disable caching for specific modules.")
-    private boolean mEnableCache = false;
-
-    @Option(
             name = "inherit-env-vars",
             description =
                     "Whether the subprocess should inherit environment variables from the main"
                             + " process.")
     private boolean mInheritEnvVars = true;
+
+    @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
 
     @Option(
             name = TestTimeoutEnforcer.TEST_CASE_TIMEOUT_OPTION,
@@ -180,8 +175,6 @@ public class PythonBinaryHostTest
 
     private TestInformation mTestInfo;
     private IRunUtil mRunUtil;
-    private IConfiguration mConfiguration = new Configuration("", "");
-    private TestRunResultListener mTestRunResultListener;
 
     /** {@inheritDoc} */
     @Override
@@ -231,24 +224,16 @@ public class PythonBinaryHostTest
         return mExcludeFilters;
     }
 
-    /** {@inheritDoc} */
-    @Override
-    public void setConfiguration(IConfiguration configuration) {
-        mConfiguration = configuration;
-    }
-
     @Override
     public final void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        mTestRunResultListener = new TestRunResultListener();
-        listener = new ResultForwarder(listener, mTestRunResultListener);
         mTestInfo = testInfo;
         File testDir = mTestInfo.executionFiles().get(FilesKey.HOST_TESTS_DIRECTORY);
         if (testDir == null || !testDir.exists()) {
             testDir = mTestInfo.executionFiles().get(FilesKey.TESTS_DIRECTORY);
         }
         List<String> ldLibraryPath = new ArrayList<>();
-        if (testDir != null && testDir.exists()) {
+        if (!mUseMinimalSharedLibs && testDir != null && testDir.exists()) {
             List<String> libPaths =
                     Arrays.asList("lib", "lib64", "host/testcases/lib", "host/testcases/lib64");
             for (String path : libPaths) {
@@ -313,39 +298,26 @@ public class PythonBinaryHostTest
         File workingDir = pyFile.getParentFile();
         getRunUtil().setWorkingDir(workingDir);
         // Set the parent dir on the PATH
-        String separator = System.getProperty("path.separator");
         List<String> paths = new ArrayList<>();
-        // Link adb and aapt to working dir as default dependencies.
-        String runtimeDepsFolderName = "runtime_deps";
-        try {
-            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAdb());
-        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-            CLog.e("Failed to link adb to working dir %s", workingDir);
-            CLog.e(e);
-        }
-        try {
-            // This is for backward compatibility. Nowaday we only use aapt2, but in some older
-            // branches, such as git_tm-dev, aapt is still required.
-            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt());
-        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-            CLog.e("Failed to link aapt to working dir %s", workingDir);
-            CLog.e(e);
-        }
-        try {
-            RunUtil.linkFile(workingDir, runtimeDepsFolderName, getAapt2());
-        } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-            CLog.e("Failed to link aapt2 to working dir %s", workingDir);
-            CLog.e(e);
-        }
         // Bundle binaries / dependencies have priorities over existing PATH
-        paths.addAll(toRelative(workingDir, findAllSubdir(workingDir, new ArrayList<>())));
+        paths.addAll(findAllSubdir(pyFile.getParentFile(), new ArrayList<>()));
         paths.addAll(mAdditionalPaths);
         paths.add("/usr/bin");
-        String path = paths.stream().distinct().collect(Collectors.joining(separator));
+        // Adding aapt for backward compatibility. Nowaday we only use aapt2, but in some older
+        // branches, such as git_tm-dev, aapt is still required.
+        String path =
+                buildPath(
+                        Set.of(getAdb(), getAapt(), getAapt2()),
+                        paths.stream()
+                                .distinct()
+                                .collect(Collectors.joining(System.getProperty("path.separator"))));
         CLog.d("Using updated $PATH: %s", path);
         getRunUtil().setEnvVariablePriority(EnvPriority.SET);
         getRunUtil().setEnvVariable("PATH", path);
 
+        if (mUseMinimalSharedLibs) {
+            mLdLibraryPath = buildMinimalLdLibraryPath(workingDir, Arrays.asList("shared_libs"));
+        }
         if (mLdLibraryPath != null) {
             getRunUtil().setEnvVariable(LD_LIBRARY_PATH, mLdLibraryPath);
         }
@@ -405,15 +377,6 @@ public class PythonBinaryHostTest
         PythonUnitTestResultParser pythonParser =
                 new PythonUnitTestResultParser(
                         Arrays.asList(receiver), "python-run", mIncludeFilters, mExcludeFilters);
-        String instanceName =
-                mEnableCache
-                        ? mConfiguration.getCommandOptions().getRemoteCacheInstanceName()
-                        : null;
-        ICacheClient cacheClient =
-                Strings.isNullOrEmpty(instanceName)
-                        ? null
-                        : getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
-
         CommandResult result = null;
         File stderrFile = null;
         File stdoutFile = null;
@@ -424,21 +387,12 @@ public class PythonBinaryHostTest
             } else {
                 try (FileOutputStream fileOutputParser = new FileOutputStream(stderrFile)) {
                     result =
-                            cacheClient == null
-                                    ? getRunUtil()
-                                            .runTimedCmd(
-                                                    mTestTimeout,
-                                                    null,
-                                                    fileOutputParser,
-                                                    commandLine.toArray(new String[0]))
-                                    : getRunUtil()
-                                            .runTimedCmdWithOutputMonitor(
-                                                    mTestTimeout,
-                                                    0,
-                                                    null,
-                                                    fileOutputParser,
-                                                    cacheClient,
-                                                    commandLine.toArray(new String[0]));
+                            getRunUtil()
+                                    .runTimedCmd(
+                                            mTestTimeout,
+                                            null,
+                                            fileOutputParser,
+                                            commandLine.toArray(new String[0]));
                     fileOutputParser.flush();
                 }
             }
@@ -469,13 +423,6 @@ public class PythonBinaryHostTest
             }
             String testOutput = FileUtil.readStringFromFile(testOutputFile);
             pythonParser.processNewLines(testOutput.split("\n"));
-            if (!result.isCached() && !mTestRunResultListener.isTestRunFailed(runName)) {
-                getRunUtil()
-                        .uploadCache(
-                                cacheClient,
-                                ExecutableActionResult.create(
-                                        result.getExitCode(), stdoutFile, stderrFile));
-            }
         } catch (RuntimeException e) {
             StringBuilder message = new StringBuilder();
             String stderr = "";
@@ -549,18 +496,18 @@ public class PythonBinaryHostTest
     }
 
     @VisibleForTesting
-    File getAapt() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.findExecutableOnPath("aapt");
+    String getAapt() {
+        return "aapt";
     }
 
     @VisibleForTesting
-    File getAapt2() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.findExecutableOnPath("aapt2");
+    String getAapt2() {
+        return "aapt2";
     }
 
     @VisibleForTesting
-    File getAdb() throws DeviceActionUtil.DeviceActionConfigError {
-        return DeviceActionUtil.findExecutableOnPath("adb");
+    String getAdb() {
+        return "adb";
     }
 
     @VisibleForTesting
@@ -582,13 +529,6 @@ public class PythonBinaryHostTest
             }
         }
         return subDir;
-    }
-
-    private static List<String> toRelative(File start, List<String> paths) {
-        return paths.stream()
-                .map(p -> RunUtil.toRelative(start, p))
-                .sorted()
-                .collect(Collectors.toList());
     }
 
     private void reportFailure(

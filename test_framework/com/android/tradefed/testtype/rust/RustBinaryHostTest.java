@@ -15,40 +15,37 @@
  */
 package com.android.tradefed.testtype.rust;
 
-import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.ddmlib.IShellOutputReceiver;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
-import com.android.tradefed.result.ResultForwarder;
-import com.android.tradefed.result.TestRunResultListener;
 import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IBuildReceiver;
 import com.android.tradefed.util.CacheClientFactory;
+import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TestRunnerUtil;
-
-import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.IOException;
@@ -71,19 +68,19 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     private Set<String> mBinaryNames = new HashSet<>();
 
     @Option(
-            name = "enable-cache",
-            description = "Used to enable/disable caching for specific modules.")
-    private boolean mEnableCache = false;
-
-    @Option(
             name = "inherit-env-vars",
             description =
                     "Whether the subprocess should inherit environment variables from the main"
                             + " process.")
     private boolean mInheritEnvVars = true;
 
+    @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
+
+    private File mCoverageDir;
     private IBuildInfo mBuildInfo;
-    private TestRunResultListener mTestRunResultListener;
 
     @Override
     public void setBuild(IBuildInfo buildInfo) {
@@ -94,8 +91,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     public final void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
         try {
-            mTestRunResultListener = new TestRunResultListener();
-            listener = new ResultForwarder(listener, mTestRunResultListener);
             List<File> rustFilesList = findFiles();
             for (File file : rustFilesList) {
                 if (!file.exists()) {
@@ -169,7 +164,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                         }
                     }
                 }
-
             }
             if (res == null) {
                 throw new RuntimeException(
@@ -182,6 +176,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     private void runSingleRustFile(ITestInvocationListener listener, File file) {
         CLog.d("Run single Rust File: %s", file.getAbsolutePath());
+        String runName = file.getName();
         List<Invocation> invocations = generateInvocations(file);
 
         Set<String> foundTests = new HashSet<>();
@@ -191,7 +186,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 FailureDescription failure =
                         FailureDescription.create(
                                 "Could not count the number of tests", FailureStatus.TEST_FAILURE);
-                listener.testRunStarted(file.getName(), 0);
+                listener.testRunStarted(runName, 0);
                 listener.testRunFailed(failure);
                 listener.testRunEnded(0, new HashMap<String, Metric>());
                 CLog.e(failure.getErrorMessage());
@@ -201,16 +196,39 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
         int testCount = foundTests.size();
         CLog.d("Total test count: %d", testCount);
         long startTimeMs = System.currentTimeMillis();
-        listener.testRunStarted(file.getName(), testCount, 0, startTimeMs);
+        listener.testRunStarted(runName, testCount, 0, startTimeMs);
         if (testCount > 0) {
             for (Invocation invocation : invocations) {
+                File profdata = null;
                 try {
-                    runTest(listener, invocation, file.getName());
+                    runTest(listener, invocation, runName);
+                    if (isClangCoverageEnabled()) {
+                        Set<String> profraws = FileUtil.findFiles(mCoverageDir, ".*\\.profraw");
+                        ClangProfileIndexer indexer =
+                                new ClangProfileIndexer(
+                                        getConfiguration()
+                                                .getCoverageOptions()
+                                                .getLlvmProfdataPath());
+                        profdata = FileUtil.createTempFile(runName, ".profdata");
+                        indexer.index(profraws, profdata);
+
+                        try (FileInputStreamSource source =
+                                new FileInputStreamSource(profdata, true)) {
+                            listener.testLog(runName, LogDataType.CLANG_COVERAGE, source);
+                        }
+                    }
                 } catch (IOException e) {
                     listener.testRunFailed(e.getMessage());
                     long testTimeMs = System.currentTimeMillis() - startTimeMs;
                     listener.testRunEnded(testTimeMs, new HashMap<String, Metric>());
                     throw new RuntimeException(e);
+                } finally {
+                    if (isClangCoverageEnabled()) {
+                        FileUtil.deleteFile(profdata);
+                        FileUtil.recursiveDelete(mCoverageDir);
+                        mCoverageDir = null;
+                    }
+                    profdata = null;
                 }
             }
         }
@@ -219,7 +237,7 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     }
 
     private boolean countTests(Invocation invocation, Set<String> foundTests) {
-        CommandResult listResult = runInvocation(invocation, null, getRunUtil(), "--list");
+        CommandResult listResult = runInvocation(invocation, getRunUtil(), "--list");
         // TODO: Do we want to handle non-standard test harnesses without a
         // --list param? Currently we will report 0 tests, which will cause an
         // overall failure, but we don't know how to parse arbitrary test
@@ -239,7 +257,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
 
     private CommandResult runInvocation(
             final Invocation invocation,
-            ICacheClient cacheClient,
             IRunUtil runUtil,
             final String... extraArgs) {
         runUtil.setWorkingDir(invocation.workingDir);
@@ -252,40 +269,38 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
                 ldLibraryPathSetInEnv = true;
             }
         }
-        // Update LD_LIBRARY_PATH if it's not set already through command line args.
-        if (!ldLibraryPathSetInEnv) {
+        if (mUseMinimalSharedLibs) {
+            runUtil.setEnvVariable(
+                    "LD_LIBRARY_PATH",
+                    buildMinimalLdLibraryPath(invocation.workingDir, Arrays.asList("shared_libs")));
+        } else if (!ldLibraryPathSetInEnv) {
+            // Update LD_LIBRARY_PATH if it's not set already through command line args.
             String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(new File(invocation.command[0]));
             if (ldLibraryPath != null) {
                 runUtil.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
         }
-        runUtil.setEnvVariable(
-                "PATH",
-                buildPathWithRelativePaths(
-                        invocation.workingDir, Collections.singleton("adb"), "/usr/bin"));
+        if (isClangCoverageEnabled()) {
+            try {
+                mCoverageDir = FileUtil.createTempDir("clang");
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            runUtil.setEnvVariable(
+                    "LLVM_PROFILE_FILE", mCoverageDir.getAbsolutePath() + "/clang-%m.profraw");
+        }
+
+        runUtil.setEnvVariable("PATH", buildPath(Collections.singleton("adb"), ".:/usr/bin"));
         ArrayList<String> command = new ArrayList<String>(Arrays.asList(invocation.command));
         command.addAll(Arrays.asList(extraArgs));
-        return cacheClient == null
-                ? runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]))
-                : runUtil.runTimedCmdWithOutputMonitor(
-                        mTestTimeout, 0, null, null, cacheClient, command.toArray(new String[0]));
+        return runUtil.runTimedCmd(mTestTimeout, command.toArray(new String[0]));
     }
 
     private void runTest(
             ITestInvocationListener listener, final Invocation invocation, final String runName)
             throws IOException {
-
-        String instanceName =
-                mEnableCache
-                        ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
-                        : null;
-        ICacheClient cacheClient =
-                Strings.isNullOrEmpty(instanceName)
-                        ? null
-                        : getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
-
         IRunUtil runUtil = getRunUtil();
-        CommandResult result = runInvocation(invocation, cacheClient, runUtil);
+        CommandResult result = runInvocation(invocation, runUtil);
 
         if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             String message =
@@ -322,12 +337,6 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
             IShellOutputReceiver parser = createParser(listener, runName);
             parser.addOutput(result.getStdout().getBytes(), 0, result.getStdout().length());
             parser.flush();
-            if (!result.isCached() && !mTestRunResultListener.isTestRunFailed(runName)) {
-                runUtil.uploadCache(
-                        cacheClient,
-                        ExecutableActionResult.create(
-                                result.getExitCode(), stdoutFile, stderrFile));
-            }
         } catch (RuntimeException e) {
             listener.testRunFailed(
                     String.format("Failed to parse the rust test output: %s", e.getMessage()));
@@ -346,5 +355,10 @@ public class RustBinaryHostTest extends RustTestBase implements IBuildReceiver {
     @VisibleForTesting
     ICacheClient getCacheClient(File workFolder, String instanceName) {
         return CacheClientFactory.createCacheClient(workFolder, instanceName);
+    }
+
+    private boolean isClangCoverageEnabled() {
+        return getConfiguration().getCoverageOptions().isCoverageEnabled()
+                && getConfiguration().getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 }

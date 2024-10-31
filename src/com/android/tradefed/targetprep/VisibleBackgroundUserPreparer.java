@@ -16,6 +16,7 @@
 package com.android.tradefed.targetprep;
 
 import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -35,6 +36,13 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
 
     @VisibleForTesting public static final int INVALID_DISPLAY = -1; // same as android.view.Display
     @VisibleForTesting public static final int DEFAULT_DISPLAY = 0; // same as android.view.Display
+
+    /**
+     * Property used to indicate whether to install test apk for all users.
+     * TODO: b/367468564 - Remove this property once we have fixed the tests so that
+     * installation for the system user is no longer required
+     */
+    static final String INSTALL_TEST_APK_FOR_ALL_USERS = "INSTALL_TEST_APK_FOR_ALL_USERS";
 
     @Option(
             name = "reuse-test-user",
@@ -131,6 +139,9 @@ public class VisibleBackgroundUserPreparer extends BaseTargetPreparer {
 
         CLog.i("Setting test property %s=%d", RUN_TESTS_AS_USER_KEY, mUserId);
         testInfo.properties().put(RUN_TESTS_AS_USER_KEY, Integer.toString(mUserId));
+        // TODO: b/367468564 - Remove this property once we have fixed the tests so that
+        // installation for the system user is no longer required
+        testInfo.properties().put(INSTALL_TEST_APK_FOR_ALL_USERS, "true");
     }
 
     @Override

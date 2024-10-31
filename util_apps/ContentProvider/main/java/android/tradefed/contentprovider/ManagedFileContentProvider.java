@@ -130,7 +130,6 @@ public class ManagedFileContentProvider extends ContentProvider {
 
     @Override
     public Uri insert(Uri uri, ContentValues contentValues) {
-        String extra = "";
         File file = getFileForUri(uri);
         if (!file.exists()) {
             Log.e(TAG, String.format("Insert - File from uri: '%s' does not exists.", uri));
