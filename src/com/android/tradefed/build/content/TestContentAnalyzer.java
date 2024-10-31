@@ -158,8 +158,19 @@ public class TestContentAnalyzer {
             return null;
         }
         diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
-        return mapDiffsToModule(
-                context.contentEntry(), diffs, build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
+        ContentAnalysisResults results =
+                mapDiffsToModule(
+                        context.contentEntry(),
+                        diffs,
+                        build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
+        if (results != null) {
+            if (!context.commonLocations().isEmpty()) {
+                results.addImageDigestMapping(
+                        context.contentEntry() + "_common_location",
+                        ContentMerkleTree.buildCommonLocationFromContext(context));
+            }
+        }
+        return results;
     }
 
     private ContentAnalysisResults mapDiffsToModule(
@@ -182,7 +193,7 @@ public class TestContentAnalyzer {
         }
         File testcasesRoot = FileUtil.findFile(rootDir, "testcases");
         if (testcasesRoot == null) {
-            CLog.e("Could find a testcases directory, something went wrong.");
+            CLog.e("Couldn't find a testcases directory, something went wrong.");
             return null;
         }
         for (String depFile : dependencyFiles) {

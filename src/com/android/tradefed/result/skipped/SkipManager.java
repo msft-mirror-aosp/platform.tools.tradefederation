@@ -16,6 +16,8 @@
 package com.android.tradefed.result.skipped;
 
 import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
+import com.android.tradefed.build.content.ContentModuleLister;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -164,6 +166,24 @@ public class SkipManager implements IDisableable {
     /** Reports whether we should skip the current invocation. */
     public boolean shouldSkipInvocation(TestInformation information) {
         // Build heuristic for skipping invocation
+        if (!mNoTestsDiscovered && !mModulesDiscovered.isEmpty()) {
+            Set<String> possibleModules = new HashSet<>();
+            for (ContentAnalysisContext context : mTestArtifactsAnalysisContent) {
+                if (context.analysisMethod().equals(AnalysisMethod.SANDBOX_WORKDIR)) {
+                    possibleModules.addAll(ContentModuleLister.buildModuleList(context));
+                }
+            }
+            if (!possibleModules.isEmpty()) {
+                CLog.d("Module existing in the zips: %s", possibleModules);
+                Set<String> runnableModules = new HashSet<String>(mModulesDiscovered);
+                runnableModules.retainAll(possibleModules);
+                if (runnableModules.isEmpty()) {
+                    mNoTestsDiscovered = true;
+                    CLog.d("discovered modules '%s' do not exists in zips.", mModulesDiscovered);
+                }
+            }
+        }
+
         if (mNoTestsDiscovered) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.SKIP_NO_TESTS_DISCOVERED, 1);
@@ -177,6 +197,7 @@ public class SkipManager implements IDisableable {
                 return false;
             }
         }
+
         ArtifactsAnalyzer analyzer =
                 new ArtifactsAnalyzer(
                         information,
