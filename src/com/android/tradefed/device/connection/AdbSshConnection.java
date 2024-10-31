@@ -170,7 +170,9 @@ public class AdbSshConnection extends AdbTcpConnection {
                     break;
                 }
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-                waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+                waitForAdbConnect(
+                        getDevice().getSerialNumber(),
+                        getDevice().getOptions().getAdbConnectWaitTime());
             }
         } finally {
             getDevice().setRecoveryMode(previousMode);
@@ -229,7 +231,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getGceTunnelMonitor().closeConnection();
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-                waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+                waitForAdbConnect(serial, getDevice().getOptions().getAdbConnectWaitTime());
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.DEVICE_RECOVERED_FROM_SSH_TUNNEL, 1);
             } catch (Exception e) {
@@ -843,7 +845,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                     identifier);
         }
         try {
-            waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+            waitForAdbConnect(
+                    getDevice().getSerialNumber(), getDevice().getOptions().getAdbConnectWaitTime());
             getDevice().waitForDeviceOnline(WAIT_FOR_DEVICE_ONLINE);
         } catch (DeviceNotAvailableException e) {
             CLog.e("%s", e.toString());
