@@ -40,21 +40,25 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     public static final String INVOCATION_ID_KEY = "invocation_id";
     private boolean mStopCache = false;
     private String mInvocationId = null;
+    private boolean mGranularResults = false;
 
     public ModuleProtoResultReporter() {
         setPeriodicWriting(false);
         setDelimitedOutput(false);
     }
 
-    public ModuleProtoResultReporter(IInvocationContext mainInvocationContext) {
+    public ModuleProtoResultReporter(
+            IInvocationContext mainInvocationContext, boolean granularResults) {
         this();
         copyAttributes(mainInvocationContext);
+        mGranularResults = granularResults;
     }
 
     @Override
     protected void beforeModuleStart() {
         IInvocationContext stubContext = new InvocationContext();
         if (mInvocationId != null) {
+            CLog.d("Copying property into module results: %s", mInvocationId);
             stubContext.addInvocationAttribute(INVOCATION_ID_KEY, mInvocationId);
         }
         invocationStarted(stubContext);
@@ -67,7 +71,9 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
     @Override
     public void processTestCaseEnded(TestRecord testCaseRecord) {
-        super.processTestCaseEnded(testCaseRecord);
+        if (mGranularResults) {
+            super.processTestCaseEnded(testCaseRecord);
+        }
         if (testCaseRecord.getStatus().equals(TestStatus.FAIL)) {
             mStopCache = true;
         }
@@ -75,7 +81,9 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
     @Override
     public void processTestRunEnded(TestRecord runRecord, boolean moduleInProgress) {
-        super.processTestRunEnded(runRecord, moduleInProgress);
+        if (mGranularResults) {
+            super.processTestRunEnded(runRecord, moduleInProgress);
+        }
         if (runRecord.hasDebugInfo()) {
             mStopCache = true;
         }
@@ -103,6 +111,7 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     /** Parsing util to extract metadata we might have transferred */
     public static Map<String, String> parseResultsMetadata(File protoResults) {
         if (protoResults == null) {
+            CLog.w("Proto result file is null, cannot parse it.");
             return new HashMap<>();
         }
         try {
@@ -113,7 +122,9 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
             }
             IInvocationContext receivedContext =
                     InvocationContext.fromProto(anyDescription.unpack(Context.class));
-            return receivedContext.getAttributes().getUniqueMap();
+            Map<String, String> receivedAttributes = receivedContext.getAttributes().getUniqueMap();
+            CLog.d("Attributes received from cached results: %s", receivedAttributes);
+            return receivedAttributes;
         } catch (IOException | RuntimeException e) {
             CLog.e(e);
         }

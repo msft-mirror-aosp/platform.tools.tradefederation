@@ -48,6 +48,7 @@ public final class LockSettingsBaselineSetterTest {
     private static final String LOCK_SCREEN_OFF_COMMAND = "locksettings set-disabled true";
     private static final String CLEAR_PWD_COMMAND = "locksettings clear --old %s";
     private static final String KEYCODE_MENU_COMMAND = "input keyevent KEYCODE_MENU";
+    private static final String KEYCODE_HOME_COMMAND = "input keyevent KEYCODE_HOME";
 
     @Before
     public void setup() throws Exception {
@@ -72,6 +73,8 @@ public final class LockSettingsBaselineSetterTest {
                 .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, "true"));
         when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
                 .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
+        when(mMockDevice.executeShellV2Command(KEYCODE_HOME_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
         assertTrue(mSetter.setBaseline(mMockDevice));
         verify(mMockDevice, never()).executeShellV2Command(LOCK_SCREEN_OFF_COMMAND);
         verify(mMockDevice, never())
@@ -89,6 +92,8 @@ public final class LockSettingsBaselineSetterTest {
                         getMockCommandResult(CommandStatus.SUCCESS, "true"));
         when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
                 .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
+        when(mMockDevice.executeShellV2Command(KEYCODE_HOME_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
         assertTrue(mSetter.setBaseline(mMockDevice));
         verify(mMockDevice).executeShellV2Command(LOCK_SCREEN_OFF_COMMAND);
         verify(mMockDevice).executeShellV2Command(String.format(CLEAR_PWD_COMMAND, "0000"));
@@ -102,6 +107,8 @@ public final class LockSettingsBaselineSetterTest {
                 .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, "false"));
         when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
                 .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
+        when(mMockDevice.executeShellV2Command(KEYCODE_HOME_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
         assertFalse(mSetter.setBaseline(mMockDevice));
     }
 
@@ -111,6 +118,20 @@ public final class LockSettingsBaselineSetterTest {
         when(mMockDevice.executeShellV2Command(GET_LOCK_SCREEN_COMMAND))
                 .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, "true"));
         when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.FAILED, null));
+        when(mMockDevice.executeShellV2Command(KEYCODE_HOME_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
+        assertFalse(mSetter.setBaseline(mMockDevice));
+    }
+
+    /** Test that the setter returns false when the baseline is failed to input KEYCODE_HOME. */
+    @Test
+    public void setBaseline_inputKeycodeHomeFails_returnFalse() throws Exception {
+        when(mMockDevice.executeShellV2Command(GET_LOCK_SCREEN_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, "true"));
+        when(mMockDevice.executeShellV2Command(KEYCODE_MENU_COMMAND))
+                .thenReturn(getMockCommandResult(CommandStatus.SUCCESS, null));
+        when(mMockDevice.executeShellV2Command(KEYCODE_HOME_COMMAND))
                 .thenReturn(getMockCommandResult(CommandStatus.FAILED, null));
         assertFalse(mSetter.setBaseline(mMockDevice));
     }

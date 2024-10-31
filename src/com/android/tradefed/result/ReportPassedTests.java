@@ -26,6 +26,7 @@ import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,6 +37,7 @@ import java.util.Map.Entry;
 public class ReportPassedTests extends CollectingTestListener
         implements IConfigurationReceiver, ISupportGranularResults {
 
+    private static final int MAX_TEST_CASES_BATCH = 500;
     private static final String PASSED_TEST_LOG = "passed_tests";
     private boolean mInvocationFailed = false;
     private ITestLogger mLogger;
@@ -131,16 +133,8 @@ public class ReportPassedTests extends CollectingTestListener
         if (mLogger == null || mPassedTests == null) {
             return;
         }
-        StringBuilder sb = new StringBuilder();
         for (TestRunResult result : getMergedTestRunResults()) {
-            sb.append(createFilters(result, getBaseName(result), false));
-        }
-        if (sb.length() > 0) {
-            try {
-                FileUtil.writeToFile(sb.toString(), mPassedTests, true);
-            } catch (IOException e) {
-                CLog.e(e);
-            }
+            gatherPassedTests(result, getBaseName(result), false);
         }
         if (mPassedTests.length() == 0) {
             CLog.d("No new filter for passed_test");
@@ -166,7 +160,7 @@ public class ReportPassedTests extends CollectingTestListener
         }
     }
 
-    private String createFilters(
+    private void gatherPassedTests(
             TestRunResult runResult, String baseName, boolean invocationFailure) {
         if (mShardIndex != null) {
             baseName = "shard_" + mShardIndex + " " + baseName;
@@ -175,8 +169,10 @@ public class ReportPassedTests extends CollectingTestListener
         if (!runResult.hasFailedTests() && !runResult.isRunFailure() && !invocationFailure) {
             sb.append(baseName);
             sb.append("\n");
-            return sb.toString();
+            writeToFile(sb.toString());
+            return;
         }
+        int i = 0;
         for (Entry<TestDescription, TestResult> res : runResult.getTestResults().entrySet()) {
             if (TestStatus.FAILURE.equals(res.getValue().getResultStatus())) {
                 continue;
@@ -187,19 +183,22 @@ public class ReportPassedTests extends CollectingTestListener
             }
             sb.append(baseName + " " + res.getKey().toString());
             sb.append("\n");
+            i++;
+            if (i > MAX_TEST_CASES_BATCH) {
+                writeToFile(sb.toString());
+                sb = new StringBuilder();
+                i = 0;
+            }
         }
-        return sb.toString();
+        writeToFile(sb.toString());
     }
 
-    private void gatherPassedTests(
-            TestRunResult runResult, String baseName, boolean invocationFailure) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(createFilters(runResult, baseName, invocationFailure));
-        if (sb.length() == 0L) {
+    private void writeToFile(String toWrite) {
+        if (Strings.isNullOrEmpty(toWrite)) {
             return;
         }
         try {
-            FileUtil.writeToFile(sb.toString(), mPassedTests, true);
+            FileUtil.writeToFile(toWrite, mPassedTests, true);
         } catch (IOException e) {
             CLog.e(e);
         }

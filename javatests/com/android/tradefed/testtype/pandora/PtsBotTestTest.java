@@ -18,9 +18,6 @@ package com.android.tradefed.testtype.pandora;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
@@ -64,7 +61,6 @@ public class PtsBotTestTest {
 
     @Test
     public void testParse_configFlagsFile() throws Exception {
-        Mockito.doReturn(true).when(mSpyTest).getBluetoothFlag(any(), anyString());
         String flag = "baguette_flag";
         String jsonString =
                 String.format(
@@ -77,10 +73,8 @@ public class PtsBotTestTest {
         assertThat(config.flags).isNotEmpty();
         assertThat(config.flags.get(0).flags).containsExactly(flag);
         assertThat(config.flags.get(0).tests).containsExactly("test1", "test2");
-        assertThat(mSpyTest.getFlagsDefaultValues().get(flag)).isTrue();
 
         mSpyTest.getTestFlagConfiguration().flags.clear();
-        mSpyTest.getFlagsDefaultValues().clear();
     }
 
     @Test
@@ -91,8 +85,5 @@ public class PtsBotTestTest {
         mSpyTest.initFlagsConfig(mMockDevice, mConfigFlagsFile);
 
         assertThat(mSpyTest.getTestFlagConfiguration().flags).isEmpty();
-        assertThat(mSpyTest.getFlagsDefaultValues()).isEmpty();
-
-        mSpyTest.getFlagsDefaultValues().clear();
     }
 }

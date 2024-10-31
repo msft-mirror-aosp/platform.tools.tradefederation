@@ -31,7 +31,7 @@ import java.util.List;
 /** Compute a MerkleTree from the device content information. */
 public class DeviceMerkleTree {
 
-    /** Builds a merkle tree and returns the root digest from the device content informaton */
+    /** Builds a merkle tree and returns the root digest from the device content information */
     public static Digest buildFromContext(ContentAnalysisContext context) {
         try {
             ArtifactDetails currentContent =

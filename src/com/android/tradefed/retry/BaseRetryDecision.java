@@ -26,6 +26,7 @@ import com.android.tradefed.device.internal.DeviceResetHandler;
 import com.android.tradefed.device.internal.DeviceSnapshotHandler;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
@@ -195,7 +196,7 @@ public class BaseRetryDecision
             // No need to retry if it reaches the maximum retry count.
             return decision;
         }
-        if (mSkipRetryInPresubmit && "WORK_NODE".equals(mContext.getAttribute("trigger"))) {
+        if (mSkipRetryInPresubmit && InvocationContext.isPresubmit(mContext)) {
             CLog.d("Skipping retry due to --skip-retry-in-presubmit");
             return decision;
         }
@@ -264,7 +265,7 @@ public class BaseRetryDecision
             mPreviouslyFailing = new HashSet<>();
         }
 
-        if (mSkipRetryInPresubmit && "WORK_NODE".equals(mContext.getAttribute("trigger"))) {
+        if (mSkipRetryInPresubmit && InvocationContext.isPresubmit(mContext)) {
             CLog.d("Skipping retry due to --skip-retry-in-presubmit");
             return false;
         }
@@ -596,22 +597,7 @@ public class BaseRetryDecision
         for (TestDescription testCase : passedTests) {
             String filter = String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
             if (test instanceof ITestFileFilterReceiver) {
-                File excludeFilterFile = ((ITestFileFilterReceiver) test).getExcludeTestFile();
-                if (excludeFilterFile == null) {
-                    try {
-                        excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
-                    } catch (IOException e) {
-                        throw new HarnessRuntimeException(
-                                e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
-                    }
-                    ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
-                }
-                try {
-                    FileUtil.writeToFile(filter + "\n", excludeFilterFile, true);
-                } catch (IOException e) {
-                    CLog.e(e);
-                    continue;
-                }
+                addFilterToExcludeFilterFile((ITestFileFilterReceiver) test, filter);
             } else {
                 test.addExcludeFilter(filter);
             }
@@ -634,14 +620,22 @@ public class BaseRetryDecision
                 // If a test case failure is not retriable, exclude it from the filters.
                 String filter =
                         String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
-                test.addExcludeFilter(filter);
+                if (test instanceof ITestFileFilterReceiver) {
+                    addFilterToExcludeFilterFile((ITestFileFilterReceiver) test, filter);
+                } else {
+                    test.addExcludeFilter(filter);
+                }
                 failedTests.remove(testCase);
             }
             if (skipListForModule.contains(testCase.toString())) {
                 // If a test case failure is excluded from retry, exclude it
                 String filter =
                         String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
-                test.addExcludeFilter(filter);
+                if (test instanceof ITestFileFilterReceiver) {
+                    addFilterToExcludeFilterFile((ITestFileFilterReceiver) test, filter);
+                } else {
+                    test.addExcludeFilter(filter);
+                }
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.RETRY_TEST_SKIPPED_COUNT, 1);
                 failedTests.remove(testCase);
@@ -650,6 +644,24 @@ public class BaseRetryDecision
         }
 
         return failedTests.isEmpty();
+    }
+
+    private void addFilterToExcludeFilterFile(ITestFileFilterReceiver test, String filter) {
+        File excludeFilterFile = test.getExcludeTestFile();
+        if (excludeFilterFile == null) {
+            try {
+                excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
+            } catch (IOException e) {
+                throw new HarnessRuntimeException(
+                        e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+            }
+            ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
+        }
+        try {
+            FileUtil.writeToFile(filter + "\n", excludeFilterFile, true);
+        } catch (IOException e) {
+            CLog.e(e);
+        }
     }
 
     /** Returns all the non-stub device associated with the {@link IRemoteTest}. */

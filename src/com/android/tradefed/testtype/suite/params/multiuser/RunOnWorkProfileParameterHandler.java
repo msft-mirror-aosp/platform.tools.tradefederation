@@ -23,7 +23,7 @@ public class RunOnWorkProfileParameterHandler extends ProfileParameterHandler
         implements IModuleParameterHandler {
 
     private static final String REQUIRE_RUN_ON_WORK_PROFILE_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnWorkProfile";
+            "com.android.bedstead.enterprise.annotations.RequireRunOnWorkProfile";
 
     public RunOnWorkProfileParameterHandler() {
         super(REQUIRE_RUN_ON_WORK_PROFILE_NAME, new RunOnWorkProfileTargetPreparer());

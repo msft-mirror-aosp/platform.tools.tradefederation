@@ -45,7 +45,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Set;
 
 @RunWith(JUnit4.class)
@@ -53,10 +52,6 @@ public class DefaultTestsZipInstallerTest {
     private static final String SKIP_THIS = "skipThis";
 
     private static final String TEST_STRING = "foo";
-
-    private static final File SOME_PATH_1 = new File("/some/path/1");
-
-    private static final File SOME_PATH_2 = new File("/some/path/2");
 
     @Mock ITestDevice mMockDevice;
     private IDeviceBuildInfo mDeviceBuild;
@@ -72,14 +67,6 @@ public class DefaultTestsZipInstallerTest {
                     @Override
                     File[] getTestsZipDataFiles(File hostDir, ITestDevice device) {
                         return new File[] {new File(TEST_STRING)};
-                    }
-
-                    @Override
-                    Set<File> findDirs(File hostDir, File deviceRootPath) {
-                        Set<File> files = new HashSet<File>(2);
-                        files.add(SOME_PATH_1);
-                        files.add(SOME_PATH_2);
-                        return files;
                     }
 
                     @Override
@@ -165,10 +152,8 @@ public class DefaultTestsZipInstallerTest {
                 .thenReturn(Boolean.TRUE);
 
         when(mMockDevice.executeShellCommand(
-                        Mockito.startsWith("chown system.system " + SOME_PATH_1.getPath())))
-                .thenReturn("");
-        when(mMockDevice.executeShellCommand(
-                        Mockito.startsWith("chown system.system " + SOME_PATH_2.getPath())))
+                        Mockito.startsWith(
+                                "chown -R system.system " + FileListingService.DIRECTORY_DATA)))
                 .thenReturn("");
 
         mZipInstaller.pushTestsZipOntoData(mMockDevice, mDeviceBuild);

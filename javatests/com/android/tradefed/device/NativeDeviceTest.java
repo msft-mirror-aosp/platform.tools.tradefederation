@@ -470,6 +470,12 @@ public class NativeDeviceTest {
                     }
 
                     @Override
+                    public boolean doesFileExist(String deviceFilePath, int userId)
+                            throws DeviceNotAvailableException {
+                        return true;
+                    }
+
+                    @Override
                     public int getCurrentUser() throws DeviceNotAvailableException {
                         return 0;
                     }
@@ -515,6 +521,12 @@ public class NativeDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "drwxr-xr-x root     root    somedirectory";
+                    }
+
+                    @Override
+                    public boolean doesFileExist(String deviceFilePath, int userId)
+                            throws DeviceNotAvailableException {
+                        return true;
                     }
 
                     @Override
@@ -590,6 +602,12 @@ public class NativeDeviceTest {
                     }
 
                     @Override
+                    public boolean doesFileExist(String deviceFilePath, int userId)
+                            throws DeviceNotAvailableException {
+                        return true;
+                    }
+
+                    @Override
                     protected boolean pullFileInternal(String remoteFilePath, File localFile)
                             throws DeviceNotAvailableException {
                         if (mFirstPull) {
@@ -661,6 +679,12 @@ public class NativeDeviceTest {
                     public String executeShellCommand(String command)
                             throws DeviceNotAvailableException {
                         return "-rwxr-xr-x root     root    somefile";
+                    }
+
+                    @Override
+                    public boolean doesFileExist(String deviceFilePath, int userId)
+                            throws DeviceNotAvailableException {
+                        return true;
                     }
 
                     @Override
@@ -878,6 +902,23 @@ public class NativeDeviceTest {
     /** Unit test for {@link NativeDevice#connectToWifiNetwork(String, String)}. */
     @Test
     public void testConnectToWifiNetwork_success() throws DeviceNotAvailableException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         when(mMockWifi.connectToNetwork(
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
@@ -895,6 +936,23 @@ public class NativeDeviceTest {
     /** Unit test for {@link NativeDevice#connectToWifiNetwork(Map<String, String>)}. */
     @Test
     public void testConnectToWifiNetworkGivenMap_success() throws DeviceNotAvailableException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         when(mMockWifi.connectToNetwork(
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
@@ -917,6 +975,23 @@ public class NativeDeviceTest {
      */
     @Test
     public void testConnectToWifiNetwork_failure() throws DeviceNotAvailableException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         when(mMockWifi.connectToNetwork(
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
@@ -947,6 +1022,23 @@ public class NativeDeviceTest {
      */
     @Test
     public void testConnectToWifiNetworkGivenMap_failure() throws DeviceNotAvailableException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         when(mMockWifi.connectToNetwork(
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
@@ -980,6 +1072,23 @@ public class NativeDeviceTest {
     @Test
     public void testConnectToWifiNetwork_maxConnectTime()
             throws DeviceNotAvailableException, ConfigurationException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         OptionSetter deviceOptionSetter = new OptionSetter(mTestDevice.getOptions());
         deviceOptionSetter.setOptionValue("max-wifi-connect-time", "10000");
         Clock mockClock = Mockito.mock(Clock.class);
@@ -1016,6 +1125,23 @@ public class NativeDeviceTest {
     @Test
     public void testConnectToWifiNetworkGivenMap_maxConnectTime()
             throws DeviceNotAvailableException, ConfigurationException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         OptionSetter deviceOptionSetter = new OptionSetter(mTestDevice.getOptions());
         deviceOptionSetter.setOptionValue("max-wifi-connect-time", "10000");
         Clock mockClock = Mockito.mock(Clock.class);
@@ -1050,6 +1176,23 @@ public class NativeDeviceTest {
     /** Unit test for {@link NativeDevice#connectToWifiNetwork(String, String, boolean)}. */
     @Test
     public void testConnectToWifiNetwork_scanSsid() throws DeviceNotAvailableException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         when(mMockWifi.connectToNetwork(
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
@@ -1068,6 +1211,23 @@ public class NativeDeviceTest {
     /** Unit test for {@link NativeDevice#connectToWifiNetwork(Map<String, String>, boolean)}. */
     @Test
     public void testConnectToWifiNetworkGivenMap_scanSsid() throws DeviceNotAvailableException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         when(mMockWifi.connectToNetwork(
                         FAKE_NETWORK_SSID,
                         FAKE_NETWORK_PASSWORD,
@@ -1125,6 +1285,23 @@ public class NativeDeviceTest {
     /** Unit test for {@link NativeDevice#disconnectFromWifi()}. */
     @Test
     public void testDisconnectFromWifi() throws DeviceNotAvailableException {
+        mTestDevice =
+                new TestableAndroidNativeDevice() {
+                    @Override
+                    public boolean enableAdbRoot() throws DeviceNotAvailableException {
+                        return false;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper() throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+
+                    @Override
+                    IWifiHelper createWifiHelper(boolean useV2) throws DeviceNotAvailableException {
+                        return mMockWifi;
+                    }
+                };
         when(mMockWifi.disconnectFromNetwork()).thenReturn(true);
 
         assertTrue(mTestDevice.disconnectFromWifi());
