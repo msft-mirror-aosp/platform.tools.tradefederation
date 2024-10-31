@@ -15,19 +15,19 @@
  */
 package com.android.tradefed.testtype.binary;
 
-import static com.android.tradefed.util.EnvironmentVariableUtil.buildPathWithRelativePaths;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildMinimalLdLibraryPath;
+import static com.android.tradefed.util.EnvironmentVariableUtil.buildPath;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IDeviceBuildInfo;
-import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
 import com.android.tradefed.config.GlobalConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.StubDevice;
-import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.FailureDescription;
@@ -48,14 +48,14 @@ import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.TestRunnerUtil;
 
-import com.google.common.base.Strings;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Test runner for executable running on the host. The runner implements {@link IDeviceTest} since
@@ -79,16 +79,16 @@ public class ExecutableHostTest extends ExecutableBaseTest {
     private boolean mExecuteRelativeToScript = false;
 
     @Option(
-            name = "enable-cache",
-            description = "Used to enable/disable caching for specific modules.")
-    private boolean mEnableCache = false;
-
-    @Option(
             name = "inherit-env-vars",
             description =
                     "Whether the subprocess should inherit environment variables from the main"
                             + " process.")
     private boolean mInheritEnvVars = true;
+
+    @Option(
+            name = "use-minimal-shared-libs",
+            description = "Whether use the shared libs in per module folder.")
+    private boolean mUseMinimalSharedLibs = false;
 
     @Override
     public String findBinary(String binary) {
@@ -135,31 +135,39 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         if (!(getTestInfo().getDevice().getIDevice() instanceof StubDevice)) {
             runUtil.setEnvVariable(ANDROID_SERIAL, getTestInfo().getDevice().getSerialNumber());
         }
-        String ldLibraryPath = TestRunnerUtil.getLdLibraryPath(new File(binaryPath));
+        String ldLibraryPath;
         // Also add the directory of the binary path as the test may package library as data
         // dependency.
         File workingDir = new File(binaryPath).getParentFile();
         runUtil.setWorkingDir(workingDir);
-        if (ldLibraryPath != null) {
-            ldLibraryPath =
-                    String.format(
-                            "%s%s%s",
-                            ldLibraryPath,
-                            java.io.File.pathSeparator,
-                            workingDir.getAbsolutePath());
+        if (mUseMinimalSharedLibs) {
+            ldLibraryPath = buildMinimalLdLibraryPath(workingDir, Arrays.asList("shared_libs"));
         } else {
-            ldLibraryPath = workingDir.getAbsolutePath();
+            ldLibraryPath = TestRunnerUtil.getLdLibraryPath(new File(binaryPath));
+            if (ldLibraryPath != null) {
+                ldLibraryPath =
+                        String.format(
+                                "%s%s%s",
+                                ldLibraryPath,
+                                java.io.File.pathSeparator,
+                                workingDir.getAbsolutePath());
+            } else {
+                ldLibraryPath = workingDir.getAbsolutePath();
+            }
         }
         runUtil.setEnvVariable(LD_LIBRARY_PATH, ldLibraryPath);
 
+        Set<String> tools = new HashSet<>();
         // Update Tradefed adb on $PATH of binary
         File adbBinary = AdbUtils.getAdbToUpdate(getTestInfo(), getAdbPath());
+        tools.add(adbBinary != null ? adbBinary.getAbsolutePath() : "adb");
+        if (getTestInfo().getDevice() instanceof IManagedTestDevice) {
+            tools.add(((IManagedTestDevice) getTestInfo().getDevice()).getFastbootPath());
+        }
         runUtil.setEnvVariable(
                 "PATH",
-                buildPathWithRelativePaths(
-                        workingDir,
-                        Collections.singleton(
-                                adbBinary != null ? adbBinary.getAbsolutePath() : "adb"),
+                buildPath(
+                        tools,
                         String.format(
                                 "%s:/usr/bin",
                                 SystemUtil.getRunningJavaBinaryPath()
@@ -177,31 +185,15 @@ public class ExecutableHostTest extends ExecutableBaseTest {
         }
         File stdout = FileUtil.createTempFile(scriptName + LOG_STDOUT_TAG, ".txt");
         File stderr = FileUtil.createTempFile(scriptName + LOG_STDERR_TAG, ".txt");
-        ICacheClient cacheClient = null;
 
         try (FileOutputStream stdoutStream = new FileOutputStream(stdout);
                 FileOutputStream stderrStream = new FileOutputStream(stderr); ) {
-            String instanceName =
-                    mEnableCache
-                            ? getConfiguration().getCommandOptions().getRemoteCacheInstanceName()
-                            : null;
-            if (!Strings.isNullOrEmpty(instanceName)) {
-                cacheClient = getCacheClient(CurrentInvocation.getWorkFolder(), instanceName);
-            }
             CommandResult res =
-                    cacheClient == null
-                            ? runUtil.runTimedCmd(
-                                    getTimeoutPerBinaryMs(),
-                                    stdoutStream,
-                                    stderrStream,
-                                    command.toArray(new String[0]))
-                            : runUtil.runTimedCmdWithOutputMonitor(
-                                    getTimeoutPerBinaryMs(),
-                                    0,
-                                    stdoutStream,
-                                    stderrStream,
-                                    cacheClient,
-                                    command.toArray(new String[0]));
+                    runUtil.runTimedCmd(
+                            getTimeoutPerBinaryMs(),
+                            stdoutStream,
+                            stderrStream,
+                            command.toArray(new String[0]));
             if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
                 FailureStatus status = FailureStatus.TEST_FAILURE;
                 // Everything should be outputted in stdout with our redirect above.
@@ -216,10 +208,6 @@ public class ExecutableHostTest extends ExecutableBaseTest {
                 listener.testFailed(
                         description,
                         FailureDescription.create(errorMessage).setFailureStatus(status));
-            } else if (!res.isCached() && !isTestFailed(description.getTestName())) {
-                runUtil.uploadCache(
-                        cacheClient,
-                        ExecutableActionResult.create(res.getExitCode(), stdout, stderr));
             }
         } finally {
             logFile(stdout, listener);

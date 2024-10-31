@@ -140,6 +140,7 @@ public class ConfigurationUtil {
                     serializer, obj, transformer, printDeprecatedOptions, printUnchangedOptions);
             serializer.endTag(null, classTypeName);
         }
+        serializer.flush();
     }
 
     /**
@@ -224,6 +225,7 @@ public class ConfigurationUtil {
                 fieldVal = transformer.transform(obj, option, fieldVal);
                 dumpOptionToXml(serializer, option.name(), null, fieldVal.toString());
             }
+            serializer.flush();
         }
     }
 

@@ -15,8 +15,6 @@
  */
 package com.android.tradefed.targetprep;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -128,27 +126,6 @@ public class InstallKernelModulePreparerTest {
                         matches(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
                 .thenReturn(mSuccessResult);
         mPreparer.setUp(mTestInfo);
-    }
-
-    /** Test {@link InstallKernelModulePreparer#getDependentModules()} */
-    @Test
-    public void testGetDependentModules() throws ConfigurationException {
-        String output =
-                "Module Size  Used b\n"
-                        + "kunit_test             663552  0\n"
-                        + "time_test             663558  0\n"
-                        + "kunit                  57344  15 kunit_test,time_test\n";
-        String[] expected = {"kunit_test", "time_test"};
-        String[] actual = mPreparer.getDependentModules("kunit", output);
-        assertArrayEquals(expected, actual);
-        assertArrayEquals(new String[0], mPreparer.getDependentModules("kunit", "kunit 123 12"));
-    }
-
-    /** Test {@link InstallKernelModulePreparer#getDisplayedModuleName()} */
-    @Test
-    public void testGetDisplayedModuleName() throws ConfigurationException {
-        assertEquals("kunit_test", mPreparer.getDisplayedModuleName("/data/kunit-test.ko"));
-        assertEquals("kunit_test", mPreparer.getDisplayedModuleName("kunit-test.ko"));
     }
 
     /**

@@ -96,7 +96,7 @@ public final class SandboxOptions {
                 "The time we should wait for all events to complete after the "
                         + "sandbox is done running."
     )
-    private long mWaitForEventsTimeoutMs = 30000L;
+    private long mWaitForEventsTimeoutMs = 60000L;
 
     @Option(
             name = ENABLE_DEBUG_THREAD,

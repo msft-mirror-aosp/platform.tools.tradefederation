@@ -82,8 +82,9 @@ class DumpsysPackageReceiver extends MultiLineReceiver {
      * <p/>
      * Expected pattern is:
      * Package: [com.foo]
-     *   key=value
-     *   key2=value2
+     *   key=value key2=value2
+     *   key3=value with spaces
+     *   key4=value=with=equal=signs key5=normalvalue
      */
     private class PackageParserState implements ParserState {
 
@@ -122,20 +123,36 @@ class DumpsysPackageReceiver extends MultiLineReceiver {
             return this;
         }
 
+        /**
+         * Parse a line containing attributes.
+         *
+         * Attributes are in the following formats:
+         *   key=value key2=value2
+         *   key3=value with spaces
+         *   key4=value=with=equal=signs key5=normalvalue
+         * We assume that key-value pairs with whitespaces will not appear on the same line with
+         * other attributes.
+         */
         private void parseAttributes(String line) {
             String[] prop = line.split("=");
             if (prop.length == 2) {
+                // If there are only two splits, treat the split before = as key and the split
+                // after as value.
                 mPkgInfo.addAttribute(prop[0], prop[1]);
             } else if (prop.length > 2) {
-                // multiple props on one line. Split by both whitespace and =
-                String[] vn = line.split(" |=");
-                if (vn.length % 2 != 0) {
-                    // improper format, ignore
-                    return;
-                }
-                for (int i=0; i < vn.length; i = i + 2) {
-                    mPkgInfo.addAttribute(vn[i], vn[i+1]);
-                }
+              // If there are more than two splits, treat the line containing multiple key-value
+              // pairs, each one not containing whitespaces.
+              // First split by whitespace to get all key-value pairs on a line.
+              for (String keyValuePair : line.split(" ")) {
+                  // Then check the first position of = sign of a single key-value pair, where the
+                  // key and the value are separated.
+                  int firstEqualPos = keyValuePair.indexOf('=');
+                  if (firstEqualPos != -1) {
+                      mPkgInfo.addAttribute(
+                          keyValuePair.substring(0, firstEqualPos),
+                          keyValuePair.substring(firstEqualPos + 1));
+                  }
+              }
             }
 
         }

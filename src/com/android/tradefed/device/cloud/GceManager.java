@@ -454,28 +454,8 @@ public class GceManager {
 
                 if (!bootSuccess) {
                     if (logger != null) {
-                        if (hOUtil != null) {
-                            File cvdLogsDir = hOUtil.pullCvdHostLogs();
-                            if (cvdLogsDir != null) {
-                                GceManager.logDirectory(
-                                        cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
-                                FileUtil.recursiveDelete(cvdLogsDir);
-                            } else {
-                                CLog.i(
-                                        "CVD Logs is null, no logs collected from host"
-                                                + " orchestrator.");
-                            }
-                            File tempFile =
-                                    hOUtil.collectLogByCommand(
-                                            "host_kernel",
-                                            HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                            logAndDeleteFile(tempFile, "host_kernel", logger);
-                            tempFile =
-                                    hOUtil.collectLogByCommand(
-                                            "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                            logAndDeleteFile(tempFile, "host_orchestrator", logger);
-                            tempFile = hOUtil.getTunnelLog();
-                            logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
+                        if (getTestDeviceOptions().useCvdCF()) {
+                            CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvdInfo, hOUtil, logger);
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());

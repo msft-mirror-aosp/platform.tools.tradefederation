@@ -987,7 +987,7 @@ public class CommandScheduler extends Thread implements ICommandScheduler, IComm
         private boolean skipExperiment(IConfiguration config, IInvocationContext context) {
             // skip experiment for TRYBOT runs
             return config.getCommandOptions().skipTrybotExperiment()
-                    && "TRYBOT".equals(context.getAttribute("trigger"));
+                    && InvocationContext.isOnDemand(context);
         }
     }
 
