@@ -103,8 +103,6 @@ public class ProtoResultReporterTest {
 
         //  ------ Verify that everything was populated ------
         assertNotNull(mFinalRecord.getTestRecordId());
-        assertNotNull(mFinalRecord.getStartTime().getSeconds());
-        assertNotNull(mFinalRecord.getEndTime().getSeconds());
         assertNotNull(mFinalRecord.getDebugInfo());
 
         // The invocation has 2 modules
@@ -166,8 +164,6 @@ public class ProtoResultReporterTest {
 
         //  ------ Verify that everything was populated ------
         assertNotNull(mFinalRecord.getTestRecordId());
-        assertNotNull(mFinalRecord.getStartTime().getSeconds());
-        assertNotNull(mFinalRecord.getEndTime().getSeconds());
         assertNotNull(mFinalRecord.getDebugInfo());
 
         DebugInfo invocFailure = mFinalRecord.getDebugInfo();

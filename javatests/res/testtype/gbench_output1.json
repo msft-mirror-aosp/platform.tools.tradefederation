@@ -11,19 +11,22 @@
       "name": "BM_one",
       "iterations": 109451958,
       "real_time": 5,
-      "cpu_time": 5
+      "cpu_time": 5,
+      "time_unit": "ns"
     },
     {
       "name": "BM_two",
       "iterations": 50906784,
       "real_time": 1,
-      "cpu_time": 11
+      "cpu_time": 11,
+      "time_unit": "ns"
     },
     {
       "name": "BM_string_strlen/64",
       "iterations": 10499948,
       "real_time": 60,
       "cpu_time": 60,
+      "time_unit": "ns",
       "bytes_per_second": 1061047935
     }
   ]
