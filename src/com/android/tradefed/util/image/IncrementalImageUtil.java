@@ -25,6 +25,7 @@ import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.device.SnapuserdWaitPhase;
+import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceState;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
@@ -43,7 +44,6 @@ import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
-import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.ZipUtil;
 import com.android.tradefed.util.ZipUtil2;
@@ -57,6 +57,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -68,6 +69,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /** A utility to leverage the incremental image and device update. */
 public class IncrementalImageUtil {
@@ -91,6 +93,7 @@ public class IncrementalImageUtil {
     private final File mCreateSnapshotBinary;
     private final boolean mApplySnapshot;
     private final boolean mWipeAfterApplySnapshot;
+    private final boolean mUpdateBootloaderFromUserspace;
     private boolean mNewFlow;
     private final SnapuserdWaitPhase mWaitPhase;
 
@@ -111,10 +114,11 @@ public class IncrementalImageUtil {
             File createSnapshot,
             boolean isIsolatedSetup,
             boolean allowCrossRelease,
-            MultiMap<String, String> allowedbranchTransition,
+            Set<String> allowedTransition,
             boolean applySnapshot,
             boolean wipeAfterApply,
             boolean newFlow,
+            boolean updateBootloaderFromUserspace,
             SnapuserdWaitPhase waitPhase)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
@@ -141,10 +145,8 @@ public class IncrementalImageUtil {
         if (!tracker.branch.equals(build.getBuildBranch())) {
             if (applySnapshot
                     && wipeAfterApply
-                    && allowedbranchTransition.containsKey(tracker.branch)
-                    && allowedbranchTransition
-                            .get(tracker.branch)
-                            .contains(build.getBuildBranch())) {
+                    && allowedTransition.contains(tracker.branch)
+                    && allowedTransition.contains(build.getBuildBranch())) {
                 CLog.d("Allowing transition from %s => %s", tracker.branch, build.getBuildBranch());
             } else {
                 CLog.d("Newer build is not on the same branch.");
@@ -214,6 +216,7 @@ public class IncrementalImageUtil {
                 applySnapshot,
                 wipeAfterApply,
                 newFlow,
+                updateBootloaderFromUserspace,
                 waitPhase);
     }
 
@@ -227,6 +230,7 @@ public class IncrementalImageUtil {
             boolean applySnapshot,
             boolean wipeAfterApply,
             boolean newFlow,
+            boolean updateBootloaderFromUserspace,
             SnapuserdWaitPhase waitPhase) {
         mDevice = device;
         mSrcImage = deviceImage;
@@ -235,6 +239,7 @@ public class IncrementalImageUtil {
         mApplySnapshot = applySnapshot;
         mWipeAfterApplySnapshot = wipeAfterApply;
         mNewFlow = newFlow;
+        mUpdateBootloaderFromUserspace = updateBootloaderFromUserspace;
         mWaitPhase = waitPhase;
 
         mTargetImage = targetImage;
@@ -349,6 +354,16 @@ public class IncrementalImageUtil {
             mNewFlow = false;
             return;
         }
+        // If device isn't online, we can't use the new flow
+        if (!TestDeviceState.ONLINE.equals(mDevice.getDeviceState())) {
+            mNewFlow = false;
+            return;
+        }
+        InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.INCREMENTAL_NEW_FLOW, 1);
+        // If enable, push the bootloader from userspace like OTA
+        if (mUpdateBootloaderFromUserspace) {
+            updateBootloaderFromUserspace(currentBootloader);
+        }
         updateDevice(currentBootloader, currentRadio);
     }
 
@@ -369,6 +384,82 @@ public class IncrementalImageUtil {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.INCREMENTAL_FLASHING_UPDATE_FAILURE, 1);
             throw e;
+        }
+    }
+
+    private void updateBootloaderFromUserspace(File currentBootloader)
+            throws DeviceNotAvailableException, TargetSetupError {
+        File bootloaderDir = null;
+        try (CloseableTraceScope ignored = new CloseableTraceScope("update_bootloader_userspace")) {
+            String listAbPartitions = mDevice.getProperty("ro.product.ab_ota_partitions");
+            if (listAbPartitions == null) {
+                throw new TargetSetupError(
+                        "Couldn't query ab_ota_partitions",
+                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            }
+            String bootSuffix = mDevice.getProperty("ro.boot.slot_suffix");
+            if (bootSuffix == null) {
+                throw new TargetSetupError(
+                        "Couldn't query ro.boot.slot_suffix",
+                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            }
+            if (bootSuffix.equals("_a")) {
+                bootSuffix = "_b";
+            } else if (bootSuffix.equals("_b")) {
+                bootSuffix = "_a";
+            } else {
+                throw new TargetSetupError(
+                        String.format("unexpected ro.boot.slot_suffix: %s", bootSuffix),
+                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            }
+
+            Set<String> partitions =
+                    Arrays.asList(listAbPartitions.split(",")).stream()
+                            .map(p -> p + ".img")
+                            .collect(Collectors.toSet());
+            CLog.d("Bootloader partitions to be considered: %s", partitions);
+            try {
+                bootloaderDir =
+                        FileUtil.createTempDir("bootloader", CurrentInvocation.getWorkFolder());
+                FastbootPack.unpack(currentBootloader, bootloaderDir, null, false);
+            } catch (IOException e) {
+                throw new TargetSetupError(
+                        e.getMessage(), e, InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            }
+            Set<File> toBePushed = new LinkedHashSet<File>();
+            for (File f : bootloaderDir.listFiles()) {
+                if (partitions.contains(f.getName())) {
+                    toBePushed.add(f);
+                }
+            }
+            CLog.d("Bootloader partitions to be updated: %s", toBePushed);
+            mDevice.executeShellV2Command("mkdir -p /data/bootloader");
+            for (File push : toBePushed) {
+                boolean success = mDevice.pushFile(push, "/data/bootloader/" + push.getName());
+                if (!success) {
+                    throw new TargetSetupError(
+                            "Failed to push bootloader partition.",
+                            InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+                }
+            }
+            for (File write : toBePushed) {
+                CommandResult writeRes =
+                        mDevice.executeShellV2Command(
+                                String.format(
+                                        "dd if=/data/bootloader/%s of=/dev/block/by-name/%s%s",
+                                        write.getName(),
+                                        FileUtil.getBaseName(write.getName()),
+                                        bootSuffix));
+                if (!CommandStatus.SUCCESS.equals(writeRes.getStatus())) {
+                    throw new TargetSetupError(
+                            String.format(
+                                    "Failed to write bootloader partition: %s",
+                                    writeRes.getStderr()),
+                            InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+                }
+            }
+        } finally {
+            FileUtil.recursiveDelete(bootloaderDir);
         }
     }
 
@@ -414,7 +505,19 @@ public class IncrementalImageUtil {
         try (CloseableTraceScope ignored = new CloseableTraceScope("update_device")) {
             // Once block comparison is successful, log the information
             logTargetInformation(targetDirectory);
-            logPatchesInformation(workDir);
+            long totalPatchSizes = logPatchesInformation(workDir);
+            // if we have more than 2.5GB we will overflow super partition size to /data and we
+            // can't use the feature
+            if (totalPatchSizes > 2300000000L) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Patches too large.");
+                throw new TargetSetupError(
+                        String.format(
+                                "Total patch size is %s bytes. Too large to use the feature."
+                                        + " falling back",
+                                totalPatchSizes),
+                        InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
+            }
 
             mDevice.executeShellV2Command("mkdir -p /data/ndb");
             mDevice.executeShellV2Command("rm -rf /data/ndb/*.patch");
@@ -478,6 +581,9 @@ public class IncrementalImageUtil {
                 if (!CommandStatus.SUCCESS.equals(mapOutput.getStatus())) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.INCREMENTAL_FALLBACK_REASON, "Failed apply-update");
+                    // Clean state if apply-update fails
+                    mDevice.executeShellV2Command("snapshotctl unmap-snapshots");
+                    mDevice.executeShellV2Command("snapshotctl delete-snapshots");
                     throw new TargetSetupError(
                             String.format(
                                     "Failed to apply-update.\nstdout:%s\nstderr:%s",
@@ -499,7 +605,19 @@ public class IncrementalImageUtil {
                             InfraErrorIdentifier.INCREMENTAL_FLASHING_ERROR);
                 }
             }
-            mDevice.rebootIntoBootloader();
+            try {
+                if (mNewFlow && mDevice instanceof TestDevice) {
+                    ((TestDevice) mDevice).setFirstBootloaderReboot();
+                }
+                mDevice.rebootIntoBootloader();
+            } catch (DeviceNotAvailableException e) {
+                if (mNewFlow) {
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.INCREMENTAL_FIRST_BOOTLOADER_REBOOT_FAIL, 1);
+                }
+                throw e;
+            }
+
             if (mApplySnapshot) {
                 if (mWipeAfterApplySnapshot) {
                     CommandResult cancelResults =
@@ -589,11 +707,15 @@ public class IncrementalImageUtil {
                         mDevice.executeShellV2Command(
                                 "snapshotctl revert-snapshots", 60L, TimeUnit.SECONDS, 0);
                 if (!CommandStatus.SUCCESS.equals(revertOutput.getStatus())) {
-                    CLog.d(
-                            "Failed revert-snapshots. stdout: %s, stderr: %s",
-                            revertOutput.getStdout(), revertOutput.getStderr());
+                    String failedMessage =
+                            String.format(
+                                    "Failed revert-snapshots. stdout: %s, stderr: %s",
+                                    revertOutput.getStdout(), revertOutput.getStderr());
+                    CLog.d(failedMessage);
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.INCREMENTAL_FLASHING_TEARDOWN_FAILURE, 1);
+                    // Invalidate the device since it failed the revert
+                    throw new DeviceDisconnectedException(failedMessage, mDevice.getSerialNumber());
                 }
                 if (mSourceDirectory != null) {
                     // flash all static partition in bootloader
@@ -778,17 +900,28 @@ public class IncrementalImageUtil {
         return true;
     }
 
-    private void logPatchesInformation(File patchesDirectory) {
+    private long logPatchesInformation(File patchesDirectory) {
+        long totalPatchesSize = 0L;
         for (File patch : patchesDirectory.listFiles()) {
+            if (patch == null) {
+                CLog.w("Something went wrong listing %s", patchesDirectory);
+                return 0L;
+            }
+            totalPatchesSize += patch.length();
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationGroupMetricKey.INCREMENTAL_FLASHING_PATCHES_SIZE,
                     patch.getName(),
                     patch.length());
         }
+        return totalPatchesSize;
     }
 
     private void logTargetInformation(File targetDirectory) {
         for (File patch : targetDirectory.listFiles()) {
+            if (patch == null) {
+                CLog.w("Something went wrong listing target %s", targetDirectory);
+                return;
+            }
             if (DYNAMIC_PARTITIONS_TO_DIFF.contains(patch.getName())) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationGroupMetricKey.INCREMENTAL_FLASHING_TARGET_SIZE,

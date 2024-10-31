@@ -46,7 +46,7 @@ public class AdbTcpConnection extends DefaultConnection {
     protected static final long RETRY_INTERVAL_MS = 5000;
     protected static final int MAX_RETRIES = 5;
     protected static final long DEFAULT_SHORT_CMD_TIMEOUT = 20 * 1000;
-    protected static final long WAIT_FOR_ADB_CONNECT = 2 * 60 * 1000;
+
     private static final String ADB_SUCCESS_CONNECT_TAG = "connected to";
     private static final String ADB_ALREADY_CONNECTED_TAG = "already";
     private static final String ADB_CONN_REFUSED = "Connection refused";
@@ -82,7 +82,7 @@ public class AdbTcpConnection extends DefaultConnection {
     public void reconnect(String serial) throws DeviceNotAvailableException {
         super.reconnect(serial);
         adbTcpConnect(getHostName(serial), getPortNum(serial));
-        waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+        waitForAdbConnect(serial, getDevice().getOptions().getAdbConnectWaitTime());
     }
 
     /** {@inheritDoc} */

@@ -92,6 +92,7 @@ public enum LogDataType {
     ADB_HOST_LOG("txt", "text/plain", true, true),
     PASSED_TESTS("txt", "text/plain", true, true),
     RECOVERY_MODE_LOG("txt", "text/plain", false, true),
+    CONNDIAG("txt", "text/plain", false, true), // Connectivity diagnostics
     GOLDEN_RESULT_PROTO(
             "textproto",
             "text/plain",

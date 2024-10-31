@@ -209,6 +209,7 @@ public class TestDevice extends NativeDevice {
         String cid;
     }
 
+    private boolean mFirstBootloaderReboot = false;
     private boolean mWaitForSnapuserd = false;
     private SnapuserdWaitPhase mWaitPhase = null;
     private long mSnapuserNotificationTimestamp = 0L;
@@ -1316,9 +1317,14 @@ public class TestDevice extends NativeDevice {
     protected void doAdbReboot(RebootMode rebootMode, @Nullable final String reason)
             throws DeviceNotAvailableException {
         getConnection().notifyAdbRebootCalled();
-        if (!TestDeviceState.ONLINE.equals(getDeviceState())
-                || !doAdbFrameworkReboot(rebootMode, reason)) {
-            super.doAdbReboot(rebootMode, reason);
+        try {
+            if (mFirstBootloaderReboot
+                    || (!TestDeviceState.ONLINE.equals(getDeviceState())
+                            || !doAdbFrameworkReboot(rebootMode, reason))) {
+                super.doAdbReboot(rebootMode, reason);
+            }
+        } finally {
+            mFirstBootloaderReboot = false;
         }
     }
 
@@ -2404,6 +2410,7 @@ public class TestDevice extends NativeDevice {
     /** {@inheritDoc} */
     @Override
     public void postInvocationTearDown(Throwable exception) {
+        mFirstBootloaderReboot = false;
         super.postInvocationTearDown(exception);
         // If wifi was installed and it's a real device, attempt to clean it.
         if (mWasWifiHelperInstalled) {
@@ -2736,6 +2743,10 @@ public class TestDevice extends NativeDevice {
         return null;
     }
 
+    public void setFirstBootloaderReboot() {
+        mFirstBootloaderReboot = true;
+    }
+
     /**
      * Checks the preconditions to run a microdroid.
      *
@@ -2893,6 +2904,10 @@ public class TestDevice extends NativeDevice {
         final String hugePagesFlag = builder.mHugePages ? "--hugepages" : "";
         final String nameFlag =
                 Strings.isNullOrEmpty(builder.mName) ? "" : "--name " + builder.mName;
+        final String dumpDt =
+                Strings.isNullOrEmpty(builder.mDumpDt)
+                        ? ""
+                        : "--dump-device-tree " + builder.mDumpDt;
 
         List<String> args =
                 new ArrayList<>(
@@ -2917,7 +2932,8 @@ public class TestDevice extends NativeDevice {
                                 outApkIdsigPath,
                                 builder.mInstanceImg,
                                 "--config-path",
-                                builder.mConfigPath));
+                                builder.mConfigPath,
+                                dumpDt));
         if (isVirtFeatureEnabled("com.android.kvm.LLPVM_CHANGES")) {
             args.add("--instance-id-file");
             args.add(builder.mInstanceIdFile);
@@ -3261,6 +3277,7 @@ public class TestDevice extends NativeDevice {
         private String mInstanceImg; // Path to instance_img file
         private boolean mHugePages;
         private String mName;
+        private String mDumpDt;
 
         /** Creates a builder for the given APK/apkPath and the payload config file in APK. */
         private MicrodroidBuilder(File apkFile, String apkPath, @Nonnull String configPath) {
@@ -3280,6 +3297,7 @@ public class TestDevice extends NativeDevice {
             mInstanceIdFile = null;
             mInstanceImg = null;
             mName = null;
+            mDumpDt = null;
         }
 
         /** Creates a Microdroid builder for the given APK and the payload config file in APK. */
@@ -3303,6 +3321,16 @@ public class TestDevice extends NativeDevice {
          */
         public MicrodroidBuilder debugLevel(String debugLevel) {
             mDebugLevel = debugLevel;
+            return this;
+        }
+
+        /**
+         * Sets path where device tree blob will be dumped.
+         *
+         * <p>Supported values: null and "path".
+         */
+        public MicrodroidBuilder dumpDt(String dumpDt) {
+            mDumpDt = dumpDt;
             return this;
         }
 

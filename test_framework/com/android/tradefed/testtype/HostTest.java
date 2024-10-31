@@ -125,11 +125,10 @@ public class HostTest
     private String mMethodName;
 
     @Option(
-        name = "jar",
-        description = "The jars containing the JUnit test class to run.",
-        importance = Importance.IF_UNSET
-    )
-    private Set<String> mJars = new HashSet<>();
+            name = "jar",
+            description = "The jars containing the JUnit test class to run.",
+            importance = Importance.IF_UNSET)
+    private Set<String> mJars = new LinkedHashSet<>();
 
     public static final String SET_OPTION_NAME = "set-option";
     public static final String SET_OPTION_DESC =
@@ -144,14 +143,17 @@ public class HostTest
     @Option(name = SET_OPTION_NAME, description = SET_OPTION_DESC)
     private List<String> mKeyValueOptions = new ArrayList<>();
 
-    @Option(name = "include-annotation",
+    @Option(
+            name = "include-annotation",
             description = "The set of annotations a test must have to be run.")
-    private Set<String> mIncludeAnnotations = new HashSet<>();
+    private Set<String> mIncludeAnnotations = new LinkedHashSet<>();
 
-    @Option(name = "exclude-annotation",
-            description = "The set of annotations to exclude tests from running. A test must have "
-                    + "none of the annotations in this list to run.")
-    private Set<String> mExcludeAnnotations = new HashSet<>();
+    @Option(
+            name = "exclude-annotation",
+            description =
+                    "The set of annotations to exclude tests from running. A test must have "
+                            + "none of the annotations in this list to run.")
+    private Set<String> mExcludeAnnotations = new LinkedHashSet<>();
 
     /**
      * It is strongly recommended that clients set include and exclude filters at the suite level
@@ -161,7 +163,7 @@ public class HostTest
     @Option(
             name = "include-filter",
             description = "The set of annotations a test must have to be run.")
-    private Set<String> mIncludeFilters = new HashSet<>();
+    private Set<String> mIncludeFilters = new LinkedHashSet<>();
 
     /**
      * It is strongly recommended that clients set include and exclude filters at the suite level
@@ -173,7 +175,7 @@ public class HostTest
             description =
                     "The set of annotations to exclude tests from running. A test must have "
                             + "none of the annotations in this list to run.")
-    private Set<String> mExcludeFilters = new HashSet<>();
+    private Set<String> mExcludeFilters = new LinkedHashSet<>();
 
     @Option(name = "collect-tests-only",
             description = "Only invoke the instrumentation to collect list of applicable test "

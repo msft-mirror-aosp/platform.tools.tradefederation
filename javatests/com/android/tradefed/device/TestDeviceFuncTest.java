@@ -28,13 +28,13 @@ import static org.junit.Assume.assumeTrue;
 import static org.mockito.Mockito.mock;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.tradefed.TestAppConstants;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.TestStatus;
+import com.android.tradefed.result.ddmlib.RemoteAndroidTestRunner;
 import com.android.tradefed.testtype.DeviceJUnit4ClassRunner;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.util.CommandResult;

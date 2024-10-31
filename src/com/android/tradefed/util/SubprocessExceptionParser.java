@@ -21,6 +21,7 @@ import com.android.tradefed.error.IHarnessException;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.sandbox.TradefedSandboxRunner;
 
 import org.json.JSONException;
@@ -76,7 +77,10 @@ public class SubprocessExceptionParser {
                     throw (DeviceNotAvailableException) obj;
                 }
                 if (obj instanceof IHarnessException) {
-                    throw new HarnessRuntimeException(message, (IHarnessException) obj);
+                    throw new HarnessRuntimeException(
+                            message,
+                            TestErrorIdentifier.SUBPROCESS_UNCATEGORIZED_EXCEPTION,
+                            (IHarnessException) obj);
                 }
                 throw new HarnessRuntimeException(message, obj, InfraErrorIdentifier.UNDETERMINED);
             } catch (IOException e) {

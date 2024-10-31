@@ -47,5 +47,8 @@ public enum FlashingMethod {
     /**
      * The device was flashed via a `fastboot flashall` command on a directory of partition images
      */
-    FASTBOOT_FLASH_ALL
+    FASTBOOT_FLASH_ALL,
+
+    /** The device was flashed via a simulated OTA while in userspace */
+    USERSPACE_OTA
 }

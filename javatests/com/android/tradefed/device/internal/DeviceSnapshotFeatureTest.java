@@ -96,4 +96,20 @@ public class DeviceSnapshotFeatureTest {
                         .getErrorTrace()
                         .contains("with connection type [null] doesn't support snapshotting"));
     }
+
+    @Test
+    public void testFeature_deleteSnapshot() throws Exception {
+        FeatureRequest.Builder request =
+                FeatureRequest.newBuilder()
+                        .putArgs("serial", "device-serial")
+                        .putArgs("device_name", ConfigurationDef.DEFAULT_DEVICE_NAME)
+                        .putArgs("snapshot_id", "random_id")
+                        .putArgs("delete_flag", "true");
+
+        FeatureResponse response = mFeature.execute(request.build());
+        assertTrue(
+                response.getErrorInfo()
+                        .getErrorTrace()
+                        .contains("with connection type [null] doesn't support snapshotting"));
+    }
 }

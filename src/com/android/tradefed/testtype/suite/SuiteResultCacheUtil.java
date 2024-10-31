@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype.suite;
 
+import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
@@ -45,10 +46,31 @@ public class SuiteResultCacheUtil {
 
     public static final String DEVICE_IMAGE_KEY = "device_image";
 
+    /** Describes the cache results. */
+    public static class CacheResultDescriptor {
+        private final boolean cacheHit;
+        private final String cacheExplanation;
+
+        public CacheResultDescriptor(boolean cacheHit, String explanation) {
+            this.cacheHit = cacheHit;
+            this.cacheExplanation = explanation;
+        }
+
+        public boolean isCacheHit() {
+            return cacheHit;
+        }
+
+        public String getDetails() {
+            return cacheExplanation;
+        }
+    }
+
     /**
      * Upload results to RBE
      *
      * @param mainConfig
+     * @param testInfo
+     * @param module
      * @param moduleConfig
      * @param protoResults
      * @param moduleDir
@@ -57,7 +79,7 @@ public class SuiteResultCacheUtil {
     public static void uploadModuleResults(
             IConfiguration mainConfig,
             TestInformation testInfo,
-            String moduleId,
+            ModuleDefinition module,
             File moduleConfig,
             File protoResults,
             File moduleDir,
@@ -79,7 +101,8 @@ public class SuiteResultCacheUtil {
                     InvocationMetricKey.MODULE_RESULTS_CACHE_DEVICE_MISMATCH, 1);
             return;
         }
-        // TODO: Ensure we have the link to the results
+        String moduleId = module.getId();
+        long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("upload_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
@@ -89,14 +112,32 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
+            Digest configDigest = DigestCalculator.compute(moduleConfig);
+            environment.put("module_config", configDigest.getHash());
+            if (module.getIntraModuleShardCount() != null
+                    && module.getIntraModuleShardIndex() != null) {
+                environment.put(
+                        "intra_module_shard_index",
+                        Integer.toString(module.getIntraModuleShardIndex()));
+                environment.put(
+                        "intra_module_shard_count",
+                        Integer.toString(module.getIntraModuleShardCount()));
+            }
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
             ExecutableActionResult result = ExecutableActionResult.create(0, protoResults, null);
-            CLog.d("Uploading cache for %s", action);
+            CLog.d("Uploading cache for %s and %s", action, protoResults);
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MODULE_CACHE_UPLOAD_ERROR, 1);
+        } finally {
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.MODULE_CACHE_UPLOAD_TIME,
+                    startTime,
+                    System.currentTimeMillis());
         }
     }
 
@@ -104,22 +145,26 @@ public class SuiteResultCacheUtil {
      * Look up results in RBE for the test module.
      *
      * @param mainConfig
-     * @param moduleId
+     * @param module
      * @param moduleConfig
      * @param moduleDir
      * @param skipContext
-     * @return true if we get a cache hit
+     * @return a {@link CacheResultDescriptor} describing the cache result.
      */
-    public static boolean lookUpModuleResults(
+    public static CacheResultDescriptor lookUpModuleResults(
             IConfiguration mainConfig,
-            String moduleId,
+            ModuleDefinition module,
             File moduleConfig,
             File moduleDir,
             SkipContext skipContext) {
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.MODULE_RESULTS_CHECKING_CACHE, 1);
         if (skipContext.getImageToDigest().containsValue(null)) {
             CLog.d("No digest for device.");
-            return false;
+            return new CacheResultDescriptor(false, null);
         }
+        String moduleId = module.getId();
+        long startTime = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
@@ -129,6 +174,17 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
+            Digest configDigest = DigestCalculator.compute(moduleConfig);
+            environment.put("module_config", configDigest.getHash());
+            if (module.getIntraModuleShardCount() != null
+                    && module.getIntraModuleShardIndex() != null) {
+                environment.put(
+                        "intra_module_shard_index",
+                        Integer.toString(module.getIntraModuleShardIndex()));
+                environment.put(
+                        "intra_module_shard_count",
+                        Integer.toString(module.getIntraModuleShardCount()));
+            }
             ExecutableAction action =
                     ExecutableAction.create(
                             moduleDir, Arrays.asList(moduleId), environment, 60000L);
@@ -136,23 +192,37 @@ public class SuiteResultCacheUtil {
             ExecutableActionResult cachedResults = cacheClient.lookupCache(action);
             if (cachedResults == null) {
                 CLog.d("No cached results for %s", moduleId);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.MODULE_CACHE_MISS_ID, moduleId);
             } else {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.MODULE_RESULTS_CACHE_HIT, 1);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.MODULE_CACHE_HIT_ID, moduleId);
+                String details = "Cached results.";
                 Map<String, String> metadata =
                         ModuleProtoResultReporter.parseResultsMetadata(cachedResults.stdOut());
                 if (metadata.containsKey(ModuleProtoResultReporter.INVOCATION_ID_KEY)) {
-                    CLog.d(
-                            "cached results origin: http://ab/%s",
-                            metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY));
+                    details +=
+                            String.format(
+                                    " origin of results: http://ab/%s",
+                                    metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY));
+                    CLog.d(details);
                 }
                 FileUtil.deleteFile(cachedResults.stdOut());
                 FileUtil.deleteFile(cachedResults.stdErr());
-                return true;
+                return new CacheResultDescriptor(true, details);
             }
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.MODULE_CACHE_DOWNLOAD_ERROR, 1);
+        } finally {
+            InvocationMetricLogger.addInvocationPairMetrics(
+                    InvocationMetricKey.MODULE_CACHE_DOWNLOAD_TIME,
+                    startTime,
+                    System.currentTimeMillis());
         }
-        return false;
+        return new CacheResultDescriptor(false, null);
     }
 }
