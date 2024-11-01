@@ -149,13 +149,6 @@ public class IsolatedHostTest
             new HashSet<>(Arrays.asList("org/junit", "com/google/common/collect/testing/google"));
 
     @Option(
-            name = "exclude-robolectric-packages",
-            description =
-                    "Indicates whether to exclude 'org/robolectric' when robolectric resources."
-                            + " Defaults to be true.")
-    private boolean mExcludeRobolectricPackages = true;
-
-    @Option(
             name = "java-folder",
             description = "The JDK to be used. If unset, the JDK on $PATH will be used.")
     private File mJdkFolder = null;
@@ -432,11 +425,6 @@ public class IsolatedHostTest
 
         if (mRobolectricResources) {
             cmdArgs.addAll(compileRobolectricOptions(artifactsDir));
-            // Prevent tradefed from eagerly loading classes, which may not load without shadows
-            // applied.
-            if (mExcludeRobolectricPackages) {
-                mExcludePaths.add("org/robolectric");
-            }
         }
         if (mRavenwoodResources) {
             // For the moment, swap in the default JUnit upstream runner
@@ -694,6 +682,11 @@ public class IsolatedHostTest
     }
 
     private List<String> compileRobolectricOptions(File artifactsDir) {
+        // TODO: allow tests to specify the android-all jar versions they need (perhaps prebuilts as
+        // well).
+        // This is a byproduct of limits in Soong.   When android-all jars can be depended on as
+        // standard prebuilts,
+        // this will not be needed.
         List<String> options = new ArrayList<>();
         File testDir = findTestDirectory();
         File androidAllDir = FileUtil.findFile(testDir, "android-all");
@@ -703,21 +696,14 @@ public class IsolatedHostTest
         String dependencyDir =
                 "-Drobolectric.dependency.dir=" + androidAllDir.getAbsolutePath() + "/";
         options.add(dependencyDir);
+        // TODO: Clean up this debt to allow RNG tests to upload images to scuba
+        // Should likely be done as multiple calls/CLs - one per class and then could be done in a
+        // rule in Robolectric.
+        // Perhaps as a class rule once Robolectric has support.
         if (artifactsDir != null) {
             String artifactsDirFull =
                     "-Drobolectric.artifacts.dir=" + artifactsDir.getAbsolutePath() + "/";
             options.add(artifactsDirFull);
-        }
-        options.add("-Drobolectric.offline=true");
-        options.add("-Drobolectric.logging=stdout");
-        options.add("-Drobolectric.resourcesMode=BINARY");
-        options.add("-Drobolectric.usePreinstrumentedJars=false");
-        // TODO(rexhoffman) figure out how to get the local conscrypt working - shared objects and
-        // such.
-        options.add("-Drobolectric.conscryptMode=OFF");
-
-        if (this.debug) {
-            options.add("-Drobolectric.logging.enabled=true");
         }
         return options;
     }
