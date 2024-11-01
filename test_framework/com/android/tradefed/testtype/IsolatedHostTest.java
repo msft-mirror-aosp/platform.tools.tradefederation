@@ -268,6 +268,14 @@ public class IsolatedHostTest
             if (ldLibraryPath != null) {
                 runner.setEnvVariable("LD_LIBRARY_PATH", ldLibraryPath);
             }
+            if (!mInheritEnvVars) {
+                // We have to carry the proper java via path to the environment otherwise
+                // we can run into issue
+                runner.setEnvVariable("PATH",
+                          String.format("%s:/usr/bin", SystemUtil.getRunningJavaBinaryPath()
+                                          .getParentFile()
+                                          .getAbsolutePath()));
+            }
 
             runner.setWorkingDir(mWorkDir);
             CLog.v("Using PWD: %s", mWorkDir.getAbsolutePath());
