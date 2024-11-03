@@ -24,7 +24,6 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.ArrayUtil;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 
@@ -34,14 +33,12 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-
 /**
  * A default implementation of tests zip installer.
  */
 public class DefaultTestsZipInstaller implements ITestsZipInstaller {
     private static final int RM_ATTEMPTS = 3;
     private static final String DEVICE_DATA_PATH = buildAbsPath(FileListingService.DIRECTORY_DATA);
-    private static final File DEVICE_DATA_FILE = new File(DEVICE_DATA_PATH);
 
     /**
      * A list of /data subdirectories to NOT wipe when doing UserDataFlashOption.TESTS_ZIP
@@ -127,10 +124,7 @@ public class DefaultTestsZipInstaller implements ITestsZipInstaller {
             device.syncFiles(hostSubDir, DEVICE_DATA_PATH);
         }
 
-        // FIXME: this may end up mixing host slashes and device slashes
-        for (File dir : findDirs(hostDir, DEVICE_DATA_FILE)) {
-            device.executeShellCommand("chown system.system " + dir.getPath());
-        }
+        device.executeShellCommand("chown -R system.system " + DEVICE_DATA_PATH);
 
         device.setRecoveryMode(cachedRecoveryMode);
     }
@@ -249,12 +243,5 @@ public class DefaultTestsZipInstaller implements ITestsZipInstaller {
                     device.getDeviceDescriptor());
         }
         return childFiles;
-    }
-
-    /**
-     * Indirection to {@link FileUtil#findDirsUnder(File, File)} to allow for unit testing.
-     */
-    Set<File> findDirs(File hostDir, File deviceRootPath) {
-        return FileUtil.findDirsUnder(hostDir, deviceRootPath);
     }
 }
