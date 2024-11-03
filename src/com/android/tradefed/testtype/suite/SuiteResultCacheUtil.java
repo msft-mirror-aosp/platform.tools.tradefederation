@@ -174,8 +174,10 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
-            Digest configDigest = DigestCalculator.compute(moduleConfig);
-            environment.put("module_config", configDigest.getHash());
+            try (CloseableTraceScope computeDigest = new CloseableTraceScope("compute_digest")) {
+                Digest configDigest = DigestCalculator.compute(moduleConfig);
+                environment.put("module_config", configDigest.getHash());
+            }
             if (module.getIntraModuleShardCount() != null
                     && module.getIntraModuleShardIndex() != null) {
                 environment.put(
