@@ -335,9 +335,7 @@ public class SearchArtifactUtil {
         return null;
     }
 
-    /** Returns the module directory if present, when called inside a module scope. */
-    public static File getModuleDirFromConfig() {
-        IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
+    public static File getModuleDirFromConfig(IInvocationContext moduleContext) {
         if (moduleContext != null) {
             List<String> moduleDirPath =
                     moduleContext
@@ -351,6 +349,12 @@ public class SearchArtifactUtil {
             }
         }
         return null;
+    }
+
+    /** Returns the module directory if present, when called inside a module scope. */
+    public static File getModuleDirFromConfig() {
+        IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
+        return getModuleDirFromConfig(moduleContext);
     }
 
     /**
