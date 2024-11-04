@@ -933,6 +933,53 @@ public class TestMappingTest {
     }
 
     /**
+     * Test for {@link TestMapping#getTestMappingSources()} for collecting paths of TEST_MAPPING
+     * files from a zip file and a directory.
+     */
+    @Test
+    public void testGetTestMappingSources_Dir() throws Exception {
+        // Test directory structure:
+        // ├── disabled-presubmit-tests
+        // ├── src1
+        // |   ├── sub_dir1
+        // |   |  └── TEST_MAPPING
+        // │   └── TEST_MAPPING
+        // ├── src2
+        // │   └── TEST_MAPPING
+        // └── test_mappings.zip
+        File tempDir = null;
+        try {
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File srcDir = FileUtil.createNamedTempDir(tempDir, "src1");
+            String srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_1";
+            InputStream resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, srcDir, TEST_MAPPING);
+
+            File subDir = FileUtil.createNamedTempDir(srcDir, "sub_dir1");
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_2";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir, TEST_MAPPING);
+
+            subDir = FileUtil.createNamedTempDir(tempDir, "src2");
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + "test_mapping_1";
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, subDir, TEST_MAPPING);
+
+            srcFile = File.separator + TEST_DATA_DIR + File.separator + DISABLED_PRESUBMIT_TESTS;
+            resourceStream = this.getClass().getResourceAsStream(srcFile);
+            FileUtil.saveResourceFile(resourceStream, tempDir, DISABLED_PRESUBMIT_TESTS);
+
+            Set<String> sources = mTestMapping.getTestMappingSources(tempDir);
+            assertEquals(3, sources.size());
+            assertTrue(sources.contains("src1/TEST_MAPPING"));
+            assertTrue(sources.contains("src1/sub_dir1/TEST_MAPPING"));
+            assertTrue(sources.contains("src2/TEST_MAPPING"));
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+        }
+    }
+
+    /**
      * Test for {@link TestMapping#mergeTestMappingZips()} for merging a missed test_mappings.zip.
      */
     @Test
@@ -1062,6 +1109,65 @@ public class TestMappingTest {
 
             when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
             when(mockBuildInfo.getFile("extra-zip")).thenReturn(zipFile2);
+            Set<TestInfo> results =
+                    mTestMapping.getTests(
+                            mockBuildInfo,
+                            "presubmit",
+                            false,
+                            null,
+                            new HashSet<String>(),
+                            Arrays.asList("extra-zip"),
+                            new HashSet<>());
+            assertEquals(2, results.size());
+            Set<String> names = new HashSet<String>();
+            for (TestInfo test : results) {
+                names.add(test.getName());
+            }
+            assertTrue(names.contains("test1"));
+            assertTrue(names.contains("test2"));
+        } finally {
+            FileUtil.recursiveDelete(tempDir);
+            FileUtil.recursiveDelete(tempDir2);
+        }
+    }
+
+    /**
+     * Test for {@link TestMapping#getTests()} for loading tests from a test_mappings.zip and a
+     * directory
+     */
+    @Test
+    public void testGetTestsWithAdditionalTestMappingDir() throws Exception {
+        // Test directory1 structure:
+        // ├── disabled-presubmit-tests
+        // ├── src1
+        // │   └── TEST_MAPPING
+        // └── test_mappings.zip
+        //
+        // Test directory2 structure:
+        // ├── disabled-presubmit-tests
+        // ├── src2
+        // │   └── TEST_MAPPING
+        File tempDir = null;
+        File tempDir2 = null;
+        IBuildInfo mockBuildInfo = mock(IBuildInfo.class);
+        try {
+            // Create 1 test_mappings.zip
+            tempDir = FileUtil.createTempDir("test_mapping");
+            File srcDir = FileUtil.createNamedTempDir(tempDir, "src1");
+            createTestMapping(srcDir, "test_mapping_kernel1");
+            createTestMapping(tempDir, DISABLED_PRESUBMIT_TESTS);
+            List<File> filesToZip =
+                    Arrays.asList(srcDir, new File(tempDir, DISABLED_PRESUBMIT_TESTS));
+            File zipFile = Paths.get(tempDir.getAbsolutePath(), TEST_MAPPINGS_ZIP).toFile();
+            ZipUtil.createZip(filesToZip, zipFile);
+
+            // Create another 1 test_mappings.zip
+            tempDir2 = FileUtil.createTempDir("test_mapping");
+            File srcDir2 = FileUtil.createNamedTempDir(tempDir2, "src2");
+            createTestMapping(srcDir2, "test_mapping_kernel2");
+
+            when(mockBuildInfo.getFile(TEST_MAPPINGS_ZIP)).thenReturn(zipFile);
+            when(mockBuildInfo.getFile("extra-zip")).thenReturn(tempDir2);
             Set<TestInfo> results =
                     mTestMapping.getTests(
                             mockBuildInfo,

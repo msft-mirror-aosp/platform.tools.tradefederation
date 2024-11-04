@@ -22,7 +22,6 @@ import static com.google.common.base.Preconditions.checkState;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner.TestSize;
-import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -51,6 +50,7 @@ import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.ddmlib.AndroidTestOrchestratorRemoteTestRunner;
 import com.android.tradefed.result.ddmlib.DefaultRemoteAndroidTestRunner;
+import com.android.tradefed.result.ddmlib.RemoteAndroidTestRunner;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
@@ -75,6 +75,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -211,7 +212,7 @@ public class InstrumentationTest
             name = "instrumentation-arg",
             description = "Additional instrumentation arguments to provide.",
             requiredForRerun = true)
-    private final Map<String, String> mInstrArgMap = new HashMap<String, String>();
+    private final Map<String, String> mInstrArgMap = new LinkedHashMap<String, String>();
 
     @Option(
             name = "rerun-from-file",

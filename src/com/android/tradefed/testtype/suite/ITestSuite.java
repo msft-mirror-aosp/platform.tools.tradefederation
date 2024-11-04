@@ -21,6 +21,7 @@ import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.Configuration;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.DynamicRemoteFileResolver;
 import com.android.tradefed.config.IConfiguration;
@@ -92,6 +93,7 @@ import com.android.tradefed.util.AbiFormatter;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.SearchArtifactUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
@@ -101,6 +103,7 @@ import com.proto.tradefed.feature.FeatureResponse;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -389,6 +392,13 @@ public abstract class ITestSuite
 
     @Option(name = "stage-remote-file", description = "Whether to allow staging of remote files.")
     private boolean mStageRemoteFile = true;
+
+    @Option(
+            name = "prioritize-host-config",
+            description =
+                    "If there are duplicate test configs for host/target, prioritize the host"
+                            + " config, otherwise use the target config.")
+    private boolean mPrioritizeHostConfig = false;
 
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
@@ -682,6 +692,12 @@ public abstract class ITestSuite
                 ValidateSuiteConfigHelper.validateConfig(config.getValue());
                 Map<String, List<ITargetPreparer>> preparersPerDevice =
                         getPreparerPerDevice(config.getValue());
+                // add the prioritize-host-config value in the module config
+                config.getValue()
+                        .getConfigurationDescription()
+                        .addMetadata(
+                                ConfigurationDescriptor.PRIORITIZE_HOST_CONFIG_KEY,
+                                String.valueOf(mPrioritizeHostConfig));
                 ModuleDefinition module =
                         new ModuleDefinition(
                                 config.getKey(),
@@ -930,14 +946,7 @@ public abstract class ITestSuite
                                     .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
                     CacheResultDescriptor cacheDescriptor = null;
-                    // TODO(b/363066706): Switch to official API
-                    File moduleDir = null;
-                    try {
-                        moduleDir = FileUtil.findDirectory(baseModuleName, getTestsDir());
-                        CLog.d("module %s directory is %s", module.getId(), moduleDir);
-                    } catch (IOException e) {
-                        CLog.e(e);
-                    }
+                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName, true);
                     if (moduleDir == null) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
@@ -949,7 +958,7 @@ public abstract class ITestSuite
                         cacheDescriptor =
                                 SuiteResultCacheUtil.lookUpModuleResults(
                                         mMainConfiguration,
-                                        module.getId(),
+                                        module,
                                         moduleConfig,
                                         moduleDir,
                                         mSkipContext);
@@ -957,8 +966,10 @@ public abstract class ITestSuite
                             try {
                                 File protoResults =
                                         FileUtil.createTempFile("module-results", ".proto");
+                                // Do not report granular results until we need them they consume a
+                                // lot of memory
                                 moduleReporter =
-                                        new ModuleProtoResultReporter(testInfo.getContext());
+                                        new ModuleProtoResultReporter(testInfo.getContext(), false);
                                 moduleReporter.setOutputFile(protoResults);
                                 moduleListeners.add(moduleReporter);
                             } catch (IOException e) {
@@ -974,7 +985,13 @@ public abstract class ITestSuite
                     // Trigger module start on module level listener too
                     new ResultForwarder(moduleListeners)
                             .testModuleStarted(module.getModuleInvocationContext());
-                    if (moduleConfig != null) {
+                    boolean applyCachedResults =
+                            cacheDescriptor != null
+                                    && cacheDescriptor.isCacheHit()
+                                    && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                    && mSkipContext.shouldUseCache();
+                    // TODO(b/372243975): report logs even while applying caching
+                    if (moduleConfig != null && !applyCachedResults) {
                         try (InputStreamSource source =
                                 new FileInputStreamSource(moduleConfig, false)) {
                             listener.testLog(
@@ -998,16 +1015,14 @@ public abstract class ITestSuite
                                                     + " detected.");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
-                        } else if (cacheDescriptor != null
-                                && cacheDescriptor.isCacheHit()
-                                && mMainConfiguration.getCommandOptions().reportCacheResults()
-                                && mSkipContext.shouldUseCache()) {
+                        } else if (applyCachedResults) {
                             CLog.d("Reporting cached results for module %s", module.getId());
-                            // TODO: Include pointer to base results
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(
                                             ModuleDefinition.MODULE_SKIPPED,
                                             cacheDescriptor.getDetails());
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(ModuleDefinition.SPARSE_MODULE, "true");
                         } else {
                             runSingleModule(module, moduleInfo, listener, moduleListeners);
                         }
@@ -1024,7 +1039,7 @@ public abstract class ITestSuite
                                 SuiteResultCacheUtil.uploadModuleResults(
                                         mMainConfiguration,
                                         testInfo,
-                                        module.getId(),
+                                        module,
                                         moduleConfig,
                                         protoResults,
                                         moduleDir,
@@ -1038,8 +1053,10 @@ public abstract class ITestSuite
                         // execution
                         listenerWithCollectors.testModuleEnded();
                         mModuleInProgress = null;
-                        // Following modules will not be isolated if no action is taken
-                        CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                        if (!applyCachedResults) {
+                            // Following modules will not be isolated if no action is taken
+                            CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
+                        }
                     }
                     if (moduleRan) {
                         // Module isolation routine
@@ -1086,6 +1103,7 @@ public abstract class ITestSuite
 
     /** Log the module configuration. */
     private File dumpModuleConfig(ModuleDefinition module) {
+        boolean restore = false;
         try {
             File configFile =
                     FileUtil.createTempFile(
@@ -1094,7 +1112,12 @@ public abstract class ITestSuite
                                     .getModuleName(),
                             ".xml",
                             CurrentInvocation.getWorkFolder());
-            try (PrintWriter pw = new PrintWriter(configFile)) {
+            if (module.getModuleConfiguration().getTests().isEmpty()) {
+                module.getModuleConfiguration().setTests(module.getTests());
+                restore = true;
+            }
+            try (FileOutputStream stream = new FileOutputStream(configFile);
+                    PrintWriter pw = new PrintWriter(stream, true)) {
                 module.getModuleConfiguration()
                         .dumpXml(
                                 pw,
@@ -1103,6 +1126,10 @@ public abstract class ITestSuite
                                 false);
                 pw.flush();
                 return configFile;
+            } finally {
+                if (restore) {
+                    module.getModuleConfiguration().setTests(new ArrayList<>());
+                }
             }
         } catch (RuntimeException | IOException e) {
             CLog.e(e);
@@ -1930,5 +1957,20 @@ public abstract class ITestSuite
 
     public void setSkipContext(SkipContext skipContext) {
         mSkipContext = skipContext;
+    }
+
+    /* Return a {@link boolean} for the setting of prioritize-host-config.*/
+    boolean getPrioritizeHostConfig() {
+        return mPrioritizeHostConfig;
+    }
+
+    /**
+     * Set option prioritize-host-config.
+     *
+     * @param prioritizeHostConfig true to prioritize host config, i.e., run host test if possible.
+     */
+    @com.google.common.annotations.VisibleForTesting
+    protected void setPrioritizeHostConfig(boolean prioritizeHostConfig) {
+        mPrioritizeHostConfig = prioritizeHostConfig;
     }
 }

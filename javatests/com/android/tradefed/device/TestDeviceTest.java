@@ -50,7 +50,6 @@ import com.android.ddmlib.ShellCommandUnresponsiveException;
 import com.android.ddmlib.SplitApkInstaller;
 import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
-import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 import com.android.sdklib.AndroidVersion;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice.ApexInfo;
@@ -3324,7 +3323,7 @@ public class TestDeviceTest {
     /**
      * Test that trying to run a test with a user with {@link
      * TestDevice#runInstrumentationTestsAsUser(IRemoteAndroidTestRunner, int, Collection)} fails if
-     * the {@link IRemoteAndroidTestRunner} is not an instance of {@link RemoteAndroidTestRunner}.
+     * the {@link IRemoteAndroidTestRunner} is not an instance of ddmlib RemoteAndroidTestRunner.
      */
     @Test
     public void testrunInstrumentationTestsAsUser_failed() throws Exception {
@@ -5718,17 +5717,21 @@ public class TestDeviceTest {
                     public File pullFile(String remoteFilePath) throws DeviceNotAvailableException {
                         return new File("test");
                     }
+
+                    @Override
+                    public boolean doesFileExist(String deviceFilePath, int userId)
+                            throws DeviceNotAvailableException {
+                        return true;
+                    }
                 };
         injectShellResponse("pidof system_server", "929");
         injectShellResponse("am dumpheap 929 /data/dump.hprof", "");
-        injectShellResponse("ls \"/data/dump.hprof\"", "/data/dump.hprof");
         injectShellResponse("rm -rf /data/dump.hprof", "");
 
         File res = mTestDevice.dumpHeap("system_server", "/data/dump.hprof");
         assertNotNull(res);
         verifyShellResponse("pidof system_server");
         verifyShellResponse("am dumpheap 929 /data/dump.hprof");
-        verifyShellResponse("ls \"/data/dump.hprof\"");
         verifyShellResponse("rm -rf /data/dump.hprof");
     }
 
@@ -6040,21 +6043,22 @@ public class TestDeviceTest {
     /** Test {@link TestDevice#doesFileExist(String)}. */
     @Test
     public void testDoesFileExists() throws Exception {
-        injectShellResponse("ls \"/data/local/tmp/file\"", "file");
+        TestDevice testDevice =
+                new TestableTestDeviceV2()
+                        .injectShellV2Command("ls '/data/local/tmp/file\'", "file");
 
-        assertTrue(mTestDevice.doesFileExist("/data/local/tmp/file"));
-        verifyShellResponse("ls \"/data/local/tmp/file\"");
+        assertTrue(testDevice.doesFileExist("/data/local/tmp/file"));
     }
 
     /** Test {@link TestDevice#doesFileExist(String)} when the file does not exists. */
     @Test
     public void testDoesFileExists_notExists() throws Exception {
-        injectShellResponse(
-                "ls \"/data/local/tmp/file\"",
-                "ls: cannot access 'file': No such file or directory\n");
-
-        assertFalse(mTestDevice.doesFileExist("/data/local/tmp/file"));
-        verifyShellResponse("ls \"/data/local/tmp/file\"");
+        TestDevice testDevice =
+                new TestableTestDeviceV2()
+                        .injectShellV2Command(
+                                "ls '/data/local/tmp/file'",
+                                "ls: cannot access 'file': No such file or directory\n");
+        assertFalse(testDevice.doesFileExist("/data/local/tmp/file"));
     }
 
     /**

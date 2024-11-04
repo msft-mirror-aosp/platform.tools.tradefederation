@@ -42,6 +42,7 @@ public abstract class GTestParserTestBase {
     protected static final String GTEST_OUTPUT_FILE_12 = "gtest_output12.txt";
     protected static final String GTEST_OUTPUT_FILE_13 = "gtest_output13.txt";
     protected static final String GTEST_OUTPUT_FILE_14 = "gtest_output14.txt";
+    protected static final String GTEST_OUTPUT_FILE_15 = "gtest_output15.txt";
     protected static final String GTEST_LIST_FILE_1 = "gtest_list1.txt";
     protected static final String GTEST_LIST_FILE_2 = "gtest_list2.txt";
     protected static final String GTEST_LIST_FILE_3 = "gtest_list3.txt";

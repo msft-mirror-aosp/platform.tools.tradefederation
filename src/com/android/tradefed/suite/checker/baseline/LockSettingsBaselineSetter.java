@@ -35,6 +35,7 @@ public class LockSettingsBaselineSetter extends DeviceBaselineSetter {
     private static final String LOCK_SCREEN_OFF_COMMAND = "locksettings set-disabled true";
     private static final String CLEAR_PWD_COMMAND = "locksettings clear --old %s";
     private static final String KEYCODE_MENU_COMMAND = "input keyevent KEYCODE_MENU";
+    private static final String KEYCODE_HOME_COMMAND = "input keyevent KEYCODE_HOME";
 
     public LockSettingsBaselineSetter(JSONObject object, String name) throws JSONException {
         super(object, name);
@@ -59,8 +60,10 @@ public class LockSettingsBaselineSetter extends DeviceBaselineSetter {
         if (!isLockScreenDisabled(mDevice)) {
             return false;
         }
-        CommandResult result = mDevice.executeShellV2Command(KEYCODE_MENU_COMMAND);
-        return CommandStatus.SUCCESS.equals(result.getStatus());
+        CommandResult menuResult = mDevice.executeShellV2Command(KEYCODE_MENU_COMMAND);
+        CommandResult homeResult = mDevice.executeShellV2Command(KEYCODE_HOME_COMMAND);
+        return CommandStatus.SUCCESS.equals(menuResult.getStatus())
+                && CommandStatus.SUCCESS.equals(homeResult.getStatus());
     }
 
     private boolean isLockScreenDisabled(ITestDevice mDevice) throws DeviceNotAvailableException {

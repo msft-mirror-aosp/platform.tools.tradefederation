@@ -25,10 +25,14 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.ZipUtil;
+import com.android.tradefed.util.avd.HostOrchestratorUtil;
+
 import com.google.common.base.Strings;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,6 +56,10 @@ public class CommonLogRemoteFileUtil {
     /** The directory where to find Oxygen device logs. */
     public static final String OXYGEN_CUTTLEFISH_LOG_DIR =
             "/tmp/cfbase/3/cuttlefish/instances/cvd-1/logs/";
+
+    /** cvd fetch log */
+    public static final String OXYGEN_CUTTLEFISH_FETCH_LOG = "/tmp/cfbase/3/fetch.log";
+
     /**
      * The directory where to find Oxygen device runtime logs. Only use this if
      * OXYGEN_CUTTLEFISH_LOG_DIR is not found.
@@ -143,6 +151,9 @@ public class CommonLogRemoteFileUtil {
         OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_EMULATOR_LOG_DIR, null, LogDataType.DIR));
         OXYGEN_LOG_FILES.add(
                 new KnownLogFileEntry(OXYGEN_CUTTLEFISH_LOG_DIR, null, LogDataType.DIR));
+        OXYGEN_LOG_FILES.add(
+                new KnownLogFileEntry(
+                        OXYGEN_CUTTLEFISH_FETCH_LOG, null, LogDataType.CUTTLEFISH_LOG));
         OXYGEN_LOG_FILES.add(new KnownLogFileEntry(OXYGEN_GOLDFISH_LOG_DIR, null, LogDataType.DIR));
         NETSIM_LOG_FILES.add(new KnownLogFileEntry(NETSIM_LOG_DIR, null, LogDataType.DIR));
         NETSIM_LOG_FILES.add(new KnownLogFileEntry(NETSIM_USER_LOG_DIR, null, LogDataType.DIR));
@@ -371,6 +382,41 @@ public class CommonLogRemoteFileUtil {
             CLog.e("Failed to zip the tombstones:");
             CLog.e(e);
         }
+    }
+
+    /**
+     * Pull CF logs via Host Orchestrator.
+     *
+     * @param gceAvdInfo The descriptor of the remote instance.
+     * @param hOUtil The {@link HostOrchestratorUtil} used to pull CF logs.
+     * @param logger The {@link ITestLogger} where to log the file.
+     */
+    public static void pullCommonCvdLogs(
+            GceAvdInfo gceAvdInfo, HostOrchestratorUtil hOUtil, ITestLogger logger) {
+        if (hOUtil == null || gceAvdInfo == null || gceAvdInfo.hostAndPort() == null) {
+            CLog.e(
+                    "HostOrchestratorUtil, GceAvdInfo or its host setting was null, cannot collect"
+                            + " remote files.");
+            return;
+        }
+        File cvdLogsDir = hOUtil.pullCvdHostLogs();
+        if (cvdLogsDir != null) {
+            GceManager.logDirectory(cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
+            FileUtil.recursiveDelete(cvdLogsDir);
+        } else {
+            CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
+        }
+        File tempFile =
+                hOUtil.collectLogByCommand("host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        GceManager.logAndDeleteFile(tempFile, "host_kernel", logger);
+        tempFile = hOUtil.collectLogByCommand("host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+        GceManager.logAndDeleteFile(tempFile, "host_orchestrator", logger);
+        tempFile = hOUtil.getTunnelLog();
+        GceManager.logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
+        tempFile =
+                hOUtil.collectLogByCommand(
+                        "oxygen_container_log", HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
+        GceManager.logAndDeleteFile(tempFile, "oxygen_container_log", logger);
     }
 
     /**

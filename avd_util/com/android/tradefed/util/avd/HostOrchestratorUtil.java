@@ -37,7 +37,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +45,7 @@ public class HostOrchestratorUtil {
     public static final String URL_HOST_KERNEL_LOG = "_journal/entries?_TRANSPORT=kernel";
     public static final String URL_HO_LOG =
             "_journal/entries?_SYSTEMD_UNIT=cuttlefish-host_orchestrator.service";
+    public static final String URL_OXYGEN_CONTAINER_LOG = "_journal/entries?CONTAINER_NAME=oxygen";
     private static final long CMD_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
     private static final long WAIT_FOR_OPERATION_MS = 5 * 6 * 1000; // 30 sec
     private static final long WAIT_FOR_OPERATION_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
@@ -77,47 +77,6 @@ public class HostOrchestratorUtil {
     private String mAccountingUser;
     private Map<String, String> mExtraOxygenArgs;
     private OxygenClient mOxygenClient;
-
-    @Deprecated
-    public HostOrchestratorUtil(
-            boolean useOxygenation,
-            boolean useCvdOxygen,
-            File sshPrivateKeyPath,
-            String instanceUser,
-            String instanceName,
-            String host,
-            String oxygenationDeviceId,
-            File avdDriverBinary) {
-        this(
-                useOxygenation,
-                useCvdOxygen,
-                sshPrivateKeyPath,
-                instanceUser,
-                instanceName,
-                host,
-                oxygenationDeviceId,
-                new OxygenClient(Arrays.asList(avdDriverBinary.getAbsolutePath())));
-    }
-
-    @Deprecated
-    public HostOrchestratorUtil(
-            boolean useOxygenation,
-            boolean useCvdOxygen,
-            File sshPrivateKeyPath,
-            String instanceUser,
-            String instanceName,
-            String host,
-            String oxygenationDeviceId,
-            OxygenClient oxygenClient) {
-        mUseOxygenation = useOxygenation;
-        mUseCvdOxygen = useCvdOxygen;
-        mSshPrivateKeyPath = sshPrivateKeyPath;
-        mInstanceUser = instanceUser;
-        mInstanceName = instanceName;
-        mHost = host;
-        mOxygenationDeviceId = oxygenationDeviceId;
-        mOxygenClient = oxygenClient;
-    }
 
     public HostOrchestratorUtil(
             boolean useOxygenation,
@@ -179,7 +138,9 @@ public class HostOrchestratorUtil {
             FileUtil.deleteFile(tempFile);
             return null;
         } finally {
-            mOxygenClient.closeLHPConnection(tunnel);
+            if (mUseOxygenation) {
+                mOxygenClient.closeLHPConnection(tunnel);
+            }
         }
     }
 
@@ -243,7 +204,9 @@ public class HostOrchestratorUtil {
         } catch (IOException e) {
             CLog.e("Failed pulling cvd host logs via Host Orchestrator: %s", e);
         } finally {
-            mOxygenClient.closeLHPConnection(tunnel);
+            if (mUseOxygenation) {
+                mOxygenClient.closeLHPConnection(tunnel);
+            }
             cvdLogsZip.delete();
         }
         return cvdLogsDir;
@@ -279,7 +242,9 @@ public class HostOrchestratorUtil {
         } catch (IOException e) {
             CLog.e("Failed getting gce status via Host Orchestrator: %s", e);
         } finally {
-            mOxygenClient.closeLHPConnection(tunnel);
+            if (mUseOxygenation) {
+                mOxygenClient.closeLHPConnection(tunnel);
+            }
         }
         return false;
     }
@@ -333,7 +298,9 @@ public class HostOrchestratorUtil {
         } catch (IOException e) {
             CLog.e("Failed powerwashing gce via Host Orchestrator: %s", e);
         } finally {
-            mOxygenClient.closeLHPConnection(tunnel);
+            if (mUseOxygenation) {
+                mOxygenClient.closeLHPConnection(tunnel);
+            }
         }
         return curlRes;
     }
@@ -382,7 +349,9 @@ public class HostOrchestratorUtil {
         } catch (IOException e) {
             CLog.e("Failed stopping gce via Host Orchestrator: %s", e);
         } finally {
-            mOxygenClient.closeLHPConnection(tunnel);
+            if (mUseOxygenation) {
+                mOxygenClient.closeLHPConnection(tunnel);
+            }
         }
         return curlRes;
     }
@@ -395,6 +364,12 @@ public class HostOrchestratorUtil {
 
     /** Attempt to restore snapshot of a Cuttlefish instance via Host Orchestrator. */
     public CommandResult restoreSnapshotGce() {
+        // TODO(b/339304559): Flesh out this section when the host orchestrator is supported.
+        return new CommandResult(CommandStatus.EXCEPTION);
+    }
+
+    /** Attempt to delete snapshot of a Cuttlefish instance via Host Orchestrator. */
+    public CommandResult deleteSnapshotGce(String snapshotId) {
         // TODO(b/339304559): Flesh out this section when the host orchestrator is supported.
         return new CommandResult(CommandStatus.EXCEPTION);
     }
