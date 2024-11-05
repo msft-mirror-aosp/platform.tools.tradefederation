@@ -946,7 +946,9 @@ public abstract class ITestSuite
                                     .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
                     CacheResultDescriptor cacheDescriptor = null;
-                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName, true);
+                    File moduleDir =
+                            SearchArtifactUtil.getModuleDirFromConfig(
+                                    module.getModuleInvocationContext());
                     if (moduleDir == null) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);

@@ -151,7 +151,13 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
         String[] command = request.getArgsList().toArray(new String[0]);
         File record = null;
         try {
-            record = FileUtil.createTempFile("test_record", ".pb");
+            // For Cloud ATE, use shared directory for sharing the record file.
+            if(System.getenv("IS_CLOUD_ATE") != null) {
+                File shared = new File("/tmp/cloud-ate-shared/");
+                record = FileUtil.createTempFile("test_record", ".pb", shared);
+            } else {
+                record = FileUtil.createTempFile("test_record", ".pb");
+            }
             CommandStatusHandler handler = new CommandStatusHandler();
             FileProtoResultReporter fileReporter = new FileProtoResultReporter();
             fileReporter.setOutputFile(record);
