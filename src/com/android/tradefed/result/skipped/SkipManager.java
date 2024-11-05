@@ -16,11 +16,14 @@
 package com.android.tradefed.result.skipped;
 
 import com.android.tradefed.build.content.ContentAnalysisContext;
+import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
+import com.android.tradefed.build.content.ContentModuleLister;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
@@ -163,6 +166,24 @@ public class SkipManager implements IDisableable {
     /** Reports whether we should skip the current invocation. */
     public boolean shouldSkipInvocation(TestInformation information) {
         // Build heuristic for skipping invocation
+        if (!mNoTestsDiscovered && !mModulesDiscovered.isEmpty()) {
+            Set<String> possibleModules = new HashSet<>();
+            for (ContentAnalysisContext context : mTestArtifactsAnalysisContent) {
+                if (context.analysisMethod().equals(AnalysisMethod.SANDBOX_WORKDIR)) {
+                    possibleModules.addAll(ContentModuleLister.buildModuleList(context));
+                }
+            }
+            if (!possibleModules.isEmpty()) {
+                CLog.d("Module existing in the zips: %s", possibleModules);
+                Set<String> runnableModules = new HashSet<String>(mModulesDiscovered);
+                runnableModules.retainAll(possibleModules);
+                if (runnableModules.isEmpty()) {
+                    mNoTestsDiscovered = true;
+                    CLog.d("discovered modules '%s' do not exists in zips.", mModulesDiscovered);
+                }
+            }
+        }
+
         if (mNoTestsDiscovered) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.SKIP_NO_TESTS_DISCOVERED, 1);
@@ -176,6 +197,7 @@ public class SkipManager implements IDisableable {
                 return false;
             }
         }
+
         ArtifactsAnalyzer analyzer =
                 new ArtifactsAnalyzer(
                         information,
@@ -195,7 +217,7 @@ public class SkipManager implements IDisableable {
         if (isDisabled()) {
             return;
         }
-        if ("WORK_NODE".equals(context.getAttribute("trigger"))) {
+        if (InvocationContext.isPresubmit(context)) {
             try (TradefedFeatureClient client = new TradefedFeatureClient()) {
                 Map<String, String> args = new HashMap<>();
                 FeatureResponse response = client.triggerFeature("FetchDemotionInformation", args);
@@ -224,7 +246,7 @@ public class SkipManager implements IDisableable {
             return false;
         }
         mImageFileToDigest.putAll(results.getImageToDigest());
-        boolean presubmit = "WORK_NODE".equals(information.getContext().getAttribute("trigger"));
+        boolean presubmit = InvocationContext.isPresubmit(information.getContext());
         if (results.deviceImageChanged()) {
             return false;
         }

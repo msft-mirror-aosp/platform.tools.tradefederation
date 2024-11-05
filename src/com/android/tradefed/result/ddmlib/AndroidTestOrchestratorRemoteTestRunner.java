@@ -17,7 +17,6 @@
 package com.android.tradefed.result.ddmlib;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.testrunner.RemoteAndroidTestRunner;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -25,8 +25,12 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IShardableTest;
@@ -71,7 +75,7 @@ import java.util.stream.Collectors;
  * (see
  * https://www.bluetooth.com/develop-with-bluetooth/qualification-listing/qualification-test-tools/profile-tuning-suite/).
  */
-public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableTest {
+public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableTest, ITestLogger {
 
     private static final String TAG = "PandoraPtsBot";
 
@@ -522,9 +526,22 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                     if (!matchingFlagConfig || unflagged) {
                         runPtsBotTest(profile, testName, testInfo, listener);
                     }
-                    long endTimestamp = System.currentTimeMillis();
-                    listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
+                    try {
+                        File snoopFile = FileUtil.createTempFile("android_snoop_log", ".log");
+                        testDevice.pullFile("/data/misc/bluetooth/logs/btsnoop_hci.log", snoopFile);
+                        try (InputStreamSource source =
+                                new FileInputStreamSource(snoopFile, true)) {
+                            listener.testLog(
+                                    String.format("android_btsnoop_%s", testName),
+                                    LogDataType.BT_SNOOP_LOG,
+                                    source);
+                        }
+                    } catch (DeviceNotAvailableException | IOException e) {
+                        CLog.e("Cannot fetch Android snoop logs: " + e.toString());
+                    }
                 }
+                long endTimestamp = System.currentTimeMillis();
+                listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
             } else {
                 CLog.i("No tests applicable for %s", profile);
             }
@@ -765,6 +782,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
 
         ProcessBuilder builder = new ProcessBuilder(command);
 
+        builder.environment().put("PYTHONDONTWRITEBYTECODE", "1");
         if (binTempDir != null) builder.environment().put("XDG_CACHE_HOME", binTempDir.getPath());
         if (pythonHome != null) builder.environment().put("PYTHONHOME", pythonHome.getPath());
 
