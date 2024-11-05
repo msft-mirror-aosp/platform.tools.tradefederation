@@ -44,8 +44,6 @@ import com.android.tradefed.testtype.suite.params.NegativeHandler;
 import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.FileUtil;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -136,13 +134,6 @@ public class BaseTestSuite extends ITestSuite {
                     "The tag that must be run. If specified, only configurations containing the "
                             + "matching suite tag will be able to run.")
     private String mSuiteTag = null;
-
-    @Option(
-            name = "prioritize-host-config",
-            description =
-                    "If there are duplicate test configs for host/target, prioritize the host"
-                            + " config, otherwise use the target config.")
-    private boolean mPrioritizeHostConfig = false;
 
     @Option(
             name = "suite-config-prefix",
@@ -355,7 +346,7 @@ public class BaseTestSuite extends ITestSuite {
 
             // Include host or target first in the search if it exists, we have to this in
             // BaseTestSuite because it's the only one with the BuildInfo knowledge of linked files
-            if (mPrioritizeHostConfig) {
+            if (getPrioritizeHostConfig()) {
                 File hostSubDir = getBuildInfo().getFile(BuildInfoFileKey.HOST_LINKED_DIR);
                 if (hostSubDir != null && hostSubDir.exists()) {
                     testsDirectories.add(hostSubDir);
@@ -696,21 +687,6 @@ public class BaseTestSuite extends ITestSuite {
         }
         filters.clear();
         filters.addAll(cleanedFilters);
-    }
-
-    /* Return a {@link boolean} for the setting of prioritize-host-config.*/
-    boolean getPrioritizeHostConfig() {
-        return mPrioritizeHostConfig;
-    }
-
-    /**
-     * Set option prioritize-host-config.
-     *
-     * @param prioritizeHostConfig true to prioritize host config, i.e., run host test if possible.
-     */
-    @VisibleForTesting
-    protected void setPrioritizeHostConfig(boolean prioritizeHostConfig) {
-        mPrioritizeHostConfig = prioritizeHostConfig;
     }
 
     /** Log a file directly to the result reporter. */

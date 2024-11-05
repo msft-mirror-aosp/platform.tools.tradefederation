@@ -82,16 +82,6 @@ public class TestContentAnalyzer {
                     }
                 }
             }
-            // Handle invalidation should it be set.
-            for (ContentAnalysisContext context : activeContexts) {
-                if (context.abortAnalysis()) {
-                    CLog.w("Analysis was aborted: %s", context.abortReason());
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
-                    return null;
-                }
-            }
-
             List<ContentAnalysisContext> buildKeyAnalysis =
                     activeContexts.stream()
                             .filter(c -> AnalysisMethod.BUILD_KEY.equals(c.analysisMethod()))
@@ -99,16 +89,19 @@ public class TestContentAnalyzer {
             // Analyze separately the BUILD_KEY files
             int countBuildKeyDiff = 0;
             for (ContentAnalysisContext context : buildKeyAnalysis) {
-                if (AnalysisMethod.BUILD_KEY.equals(context.analysisMethod())) {
-                    boolean hasChanged = buildKeyAnalysis(context);
-                    if (hasChanged) {
-                        CLog.d(
-                                "build key '%s' has changed or couldn't be evaluated.",
-                                context.contentEntry());
-                        countBuildKeyDiff++;
-                        InvocationMetricLogger.addInvocationMetrics(
-                                InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
-                    }
+                boolean hasChanged = true;
+                if (context.abortAnalysis()) {
+                    hasChanged = true;
+                } else {
+                    hasChanged = buildKeyAnalysis(context);
+                }
+                if (hasChanged) {
+                    CLog.d(
+                            "build key '%s' has changed or couldn't be evaluated.",
+                            context.contentEntry());
+                    countBuildKeyDiff++;
+                    InvocationMetricLogger.addInvocationMetrics(
+                            InvocationMetricKey.BUILD_KEY_WITH_DIFFS, 1);
                 }
             }
             activeContexts.removeAll(buildKeyAnalysis);
@@ -118,28 +111,33 @@ public class TestContentAnalyzer {
             }
             List<ContentAnalysisResults> allResults = new ArrayList<>();
             for (ContentAnalysisContext ac : activeContexts) {
-                ContentAnalysisResults results;
+                ContentAnalysisResults results = null;
                 AnalysisMethod method = ac.analysisMethod();
-                switch (method) {
-                    case MODULE_XTS:
-                        results = xtsAnalysis(information.getBuildInfo(), ac);
-                        break;
-                    case FILE:
-                        results = fileAnalysis(information.getBuildInfo(), ac);
-                        break;
-                    case SANDBOX_WORKDIR:
-                        results = workdirAnalysis(information.getBuildInfo(), ac);
-                        break;
-                    default:
-                        // do nothing for the rest for now.
-                        return null;
+                if (!ac.abortAnalysis()) {
+                    switch (method) {
+                        case MODULE_XTS:
+                            results = xtsAnalysis(information.getBuildInfo(), ac);
+                            break;
+                        case FILE:
+                            results = fileAnalysis(information.getBuildInfo(), ac);
+                            break;
+                        case SANDBOX_WORKDIR:
+                            results = workdirAnalysis(information.getBuildInfo(), ac);
+                            break;
+                        default:
+                            // do nothing for the rest for now.
+                            return null;
+                    }
                 }
                 if (results == null) {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
-                    return null;
+                    // Continue with an invalidated analysis
+                    results = new ContentAnalysisResults().addModifiedSharedFolder(1);
+                    CLog.d("Content analysis results for %s: invalid", ac.contentEntry());
+                } else {
+                    CLog.d("content analysis results for %s: %s", ac.contentEntry(), results);
                 }
-                CLog.d("content analysis results for %s: %s", ac.contentEntry(), results);
                 allResults.add(results);
             }
             ContentAnalysisResults finalResults = ContentAnalysisResults.mergeResults(allResults);
@@ -160,8 +158,19 @@ public class TestContentAnalyzer {
             return null;
         }
         diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
-        return mapDiffsToModule(
-                context.contentEntry(), diffs, build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
+        ContentAnalysisResults results =
+                mapDiffsToModule(
+                        context.contentEntry(),
+                        diffs,
+                        build.getFile(BuildInfoFileKey.ROOT_DIRECTORY));
+        if (results != null) {
+            if (!context.commonLocations().isEmpty()) {
+                results.addImageDigestMapping(
+                        context.contentEntry() + "_common_location",
+                        ContentMerkleTree.buildCommonLocationFromContext(context));
+            }
+        }
+        return results;
     }
 
     private ContentAnalysisResults mapDiffsToModule(
@@ -184,7 +193,7 @@ public class TestContentAnalyzer {
         }
         File testcasesRoot = FileUtil.findFile(rootDir, "testcases");
         if (testcasesRoot == null) {
-            CLog.e("Could find a testcases directory, something went wrong.");
+            CLog.e("Couldn't find a testcases directory, something went wrong.");
             return null;
         }
         for (String depFile : dependencyFiles) {
@@ -310,6 +319,11 @@ public class TestContentAnalyzer {
         ContentAnalysisResults results = new ContentAnalysisResults();
         List<ArtifactFileDescriptor> diffs = new ArrayList<>();
         Set<String> AllCommonDirs = new HashSet<>();
+        if (!context.commonLocations().isEmpty()) {
+            results.addImageDigestMapping(
+                    context.contentEntry() + "_common_location",
+                    ContentMerkleTree.buildCommonLocationFromContext(context));
+        }
         List<ArtifactFileDescriptor> diff =
                 analyzeContentDiff(context.contentInformation(), context.contentEntry());
         if (diff == null) {

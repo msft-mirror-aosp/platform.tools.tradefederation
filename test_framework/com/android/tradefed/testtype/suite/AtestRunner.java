@@ -25,6 +25,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.SubprocessResultsReporter;
 import com.android.tradefed.targetprep.ITargetPreparer;
+import com.android.tradefed.targetprep.incremental.IIncrementalSetup;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -97,6 +98,20 @@ public class AtestRunner extends BaseTestSuite {
     )
     private List<File> mModuleConfigPaths = new ArrayList<>();
 
+    @Option(
+        name = "incremental-setup",
+        description =
+                "Indicates the user specification of whether to enable incremental setup, "
+                    + "default to UNSPECIFIED."
+    )
+    private IncrementalSetupEnabled mIncrementalSetupEnabled = IncrementalSetupEnabled.UNSPECIFIED;
+
+    private static enum IncrementalSetupEnabled {
+        UNSPECIFIED,
+        NO,
+        YES,
+    }
+
     public AtestRunner() {
         setMultiDeviceStrategy(MultiDeviceModuleStrategy.RUN);
     }
@@ -131,6 +146,12 @@ public class AtestRunner extends BaseTestSuite {
             }
             if (mDebug) {
                 addDebugger(testConfig);
+            }
+
+            if (mIncrementalSetupEnabled == IncrementalSetupEnabled.YES) {
+                setIncrementalSetupEnabledForTargetPreparers(testConfig, /* shouldEnable= */ true);
+            } else if (mIncrementalSetupEnabled == IncrementalSetupEnabled.NO) {
+                setIncrementalSetupEnabledForTargetPreparers(testConfig, /* shouldEnable= */ false);
             }
 
             // Inject include-filter to test.
@@ -246,6 +267,22 @@ public class AtestRunner extends BaseTestSuite {
                         "%s: Disabling Target Preparer TearDown (%s)",
                         testConfig.getName(), targetPreparer.getClass().getSimpleName());
                 targetPreparer.setDisableTearDown(true);
+            }
+        }
+    }
+
+    /**
+     * Helper to set incremental setup enabled or disabled to TargetPreparers of a test.
+     *
+     * @param testConfig the test config which contains all target preparers.
+     * @param shouldEnable {@code true} to enable incremental setup, otherwise disable incremental
+     *     setup.
+     */
+    private static void setIncrementalSetupEnabledForTargetPreparers(
+        IConfiguration testConfig, boolean shouldEnable) {
+        for (ITargetPreparer targetPreparer : testConfig.getTargetPreparers()) {
+            if (targetPreparer instanceof IIncrementalSetup) {
+                ((IIncrementalSetup) targetPreparer).setIncrementalSetupEnabled(shouldEnable);
             }
         }
     }

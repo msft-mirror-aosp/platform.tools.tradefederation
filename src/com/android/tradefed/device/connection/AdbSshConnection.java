@@ -170,7 +170,9 @@ public class AdbSshConnection extends AdbTcpConnection {
                     break;
                 }
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-                waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+                waitForAdbConnect(
+                        getDevice().getSerialNumber(),
+                        getDevice().getOptions().getAdbConnectWaitTime());
             }
         } finally {
             getDevice().setRecoveryMode(previousMode);
@@ -229,7 +231,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getGceTunnelMonitor().closeConnection();
                 getRunUtil().sleep(WAIT_FOR_TUNNEL_OFFLINE);
                 waitForTunnelOnline(WAIT_FOR_TUNNEL_ONLINE);
-                waitForAdbConnect(serial, WAIT_FOR_ADB_CONNECT);
+                waitForAdbConnect(serial, getDevice().getOptions().getAdbConnectWaitTime());
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.DEVICE_RECOVERED_FROM_SSH_TUNNEL, 1);
             } catch (Exception e) {
@@ -673,6 +675,56 @@ public class AdbSshConnection extends AdbTcpConnection {
     }
 
     /**
+     * Attempt to delete snapshot of a Cuttlefish instance
+     *
+     * @param user the host running user of AVD, <code>null</code> if not applicable.
+     * @return returns CommandResult of the delete snapshot attempts
+     * @throws TargetSetupError
+     */
+    public CommandResult deleteSnapshotGce(String user, String snapshotId) throws TargetSetupError {
+        CommandResult deleteRes = null;
+        if (Strings.isNullOrEmpty(snapshotId)) {
+            throw new TargetSetupError(
+                    "SnapshotId was not passed to delete snapshot.",
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_DELETE_SNAPSHOT);
+        }
+        if (mGceAvd == null) {
+            String errorMsg = "Can not get GCE AVD Info. launch GCE first?";
+            throw new TargetSetupError(
+                    errorMsg,
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+        }
+        if (getDevice().getOptions().useCvdCF()) {
+            deleteRes = mHOUtil.deleteSnapshotGce(snapshotId);
+        } else {
+            // Get the user from options instance-user if user is null.
+            if (user == null) {
+                user = getDevice().getOptions().getInstanceUser();
+            }
+            String deleteSnapshotCmd =
+                    String.format("rm -r /tmp/%s/snapshots/%s", user, snapshotId);
+            deleteRes =
+                    getGceHandler()
+                            .remoteSshCommandExecution(
+                                    mGceAvd,
+                                    getDevice().getOptions(),
+                                    getRunUtil(),
+                                    Math.max(10000L, getDevice().getOptions().getGceCmdTimeout()),
+                                    deleteSnapshotCmd.split(" "));
+        }
+        if (!CommandStatus.SUCCESS.equals(deleteRes.getStatus())) {
+            CLog.e("%s", deleteRes.getStderr());
+            throw new TargetSetupError(
+                    String.format("failed to delete snapshot device: %s", deleteRes.getStderr()),
+                    getDevice().getDeviceDescriptor(),
+                    DeviceErrorIdentifier.DEVICE_FAILED_TO_DELETE_SNAPSHOT);
+        }
+        return deleteRes;
+    }
+
+    /**
      * Attempt to snapshot a Cuttlefish instance
      *
      * @param user the host running user of AVD, <code>null</code> if not applicable.
@@ -793,7 +845,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                     identifier);
         }
         try {
-            waitForAdbConnect(getDevice().getSerialNumber(), WAIT_FOR_ADB_CONNECT);
+            waitForAdbConnect(
+                    getDevice().getSerialNumber(), getDevice().getOptions().getAdbConnectWaitTime());
             getDevice().waitForDeviceOnline(WAIT_FOR_DEVICE_ONLINE);
         } catch (DeviceNotAvailableException e) {
             CLog.e("%s", e.toString());

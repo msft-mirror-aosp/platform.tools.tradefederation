@@ -41,6 +41,7 @@ import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.AbiUtils;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
+import com.android.tradefed.util.SearchArtifactUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -247,6 +248,9 @@ public class PushFilePreparer extends BaseTargetPreparer
                         File moduleDir =
                                 FileUtil.findDirectory(
                                         mModuleName, scanDirs.toArray(new File[] {}));
+                        if (moduleDir == null) {
+                            moduleDir = SearchArtifactUtil.getModuleDirFromConfig();
+                        }
                         if (moduleDir != null) {
                             // If the spec is pushing the module itself
                             if (mModuleName.equals(fileName)) {
