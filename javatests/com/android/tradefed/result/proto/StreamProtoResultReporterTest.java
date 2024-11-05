@@ -116,9 +116,9 @@ public class StreamProtoResultReporterTest {
             // Invocation ends
             mReporter.invocationEnded(500L);
         } finally {
+            mReporter.closeSocket();
             receiver.joinReceiver(5000);
             receiver.close();
-            mReporter.closeSocket();
         }
         InOrder inOrder = Mockito.inOrder(mMockListener);
         inOrder.verify(mMockListener).invocationStarted(Mockito.any());
@@ -172,11 +172,11 @@ public class StreamProtoResultReporterTest {
                     "proto-report-port", Integer.toString(receiver.getSocketServerPort()));
             // No calls on the mocks
 
-            // If we join, then we will stop parsing events
-            receiver.joinReceiver(100);
             mReporter.invocationStarted(mInvocationContext);
+            receiver.mStopParsing.set(true);
             // Invocation ends
             mReporter.invocationEnded(500L);
+            receiver.joinReceiver(500L);
         } finally {
             receiver.close();
             mReporter.closeSocket();
@@ -227,9 +227,9 @@ public class StreamProtoResultReporterTest {
             // Invocation ends
             mReporter.invocationEnded(500L);
         } finally {
+            mReporter.closeSocket();
             receiver.joinReceiver(5000);
             receiver.close();
-            mReporter.closeSocket();
         }
 
         verify(mMockListener).testModuleStarted(Mockito.any());
