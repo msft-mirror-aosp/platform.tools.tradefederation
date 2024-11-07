@@ -28,4 +28,11 @@ public class ConfigurationTestMappingParserSettings {
                             + "will be run. If no list is specified, the tests will not be "
                             + "filtered by allowed tests.")
     public Set<String> mAllowedTestLists = new HashSet<>();
+
+    @Option(
+            name = "run-test-suite",
+            description =
+                    "Entry point to execute the given test suite as defined by the Soong"
+                            + " test_suites rule")
+    public String mRunTestSuite = null;
 }
