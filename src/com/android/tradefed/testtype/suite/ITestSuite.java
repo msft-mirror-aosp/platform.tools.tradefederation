@@ -400,6 +400,13 @@ public abstract class ITestSuite
                             + " config, otherwise use the target config.")
     private boolean mPrioritizeHostConfig = false;
 
+    @Option(
+            name = "run-test-suite",
+            description =
+                    "Entry point to execute the given test suite as defined by the Soong"
+                            + " test_suites rule")
+    private String mRunTestSuite = null;
+
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
         FULLY_ISOLATED; // Test received a fresh device.
