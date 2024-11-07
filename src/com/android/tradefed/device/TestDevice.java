@@ -1278,12 +1278,16 @@ public class TestDevice extends NativeDevice {
             try {
                 // check framework running
                 String output = executeShellCommand("pm path android");
-                if (output == null || !output.contains("package:")) {
+                if (output == null || !output.trim().startsWith("package:")) {
                     CLog.v("framework reboot: can't detect framework running");
                     return false;
                 }
                 notifyRebootStarted();
-                String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
+                String command = "svc power reboot";
+                String mode = rebootMode.formatRebootCommand(reason);
+                if (mode != null && !mode.isEmpty()) {
+                    command = String.format("%s %s", command, mode);
+                }
                 CommandResult result = executeShellV2Command(command);
                 if (result.getStdout().contains(EARLY_REBOOT)
                         || result.getStderr().contains(EARLY_REBOOT)) {
