@@ -35,7 +35,6 @@ public class EnvironmentVariableUtil {
      * @return The value of PATH.
      */
     public static String buildPath(Set<String> tools, String addition) {
-        String runtimeDepsFolderName = "runtime_deps";
         List<String> paths = new ArrayList<>();
         for (String t : tools) {
             try {
