@@ -400,6 +400,13 @@ public abstract class ITestSuite
                             + " config, otherwise use the target config.")
     private boolean mPrioritizeHostConfig = false;
 
+    @Option(
+            name = "run-test-suite",
+            description =
+                    "Entry point to execute the given test suite as defined by the Soong"
+                            + " test_suites rule")
+    private String mRunTestSuite = null;
+
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
         FULLY_ISOLATED; // Test received a fresh device.
@@ -946,7 +953,9 @@ public abstract class ITestSuite
                                     .getModuleName();
                     ModuleProtoResultReporter moduleReporter = null;
                     CacheResultDescriptor cacheDescriptor = null;
-                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName, true);
+                    File moduleDir =
+                            SearchArtifactUtil.getModuleDirFromConfig(
+                                    module.getModuleInvocationContext());
                     if (moduleDir == null) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
