@@ -108,7 +108,13 @@ public class LogCollector {
                                             new AbstractMap.SimpleEntry<>(
                                                     "mkdir failed: errno 117 (Structure needs"
                                                             + " cleaning)",
-                                                    "filesystem_corrupt")))
+                                                    "filesystem_corrupt")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*kernel.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Kernel panic - not syncing: VFS: Unable to"
+                                                            + " mount root fs on unknown-block",
+                                                    "cf_ramdisk_mount_failure")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**
