@@ -127,4 +127,28 @@ public final class ApkChangeDetectorTest {
 
         assertThat(shouldSkipInstallation).isTrue();
     }
+
+    @Test
+    public void handlePackageCleanup_forSingleUser_skipAppUninstallation() throws Exception {
+        doReturn("Pseudo success message")
+            .when(mMockDevice).executeShellCommand("am force-stop a.b.c.package");
+
+        boolean shouldSkipAppUninstallation =
+            mApkChangeDetector.handlePackageCleanup(
+                "a.b.c.package", mMockDevice, /* userId= */ 12345, /* forAllUsers= */ false);
+
+        assertThat(shouldSkipAppUninstallation).isTrue();
+    }
+
+    @Test
+    public void handlePackageCleanup_forAllUsers_skipAppUninstallation() throws Exception {
+        doReturn("Pseudo success message")
+            .when(mMockDevice).executeShellCommand("am force-stop a.b.c.package");
+
+        boolean shouldSkipAppUninstallation =
+            mApkChangeDetector.handlePackageCleanup(
+                "a.b.c.package", mMockDevice, /* userId= */ null, /* forAllUsers= */ true);
+
+        assertThat(shouldSkipAppUninstallation).isTrue();
+    }
 }
