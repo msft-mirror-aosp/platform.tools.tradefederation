@@ -48,6 +48,10 @@ public class SkipContext {
         return true;
     }
 
+    public boolean isPresubmit() {
+        return presubmit;
+    }
+
     public Map<String, Digest> getImageToDigest() {
         return imageToDigest;
     }
