@@ -365,6 +365,11 @@ public class CommandOptions implements ICommandOptions {
             description = "Actually enable the reporting of caching status.")
     private boolean mEnableModuleCachingResults = false;
 
+    @Option(
+            name = "report-cache-results-presubmit",
+            description = "Actually enable the reporting of caching status in presubmit.")
+    private boolean mEnableCachingResultsInPresubmit = false;
+
     /**
      * Set the help mode for the config.
      * <p/>
@@ -894,5 +899,11 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean reportCacheResults() {
         return mEnableModuleCachingResults;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean reportCacheResultsInPresubmit() {
+        return mEnableCachingResultsInPresubmit;
     }
 }
