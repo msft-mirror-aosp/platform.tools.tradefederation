@@ -997,7 +997,11 @@ public abstract class ITestSuite
                     boolean applyCachedResults =
                             cacheDescriptor != null
                                     && cacheDescriptor.isCacheHit()
-                                    && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                    && (mMainConfiguration.getCommandOptions().reportCacheResults()
+                                            || (mSkipContext.isPresubmit()
+                                                    && mMainConfiguration
+                                                            .getCommandOptions()
+                                                            .reportCacheResultsInPresubmit()))
                                     && mSkipContext.shouldUseCache();
                     // TODO(b/372243975): report logs even while applying caching
                     if (moduleConfig != null && !applyCachedResults) {
