@@ -17,6 +17,7 @@
 package com.android.tradefed.observatory;
 
 import com.android.ddmlib.DdmPreferences;
+import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
@@ -26,6 +27,7 @@ import com.android.tradefed.invoker.tracing.TracingLogger;
 import com.android.tradefed.log.Log;
 import com.android.tradefed.log.LogRegistry;
 import com.android.tradefed.log.StdoutLogger;
+import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
@@ -96,6 +98,13 @@ public class TestZipDiscoveryExecutor {
             }
 
             Set<String> testZipRegexSet = new LinkedHashSet<>();
+
+            // If sandbox is in use, retrieve the value of option --sandbox-tests-zips
+            if (config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME) != null) {
+                SandboxOptions sandboxOptions = (SandboxOptions) config.getConfigurationObject(
+                        Configuration.SANBOX_OPTIONS_TYPE_NAME);
+                testZipRegexSet.addAll(sandboxOptions.getTestsZips());
+            }
 
             List<IDeviceConfiguration> list = config.getDeviceConfig();
 
