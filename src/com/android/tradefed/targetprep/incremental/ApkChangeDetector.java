@@ -110,8 +110,13 @@ public class ApkChangeDetector {
      *     indicates that the cleanup is not done.
      */
     public boolean handlePackageCleanup(
-        String packageName, ITestDevice device, Integer userId, boolean forAllUsers) {
-        throw new UnsupportedOperationException("This method is not implemented yet.");
+        String packageName, ITestDevice device, Integer userId, boolean forAllUsers)
+        throws DeviceNotAvailableException {
+        // For the current implementation, we stop the app process. If successful, skip the app
+        // uninstallation.
+        String commandToRun = String.format("am force-stop %s", packageName);
+        device.executeShellCommand(commandToRun);
+        return true;
     }
 
     /** The receiver class for SHA256Sum outputs. */
