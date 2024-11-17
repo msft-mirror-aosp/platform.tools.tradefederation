@@ -308,4 +308,7 @@ public interface ICommandOptions {
 
     /** Returns true if we should report cache results when available. */
     public boolean reportCacheResults();
+
+    /** Returns true if we should report cache results when available in presubmit. */
+    public boolean reportCacheResultsInPresubmit();
 }
