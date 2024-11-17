@@ -52,6 +52,24 @@ public abstract class ExecutableAction {
             Command command =
                     Command.newBuilder()
                             .addAllArguments(args)
+                            .setPlatform(
+                                    Platform.newBuilder()
+                                            .addProperties(
+                                                    Property.newBuilder()
+                                                            .setName(
+                                                                    String.format(
+                                                                            "%s(%s)",
+                                                                            System.getProperty(
+                                                                                    "os.name"),
+                                                                            System.getProperty(
+                                                                                    "os.version")))
+                                                            .build())
+                                            .addProperties(
+                                                    Property.newBuilder()
+                                                            .setName("cache-silo-key")
+                                                            .setValue(SILO_CACHE_KEY)
+                                                            .build())
+                                            .build())
                             .addAllEnvironmentVariables(
                                     envVariables.entrySet().stream()
                                             .map(
@@ -67,15 +85,7 @@ public abstract class ExecutableAction {
             Action.Builder actionBuilder =
                     Action.newBuilder()
                             .setInputRootDigest(inputMerkleTree.rootDigest())
-                            .setCommandDigest(DigestCalculator.compute(command))
-                            .setPlatform(
-                                    Platform.newBuilder()
-                                            .addProperties(
-                                                    Property.newBuilder()
-                                                            .setName("cache-silo-key")
-                                                            .setValue(SILO_CACHE_KEY)
-                                                            .build())
-                                            .build());
+                            .setCommandDigest(DigestCalculator.compute(command));
             if (timeout > 0L) {
                 actionBuilder.setTimeout(Duration.newBuilder().setSeconds(timeout).build());
             }
