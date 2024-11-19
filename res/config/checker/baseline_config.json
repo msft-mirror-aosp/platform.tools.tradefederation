@@ -42,7 +42,7 @@
   },
   "disable_usb_app_verification": {
     "class_name": "com.android.tradefed.suite.checker.baseline.SettingsBaselineSetter",
-    "namespace": "secure",
+    "namespace": "global",
     "key": "verifier_verify_adb_installs",
     "value": "0"
   },

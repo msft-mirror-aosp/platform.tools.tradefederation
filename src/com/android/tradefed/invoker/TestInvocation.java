@@ -1921,7 +1921,7 @@ public class TestInvocation implements ITestInvocation {
     }
 
     private void reportModuleSkip(IConfiguration config, ITestInvocationListener listener) {
-        if (!config.getSkipManager().reportSkippedModule()) {
+        if (!config.getSkipManager().reportInvocationSkippedModule()) {
             return;
         }
         // Make a heuristic determination of ABI.
