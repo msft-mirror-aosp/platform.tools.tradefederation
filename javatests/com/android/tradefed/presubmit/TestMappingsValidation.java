@@ -209,6 +209,7 @@ public class TestMappingsValidation implements IBuildReceiver {
                     "CtsAutoFillServiceTestCases_cts_inline",
                     "CtsAutoFillServiceTestCases_android_server_autofill_Presubmit",
                     "CtsOsTestCases",
+                    "CtsOsTestCases_presubmit_NoLarge",
                     "CtsDynamicMimeHostTestCases",
                     "VtsHalNeuralnetworksTargetTest",
                     "CtsWifiTestCases",
