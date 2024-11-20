@@ -114,7 +114,14 @@ public class LogCollector {
                                             new AbstractMap.SimpleEntry<>(
                                                     "Kernel panic - not syncing: VFS: Unable to"
                                                             + " mount root fs on unknown-block",
-                                                    "cf_ramdisk_mount_failure")))
+                                                    "cf_ramdisk_mount_failure")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*launcher.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "BluetoothShellCommand:"
+                                                        + " wait-for-state:STATE_OFF: Failed with"
+                                                        + " status=-1",
+                                                    "bluetooth_failed_to_stop")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**

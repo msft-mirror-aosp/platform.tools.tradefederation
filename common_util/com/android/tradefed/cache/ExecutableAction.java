@@ -56,16 +56,6 @@ public abstract class ExecutableAction {
                                     Platform.newBuilder()
                                             .addProperties(
                                                     Property.newBuilder()
-                                                            .setName(
-                                                                    String.format(
-                                                                            "%s(%s)",
-                                                                            System.getProperty(
-                                                                                    "os.name"),
-                                                                            System.getProperty(
-                                                                                    "os.version")))
-                                                            .build())
-                                            .addProperties(
-                                                    Property.newBuilder()
                                                             .setName("cache-silo-key")
                                                             .setValue(SILO_CACHE_KEY)
                                                             .build())
