@@ -245,7 +245,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     /** Helper to parse an apk file with aapt. */
     @VisibleForTesting
     AaptParser doAaptParse(File apkFile) {
-        return AaptParser.parse(apkFile);
+        return AaptParser.parse(apkFile, mAaptVersion);
     }
 
     @VisibleForTesting
