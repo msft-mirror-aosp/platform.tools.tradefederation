@@ -851,7 +851,7 @@ public class TestAppInstallSetupTest {
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             assertEquals(
-                    String.format("Failed to extract info from `%s` using aapt", fakeApk.getName()),
+                    String.format("Failed to extract info from `%s` using aapt2", fakeApk.getName()),
                     expected.getMessage());
         } finally {
         }
