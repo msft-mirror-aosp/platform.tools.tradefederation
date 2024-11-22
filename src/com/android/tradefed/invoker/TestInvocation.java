@@ -1952,6 +1952,9 @@ public class TestInvocation implements ITestInvocation {
             moduleContext.addInvocationAttribute(
                     ModuleDefinition.MODULE_SKIPPED,
                     config.getSkipManager().getInvocationSkipReason());
+            moduleContext.addInvocationAttribute(
+                    ModuleDefinition.SPARSE_MODULE,
+                    "true");
             listener.testModuleStarted(moduleContext);
             listener.testModuleEnded();
         }
