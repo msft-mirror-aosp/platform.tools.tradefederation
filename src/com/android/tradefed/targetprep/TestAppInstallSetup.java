@@ -245,7 +245,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     /** Helper to parse an apk file with aapt. */
     @VisibleForTesting
     AaptParser doAaptParse(File apkFile) {
-        return AaptParser.parse(apkFile);
+        return AaptParser.parse(apkFile, mAaptVersion);
     }
 
     @VisibleForTesting
@@ -642,7 +642,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
                 if (aaptParser == null) {
                     throw new TargetSetupError(
                             String.format(
-                                    "Failed to extract info from `%s` using aapt",
+                                    "Failed to extract info from `%s` using "
+                                        + (mAaptVersion == AaptVersion.AAPT
+                                        ? "aapt" : "aapt2"),
                                     testAppFile.getAbsoluteFile().getName()),
                             device.getDeviceDescriptor());
                 }
