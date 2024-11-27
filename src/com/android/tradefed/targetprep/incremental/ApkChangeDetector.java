@@ -23,6 +23,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.google.common.base.Splitter;
+import com.google.common.collect.Sets;
 import com.google.common.hash.Hashing;
 import java.io.File;
 import java.io.FileInputStream;
@@ -43,6 +44,15 @@ public class ApkChangeDetector {
 
     private static final long MIN_FREE_DISK_SPACE_THRESHOLD_IN_BYTES = 10000000L;
     private static final double DISK_SPACE_TO_USE_ESTIMATE_FACTOR = 1.5;
+    @VisibleForTesting
+    static final String PACKAGE_INSTALLED_FILE_PATH =
+        "/sdcard/.tradefed_package_installation_cache";
+
+    @VisibleForTesting
+    final Set<String> mPackagesHandledInCurrentTestRun = new HashSet<>();
+
+    private Set<String> mPackagesHandledInPreviousTestRuns;
+    private Boolean incrementalSetupSupportEnsureResult;
 
     /**
      * Handle app pre-install process.
@@ -56,9 +66,13 @@ public class ApkChangeDetector {
     public boolean handleTestAppsPreinstall(
         String packageName, List<File> testApps, ITestDevice device)
         throws DeviceNotAvailableException {
+        if (!ensureIncrementalSetupSupported(device)) {
+            return false;
+        }
         if (!cleanupAppsIfNecessary(device, testApps)) {
             return false;
         }
+        updateInstalledPackageCache(device, packageName);
 
         List<String> apkInstallPaths = getApkInstallPaths(packageName, device);
         if (apkInstallPaths.size() != testApps.size()) {
@@ -101,6 +115,11 @@ public class ApkChangeDetector {
     public boolean handlePackageCleanup(
         String packageName, ITestDevice device, Integer userId, boolean forAllUsers)
         throws DeviceNotAvailableException {
+        if (!mPackagesHandledInCurrentTestRun.contains(packageName)) {
+            // In case incremental setup is not supported for the package, skip package cleanup of
+            // this detector.
+            return false;
+        }
         // For the current implementation, we stop the app process. If successful, skip the app
         // uninstallation.
         String commandToRun = String.format("am force-stop %s", packageName);
@@ -199,7 +218,28 @@ public class ApkChangeDetector {
         long totalAppSize = testApps.stream().mapToLong(File::length).sum();
         if (freeDiskSpace - totalAppSize * DISK_SPACE_TO_USE_ESTIMATE_FACTOR
                 < MIN_FREE_DISK_SPACE_THRESHOLD_IN_BYTES) {
-            throw new UnsupportedOperationException("App cleanup is not yet supported.");
+            // First, get the list of packages to be uninstalled.
+            Set<String> packagesToBeUninstalled =
+                Sets.difference(
+                    loadPackagesHandledInPreviousTestRuns(device),
+                    mPackagesHandledInCurrentTestRun);
+
+            // Then, uninstall the packages.
+            boolean anyUninstallationFailed = false;
+            for (String packageName : packagesToBeUninstalled) {
+                if (device.uninstallPackage(packageName) != null) {
+                    anyUninstallationFailed = true;
+                }
+            }
+
+            // Finally, remove the file indicating the packages to be uninstalled if there is no
+            // uninstallation failure; otherwise, return false to indicate the cleanup is not
+            // successful.
+            if (anyUninstallationFailed) {
+                return false;
+            }
+            device.deleteFile(PACKAGE_INSTALLED_FILE_PATH);
+            mPackagesHandledInPreviousTestRuns = new HashSet<>();
         }
         return true;
     }
@@ -233,5 +273,69 @@ public class ApkChangeDetector {
                 "Free disk space info under /data was malformatted.");
         }
         return Long.parseLong(tokens[3]) * bytesInKiloBytes;
+    }
+
+    /**
+     * Get the set of packages installed on the device and handled by the APK change detector in
+     * previous test runs.
+     */
+    @VisibleForTesting
+    Set<String> loadPackagesHandledInPreviousTestRuns(ITestDevice device)
+        throws DeviceNotAvailableException {
+        if (mPackagesHandledInPreviousTestRuns != null) {
+            return mPackagesHandledInPreviousTestRuns;
+        }
+
+        String fileContents = device.pullFileContents(PACKAGE_INSTALLED_FILE_PATH);
+        if (fileContents != null) {
+            Splitter splitter = Splitter.on('\n').trimResults().omitEmptyStrings();
+            mPackagesHandledInPreviousTestRuns =
+                Sets.newHashSet(splitter.split(fileContents));
+        } else {
+            mPackagesHandledInPreviousTestRuns = new HashSet<>();
+        }
+        return mPackagesHandledInPreviousTestRuns;
+    }
+
+    /**
+     * Return the incremental setup is supported on {@code device}.
+     *
+     * Note that this method has the side effect of creating a cache file under "/sdcard/." if it
+     * does not exist.
+     */
+    @VisibleForTesting
+    boolean ensureIncrementalSetupSupported(ITestDevice device)
+        throws DeviceNotAvailableException {
+        if (incrementalSetupSupportEnsureResult != null) {
+            return incrementalSetupSupportEnsureResult;
+        }
+
+        // Check if the device has sha256sum command installed.
+        String sha256SumDryRunOutput = device.executeShellCommand("sha256sum --help");
+        if (sha256SumDryRunOutput.contains("sha256sum: inaccessible or not found")) {
+            incrementalSetupSupportEnsureResult = false;
+            return false;
+        }
+
+        // Check if we have access to "/sdcard/.".
+        if (device.doesFileExist(PACKAGE_INSTALLED_FILE_PATH)) {
+            incrementalSetupSupportEnsureResult = true;
+        } else {
+            incrementalSetupSupportEnsureResult =
+                device.pushString("", PACKAGE_INSTALLED_FILE_PATH);
+        }
+        return incrementalSetupSupportEnsureResult;
+    }
+
+    private void updateInstalledPackageCache(ITestDevice device, String packageName)
+        throws DeviceNotAvailableException {
+        mPackagesHandledInCurrentTestRun.add(packageName);
+        Set<String> packagesHandledByIncrementalSetup =
+            Sets.union(
+                loadPackagesHandledInPreviousTestRuns(device),
+                mPackagesHandledInCurrentTestRun);
+        device.pushString(
+            String.join("\n", packagesHandledByIncrementalSetup),
+            PACKAGE_INSTALLED_FILE_PATH);
     }
 }
