@@ -158,14 +158,16 @@ public class OtaUpdateDeviceFlasherTest {
     }
 
     @Test
-    public void testFlash() throws Exception {
+    public void testFlash_success() throws Exception {
         // prep
+        mFlasher.setUserDataFlashOption(UserDataFlashOption.WIPE);
         when(mMockDevice.enableAdbRoot()).thenReturn(true);
         when(mMockDevice.setProperty(
                         Mockito.eq(OtaUpdateDeviceFlasher.OTA_DOWNGRADE_PROP), Mockito.eq("1")))
                 .thenReturn(true);
         CommandResult cr = new CommandResult();
         cr.setStatus(CommandStatus.SUCCESS);
+        cr.setStderr(OtaUpdateDeviceFlasher.UPDATE_SUCCESS_OUTPUT);
         when(mMockRunUtil.runTimedCmd(Mockito.any(long.class), Mockito.any())).thenReturn(cr);
         doNothing().when(mMockDevice).rebootUntilOnline();
         // test
@@ -174,6 +176,76 @@ public class OtaUpdateDeviceFlasherTest {
         mFlasher.flash(mMockDevice, dbi);
         // verify
         mInOrder.verify(mMockDevice).enableAdbRoot();
+        mInOrder.verify(mMockDevice).executeShellCommand("stop");
+        mInOrder.verify(mMockDevice).executeShellCommand("rm -rf /data/*");
+        mInOrder.verify(mMockDevice).reboot();
+        mInOrder.verify(mMockDevice).waitForDeviceAvailable();
+        mInOrder.verify(mMockDevice).enableAdbRoot();
+        mInOrder.verify(mMockDevice).executeShellCommand("svc power stayon true");
+        mInOrder.verify(mMockDevice)
+                .setProperty(
+                        Mockito.eq(OtaUpdateDeviceFlasher.OTA_DOWNGRADE_PROP), Mockito.eq("1"));
+        mInOrder.verify(mMockRunUtil).runTimedCmd(Mockito.any(long.class), Mockito.any());
+        mInOrder.verify(mMockDevice).rebootUntilOnline();
+    }
+
+    @Test(expected = TargetSetupError.class)
+    public void testFlash_no_success_output() throws Exception {
+        // prep
+        mFlasher.setUserDataFlashOption(UserDataFlashOption.WIPE);
+        when(mMockDevice.enableAdbRoot()).thenReturn(true);
+        when(mMockDevice.setProperty(
+                        Mockito.eq(OtaUpdateDeviceFlasher.OTA_DOWNGRADE_PROP), Mockito.eq("1")))
+                .thenReturn(true);
+        CommandResult cr = new CommandResult();
+        cr.setStatus(CommandStatus.SUCCESS);
+        cr.setStderr("onPayloadApplicationComplete(ErrorCode::kInstallDeviceOpenError (7))");
+        when(mMockRunUtil.runTimedCmd(Mockito.any(long.class), Mockito.any())).thenReturn(cr);
+        doNothing().when(mMockDevice).rebootUntilOnline();
+        // test
+        IDeviceBuildInfo dbi = setupDeviceBuildInfoForOta();
+        mFlasher.preFlashOperations(mMockDevice, dbi);
+        mFlasher.flash(mMockDevice, dbi);
+        // verify
+        mInOrder.verify(mMockDevice).enableAdbRoot();
+        mInOrder.verify(mMockDevice).executeShellCommand("stop");
+        mInOrder.verify(mMockDevice).executeShellCommand("rm -rf /data/*");
+        mInOrder.verify(mMockDevice).reboot();
+        mInOrder.verify(mMockDevice).waitForDeviceAvailable();
+        mInOrder.verify(mMockDevice).enableAdbRoot();
+        mInOrder.verify(mMockDevice).executeShellCommand("svc power stayon true");
+        mInOrder.verify(mMockDevice)
+                .setProperty(
+                        Mockito.eq(OtaUpdateDeviceFlasher.OTA_DOWNGRADE_PROP), Mockito.eq("1"));
+        mInOrder.verify(mMockRunUtil).runTimedCmd(Mockito.any(long.class), Mockito.any());
+        mInOrder.verify(mMockDevice).rebootUntilOnline();
+    }
+
+    @Test(expected = TargetSetupError.class)
+    public void testFlash_command_failure() throws Exception {
+        // prep
+        mFlasher.setUserDataFlashOption(UserDataFlashOption.WIPE);
+        when(mMockDevice.enableAdbRoot()).thenReturn(true);
+        when(mMockDevice.setProperty(
+                        Mockito.eq(OtaUpdateDeviceFlasher.OTA_DOWNGRADE_PROP), Mockito.eq("1")))
+                .thenReturn(true);
+        CommandResult cr = new CommandResult();
+        cr.setStatus(CommandStatus.FAILED);
+        cr.setStderr(OtaUpdateDeviceFlasher.UPDATE_SUCCESS_OUTPUT);
+        when(mMockRunUtil.runTimedCmd(Mockito.any(long.class), Mockito.any())).thenReturn(cr);
+        doNothing().when(mMockDevice).rebootUntilOnline();
+        // test
+        IDeviceBuildInfo dbi = setupDeviceBuildInfoForOta();
+        mFlasher.preFlashOperations(mMockDevice, dbi);
+        mFlasher.flash(mMockDevice, dbi);
+        // verify
+        mInOrder.verify(mMockDevice).enableAdbRoot();
+        mInOrder.verify(mMockDevice).executeShellCommand("stop");
+        mInOrder.verify(mMockDevice).executeShellCommand("rm -rf /data/*");
+        mInOrder.verify(mMockDevice).reboot();
+        mInOrder.verify(mMockDevice).waitForDeviceAvailable();
+        mInOrder.verify(mMockDevice).enableAdbRoot();
+        mInOrder.verify(mMockDevice).executeShellCommand("svc power stayon true");
         mInOrder.verify(mMockDevice)
                 .setProperty(
                         Mockito.eq(OtaUpdateDeviceFlasher.OTA_DOWNGRADE_PROP), Mockito.eq("1"));
