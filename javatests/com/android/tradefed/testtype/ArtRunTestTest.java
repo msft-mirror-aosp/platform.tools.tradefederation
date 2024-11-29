@@ -16,7 +16,7 @@
 
 package com.android.tradefed.testtype;
 
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -135,12 +135,9 @@ public class ArtRunTestTest {
         final String classpath = "/data/local/tmp/test/test.jar";
         mSetter.setOptionValue("classpath", classpath);
 
-        try {
-            mArtRunTest.run(mTestInfo, mMockInvocationListener);
-            fail("An exception should have been thrown.");
-        } catch (IllegalArgumentException e) {
-            // Expected.
-        }
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> mArtRunTest.run(mTestInfo, mMockInvocationListener));
     }
 
     /** Test the behavior of the run method when the `classpath` option is not set. */
@@ -152,12 +149,9 @@ public class ArtRunTestTest {
         createExpectedStdoutFile(runTestName);
         createExpectedStderrFile(runTestName);
 
-        try {
-            mArtRunTest.run(mTestInfo, mMockInvocationListener);
-            fail("An exception should have been thrown.");
-        } catch (IllegalArgumentException e) {
-            // Expected.
-        }
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> mArtRunTest.run(mTestInfo, mMockInvocationListener));
     }
 
     /** Helper containing testing logic for a (single) test expected to run (and succeed). */
