@@ -16,6 +16,8 @@
 
 package com.android.tradefed.testtype;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -363,6 +365,203 @@ public class ArtRunTestTest {
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
         verify(mMockInvocationListener).testFailed(testId, "Test `test` exited with code 1");
+        verify(mMockInvocationListener)
+                .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
+        verify(mMockInvocationListener)
+                .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+
+        verify(mMockITestDevice).deleteFile(tmpTestRemoteDirPath);
+    }
+
+    /**
+     * Test the behavior of the run method when the transfer of the standard output file produced by
+     * the shell command fails because of mismatching file sizes.
+     *
+     * <p>This test exercises the {@link com.android.tradefed.testtype.ArtRunTest#pullAndCheckFile}
+     * method.
+     */
+    @Test
+    public void testRunSingleTest_failedStandardOutputTransfer_sizesMismatch()
+            throws ConfigurationException, DeviceNotAvailableException, IOException {
+        final String runTestName = "test";
+        mSetter.setOptionValue("run-test-name", runTestName);
+        createExpectedStdoutFile(runTestName);
+        createExpectedStderrFile(runTestName);
+        final String classpath = "/data/local/tmp/test/test.jar";
+        mSetter.setOptionValue("classpath", classpath);
+
+        // Pre-test checks.
+        when(mMockAbi.getName()).thenReturn("abi");
+        when(mMockITestDevice.getSerialNumber()).thenReturn("");
+        String runName = "ArtRunTest_abi";
+
+        // Beginning of test.
+
+        TestDescription testId = new TestDescription(runName, runTestName);
+
+        final String stdoutFileName = "stdout.txt";
+        final String stderrFileName = "stderr.txt";
+
+        String tmpTestRemoteDirPath = "/data/local/tmp/test.0123456789";
+        String remoteStdoutFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stdoutFileName);
+        String remoteStderrFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stderrFileName);
+
+        // Create remote temporary directory.
+        String mktempCmd = "mktemp -d -p /data/local/tmp test.XXXXXXXXXX";
+        CommandResult mktempResult =
+                createMockCommandResult(
+                        String.format("%s\n", tmpTestRemoteDirPath), "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(mktempCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(mktempResult);
+
+        // Test execution.
+        String dalvikvmCmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main "
+                                + ">%s 2>%s",
+                        classpath, remoteStdoutFilePath, remoteStderrFilePath);
+        CommandResult dalvikvmResult =
+                createMockCommandResult(/* stdout */ "", /* stderr */ "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(dalvikvmCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(dalvikvmResult);
+
+        // Pull and check standard output file from device.
+        String statStdoutCmd = String.format("stat --format %%s %s", remoteStdoutFilePath);
+        File localStdoutFile = new File(mTmpTestLocalDir, stdoutFileName);
+        try (FileWriter fw = new FileWriter(localStdoutFile)) {
+            // Simulate an incorrect transfer by truncating the retrieved standard output.
+            fw.write("output\n".substring(0, 3));
+        }
+        CommandResult statStdoutResult = createMockCommandResult("7\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStdoutCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStdoutResult);
+        String md5sumStdoutCmd = String.format("md5sum -b %s", remoteStdoutFilePath);
+        CommandResult md5sumStdoutResult =
+                createMockCommandResult("838337db0b65bfd3a542f0c5ca047ae2\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStdoutCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStdoutResult);
+        when(mMockITestDevice.pullFile(remoteStdoutFilePath, localStdoutFile)).thenReturn(true);
+
+        // Verify that the failed transfer is caught.
+        Exception thrown =
+                assertThrows(
+                        RuntimeException.class,
+                        () -> mArtRunTest.run(mTestInfo, mMockInvocationListener));
+        assertThat(thrown).hasCauseThat().isInstanceOf(IOException.class);
+        assertThat(thrown)
+                .hasMessageThat()
+                .contains(
+                        String.format(
+                                "Size of local file `%s` does not match size of remote file `%s`"
+                                        + " pulled from device: 3 bytes vs 7 bytes",
+                                localStdoutFile, remoteStdoutFilePath));
+
+        // End of test.
+
+        verify(mMockInvocationListener).testRunStarted(runName, 1);
+        verify(mMockInvocationListener).testStarted(testId);
+        verify(mMockInvocationListener)
+                .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
+        verify(mMockInvocationListener)
+                .testRunEnded(Mockito.anyLong(), (HashMap<String, Metric>) Mockito.any());
+
+        verify(mMockITestDevice).deleteFile(tmpTestRemoteDirPath);
+    }
+
+    /**
+     * Test the behavior of the run method when the transfer of the standard output file produced by
+     * the shell command fails because of mismatching MD5 digests.
+     *
+     * <p>This test exercises the {@link com.android.tradefed.testtype.ArtRunTest#pullAndCheckFile}
+     * method.
+     */
+    @Test
+    public void testRunSingleTest_failedStandardOutputTransfer_md5DigestsMismatch()
+            throws ConfigurationException, DeviceNotAvailableException, IOException {
+        final String runTestName = "test";
+        mSetter.setOptionValue("run-test-name", runTestName);
+        createExpectedStdoutFile(runTestName);
+        createExpectedStderrFile(runTestName);
+        final String classpath = "/data/local/tmp/test/test.jar";
+        mSetter.setOptionValue("classpath", classpath);
+
+        // Pre-test checks.
+        when(mMockAbi.getName()).thenReturn("abi");
+        when(mMockITestDevice.getSerialNumber()).thenReturn("");
+        String runName = "ArtRunTest_abi";
+
+        // Beginning of test.
+
+        TestDescription testId = new TestDescription(runName, runTestName);
+
+        final String stdoutFileName = "stdout.txt";
+        final String stderrFileName = "stderr.txt";
+
+        String tmpTestRemoteDirPath = "/data/local/tmp/test.0123456789";
+        String remoteStdoutFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stdoutFileName);
+        String remoteStderrFilePath = String.format("%s/%s", tmpTestRemoteDirPath, stderrFileName);
+
+        // Create remote temporary directory.
+        String mktempCmd = "mktemp -d -p /data/local/tmp test.XXXXXXXXXX";
+        CommandResult mktempResult =
+                createMockCommandResult(
+                        String.format("%s\n", tmpTestRemoteDirPath), "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(mktempCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(mktempResult);
+
+        // Test execution.
+        String dalvikvmCmd =
+                String.format(
+                        "dalvikvm64 -Xcompiler-option --compile-art-test -classpath %s Main "
+                                + ">%s 2>%s",
+                        classpath, remoteStdoutFilePath, remoteStderrFilePath);
+        CommandResult dalvikvmResult =
+                createMockCommandResult(/* stdout */ "", /* stderr */ "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(dalvikvmCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(dalvikvmResult);
+
+        // Pull and check standard output file from device.
+        String statStdoutCmd = String.format("stat --format %%s %s", remoteStdoutFilePath);
+        File localStdoutFile = new File(mTmpTestLocalDir, stdoutFileName);
+        try (FileWriter fw = new FileWriter(localStdoutFile)) {
+            // Simulate an incorrect transfer by substituting a characted in the retrieved standard
+            // output.
+            fw.write("output\n".replace("p", "c"));
+        }
+        CommandResult statStdoutResult = createMockCommandResult("7\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        statStdoutCmd, 10000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(statStdoutResult);
+        String md5sumStdoutCmd = String.format("md5sum -b %s", remoteStdoutFilePath);
+        CommandResult md5sumStdoutResult =
+                createMockCommandResult("838337db0b65bfd3a542f0c5ca047ae2\n", "", /* exitCode */ 0);
+        when(mMockITestDevice.executeShellV2Command(
+                        md5sumStdoutCmd, 60000L, TimeUnit.MILLISECONDS, 0))
+                .thenReturn(md5sumStdoutResult);
+        when(mMockITestDevice.pullFile(remoteStdoutFilePath, localStdoutFile)).thenReturn(true);
+
+        // Verify that the failed transfer is caught.
+        Exception thrown =
+                assertThrows(
+                        RuntimeException.class,
+                        () -> mArtRunTest.run(mTestInfo, mMockInvocationListener));
+        assertThat(thrown).hasCauseThat().isInstanceOf(IOException.class);
+        assertThat(thrown)
+                .hasMessageThat()
+                .contains(
+                        String.format(
+                                "MD5 digest of local file `%s` does not match MD5 digest of remote"
+                                        + " file `%s` pulled from device:"
+                                        + " 8986be111a9c226a458088dbcf2ba398 vs "
+                                        + "838337db0b65bfd3a542f0c5ca047ae2",
+                                localStdoutFile, remoteStdoutFilePath));
+
+        // End of test.
+
+        verify(mMockInvocationListener).testRunStarted(runName, 1);
+        verify(mMockInvocationListener).testStarted(testId);
         verify(mMockInvocationListener)
                 .testEnded(eq(testId), (HashMap<String, Metric>) Mockito.any());
         verify(mMockInvocationListener)
