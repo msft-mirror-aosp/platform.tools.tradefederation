@@ -164,7 +164,7 @@ public class NativeDevice
     private static final int MAX_SYSTEM_SERVER_DELAY_AFTER_BOOT_UP_SEC = 25;
 
     /** The time in ms to wait before starting logcat for a device */
-    private int mLogStartDelay = 5*1000;
+    private int mLogStartDelay = 0;
 
     /** The time in ms to wait for a device to become unavailable. Should usually be short */
     private static final int DEFAULT_UNAVAILABLE_TIMEOUT = 20 * 1000;

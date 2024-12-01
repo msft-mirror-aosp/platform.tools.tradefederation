@@ -30,7 +30,7 @@ import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.testtype.IRemoteTest;
-import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.FileUtil;
 
 import org.json.JSONArray;
@@ -98,11 +98,21 @@ public class TestZipDiscoveryExecutor {
             }
 
             Set<String> testZipRegexSet = new LinkedHashSet<>();
+            SandboxOptions sandboxOptions = null;
 
-            // If sandbox is in use, retrieve the value of option --sandbox-tests-zips
+            // If sandbox is in use, we always need to download the tradefed zip.
+            if (config.getCommandOptions().shouldUseSandboxing()
+                    || config.getCommandOptions().shouldUseRemoteSandboxMode()) {
+                testZipRegexSet.add(".*tradefed.zip");
+            }
+
             if (config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME) != null) {
-                SandboxOptions sandboxOptions = (SandboxOptions) config.getConfigurationObject(
+                sandboxOptions = (SandboxOptions) config.getConfigurationObject(
                         Configuration.SANBOX_OPTIONS_TYPE_NAME);
+            }
+
+            // Retrieve the value of option --sandbox-tests-zips
+            if (sandboxOptions != null) {
                 testZipRegexSet.addAll(sandboxOptions.getTestsZips());
             }
 
@@ -110,13 +120,13 @@ public class TestZipDiscoveryExecutor {
 
             if (list != null && list.size() > 0) {
                 for (IDeviceConfiguration deviceConfiguration : list) {
-                    // Attempt to retrieve the value of option "--test-zip-file-filter"
+                    // Attempt to retrieve test zip filters from the build provider."
                     if (deviceConfiguration.getBuildProvider() instanceof IDiscoverDependencies) {
-                        String testZipFileFilter =
+                        Set<String> testZipFileFilters =
                                 ((IDiscoverDependencies) deviceConfiguration.getBuildProvider())
                                         .reportTestZipFileFilter();
-                        if (testZipFileFilter != null) {
-                            testZipRegexSet.add(testZipFileFilter);
+                        if (testZipFileFilters != null) {
+                            testZipRegexSet.addAll(testZipFileFilters);
                         }
                     }
                 }
@@ -124,7 +134,10 @@ public class TestZipDiscoveryExecutor {
 
             for (IRemoteTest test : tests) {
                 // For test mapping suite, match the corresponding test zip by test config name.
-                if (test instanceof TestMappingSuiteRunner) {
+                // Suppress the extra target if sandbox is not downloading the default zip.
+                if (test instanceof ITestSuite && sandboxOptions != null
+                        && sandboxOptions.getTestsZips().isEmpty()
+                        && sandboxOptions.downloadDefaultZips()) {
                     testZipRegexSet.addAll(
                             TradefedSandbox.matchSandboxExtraBuildTargetByConfigName(
                                     config.getName()));
