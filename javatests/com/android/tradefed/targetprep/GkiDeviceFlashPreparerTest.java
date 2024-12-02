@@ -435,6 +435,39 @@ public class GkiDeviceFlashPreparerTest {
         verify(mMockDevice).postBootSetup();
     }
 
+    /* Verifies that preparer can flash GKI boot image with additional fastboot commands */
+    @Test
+    public void testSetup_Success_with_additional_fastboot_commands() throws Exception {
+        File bootImg = FileUtil.createTempFile("boot", ".img", mTmpDir);
+        bootImg.renameTo(new File(mTmpDir, "boot.img"));
+        FileUtil.writeToFile("ddd", bootImg);
+        mBuildInfo.setFile("gki_boot.img", bootImg, "0");
+        mOptionSetter.setOptionValue("additional-fastboot-command", "erase misc");
+        mOptionSetter.setOptionValue("additional-fastboot-command", "erase devinfo");
+
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand(
+                        "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("erase misc")).thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("erase devinfo")).thenReturn(mSuccessResult);
+
+        when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
+
+        mPreparer.setUp(mTestInfo);
+        mPreparer.tearDown(mTestInfo, null);
+
+        verify(mMockDevice).rebootIntoBootloader();
+        verify(mMockRunUtil).allowInterrupt(false);
+        verify(mMockRunUtil).allowInterrupt(true);
+        verify(mMockRunUtil).sleep(anyLong());
+        verify(mMockDevice).rebootUntilOnline();
+        verify(mMockDevice).setDate(null);
+        verify(mMockDevice).waitForDeviceAvailable(anyLong());
+        verify(mMockDevice).setRecoveryMode(RecoveryMode.AVAILABLE);
+        verify(mMockDevice).postBootSetup();
+    }
+
     /* Verifies that preparer can flash GKI boot image with disable-verity options */
     @Test
     public void testSetup_Success_with_disable_verity() throws Exception {
