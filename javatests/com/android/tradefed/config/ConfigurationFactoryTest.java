@@ -42,6 +42,8 @@ import com.android.tradefed.targetprep.multi.StubMultiTargetPreparer;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.StreamUtil;
 
+import com.google.common.collect.ImmutableSet;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -1375,6 +1377,19 @@ public class ConfigurationFactoryTest {
         LocalDeviceBuildProvider provider = (LocalDeviceBuildProvider) device2.getBuildProvider();
         // command line options are properly propagated to the included object in device tag.
         assertEquals("faketestdir", provider.getTestDir().getName());
+    }
+
+    @Test
+    public void testPartialCreateMultiDevices() throws Exception {
+        IConfiguration config =
+                mFactory.createPartialConfigurationFromArgs(
+                        new String[] {"test-config-multi-include", "--test-dir", "faketestdir"},
+                        null,
+                        ImmutableSet.of(Configuration.BUILD_PROVIDER_TYPE_NAME),
+                        null);
+        assertEquals(2, config.getDeviceConfig().size());
+        IDeviceConfiguration device2 = config.getDeviceConfigByName("device2");
+        assertTrue(device2.getBuildProvider() instanceof LocalDeviceBuildProvider);
     }
 
     /**
