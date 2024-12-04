@@ -1,0 +1,123 @@
+/*
+ * Copyright (C) 2024 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+
+package luci.resultdb.v1;
+
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+import public "tools/tradefederation/core/proto/resultdb/test_result.proto";
+
+option go_package = "go.chromium.org/luci/resultdb/proto/v1;resultpb";
+option java_package = "com.android.resultdb.proto";
+option java_multiple_files = true;
+
+// A file produced during a build/test, typically a test artifact.
+// The parent resource is either a TestResult or an Invocation.
+//
+// An invocation-level artifact might be related to tests, or it might not, for
+// example it may be used to store build step logs when streaming support is
+// added.
+// Next id: 11.
+message Artifact {
+  // Can be used to refer to this artifact.
+  // Format:
+  // - For invocation-level artifacts:
+  //   "invocations/{INVOCATION_ID}/artifacts/{ARTIFACT_ID}".
+  // - For test-result-level artifacts:
+  //   "invocations/{INVOCATION_ID}/tests/{URL_ESCAPED_TEST_ID}/results/{RESULT_ID}/artifacts/{ARTIFACT_ID}".
+  // where URL_ESCAPED_TEST_ID is the test_id escaped with
+  // https://golang.org/pkg/net/url/#PathEscape (see also https://aip.dev/122),
+  // and ARTIFACT_ID is documented below.
+  // Examples: "screenshot.png", "traces/a.txt".
+  string name = 1;
+
+  // A local identifier of the artifact, unique within the parent resource.
+  // MAY have slashes, but MUST NOT start with a slash.
+  // SHOULD not use backslashes.
+  // Regex: ^(?:[[:word:]]|\.)([\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}]{0,254}[[:word:]])?$
+  string artifact_id = 2;
+
+  // A signed short-lived URL to fetch the contents of the artifact.
+  // See also fetch_url_expiration.
+  string fetch_url = 3;
+
+  // When fetch_url expires. If expired, re-request this Artifact.
+  google.protobuf.Timestamp fetch_url_expiration = 4;
+
+  // Media type of the artifact.
+  // Logs are typically "text/plain" and screenshots are typically "image/png".
+  // Optional.
+  string content_type = 5;
+
+  // Size of the file.
+  // Can be used in UI to decide between displaying the artifact inline or only
+  // showing a link if it is too large.
+  // If you are using the gcs_uri, this field is not verified, but only treated as a hint.
+  int64 size_bytes = 6;
+
+  // Contents of the artifact.
+  // This is INPUT_ONLY, and taken by BatchCreateArtifacts().
+  // All getter RPCs, such as ListArtifacts(), do not populate values into
+  // the field in the response.
+  // If specified, `gcs_uri` must be empty.
+  bytes contents = 7 [ (google.api.field_behavior) = INPUT_ONLY ];
+
+  // The GCS URI of the artifact if it's stored in GCS.  If specified, `contents` must be empty.
+  string gcs_uri = 8;
+
+  // Status of the test result that the artifact belongs to.
+  // This is only applicable for test-level artifacts, not invocation-level artifacts.
+  // We need this field because when an artifact is created (for example, with BatchCreateArtifact),
+  // the containing test result may or may not be created yet, as they
+  // are created in different channels from result sink.
+  // Having the test status here allows setting the correct status of artifact in BigQuery.
+  TestStatus test_status = 9;
+
+  // Indicates whether ListArtifactLines RPC can be used with this artifact.
+  bool has_lines = 11;
+}
+
+message ArtifactLine {
+  enum Severity {
+    SEVERITY_UNSPECIFIED = 0;
+    VERBOSE = 10;
+    TRACE = 20;
+    DEBUG = 30;
+    INFO = 40;
+    NOTICE = 50;
+    WARNING = 60;
+    ERROR = 70;
+    CRITICAL = 80;
+    FATAL = 90;
+  }
+
+  // The position of this line in the artifact.
+  // The numbers start from 1.
+  int64 number = 1;
+
+  // The extracted timestamp of the log line. Extraction is best effort only.
+  google.protobuf.Timestamp timestamp = 2;
+
+  // The extracted severity of the line. Extraction is best effort only.
+  Severity severity = 3;
+
+  // The content of the line as it is found in the log file.
+  // Lines are split on the \n character and the character is included in the line content that immediately precedes it.
+  // Empty lines will be included in the response.
+  bytes content = 4;
+}
