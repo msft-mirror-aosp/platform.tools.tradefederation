@@ -495,10 +495,11 @@ public abstract class SubprocessTfLauncher
             return;
         }
 
-        try (FileInputStreamSource inputStream = new FileInputStreamSource(fileToExport)) {
+        try (FileInputStreamSource inputStream = new FileInputStreamSource(fileToExport, true)) {
             listener.testLog(fileToExport.getName(), LogDataType.TEXT, inputStream);
+        } catch (RuntimeException e) {
+            CLog.e(e);
         }
-        FileUtil.deleteFile(fileToExport);
     }
 
     /**
