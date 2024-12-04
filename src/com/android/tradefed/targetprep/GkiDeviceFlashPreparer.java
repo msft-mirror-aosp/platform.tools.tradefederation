@@ -79,7 +79,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private static final String OTATOOLS_ZIP = "otatools.zip";
     private static final String KERNEL_IMAGE = "Image.gz";
     // Wait time for device state to stablize in millisecond
-    private static final int STATE_STABLIZATION_WAIT_TIME = 60000;
+    private static final int STATE_STABLIZATION_WAIT_TIME = 10000;
 
     @Option(
             name = "device-boot-time",
@@ -134,6 +134,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private String mSystemDlkmArchiveName = "system_dlkm_staging_archive.tar.gz";
 
     @Option(
+            name = "vbmeta-image-name",
+            description = "The file name in BuildInfo that provides vbmeta image.")
+    private String mVbmetaImageName = "vbmeta.img";
+
+    @Option(
             name = "boot-image-file-name",
             description =
                     "The boot image file name to search for if gki-boot-image-name in "
@@ -177,6 +182,13 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private String mSystemDlkmImageFileName = "system_dlkm.img";
 
     @Option(
+            name = "vbmeta-image-file-name",
+            description =
+                    "The vbmeta image file name to search for if vbmeta-image-name in "
+                            + "BuildInfo is a zip file or directory, for example vbmeta.img.")
+    private String mVbmetaImageFileName = "vbmeta.img";
+
+    @Option(
             name = "post-reboot-device-into-user-space",
             description = "whether to boot the device in user space after flash.")
     private boolean mPostRebootDeviceIntoUserSpace = true;
@@ -202,6 +214,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
             name = "fastboot-flash-option",
             description = "additional options to pass with fastboot flash command.")
     private Collection<String> mFastbootFlashOptions = new ArrayList<>();
+
+    @Option(
+            name = "additional-fastboot-command",
+            description = "additional fastboot command to run.")
+    private Collection<String> mFastbootCommands = new ArrayList<>();
 
     @Option(
             name = "boot-header-version",
@@ -394,6 +411,23 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                 executeFastbootCmd(device, "flash", "system_dlkm", systemDlkmImg.getAbsolutePath());
             }
 
+            if (buildInfo.getFile(mVbmetaImageName) != null) {
+                File vbmetaImg =
+                        getRequestedFile(
+                                device,
+                                mVbmetaImageFileName,
+                                buildInfo.getFile(mVbmetaImageName),
+                                tmpDir);
+                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                    device.rebootIntoFastbootd();
+                }
+                executeFastbootCmd(device, "flash", "vbmeta", vbmetaImg.getAbsolutePath());
+            }
+
+            // Run additional fastboot command
+            for (String cmd : mFastbootCommands) {
+                executeFastbootCmd(device, cmd);
+            }
         } finally {
             getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
             // Allow interruption at the end no matter what.
@@ -889,6 +923,14 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         CommandResult result =
                 device.executeLongFastbootCommand(
                         fastbootCmdArgs.toArray(new String[fastbootCmdArgs.size()]));
+        if (result == null) {
+            throw new TargetSetupError(
+                    String.format(
+                            "CommandResult with fastboot command '%s' is null",
+                            String.join(" ", fastbootCmdArgs)),
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
+        }
         CLog.v("fastboot stdout: " + result.getStdout());
         CLog.v("fastboot stderr: " + result.getStderr());
         CommandStatus cmdStatus = result.getStatus();

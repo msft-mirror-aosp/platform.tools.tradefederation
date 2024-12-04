@@ -73,6 +73,11 @@ public class LogCollector {
                                                     "E cvd     : fetch_cvd",
                                                     "fetch_cvd_failure_general")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Could not resolve host: www.googleapis.com",
+                                                    "fetch_cvd_failure_resolve_googleapis")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to read from socket, retry",
