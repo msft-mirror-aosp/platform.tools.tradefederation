@@ -17,7 +17,6 @@ package com.android.tradefed.result.skipped;
 
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.service.TradefedFeatureClient;
@@ -79,8 +78,6 @@ public class SkipFeatureTest {
                         return image;
                     }
                 };
-        OptionSetter setter = new OptionSetter(skipManager);
-        setter.setOptionValue("report-module-skipped", "true");
         mConfiguration.setConfigurationObject(Configuration.SKIP_MANAGER_TYPE_NAME, skipManager);
         mSkipGetter.setConfiguration(mConfiguration);
         mSkipGetter.setTestInformation(mTestInfo);

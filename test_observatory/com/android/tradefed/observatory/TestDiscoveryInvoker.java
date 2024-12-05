@@ -41,6 +41,7 @@ import com.android.tradefed.util.testmapping.TestMapping;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 
+import com.google.common.base.Strings;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -341,6 +342,14 @@ public class TestDiscoveryInvoker {
                                         mBuildInfo.getFile(allowedList).getAbsolutePath());
                     }
                 }
+            }
+            if (!Strings.isNullOrEmpty(mappingParserSettings.mRunTestSuite)) {
+                throw new TestDiscoveryException(
+                        String.format(
+                                "Test discovery for test suite is not supported yet. Test suite:"
+                                        + " %s",
+                                mappingParserSettings.mRunTestSuite),
+                        null);
             }
 
             if (mHasConfigFallback) {

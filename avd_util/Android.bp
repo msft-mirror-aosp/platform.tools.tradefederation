@@ -30,6 +30,7 @@ java_library_host {
     static_libs: [
         "tradefed-common-util",
         "virtual-device-manager-proto",
+        "gson",
     ],
     libs: [
         "ddmlib-prebuilt",
@@ -58,6 +59,7 @@ tradefed_java_library_host {
         "virtual-device-manager-proto",
         "junit-host",
         "mockito",
+        "objenesis",
     ],
     libs: [
         "guava",

@@ -41,6 +41,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.avd.AcloudUtil;
+import com.android.tradefed.util.avd.HostOrchestratorClient;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
 import com.android.tradefed.util.avd.LogCollector;
 import com.android.tradefed.util.avd.OxygenClient;
@@ -423,7 +424,8 @@ public class GceManager {
                                     mGceAvdInfo.getOxygenationDeviceId(),
                                     OxygenUtil.getTargetRegion(getTestDeviceOptions()),
                                     getTestDeviceOptions().getOxygenAccountingUser(),
-                                    oxygenClient);
+                                    oxygenClient,
+                                    new HostOrchestratorClient.HoHttpClient());
                     bootSuccess = hOUtil.deviceBootCompleted(timeout);
                 } else {
                     final String remoteFile =
