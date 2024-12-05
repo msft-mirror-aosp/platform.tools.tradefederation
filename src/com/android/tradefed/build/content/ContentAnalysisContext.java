@@ -66,6 +66,8 @@ public class ContentAnalysisContext {
     }
 
     public Set<String> commonLocations() {
+        // Never consider ignored as part of common locations
+        commonLocations.removeAll(ignoredChange);
         return commonLocations;
     }
 

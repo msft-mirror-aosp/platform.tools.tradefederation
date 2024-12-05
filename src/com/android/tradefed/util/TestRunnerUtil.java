@@ -72,6 +72,10 @@ public class TestRunnerUtil {
                 }
             }
         }
+        File moduleSharedLibs = new File(testFile.getParentFile(), "shared_libs");
+        if (moduleSharedLibs.exists()) {
+            paths.add(moduleSharedLibs.getAbsolutePath());
+        }
         if (paths.isEmpty()) {
             return null;
         }

@@ -39,8 +39,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.incremental.ApkChangeDetector;
 import com.android.tradefed.targetprep.incremental.IIncrementalSetup;
-import com.android.tradefed.targetprep.incremental.TestAppInstallSetupIncrementalHelper;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IAbiReceiver;
 import com.android.tradefed.util.AaptParser;
@@ -226,7 +226,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     private Set<String> mPackagesInstalled = new HashSet<>();
     private TestInformation mTestInfo;
     @VisibleForTesting protected IncrementalInstallSession incrementalInstallSession;
-    private TestAppInstallSetupIncrementalHelper mIncrementalSetupHelper = null;
+    private ApkChangeDetector mApkChangeDetector = null;
 
     protected void setTestInformation(TestInformation testInfo) {
         mTestInfo = testInfo;
@@ -245,7 +245,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     /** Helper to parse an apk file with aapt. */
     @VisibleForTesting
     AaptParser doAaptParse(File apkFile) {
-        return AaptParser.parse(apkFile);
+        return AaptParser.parse(apkFile, mAaptVersion);
     }
 
     @VisibleForTesting
@@ -481,10 +481,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         if (mCleanup && !(e instanceof DeviceNotAvailableException)) {
             for (String packageName : mPackagesInstalled) {
                 try {
-                    if (
-                        mIncrementalSetupHelper != null
-                            && mIncrementalSetupHelper.handlePackageCleanup(
-                                packageName, getDevice(), mUserId, mInstallForAllUsers)) {
+                    if (mApkChangeDetector != null
+                        && mApkChangeDetector.handlePackageCleanup(
+                            packageName, getDevice(), mUserId, mInstallForAllUsers)) {
                         continue;
                     }
                     uninstallPackage(getDevice(), packageName);
@@ -518,9 +517,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     @Override
     public void setIncrementalSetupEnabled(boolean shouldEnable) {
         if (shouldEnable) {
-            mIncrementalSetupHelper = new TestAppInstallSetupIncrementalHelper();
+            mApkChangeDetector = new ApkChangeDetector();
         } else {
-            mIncrementalSetupHelper = null;
+            mApkChangeDetector = null;
         }
     }
 
@@ -546,10 +545,8 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         }
 
         for (Map.Entry<String, List<File>> e : Multimaps.asMap(packageToFiles).entrySet()) {
-            if (
-                mIncrementalSetupHelper != null
-                    && mIncrementalSetupHelper.handleTestAppsPreinstall(
-                        e.getKey(), e.getValue(), getDevice())) {
+            if (mApkChangeDetector != null
+                && mApkChangeDetector.handleTestAppsPreinstall(e.getKey(), e.getValue(), getDevice())) {
                 continue;
             }
 
@@ -645,7 +642,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
                 if (aaptParser == null) {
                     throw new TargetSetupError(
                             String.format(
-                                    "Failed to extract info from `%s` using aapt",
+                                    "Failed to extract info from `%s` using "
+                                        + (mAaptVersion == AaptVersion.AAPT
+                                        ? "aapt" : "aapt2"),
                                     testAppFile.getAbsoluteFile().getName()),
                             device.getDeviceDescriptor());
                 }

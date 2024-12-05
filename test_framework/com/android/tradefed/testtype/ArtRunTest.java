@@ -282,7 +282,8 @@ public class ArtRunTest
             CLog.d("Created temporary local directory `%s` for test", tmpTestLocalDir);
 
             File localStdoutFile = new File(tmpTestLocalDir, STDOUT_FILE_NAME);
-            if (!pullAndCheckFile(remoteStdoutFilePath, localStdoutFile)) {
+            if (!pullAndCheckFile(
+                    remoteStdoutFilePath, localStdoutFile, LogDataType.TEXT, listener)) {
                 throw new IOException(
                         String.format(
                                 "Error while pulling remote file `%s` to local file `%s`",
@@ -291,7 +292,8 @@ public class ArtRunTest
             String actualStdoutText = FileUtil.readStringFromFile(localStdoutFile);
 
             File localStderrFile = new File(tmpTestLocalDir, STDERR_FILE_NAME);
-            if (!pullAndCheckFile(remoteStderrFilePath, localStderrFile)) {
+            if (!pullAndCheckFile(
+                    remoteStderrFilePath, localStderrFile, LogDataType.TEXT, listener)) {
                 throw new IOException(
                         String.format(
                                 "Error while pulling remote file `%s` to local file `%s`",
@@ -525,12 +527,12 @@ public class ArtRunTest
                 localCfgPath.delete();
             }
 
-            if (!pullAndCheckFile(cfgPath, localCfgPath)) {
+            if (!pullAndCheckFile(cfgPath, localCfgPath, LogDataType.CFG, listener)) {
                 throw new IOException("Cannot pull CFG file from the device");
             }
 
             File tempJar = new File(tmpCheckerLocalDir, "temp.jar");
-            if (!pullAndCheckFile(mClasspath.get(0), tempJar)) {
+            if (!pullAndCheckFile(mClasspath.get(0), tempJar, LogDataType.ZIP, listener)) {
                 throw new IOException("Cannot pull JAR file from the device");
             }
 
@@ -718,7 +720,8 @@ public class ArtRunTest
 
     /**
      * Retrieve a file off device and verify that file was transferred correctly by comparing the
-     * sizes and MD5 digests of the original file (on device) and its (local) copy.
+     * sizes and MD5 digests of the original file (on device) and its (local) copy. In the case of
+     * an incorrect transfer, log the filed pulled from the device as a TradeFed artifact.
      *
      * <p>This method is essentially a wrapper around {@link
      * com.android.tradefed.device.INativeDevice#pullFile}, which has its own way to signal that a
@@ -729,6 +732,9 @@ public class ArtRunTest
      * @param remoteFilePath The absolute path to file on device.
      * @param localFile The local file to store contents in. If non-empty, contents will be
      *     replaced.
+     * @param logDataType The data type of the logged pulled filed, in case of an incorrect
+     *     transfer.
+     * @param listener The {@link ITestInvocationListener} object associated to the executed test.
      * @return <code>true</code> if file was retrieved successfully. <code>false</code> otherwise.
      * @throws DeviceNotAvailableException If connection with device is lost and cannot be
      *     recovered.
@@ -736,7 +742,11 @@ public class ArtRunTest
      *     from the device failed.
      * @throws IOException If the file size check or the MD5 digest check failed.
      */
-    private boolean pullAndCheckFile(String remoteFilePath, File localFile)
+    private boolean pullAndCheckFile(
+            String remoteFilePath,
+            File localFile,
+            LogDataType logDataType,
+            ITestInvocationListener listener)
             throws DeviceNotAvailableException, AdbShellCommandException, IOException {
         // Get the size of the remote file on device.
         long maxStatCmdTimeInMs = 10 * 1000; // 10 seconds.
@@ -775,6 +785,11 @@ public class ArtRunTest
                                     + "pulled from device: %d bytes vs %d bytes",
                             localFile, remoteFilePath, localFileSize, remoteFileSize);
             CLog.e(message);
+            try (FileInputStreamSource source = new FileInputStreamSource(localFile)) {
+                String fileName = localFile.getName();
+                listener.testLog(fileName, logDataType, source);
+                CLog.d("Logged incorrectly transferred file `%s`", fileName);
+            }
             throw new IOException(message);
         }
 
@@ -786,6 +801,11 @@ public class ArtRunTest
                                     + "file `%s` pulled from device: %s vs %s",
                             localFile, remoteFilePath, localMd5Digest, remoteMd5Digest);
             CLog.e(message);
+            try (FileInputStreamSource source = new FileInputStreamSource(localFile)) {
+                String fileName = localFile.getName();
+                listener.testLog(fileName, logDataType, source);
+                CLog.d("Logged incorrectly transferred file `%s`", fileName);
+            }
             throw new IOException(message);
         }
 
