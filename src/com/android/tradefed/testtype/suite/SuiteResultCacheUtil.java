@@ -45,6 +45,8 @@ import java.util.Map.Entry;
 public class SuiteResultCacheUtil {
 
     public static final String DEVICE_IMAGE_KEY = "device_image";
+    public static final String MODULE_CONFIG_KEY = "module_config";
+    public static final String TRADEFED_JAR_VERSION_KEY = "tradefed.jar_version";
 
     /** Describes the cache results. */
     public static class CacheResultDescriptor {
@@ -113,7 +115,11 @@ public class SuiteResultCacheUtil {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
             Digest configDigest = DigestCalculator.compute(moduleConfig);
-            environment.put("module_config", configDigest.getHash());
+            environment.put(MODULE_CONFIG_KEY, configDigest.getHash());
+            Digest tradefedDigest = computeTradefedVersion();
+            if (tradefedDigest != null) {
+                environment.put(TRADEFED_JAR_VERSION_KEY, tradefedDigest.getHash());
+            }
             if (module.getIntraModuleShardCount() != null
                     && module.getIntraModuleShardIndex() != null) {
                 environment.put(
@@ -174,8 +180,14 @@ public class SuiteResultCacheUtil {
             for (Entry<String, Digest> entry : skipContext.getImageToDigest().entrySet()) {
                 environment.put(entry.getKey(), entry.getValue().getHash());
             }
-            Digest configDigest = DigestCalculator.compute(moduleConfig);
-            environment.put("module_config", configDigest.getHash());
+            try (CloseableTraceScope computeDigest = new CloseableTraceScope("compute_digest")) {
+                Digest configDigest = DigestCalculator.compute(moduleConfig);
+                environment.put(MODULE_CONFIG_KEY, configDigest.getHash());
+                Digest tradefedDigest = computeTradefedVersion();
+                if (tradefedDigest != null) {
+                    environment.put(TRADEFED_JAR_VERSION_KEY, tradefedDigest.getHash());
+                }
+            }
             if (module.getIntraModuleShardCount() != null
                     && module.getIntraModuleShardIndex() != null) {
                 environment.put(
@@ -224,5 +236,22 @@ public class SuiteResultCacheUtil {
                     System.currentTimeMillis());
         }
         return new CacheResultDescriptor(false, null);
+    }
+
+    /**
+     * Hash Tradefed.jar as a denominator to keep results. This helps consider changes to Tradefed.
+     */
+    private static Digest computeTradefedVersion() throws IOException {
+        String classpathStr = System.getProperty("java.class.path");
+        if (classpathStr == null) {
+            return null;
+        }
+        for (String file : classpathStr.split(":")) {
+            File currentJar = new File(file);
+            if (currentJar.exists() && "tradefed.jar".equals(currentJar.getName())) {
+                return DigestCalculator.compute(currentJar);
+            }
+        }
+        return null;
     }
 }

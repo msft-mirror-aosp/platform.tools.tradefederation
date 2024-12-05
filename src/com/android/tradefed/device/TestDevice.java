@@ -1278,12 +1278,16 @@ public class TestDevice extends NativeDevice {
             try {
                 // check framework running
                 String output = executeShellCommand("pm path android");
-                if (output == null || !output.contains("package:")) {
+                if (output == null || !output.trim().startsWith("package:")) {
                     CLog.v("framework reboot: can't detect framework running");
                     return false;
                 }
                 notifyRebootStarted();
-                String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
+                String command = "svc power reboot";
+                String mode = rebootMode.formatRebootCommand(reason);
+                if (mode != null && !mode.isEmpty()) {
+                    command = String.format("%s %s", command, mode);
+                }
                 CommandResult result = executeShellV2Command(command);
                 if (result.getStdout().contains(EARLY_REBOOT)
                         || result.getStderr().contains(EARLY_REBOOT)) {
@@ -2900,6 +2904,10 @@ public class TestDevice extends NativeDevice {
                 Strings.isNullOrEmpty(builder.mCpuTopology)
                         ? ""
                         : "--cpu-topology " + builder.mCpuTopology;
+        if (builder.mOs != null && builder.mGki != null) {
+            throw new IllegalStateException("Can't specify both os and gki!");
+        }
+        final String osFlag = Strings.isNullOrEmpty(builder.mOs) ? "" : "--os " + builder.mOs;
         final String gkiFlag = Strings.isNullOrEmpty(builder.mGki) ? "" : "--gki " + builder.mGki;
         final String hugePagesFlag = builder.mHugePages ? "--hugepages" : "";
         final String nameFlag =
@@ -2925,6 +2933,7 @@ public class TestDevice extends NativeDevice {
                                 cpuFlag,
                                 cpuAffinityFlag,
                                 cpuTopologyFlag,
+                                osFlag,
                                 gkiFlag,
                                 hugePagesFlag,
                                 nameFlag,
@@ -3272,7 +3281,8 @@ public class TestDevice extends NativeDevice {
         private Map<File, String> mBootFiles;
         private long mAdbConnectTimeoutMs;
         private List<String> mAssignedDevices;
-        private String mGki;
+        @Deprecated private String mGki;
+        private String mOs;
         private String mInstanceIdFile; // Path to instance_id file
         private String mInstanceImg; // Path to instance_img file
         private boolean mHugePages;
@@ -3438,9 +3448,21 @@ public class TestDevice extends NativeDevice {
          * Uses GKI kernel instead of microdroid kernel
          *
          * @param version The GKI version to use
+         * @deprecated use {@link #os(String os)}.
          */
+        @Deprecated
         public MicrodroidBuilder gki(String version) {
             mGki = version;
+            return this;
+        }
+
+        /**
+         * Uses non-default variant of Microdroid OS.
+         *
+         * @param os The Microdroid OS version to use
+         */
+        public MicrodroidBuilder os(String os) {
+            mOs = os;
             return this;
         }
 
