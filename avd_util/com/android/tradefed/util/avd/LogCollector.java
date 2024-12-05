@@ -75,8 +75,8 @@ public class LogCollector {
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*vdl_stdout.*"),
                                             new AbstractMap.SimpleEntry<>(
-                                                    "Could not resolve host: www.googleapis.com",
-                                                    "fetch_cvd_failure_resolve_googleapis")),
+                                                    "Could not resolve host: ",
+                                                    "fetch_cvd_failure_resolve_host")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
