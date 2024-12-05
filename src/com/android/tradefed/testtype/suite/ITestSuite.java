@@ -400,6 +400,13 @@ public abstract class ITestSuite
                             + " config, otherwise use the target config.")
     private boolean mPrioritizeHostConfig = false;
 
+    @Option(
+            name = "run-test-suite",
+            description =
+                    "Entry point to execute the given test suite as defined by the Soong"
+                            + " test_suites rule")
+    private String mRunTestSuite = null;
+
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
         FULLY_ISOLATED; // Test received a fresh device.
@@ -944,14 +951,18 @@ public abstract class ITestSuite
                             module.getModuleInvocationContext()
                                     .getConfigurationDescriptor()
                                     .getModuleName();
+                    boolean shouldSkipModule = mSkipContext.shouldSkipModule(baseModuleName);
                     ModuleProtoResultReporter moduleReporter = null;
                     CacheResultDescriptor cacheDescriptor = null;
-                    File moduleDir = SearchArtifactUtil.findModuleDir(baseModuleName, true);
+                    File moduleDir =
+                            SearchArtifactUtil.getModuleDirFromConfig(
+                                    module.getModuleInvocationContext());
                     if (moduleDir == null) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.MODULE_CACHE_NO_DIR, 1);
                     }
-                    if (mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
+                    if (!shouldSkipModule
+                            && mMainConfiguration.getCommandOptions().shouldUploadCacheResults()
                             && moduleDir != null
                             && mMainConfiguration.getCommandOptions().getRemoteCacheInstanceName()
                                     != null) {
@@ -988,10 +999,14 @@ public abstract class ITestSuite
                     boolean applyCachedResults =
                             cacheDescriptor != null
                                     && cacheDescriptor.isCacheHit()
-                                    && mMainConfiguration.getCommandOptions().reportCacheResults()
+                                    && (mMainConfiguration.getCommandOptions().reportCacheResults()
+                                            || (mSkipContext.isPresubmit()
+                                                    && mMainConfiguration
+                                                            .getCommandOptions()
+                                                            .reportCacheResultsInPresubmit()))
                                     && mSkipContext.shouldUseCache();
                     // TODO(b/372243975): report logs even while applying caching
-                    if (moduleConfig != null && !applyCachedResults) {
+                    if (moduleConfig != null && !applyCachedResults && !shouldSkipModule) {
                         try (InputStreamSource source =
                                 new FileInputStreamSource(moduleConfig, false)) {
                             listener.testLog(
@@ -1003,7 +1018,7 @@ public abstract class ITestSuite
                                     testInfo, module.getModuleInvocationContext());
                     boolean moduleRan = true;
                     try {
-                        if (mSkipContext.shouldSkipModule(baseModuleName)) {
+                        if (shouldSkipModule) {
                             moduleRan = false;
                             CLog.d(
                                     "Skipping module '%s' due to no changes in artifacts.",
@@ -1013,6 +1028,8 @@ public abstract class ITestSuite
                                             ModuleDefinition.MODULE_SKIPPED,
                                             "No relevant changes to device image or test artifacts"
                                                     + " detected.");
+                            module.getModuleInvocationContext()
+                                    .addInvocationAttribute(ModuleDefinition.SPARSE_MODULE, "true");
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.PARTIAL_SKIP_MODULE_UNCHANGED_COUNT, 1);
                         } else if (applyCachedResults) {

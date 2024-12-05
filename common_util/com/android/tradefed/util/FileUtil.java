@@ -968,11 +968,11 @@ public class FileUtil {
      *
      * @param rootDir the root directory to search in
      * @param relativeParent An optional parent for all {@link File}s returned. If not specified,
-     *            all {@link File}s will be relative to {@code rootDir}.
+     *     all {@link File}s will be relative to {@code rootDir}.
      * @return An set of {@link File}s, representing all directories under {@code rootDir},
-     *         including {@code rootDir} itself. If {@code rootDir} is null, an empty set is
-     *         returned.
+     *     including {@code rootDir} itself. If {@code rootDir} is null, an empty set is returned.
      */
+    @Deprecated
     public static Set<File> findDirsUnder(File rootDir, File relativeParent) {
         Set<File> dirs = new HashSet<File>();
         if (rootDir != null) {
