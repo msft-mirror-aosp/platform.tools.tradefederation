@@ -73,6 +73,11 @@ public class LogCollector {
                                                     "E cvd     : fetch_cvd",
                                                     "fetch_cvd_failure_general")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Could not resolve host: ",
+                                                    "fetch_cvd_failure_resolve_host")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to read from socket, retry",
@@ -108,7 +113,20 @@ public class LogCollector {
                                             new AbstractMap.SimpleEntry<>(
                                                     "mkdir failed: errno 117 (Structure needs"
                                                             + " cleaning)",
-                                                    "filesystem_corrupt")))
+                                                    "filesystem_corrupt")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*kernel.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Kernel panic - not syncing: VFS: Unable to"
+                                                            + " mount root fs on unknown-block",
+                                                    "cf_ramdisk_mount_failure")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*launcher.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "BluetoothShellCommand:"
+                                                        + " wait-for-state:STATE_OFF: Failed with"
+                                                        + " status=-1",
+                                                    "bluetooth_failed_to_stop")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**

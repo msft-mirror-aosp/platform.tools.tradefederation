@@ -49,7 +49,8 @@ public class ImageContentAnalyzer {
     }
 
     /** Remove descriptors for files that do not impact the device image functionally */
-    public static void normalizeDeviceImage(List<ArtifactFileDescriptor> allDescriptors) {
+    public static void normalizeDeviceImage(
+            List<ArtifactFileDescriptor> allDescriptors, AnalysisHeuristic analysisLevel) {
         // Remove all build.prop paths
         allDescriptors.removeIf(d -> d.path.endsWith("/build.prop"));
         allDescriptors.removeIf(d -> d.path.endsWith("/prop.default"));
@@ -63,6 +64,22 @@ public class ImageContentAnalyzer {
         allDescriptors.removeIf(d -> d.path.startsWith("META/"));
         allDescriptors.removeIf(d -> d.path.startsWith("PREBUILT_IMAGES/"));
         allDescriptors.removeIf(d -> d.path.startsWith("RADIO/"));
+
+        if (analysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
+            boolean removed = false;
+            // b/335722003
+            boolean ota4k =
+                    allDescriptors.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_4k.zip"));
+            boolean ota16k =
+                    allDescriptors.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_16k.zip"));
+            if (ota4k || ota16k) {
+                removed = true;
+            }
+            if (removed) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_USED_HEURISTIC, analysisLevel.name());
+            }
+        }
     }
 
     public ContentAnalysisResults evaluate() {
@@ -107,7 +124,8 @@ public class ImageContentAnalyzer {
                                     context.contentEntry());
                         }
                         results.addImageDigestMapping(
-                                context.contentEntry(), DeviceMerkleTree.buildFromContext(context));
+                                context.contentEntry(),
+                                DeviceMerkleTree.buildFromContext(context, mAnalysisLevel));
                         break;
                     case DEVICE_IMAGE:
                         long changeCount = deviceImageAnalysis(context);
@@ -115,7 +133,8 @@ public class ImageContentAnalyzer {
                             CLog.d("device image '%s' has changed.", context.contentEntry());
                             results.addDeviceImageChanges(changeCount);
                         }
-                        Digest imageDigest = DeviceMerkleTree.buildFromContext(context);
+                        Digest imageDigest =
+                                DeviceMerkleTree.buildFromContext(context, mAnalysisLevel);
                         if (imageDigest != null) {
                             InvocationMetricLogger.addInvocationMetrics(
                                     InvocationMetricKey.DEVICE_IMAGE_HASH, imageDigest.getHash());
@@ -171,22 +190,7 @@ public class ImageContentAnalyzer {
                             context.contentInformation(), context.contentEntry());
             // Remove paths that are ignored
             diffs.removeIf(d -> context.ignoredChanges().contains(d.path));
-            normalizeDeviceImage(diffs);
-            if (mAnalysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
-                boolean removed = false;
-                // b/335722003
-                boolean ota4k =
-                        diffs.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_4k.zip"));
-                boolean ota16k =
-                        diffs.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_16k.zip"));
-                if (ota4k || ota16k) {
-                    removed = true;
-                }
-                if (removed) {
-                    InvocationMetricLogger.addInvocationMetrics(
-                            InvocationMetricKey.DEVICE_IMAGE_USED_HEURISTIC, mAnalysisLevel.name());
-                }
-            }
+            normalizeDeviceImage(diffs, mAnalysisLevel);
             if (diffs.isEmpty()) {
                 CLog.d("Device image from '%s' is unchanged", context.contentEntry());
             } else {
