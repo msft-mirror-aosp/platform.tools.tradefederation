@@ -41,6 +41,9 @@ import javax.annotation.Nullable;
  */
 public class ApkChangeDetector {
 
+    private static final long MIN_FREE_DISK_SPACE_THRESHOLD_IN_BYTES = 10000000L;
+    private static final double DISK_SPACE_TO_USE_ESTIMATE_FACTOR = 1.5;
+
     /**
      * Handle app pre-install process.
      *
@@ -51,35 +54,21 @@ public class ApkChangeDetector {
      *     setup. Default to false, which does not oblige to re-install the package APKs.
      */
     public boolean handleTestAppsPreinstall(
-        String packageName, List<File> testApps, ITestDevice device) {
-        List<String> apkInstallPaths;
-        try {
-            apkInstallPaths = getApkInstallPaths(packageName, device);
-        } catch (DeviceNotAvailableException ex) {
-            CLog.d(
-                "Exception occurred when getting the APK install paths of package '%s'. "
-                    + "Install the APKs. Error message: %s",
-                packageName, ex);
+        String packageName, List<File> testApps, ITestDevice device)
+        throws DeviceNotAvailableException {
+        if (!cleanupAppsIfNecessary(device, testApps)) {
             return false;
         }
 
+        List<String> apkInstallPaths = getApkInstallPaths(packageName, device);
         if (apkInstallPaths.size() != testApps.size()) {
             CLog.d(
-                    "The file count of APKs to be installed is not equal to the number of APKs on "
-                        + "the device for the package '%s'. Install the APKs.", packageName);
+                "The file count of APKs to be installed is not equal to the number of APKs on "
+                    + "the device for the package '%s'. Install the APKs.", packageName);
             return false;
         }
 
-        Set<String> sha256SetOnDevice;
-        try {
-            sha256SetOnDevice = getSha256SumsOnDevice(apkInstallPaths, device);
-        } catch (DeviceNotAvailableException ex) {
-            CLog.d(
-                "Exception occurred when getting the SHA256Sums of APKs on the device for the "
-                    + "package '%s'. Install the APKs. Error message: %s",
-                packageName, ex);
-            return false;
-        }
+        Set<String> sha256SetOnDevice = getSha256SumsOnDevice(apkInstallPaths, device);
         CLog.d("The SHA256Sums on device contains: ");
         sha256SetOnDevice.forEach(sha256 -> {
             CLog.d("%s", sha256);
@@ -188,5 +177,61 @@ public class ApkChangeDetector {
             inputStream.read(byteArray);
         }
         return Hashing.sha256().hashBytes(byteArray).toString();
+    }
+
+    /**
+     * Returns if the processes of checking free disk space and app cleanup are successful.
+     *
+     * Note that this method only returns {@code false} if any issue happens. Upon no needing to
+     * clean up, this method returns {@code true}.
+     */
+    private boolean cleanupAppsIfNecessary(ITestDevice device, List<File> testApps)
+        throws DeviceNotAvailableException {
+        long freeDiskSpace;
+        try {
+            freeDiskSpace = getFreeDiskSpaceForAppInstallation(device);
+        } catch (IllegalArgumentException illegalArgumentEx) {
+            CLog.d(
+                "Not able to obtain free disk space: %s. App cleanup not successful.",
+                illegalArgumentEx);
+            return false;
+        }
+        long totalAppSize = testApps.stream().mapToLong(File::length).sum();
+        if (freeDiskSpace - totalAppSize * DISK_SPACE_TO_USE_ESTIMATE_FACTOR
+                < MIN_FREE_DISK_SPACE_THRESHOLD_IN_BYTES) {
+            throw new UnsupportedOperationException("App cleanup is not yet supported.");
+        }
+        return true;
+    }
+
+    /** Get the free disk space in bytes of the folder "/data" of {@code device}. */
+    @VisibleForTesting
+    long getFreeDiskSpaceForAppInstallation(ITestDevice device)
+        throws DeviceNotAvailableException {
+        String commandToRun = "df /data";
+        return getFreeDiskSpaceFromDfCommandLine(device.executeShellCommand(commandToRun));
+    }
+
+    private long getFreeDiskSpaceFromDfCommandLine(String output) {
+        if (output == null) {
+            throw new IllegalArgumentException(
+                "No output available for obtaining the device's free disk space.");
+        }
+        // The format of the output of `df /data` is as follows:
+        // Filesystem        1K-blocks    Used Available Use% Mounted on
+        // [PATH_FS]         [TOTAL]    [USED] [FREE]    [FREE_PCT] [PATH_MOUNTED_ON]
+        // Thus we need to skip the first line and take token 3 of the second line.
+        final long bytesInKiloBytes = 1024L;
+        Splitter splitter = Splitter.on('\n').trimResults().omitEmptyStrings();
+        List<String> outputLines = splitter.splitToList(output);
+        if (outputLines.size() < 2) {
+            throw new IllegalArgumentException("No free disk space info was emitted.");
+        }
+        String[] tokens = outputLines.get(1).split("\\s+");
+        if (tokens.length < 4) {
+            throw new IllegalArgumentException(
+                "Free disk space info under /data was malformatted.");
+        }
+        return Long.parseLong(tokens[3]) * bytesInKiloBytes;
     }
 }
