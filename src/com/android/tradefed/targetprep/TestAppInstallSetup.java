@@ -16,6 +16,7 @@
 package com.android.tradefed.targetprep;
 
 import static com.android.tradefed.targetprep.UserHelper.RUN_TESTS_AS_USER_KEY;
+import static com.android.tradefed.targetprep.VisibleBackgroundUserPreparer.INSTALL_TEST_APK_FOR_ALL_USERS;
 
 import com.android.annotations.VisibleForTesting;
 import com.android.incfs.install.IncrementalInstallSession;
@@ -38,6 +39,8 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.observatory.IDiscoverDependencies;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.targetprep.incremental.ApkChangeDetector;
+import com.android.tradefed.targetprep.incremental.IIncrementalSetup;
 import com.android.tradefed.testtype.IAbi;
 import com.android.tradefed.testtype.IAbiReceiver;
 import com.android.tradefed.util.AaptParser;
@@ -81,7 +84,7 @@ import java.util.stream.Stream;
  */
 @OptionClass(alias = "tests-zip-app")
 public class TestAppInstallSetup extends BaseTargetPreparer
-        implements IAbiReceiver, IDiscoverDependencies {
+        implements IAbiReceiver, IDiscoverDependencies, IIncrementalSetup {
 
     /** The mode the apk should be install in. */
     private enum InstallMode {
@@ -215,10 +218,15 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     private IAbi mAbi = null;
     private Integer mUserId = null;
     private Boolean mGrantPermission = null;
+    // TODO: b/367468564 - Remove this flag once we have fixed the tests so that installation
+    // for the system user is no longer required when conducting tests for
+    // the secondary_user_on_secondary_display user type.
+    private boolean mInstallForAllUsers  = false;
 
     private Set<String> mPackagesInstalled = new HashSet<>();
     private TestInformation mTestInfo;
     @VisibleForTesting protected IncrementalInstallSession incrementalInstallSession;
+    private ApkChangeDetector mApkChangeDetector = null;
 
     protected void setTestInformation(TestInformation testInfo) {
         mTestInfo = testInfo;
@@ -237,7 +245,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     /** Helper to parse an apk file with aapt. */
     @VisibleForTesting
     AaptParser doAaptParse(File apkFile) {
-        return AaptParser.parse(apkFile);
+        return AaptParser.parse(apkFile, mAaptVersion);
     }
 
     @VisibleForTesting
@@ -392,6 +400,11 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             }
         }
 
+        if (testInfo.properties().get(INSTALL_TEST_APK_FOR_ALL_USERS) != null) {
+            mInstallForAllUsers = testInfo.properties().get(INSTALL_TEST_APK_FOR_ALL_USERS)
+                    .equals("true");
+        }
+
         if (mForceQueryable == null) {
             // Do not add --force-queryable if the device api level >= 34. Ideally,
             // checkApiLevelAgainstNextRelease(34) should only return true for api 34 devices. But,
@@ -468,6 +481,11 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         if (mCleanup && !(e instanceof DeviceNotAvailableException)) {
             for (String packageName : mPackagesInstalled) {
                 try {
+                    if (mApkChangeDetector != null
+                        && mApkChangeDetector.handlePackageCleanup(
+                            packageName, getDevice(), mUserId, mInstallForAllUsers)) {
+                        continue;
+                    }
                     uninstallPackage(getDevice(), packageName);
                 } catch (TargetSetupError tse) {
                     CLog.e(tse);
@@ -495,6 +513,16 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         return mCleanup;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public void setIncrementalSetupEnabled(boolean shouldEnable) {
+        if (shouldEnable) {
+            mApkChangeDetector = new ApkChangeDetector();
+        } else {
+            mApkChangeDetector = null;
+        }
+    }
+
     /**
      * Attempt to install an package or split package on the device.
      *
@@ -503,6 +531,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
      */
     protected void installer(TestInformation testInfo, Map<File, String> appFilesAndPackages)
             throws TargetSetupError, DeviceNotAvailableException {
+
         ITestDevice device = testInfo.getDevice();
 
         // TODO(hzalek): Consider changing resolveApkFiles's return to a Multimap to avoid building
@@ -516,6 +545,11 @@ public class TestAppInstallSetup extends BaseTargetPreparer
         }
 
         for (Map.Entry<String, List<File>> e : Multimaps.asMap(packageToFiles).entrySet()) {
+            if (mApkChangeDetector != null
+                && mApkChangeDetector.handleTestAppsPreinstall(e.getKey(), e.getValue(), getDevice())) {
+                continue;
+            }
+
             if (mIncrementalInstallation) {
                 CLog.d(
                         "Performing incremental installation of apk %s with %s ...",
@@ -608,7 +642,9 @@ public class TestAppInstallSetup extends BaseTargetPreparer
                 if (aaptParser == null) {
                     throw new TargetSetupError(
                             String.format(
-                                    "Failed to extract info from `%s` using aapt",
+                                    "Failed to extract info from `%s` using "
+                                        + (mAaptVersion == AaptVersion.AAPT
+                                        ? "aapt" : "aapt2"),
                                     testAppFile.getAbsoluteFile().getName()),
                             device.getDeviceDescriptor());
                 }
@@ -682,7 +718,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     private String installPackage(ITestDevice device, List<File> appFiles)
             throws DeviceNotAvailableException {
         // Handle the different install use cases (with or without a user)
-        if (mUserId == null) {
+        if (mUserId == null || mInstallForAllUsers) {
             if (appFiles.size() == 1) {
                 return device.installPackage(
                         appFiles.get(0), true, mInstallArgs.toArray(new String[] {}));
@@ -721,7 +757,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
     protected void uninstallPackage(ITestDevice device, String packageName)
             throws DeviceNotAvailableException {
         String msg;
-        if (mUserId == null) {
+        if (mUserId == null || mInstallForAllUsers) {
             msg = device.uninstallPackage(packageName);
         } else {
             msg = device.uninstallPackageForUser(packageName, mUserId);

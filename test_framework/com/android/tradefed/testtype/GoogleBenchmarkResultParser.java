@@ -17,10 +17,10 @@ package com.android.tradefed.testtype;
 
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -36,6 +36,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 /**
  * Parses the results of Google Benchmark that run from shell,
  * and return a map with all the results.
@@ -52,7 +53,8 @@ public class GoogleBenchmarkResultParser {
 
     /**
      * Parse an individual output line.
-     * name,iterations,real_time,cpu_time,bytes_per_second,items_per_second,label
+     * name,iterations,real_time,cpu_time,time_unit,bytes_per_second,items_per_second,label,
+     * error_occurred,error_message
      *
      * @param cmd_result device command result that contains the test output
      * @return a map containing the number of tests that ran.
@@ -180,7 +182,11 @@ public class GoogleBenchmarkResultParser {
         Iterator<?> i = j.keys();
         while(i.hasNext()) {
             String key = (String) i.next();
-            testResults.put(key, j.get(key).toString());
+            if (key.endsWith("time")) {
+                testResults.put(key + "_" + j.get("time_unit").toString(), j.get(key).toString());
+            } else {
+                testResults.put(key, j.get(key).toString());
+            }
         }
         return testResults;
     }

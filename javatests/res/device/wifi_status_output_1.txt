@@ -2,7 +2,7 @@ Wifi is enabled
 Wifi scanning is only available when wifi is enabled
 ==== ClientModeManager instance: ConcreteClientModeManager{id=69960513 iface=wlan0 role=ROLE_CLIENT_PRIMARY} ====
 Wifi is connected to "GoogleGuest"
-WifiInfo: SSID: "GoogleGuest", BSSID: 48:2f:6b:ac:b2:31, MAC: 82:f2:40:f1:51:be, Security type: 0, Supplicant state: COMPLETED, Wi-Fi standard: 6, RSSI: -60, Link speed: 573Mbps, Tx Link speed: 573Mbps, Max Supported Tx Link speed: 573Mbps, Rx Link speed: 344Mbps, Max Supported Rx Link speed: 573Mbps, Frequency: 5300MHz, Net ID: 0, Metered hint: false, score: 60, CarrierMerged: false, SubscriptionId: -1, IsPrimary: 1
+WifiInfo: SSID: "GoogleGuest", BSSID: 48:2f:6b:ac:b2:31, MAC: 82:f2:40:f1:51:be, Security type: 0, Supplicant state: COMPLETED, Wi-Fi standard: 6, RSSI: -60, Link speed: 573Mbps, Tx Link speed: 573Mbps, Max Supported Tx Link speed: 573Mbps, Rx Link speed: 344Mbps, Max Supported Rx Link speed: 573Mbps, Frequency: 5300MHz, Net ID: 14, Metered hint: false, score: 60, CarrierMerged: false, SubscriptionId: -1, IsPrimary: 1
 successfulTxPackets: 90968
 successfulTxPacketsPerSecond: 24.560942521673798
 retriedTxPackets: 1055

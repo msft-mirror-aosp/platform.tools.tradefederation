@@ -267,9 +267,13 @@ public class ConfigurationDef {
                 boolean shouldAddToFlatConfig = true;
 
                 for (ConfigObjectDef configDef : objClassEntry.getValue()) {
+                    String objectWithoutNamespace = objClassEntry.getKey();
+                    if (objectWithoutNamespace.contains(":")) {
+                        objectWithoutNamespace = objectWithoutNamespace.split(":")[1];
+                    }
                     if (allowedObjects != null
-                            && !allowedObjects.contains(objClassEntry.getKey())) {
-                        CLog.d("Skipping creation of %s", objClassEntry.getKey());
+                            && !allowedObjects.contains(objectWithoutNamespace)) {
+                        CLog.d("Skipping creation of %s", objectWithoutNamespace);
                         mFilteredObjects = true;
                         continue;
                     }

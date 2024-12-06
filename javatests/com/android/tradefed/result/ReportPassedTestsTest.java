@@ -82,6 +82,25 @@ public class ReportPassedTestsTest {
     }
 
     @Test
+    public void testReportLarge() {
+        mExpectedString = "";
+        mReporter.testRunStarted("run-name", 0);
+        TestDescription tid = new TestDescription("class", "testName");
+        mReporter.testStarted(tid);
+        mReporter.testFailed(tid, "failed");
+        mReporter.testEnded(tid, Collections.emptyMap());
+        for (int i = 0; i < 550; i++) {
+            TestDescription test = new TestDescription("class", "testName" + i);
+            mReporter.testStarted(test);
+            mReporter.testEnded(test, Collections.emptyMap());
+            mExpectedString += "run-name " + test.toString() + "\n";
+        }
+        mReporter.testRunEnded(0L, Collections.emptyMap());
+        mReporter.invocationEnded(0L);
+        assertTrue(mTestLogCalled);
+    }
+
+    @Test
     public void testReport_withRunFailure() {
         mExpectedString = "run-name2\n";
         mReporter.testRunStarted("run-name", 0);

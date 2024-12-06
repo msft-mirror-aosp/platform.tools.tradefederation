@@ -39,7 +39,7 @@ import java.util.Set;
 public class RunOnSecondaryUserParameterHandlerTest {
 
     private static final String REQUIRE_RUN_ON_SECONDARY_USER_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnSecondaryUser";
+            "com.android.bedstead.multiuser.annotations.RequireRunOnSecondaryUser";
     private static final String EXISTING_ANNOTATION_FILTER = "existing.annotation.filter";
 
     private RunOnSecondaryUserParameterHandler mHandler;
