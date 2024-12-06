@@ -309,6 +309,9 @@ public class GkiDeviceFlashPreparerTest {
         File otaBinDir = FileUtil.createNamedTempDir(otaDir, "bin");
         File avbtoolFile = new File(otaBinDir, "avbtool");
         FileUtil.writeToFile("ddd", avbtoolFile);
+        File otaKeyDir = FileUtil.createNamedTempDir(otaDir, "external/avb/test/data/");
+        File keyFile = new File(otaKeyDir, "testkey_rsa4096.pem");
+        FileUtil.writeToFile("xyz", keyFile);
         File otatoolsZip = FileUtil.createTempFile("otatools", ".zip", mTmpDir);
         ZipUtil.createZip(List.of(otaDir.listFiles()), otatoolsZip);
         mBuildInfo.setFile("otatools.zip", otatoolsZip, "0");
@@ -328,6 +331,10 @@ public class GkiDeviceFlashPreparerTest {
                         eq(bootImg.getAbsolutePath()),
                         eq("--partition_size"),
                         eq("53477376"),
+                        eq("--algorithm"),
+                        eq("SHA256_RSA4096"),
+                        eq("--key"),
+                        matches(".*testkey_rsa4096.pem"),
                         eq("--partition_name"),
                         eq("boot"),
                         eq("--prop"),
