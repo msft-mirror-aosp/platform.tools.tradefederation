@@ -232,6 +232,29 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                         + "https://android.googlesource.com/platform/external/avb/+/master/README.md")
     private boolean mAddHashFooter = false;
 
+    @Option(
+            name = "security-patch-level",
+            description =
+                    "The security patch level to sign the boot image when add-hash-footer is"
+                            + " enabled.")
+    private String mSecurityPatchLevel = null;
+
+    @Option(
+            name = "boot-image-key-path",
+            description =
+                    "The key path in otatools to sign the boot image when add-hash-footer is"
+                            + " enabled.")
+    private String mBootImgKeyPath = "external/avb/test/data/testkey_rsa4096.pem";
+
+    @Option(
+            name = "boot-image-key-algorithm",
+            description =
+                    "The key algorithm to sign the boot image when add-hash-footer is enabled.")
+    private String mBootImgKeyAlgorithm = "SHA256_RSA4096";
+
+    @Option(name = "support-fastbootd", description = "Whether the device supports fastbootd mode")
+    private boolean mSupportFastbootd = true;
+
     private File mBootImg = null;
     private File mSystemDlkmImg = null;
     private Collection<String> mFlashOptions = new ArrayList<>();
@@ -392,7 +415,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mVendorDlkmImageFileName,
                                 buildInfo.getFile(mVendorDlkmImageName),
                                 tmpDir);
-                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                if (mSupportFastbootd
+                        && !TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
                     device.rebootIntoFastbootd();
                 }
                 executeFastbootCmd(device, "flash", "vendor_dlkm", vendorDlkmImg.getAbsolutePath());
@@ -405,7 +429,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mSystemDlkmImageFileName,
                                 buildInfo.getFile(mSystemDlkmImageName),
                                 tmpDir);
-                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                if (mSupportFastbootd
+                        && !TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
                     device.rebootIntoFastbootd();
                 }
                 executeFastbootCmd(device, "flash", "system_dlkm", systemDlkmImg.getAbsolutePath());
@@ -418,7 +443,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mVbmetaImageFileName,
                                 buildInfo.getFile(mVbmetaImageName),
                                 tmpDir);
-                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                if (mSupportFastbootd
+                        && !TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
                     device.rebootIntoFastbootd();
                 }
                 executeFastbootCmd(device, "flash", "vbmeta", vbmetaImg.getAbsolutePath());
@@ -762,6 +788,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         }
         File avbtool = getRequestedFile(device, AVBTOOL, buildInfo.getFile(OTATOOLS_ZIP), tmpDir);
         avbtool.setExecutable(true, false);
+        File boot_img_key =
+                getRequestedFile(device, mBootImgKeyPath, buildInfo.getFile(OTATOOLS_ZIP), tmpDir);
 
         String android_version = device.getProperty("ro.build.version.release");
         if (Strings.isNullOrEmpty(android_version)) {
@@ -769,12 +797,14 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                     "Can not get android version from property ro.build.version.release.",
                     device.getDeviceDescriptor());
         }
-        String security_path_version = device.getProperty("ro.build.version.security_patch");
-        if (Strings.isNullOrEmpty(security_path_version)) {
-            throw new TargetSetupError(
-                    "Can not get security path version from property"
-                            + " ro.build.version.security_patch.",
-                    device.getDeviceDescriptor());
+        if (Strings.isNullOrEmpty(mSecurityPatchLevel)) {
+            mSecurityPatchLevel = device.getProperty("ro.build.version.security_patch");
+            if (Strings.isNullOrEmpty(mSecurityPatchLevel)) {
+                throw new TargetSetupError(
+                        "--security-patch-level is not provided. Can not get security patch version"
+                                + " from property ro.build.version.security_patch.",
+                        device.getDeviceDescriptor());
+            }
         }
 
         String command = String.format("du -b %s", mBootImg.getAbsolutePath());
@@ -784,14 +814,18 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         String cmd =
                 String.format(
                         "%s add_hash_footer --image %s --partition_size %s "
+                                + "--algorithm %s "
+                                + "--key %s "
                                 + "--partition_name boot "
                                 + "--prop com.android.build.boot.os_version:%s "
                                 + "--prop com.android.build.boot.security_patch:%s",
                         avbtool.getAbsolutePath(),
                         mBootImg.getAbsolutePath(),
                         partition_size,
+                        mBootImgKeyAlgorithm,
+                        boot_img_key,
                         android_version,
-                        security_path_version);
+                        mSecurityPatchLevel);
         executeHostCommand(device, cmd);
     }
 
