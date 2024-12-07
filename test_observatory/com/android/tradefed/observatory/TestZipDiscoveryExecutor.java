@@ -103,7 +103,11 @@ public class TestZipDiscoveryExecutor {
             // If sandbox is in use, we always need to download the tradefed zip.
             if (config.getCommandOptions().shouldUseSandboxing()
                     || config.getCommandOptions().shouldUseRemoteSandboxMode()) {
-                testZipRegexSet.add(".*tradefed.zip");
+                // Report targets for compatibility with build commands names
+                testZipRegexSet.add("tradefed.zip");
+                testZipRegexSet.add("tradefed-all.zip");
+                testZipRegexSet.add("google-tradefed.zip");
+                testZipRegexSet.add("google-tradefed-all.zip");
             }
 
             if (config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME) != null) {
