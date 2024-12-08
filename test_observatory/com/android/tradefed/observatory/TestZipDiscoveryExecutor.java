@@ -153,6 +153,14 @@ public class TestZipDiscoveryExecutor {
                 mReportNoPossibleDiscovery = true;
             }
 
+            if (testZipRegexSet.contains(null)) {
+                throw new TestDiscoveryException(
+                        "Tradefed Observatory discovered null test zip regex. This is likely due to a corrupted discovery result. Test config: %s"
+                                .format(config.getName()),
+                        null,
+                        DiscoveryExitCode.DISCOVERY_RESULTS_CORREPUTED);
+            }
+
             try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {
                 JSONObject j = new JSONObject();
                 j.put(
