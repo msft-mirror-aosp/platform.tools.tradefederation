@@ -32,7 +32,9 @@ import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.ITestInvocationListener;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -456,10 +458,15 @@ public class ArtRunTestTest {
                         String.format(
                                 "Size of local file `%s` does not match size of remote file `%s`"
                                         + " pulled from device: 3 bytes vs 7 bytes",
-                                localStdoutFile, remoteStdoutFilePath));
+                                localStdoutFile.getPath(), remoteStdoutFilePath));
 
         // End of test.
 
+        verify(mMockInvocationListener)
+                .testLog(
+                        eq(stdoutFileName),
+                        eq(LogDataType.TEXT),
+                        (FileInputStreamSource) Mockito.any());
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
         verify(mMockInvocationListener)
@@ -556,10 +563,15 @@ public class ArtRunTestTest {
                                         + " file `%s` pulled from device:"
                                         + " 8986be111a9c226a458088dbcf2ba398 vs "
                                         + "838337db0b65bfd3a542f0c5ca047ae2",
-                                localStdoutFile, remoteStdoutFilePath));
+                                localStdoutFile.getPath(), remoteStdoutFilePath));
 
         // End of test.
 
+        verify(mMockInvocationListener)
+                .testLog(
+                        eq(stdoutFileName),
+                        eq(LogDataType.TEXT),
+                        (FileInputStreamSource) Mockito.any());
         verify(mMockInvocationListener).testRunStarted(runName, 1);
         verify(mMockInvocationListener).testStarted(testId);
         verify(mMockInvocationListener)
