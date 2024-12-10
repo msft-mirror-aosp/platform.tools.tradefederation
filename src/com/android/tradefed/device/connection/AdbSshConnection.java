@@ -54,6 +54,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.avd.HostOrchestratorClient;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -1019,7 +1020,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                             OxygenUtil.getTargetRegion(getDevice().getOptions()),
                             getDevice().getOptions().getOxygenAccountingUser(),
                             OxygenUtil.createOxygenClient(
-                                    getDevice().getOptions().getAvdDriverBinary()));
+                                    getDevice().getOptions().getAvdDriverBinary()),
+                            new HostOrchestratorClient.HoHttpClient());
         }
         return mHOUtil;
     }
