@@ -375,10 +375,6 @@ public class StrictShardHelper extends ShardHelper {
     }
 
     private void topBottom(List<List<IRemoteTest>> allShards, int shardCount) {
-        // We only attempt this when the number of shard is pretty high
-        if (shardCount < 4) {
-            return;
-        }
         // Generate approximate RuntimeHint for each shard
         int index = 0;
         List<SortShardObj> shardTimes = new ArrayList<>();
@@ -395,7 +391,10 @@ public class StrictShardHelper extends ShardHelper {
             index++;
             CLog.d("+++++++++++++++++++++++++++++++++++++++++++");
         }
-
+        // We only attempt this when the number of shard is pretty high
+        if (shardCount < 4) {
+            return;
+        }
         Collections.sort(shardTimes);
         if ((shardTimes.get(0).mAggTime - shardTimes.get(shardTimes.size() - 1).mAggTime)
                 < 60 * 60 * 1000L) {
