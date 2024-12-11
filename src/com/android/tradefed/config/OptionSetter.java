@@ -135,8 +135,7 @@ public class OptionSetter {
         }
     }
 
-
-    private static Handler getHandler(Type type) throws ConfigurationException {
+    public static Handler getHandler(Type type) throws ConfigurationException {
         if (type instanceof ParameterizedType) {
             ParameterizedType parameterizedType = (ParameterizedType) type;
             Class<?> rawClass = (Class<?>) parameterizedType.getRawType();
@@ -451,6 +450,30 @@ public class OptionSetter {
     @SuppressWarnings("unchecked")
     static boolean setFieldValue(String optionName, Object optionSource, Field field, Object key,
             Object value) throws ConfigurationException {
+        return setFieldValue(optionName, optionSource, field, key, value, true);
+    }
+
+    /**
+     * Sets the given {@link Option} field's value.
+     *
+     * @param optionName the name specified in {@link Option}
+     * @param optionSource the {@link Object} to set
+     * @param field the {@link Field}
+     * @param key the key to an entry in a {@link Map} or {@link MultiMap} field or null.
+     * @param value the value to set
+     * @return Whether the field was set.
+     * @throws ConfigurationException
+     * @see OptionUpdateRule
+     */
+    @SuppressWarnings("unchecked")
+    public static boolean setFieldValue(
+            String optionName,
+            Object optionSource,
+            Field field,
+            Object key,
+            Object value,
+            boolean checkOption)
+            throws ConfigurationException {
 
         boolean fieldWasSet = true;
 
@@ -534,25 +557,35 @@ public class OptionSetter {
                     throw new ConfigurationException(String.format(
                             "Key not applicable when setting non-map field '%s'", field.getName()));
                 }
-                final Option option = field.getAnnotation(Option.class);
-                if (option == null) {
-                    // By virtue of us having gotten here, this should never happen.  But better
-                    // safe than sorry
-                    throw new ConfigurationException(String.format(
-                            "internal error: @Option annotation for field %s in class %s was " +
-                            "unexpectedly null",
-                            field.getName(), optionSource.getClass().getName()));
-                }
-                OptionUpdateRule rule = option.updateRule();
-                if (rule.shouldUpdate(optionName, optionSource, field, value)) {
+                if (checkOption) {
+                    final Option option = field.getAnnotation(Option.class);
+                    if (option == null) {
+                        // By virtue of us having gotten here, this should never happen.  But better
+                        // safe than sorry
+                        throw new ConfigurationException(
+                                String.format(
+                                        "internal error: @Option annotation for field %s in class"
+                                                + " %s was unexpectedly null",
+                                        field.getName(), optionSource.getClass().getName()));
+                    }
+                    OptionUpdateRule rule = option.updateRule();
+                    if (rule.shouldUpdate(optionName, optionSource, field, value)) {
+                        Object curValue = field.get(optionSource);
+                        if (value == null || value.equals(curValue)) {
+                            fieldWasSet = false;
+                        } else {
+                            field.set(optionSource, value);
+                        }
+                    } else {
+                        fieldWasSet = false;
+                    }
+                } else {
                     Object curValue = field.get(optionSource);
                     if (value == null || value.equals(curValue)) {
                         fieldWasSet = false;
                     } else {
                         field.set(optionSource, value);
                     }
-                } else {
-                    fieldWasSet = false;
                 }
             }
         } catch (IllegalAccessException | IllegalArgumentException e) {
@@ -1008,14 +1041,14 @@ public class OptionSetter {
         }
     }
 
-    private abstract static class Handler<T> {
+    public abstract static class Handler<T> {
         // Only BooleanHandler should ever override this.
-        boolean isBoolean() {
+        public boolean isBoolean() {
             return false;
         }
 
         // Only MapHandler should ever override this.
-        boolean isMap() {
+        public boolean isMap() {
             return false;
         }
 
@@ -1023,16 +1056,17 @@ public class OptionSetter {
          * Returns an object of appropriate type for the given Handle, corresponding to 'valueText'.
          * Returns null on failure.
          */
-        abstract T translate(String valueText);
+        public abstract T translate(String valueText);
     }
 
     private static class BooleanHandler extends Handler<Boolean> {
-        @Override boolean isBoolean() {
+        @Override
+        public boolean isBoolean() {
             return true;
         }
 
         @Override
-        Boolean translate(String valueText) {
+        public Boolean translate(String valueText) {
             if (valueText.equalsIgnoreCase("true") || valueText.equalsIgnoreCase("yes")) {
                 return Boolean.TRUE;
             } else if (valueText.equalsIgnoreCase("false") || valueText.equalsIgnoreCase("no")) {
@@ -1044,7 +1078,7 @@ public class OptionSetter {
 
     private static class ByteHandler extends Handler<Byte> {
         @Override
-        Byte translate(String valueText) {
+        public Byte translate(String valueText) {
             try {
                 return Byte.parseByte(valueText);
             } catch (NumberFormatException ex) {
@@ -1055,7 +1089,7 @@ public class OptionSetter {
 
     private static class ShortHandler extends Handler<Short> {
         @Override
-        Short translate(String valueText) {
+        public Short translate(String valueText) {
             try {
                 return Short.parseShort(valueText);
             } catch (NumberFormatException ex) {
@@ -1066,7 +1100,7 @@ public class OptionSetter {
 
     private static class IntegerHandler extends Handler<Integer> {
         @Override
-        Integer translate(String valueText) {
+        public Integer translate(String valueText) {
             try {
                 return Integer.parseInt(valueText);
             } catch (NumberFormatException ex) {
@@ -1077,7 +1111,7 @@ public class OptionSetter {
 
     private static class LongHandler extends Handler<Long> {
         @Override
-        Long translate(String valueText) {
+        public Long translate(String valueText) {
             try {
                 return Long.parseLong(valueText);
             } catch (NumberFormatException ex) {
@@ -1089,7 +1123,7 @@ public class OptionSetter {
     private static class TimeValLongHandler extends Handler<Long> {
         /** We parse the string as a time value, and return a {@code long} */
         @Override
-        Long translate(String valueText) {
+        public Long translate(String valueText) {
             try {
                 return TimeVal.fromString(valueText);
 
@@ -1102,7 +1136,7 @@ public class OptionSetter {
     private static class TimeValHandler extends Handler<TimeVal> {
         /** We parse the string as a time value, and return a {@code TimeVal} */
         @Override
-        TimeVal translate(String valueText) {
+        public TimeVal translate(String valueText) {
             try {
                 return new TimeVal(valueText);
 
@@ -1120,7 +1154,7 @@ public class OptionSetter {
          * supported.
          */
         @Override
-        Duration translate(String valueText) {
+        public Duration translate(String valueText) {
             try {
                 return Duration.ofMillis(TimeVal.fromString(valueText));
             } catch (NumberFormatException e) {
@@ -1133,7 +1167,7 @@ public class OptionSetter {
     private static class PatternHandler extends Handler<Pattern> {
         /** We parse the string as a regex pattern, and return a {@code Pattern} */
         @Override
-        Pattern translate(String valueText) {
+        public Pattern translate(String valueText) {
             try {
                 return Pattern.compile(valueText);
             } catch (PatternSyntaxException ex) {
@@ -1144,7 +1178,7 @@ public class OptionSetter {
 
     private static class FloatHandler extends Handler<Float> {
         @Override
-        Float translate(String valueText) {
+        public Float translate(String valueText) {
             try {
                 return Float.parseFloat(valueText);
             } catch (NumberFormatException ex) {
@@ -1155,7 +1189,7 @@ public class OptionSetter {
 
     private static class DoubleHandler extends Handler<Double> {
         @Override
-        Double translate(String valueText) {
+        public Double translate(String valueText) {
             try {
                 return Double.parseDouble(valueText);
             } catch (NumberFormatException ex) {
@@ -1166,23 +1200,22 @@ public class OptionSetter {
 
     private static class StringHandler extends Handler<String> {
         @Override
-        String translate(String valueText) {
+        public String translate(String valueText) {
             return valueText;
         }
     }
 
     private static class FileHandler extends Handler<File> {
         @Override
-        File translate(String valueText) {
+        public File translate(String valueText) {
             return new File(valueText);
         }
     }
 
     /**
-     * A {@link Handler} to handle values for Map fields.  The {@code Object} returned is a
-     * MapEntry
+     * A {@link Handler} to handle values for Map fields. The {@code Object} returned is a MapEntry
      */
-    private static class MapHandler extends Handler {
+    public static class MapHandler extends Handler {
         private Handler mKeyHandler;
         private Handler mValueHandler;
 
@@ -1203,11 +1236,9 @@ public class OptionSetter {
             return mValueHandler;
         }
 
-        /**
-         * {@inheritDoc}
-         */
+        /** {@inheritDoc} */
         @Override
-        boolean isMap() {
+        public boolean isMap() {
             return true;
         }
 
@@ -1239,15 +1270,13 @@ public class OptionSetter {
             return false;
         }
 
-        /**
-         * {@inheritDoc}
-         */
+        /** {@inheritDoc} */
         @Override
-        Object translate(String valueText) {
+        public Object translate(String valueText) {
             return mValueHandler.translate(valueText);
         }
 
-        Object translateKey(String keyText) {
+        public Object translateKey(String keyText) {
             return mKeyHandler.translate(keyText);
         }
     }
@@ -1293,11 +1322,9 @@ public class OptionSetter {
             return false;
         }
 
-        /**
-         * {@inheritDoc}
-         */
+        /** {@inheritDoc} */
         @Override
-        Object translate(String valueText) {
+        public Object translate(String valueText) {
             return translate(valueText, true);
         }
 
