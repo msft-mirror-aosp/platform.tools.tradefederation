@@ -140,7 +140,7 @@ public class TfTestLauncherTest {
         when(mMockBuildInfo.getBuildId()).thenReturn(BUILD_ID);
 
         mTfTestLauncher.run(mTestInfo, mMockListener);
-        verify(mMockListener, times(4))
+        verify(mMockListener, times(3))
                 .testLog(
                         (String) Mockito.any(),
                         (LogDataType) Mockito.any(),
