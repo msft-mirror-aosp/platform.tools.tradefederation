@@ -59,4 +59,12 @@ public class TestDiscoveryUtil {
                     null);
         }
     }
+
+    /** Returns true if the command is a Tradefed command */
+    public boolean isTradefedConfiguration(String[] args) {
+        if (args[0].equals("testing/mobileharness/gateway")) {
+            return false;
+        }
+        return true;
+    }
 }
