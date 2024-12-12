@@ -66,15 +66,22 @@ public class ImageContentAnalyzer {
         allDescriptors.removeIf(d -> d.path.startsWith("RADIO/"));
 
         if (analysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
-            boolean removed = false;
             // b/335722003
-            boolean ota4k =
+            boolean removed =
                     allDescriptors.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_4k.zip"));
-            boolean ota16k =
-                    allDescriptors.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_16k.zip"));
-            if (ota4k || ota16k) {
-                removed = true;
-            }
+            removed =
+                    removed
+                            || allDescriptors.removeIf(
+                                    d -> d.path.endsWith("/boot_otas/boot_ota_16k.zip"));
+            // b/383555703
+            removed =
+                    removed
+                            || allDescriptors.removeIf(
+                                    d -> d.path.equals("SYSTEM/apex/com.google.android.virt.apex"));
+            removed =
+                    removed
+                            || allDescriptors.removeIf(
+                                    d -> d.path.equals("SYSTEM/apex/com.android.virt.apex"));
             if (removed) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.DEVICE_IMAGE_USED_HEURISTIC, analysisLevel.name());
