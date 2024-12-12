@@ -103,7 +103,11 @@ public class TestZipDiscoveryExecutor {
             // If sandbox is in use, we always need to download the tradefed zip.
             if (config.getCommandOptions().shouldUseSandboxing()
                     || config.getCommandOptions().shouldUseRemoteSandboxMode()) {
-                testZipRegexSet.add(".*tradefed.zip");
+                // Report targets for compatibility with build commands names
+                testZipRegexSet.add("tradefed.zip");
+                testZipRegexSet.add("tradefed-all.zip");
+                testZipRegexSet.add("google-tradefed.zip");
+                testZipRegexSet.add("google-tradefed-all.zip");
             }
 
             if (config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME) != null) {
@@ -147,6 +151,14 @@ public class TestZipDiscoveryExecutor {
             // If no test zip related info discovered, report a no possible discovery.
             if (testZipRegexSet.isEmpty()) {
                 mReportNoPossibleDiscovery = true;
+            }
+
+            if (testZipRegexSet.contains(null)) {
+                throw new TestDiscoveryException(
+                        "Tradefed Observatory discovered null test zip regex. This is likely due to a corrupted discovery result. Test config: %s"
+                                .format(config.getName()),
+                        null,
+                        DiscoveryExitCode.DISCOVERY_RESULTS_CORREPUTED);
             }
 
             try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {
