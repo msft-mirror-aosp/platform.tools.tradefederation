@@ -55,14 +55,10 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
-import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
-import com.android.tradefed.result.LogFile;
-import com.android.tradefed.result.MultiFailureDescription;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
-import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
@@ -89,7 +85,6 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.suite.module.BaseModuleController;
 import com.android.tradefed.testtype.suite.module.IModuleController.RunStrategy;
 import com.android.tradefed.util.FileUtil;
-import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.SystemUtil;
 import com.android.tradefed.util.proto.TfMetricProtoUtil;
@@ -108,7 +103,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -602,14 +596,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 if (!mPassThroughFilters.isEmpty()) {
                     applyFilterToTest(test, mPassThroughFilters);
                 }
-                mCurrentTestWrapper =
-                        prepareGranularRetriableWrapper(
-                                test,
-                                listener,
-                                moduleLevelListeners,
-                                skipTestCases,
-                                perModuleRetryQuota);
-                mCurrentTestWrapper.setCollectTestsOnly(mCollectTestsOnly);
                 // Resolve the dynamic options for that one test.
                 preparationException =
                         invokeRemoteDynamic(moduleInfo.getDevice(), mInternalTestConfiguration);
@@ -622,6 +608,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                             true);
                     return;
                 }
+                mCurrentTestWrapper =
+                        prepareGranularRetriableWrapper(
+                                test, moduleLevelListeners, skipTestCases, perModuleRetryQuota);
+                mCurrentTestWrapper.setCollectTestsOnly(mCollectTestsOnly);
                 try (CloseableTraceScope ignored = new CloseableTraceScope("module_test")) {
                     mCurrentTestWrapper.run(moduleInfo, listener);
                 } catch (DeviceNotAvailableException dnae) {
@@ -692,7 +682,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 mInternalTargetPreparerConfiguration = null;
             }
             long cleanStartTime = getCurrentTime();
-            RuntimeException tearDownException = null;
             try (CloseableTraceScope ignored = new CloseableTraceScope("module_teardown")) {
                 Throwable exception = (runException != null) ? runException : preparationException;
                 try {
@@ -721,55 +710,21 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             } catch (RuntimeException e) {
                 CLog.e("Exception while running tearDown:");
                 CLog.e(e);
-                tearDownException = e;
+                // report the error as a new run failure
+                listener.testRunStarted(
+                        getId(), 0, mTargetPreparerRetryCount, System.currentTimeMillis());
+                FailureDescription failure =
+                        CurrentInvocation.createFailure(StreamUtil.getStackTrace(e), null)
+                                .setCause(e);
+                listener.testRunFailed(failure);
+                listener.testRunEnded(0, new HashMap<String, Metric>());
             } finally {
                 InvocationMetricLogger
                         .addInvocationPairMetrics(InvocationMetricKey.MODULE_TEARDOWN_PAIR,
                                 cleanStartTime, getCurrentTime());
                 mElapsedTearDown = getCurrentTime() - cleanStartTime;
-                // finalize results
                 if (preparationException == null) {
                     mModuleConfiguration.cleanConfigurationData();
-                    if (mMergeAttempts) {
-                        reportFinalResults(
-                                listener, mExpectedTests, mTestsResults, null, tearDownException);
-                    } else {
-                        boolean reported = false;
-                        // Push the attempts one by one
-                        for (int i = 0; i < maxRunLimit; i++) {
-                            // Get all the results for the attempt
-                            List<TestRunResult> runResultList = new ArrayList<TestRunResult>();
-                            int expectedCount = 0;
-                            for (ModuleListener attemptListener : mRunListenersResults) {
-                                for (String runName : attemptListener.getTestRunNames()) {
-                                    TestRunResult run =
-                                            attemptListener.getTestRunAtAttempt(runName, i);
-                                    if (run != null) {
-                                        runResultList.add(run);
-                                        expectedCount += run.getExpectedTestCount();
-                                    }
-                                }
-                            }
-
-                            if (!runResultList.isEmpty() || (
-                                !reported && mRetriedModulePreparationSuccess)) {
-                                if (runResultList.isEmpty()) {
-                                    reported = true;
-                                    CLog.i("Module preparation retry pass but no test cases were " +
-                                            "executed. Keep reporting the result to notify it " +
-                                            "failed in the 1st run but passed after retrying.");
-                                }
-                                reportFinalResults(
-                                        listener,
-                                        expectedCount,
-                                        runResultList,
-                                        i,
-                                        tearDownException);
-                            } else {
-                                CLog.d("No results to be forwarded for attempt %s.", i);
-                            }
-                        }
-                    }
                 }
                 // unset the module context since module run is ending.
                 CurrentInvocation.setModuleContext(null);
@@ -790,13 +745,12 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     @VisibleForTesting
     GranularRetriableTestWrapper prepareGranularRetriableWrapper(
             IRemoteTest test,
-            ITestInvocationListener listener,
             List<ITestInvocationListener> moduleLevelListeners,
             boolean skipTestCases,
             int maxRunLimit) {
         GranularRetriableTestWrapper retriableTest =
                 new GranularRetriableTestWrapper(
-                        test, this, listener, moduleLevelListeners, maxRunLimit);
+                        test, this, moduleLevelListeners, maxRunLimit, mTargetPreparerRetryCount);
         retriableTest.setModuleId(getId());
         retriableTest.setMarkTestsSkipped(skipTestCases);
         retriableTest.setMetricCollectors(mRunMetricCollectors);
@@ -832,161 +786,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         args.put("trace", StreamUtil.getStackTrace(t));
         args.put("module-id", moduleId);
         LogRegistry.getLogRegistry().logEvent(LogLevel.DEBUG, event, args);
-    }
-
-    /** Finalize results to report them all and count if there are missing tests. */
-    private void reportFinalResults(
-            ITestInvocationListener listener,
-            int totalExpectedTests,
-            List<TestRunResult> listResults,
-            Integer attempt,
-            RuntimeException tearDownException) {
-        long elapsedTime = 0L;
-        HashMap<String, Metric> metricsProto = new HashMap<>();
-        if (attempt != null) {
-            long startTime =
-                    listResults.isEmpty() ? mStartTestTime : listResults.get(0).getStartTime();
-            listener.testRunStarted(
-                    getId(), totalExpectedTests, attempt + mTargetPreparerRetryCount, startTime);
-        } else {
-            listener.testRunStarted(
-                    getId(), totalExpectedTests, mTargetPreparerRetryCount, mStartTestTime);
-        }
-        int numResults = 0;
-        MultiMap<String, LogFile> aggLogFiles = new MultiMap<>();
-        List<FailureDescription> runFailureMessages = new ArrayList<>();
-        for (TestRunResult runResult : listResults) {
-            numResults += runResult.getTestResults().size();
-            forwardTestResults(runResult.getTestResults(), listener);
-            if (runResult.isRunFailure()) {
-                runFailureMessages.add(runResult.getRunFailureDescription());
-            }
-            elapsedTime += runResult.getElapsedTime();
-            // put metrics from the tests
-            metricsProto.putAll(runResult.getRunProtoMetrics());
-            aggLogFiles.putAll(runResult.getRunLoggedFiles());
-        }
-        // put metrics from the preparation
-        metricsProto.put(
-                PREPARATION_TIME,
-                TfMetricProtoUtil.createSingleValue(mElapsedPreparation, "milliseconds"));
-        metricsProto.put(
-                TEAR_DOWN_TIME,
-                TfMetricProtoUtil.createSingleValue(mElapsedTearDown, "milliseconds"));
-        metricsProto.put(
-                TEST_TIME, TfMetricProtoUtil.createSingleValue(elapsedTime, "milliseconds"));
-        metricsProto.put(MODULE_TEST_COUNT, TfMetricProtoUtil.createSingleValue(numResults, "int"));
-        // Report all the retry informations
-        if (!mRetryStats.isEmpty()) {
-            if (attempt != null) {
-                long cost = RetryStatistics.isolationCostPerAttempt(attempt, mRetryStats);
-                if (cost != 0L) {
-                    metricsProto.put(
-                            ISOLATION_COST,
-                            TfMetricProtoUtil.createSingleValue(cost, "milliseconds"));
-                }
-            } else {
-                RetryStatistics agg = RetryStatistics.aggregateStatistics(mRetryStats);
-                metricsProto.put(
-                        RETRY_TIME,
-                        TfMetricProtoUtil.createSingleValue(agg.mRetryTime, "milliseconds"));
-                metricsProto.put(
-                        RETRY_SUCCESS_COUNT,
-                        TfMetricProtoUtil.createSingleValue(agg.mRetrySuccess, ""));
-                metricsProto.put(
-                        RETRY_FAIL_COUNT,
-                        TfMetricProtoUtil.createSingleValue(agg.mRetryFailure, ""));
-            }
-        }
-
-        // Only report the mismatch if there were no error during the run.
-        if (runFailureMessages.isEmpty() && totalExpectedTests != numResults) {
-            String error =
-                    String.format(
-                            "Module %s only ran %d out of %d expected tests.",
-                            getId(), numResults, totalExpectedTests);
-            FailureDescription mismatch =
-                    FailureDescription.create(error)
-                            .setFailureStatus(FailureStatus.TEST_FAILURE)
-                            .setErrorIdentifier(InfraErrorIdentifier.EXPECTED_TESTS_MISMATCH);
-            runFailureMessages.add(mismatch);
-            CLog.e(error);
-        }
-
-        if (tearDownException != null) {
-            FailureDescription failure =
-                    CurrentInvocation.createFailure(
-                                    StreamUtil.getStackTrace(tearDownException), null)
-                            .setCause(tearDownException);
-            runFailureMessages.add(failure);
-        }
-        // If there is any errors report them all at once
-        if (!runFailureMessages.isEmpty()) {
-            if (runFailureMessages.size() == 1) {
-                listener.testRunFailed(runFailureMessages.get(0));
-            } else {
-                listener.testRunFailed(new MultiFailureDescription(runFailureMessages));
-            }
-            mIsFailedModule = true;
-        }
-
-        // Provide a strong association of the run to its logs.
-        for (String key : aggLogFiles.keySet()) {
-            for (LogFile logFile : aggLogFiles.get(key)) {
-                if (listener instanceof ILogSaverListener) {
-                    ((ILogSaverListener) listener).logAssociation(key, logFile);
-                }
-            }
-        }
-        // Allow each attempt to have its own start/end time
-        if (attempt != null) {
-            listener.testRunEnded(elapsedTime, metricsProto);
-        } else {
-            listener.testRunEnded(getCurrentTime() - mStartTestTime, metricsProto);
-        }
-    }
-
-    private void forwardTestResults(
-            Map<TestDescription, TestResult> testResults, ITestInvocationListener listener) {
-        for (Map.Entry<TestDescription, TestResult> testEntry : testResults.entrySet()) {
-            listener.testStarted(testEntry.getKey(), testEntry.getValue().getStartTime());
-            switch (testEntry.getValue().getResultStatus()) {
-                case FAILURE:
-                    listener.testFailed(testEntry.getKey(), testEntry.getValue().getFailure());
-                    break;
-                case ASSUMPTION_FAILURE:
-                    listener.testAssumptionFailure(
-                            testEntry.getKey(), testEntry.getValue().getFailure());
-                    break;
-                case IGNORED:
-                    listener.testIgnored(testEntry.getKey());
-                    break;
-                case SKIPPED:
-                    listener.testSkipped(testEntry.getKey(), testEntry.getValue().getSkipReason());
-                    break;
-                case INCOMPLETE:
-                    listener.testFailed(
-                            testEntry.getKey(),
-                            FailureDescription.create(
-                                    "Test did not complete due to exception.",
-                                    FailureStatus.TEST_FAILURE));
-                    break;
-                default:
-                    break;
-            }
-            // Provide a strong association of the test to its logs.
-            for (Entry<String, LogFile> logFile :
-                    testEntry.getValue().getLoggedFiles().entrySet()) {
-                if (listener instanceof ILogSaverListener) {
-                    ((ILogSaverListener) listener)
-                            .logAssociation(logFile.getKey(), logFile.getValue());
-                }
-            }
-            listener.testEnded(
-                    testEntry.getKey(),
-                    testEntry.getValue().getEndTime(),
-                    testEntry.getValue().getProtoMetrics());
-        }
     }
 
     /**
@@ -1369,37 +1168,16 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         if (mStartModuleRunDate == null) {
             listener.testModuleStarted(getModuleInvocationContext());
         }
-        if (mCurrentTestWrapper != null)  {
-            mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
+        if (mCurrentTestWrapper != null
+                && mCurrentTestWrapper.getCurrentStartEndCollector() != null) {
             HarnessRuntimeException interruptedException =
                     new HarnessRuntimeException(
-                        message, TestErrorIdentifier.MODULE_DID_NOT_EXECUTE);
-            for (int i = 0; i < mMaxRetry; i++) {
-                // Get all the results for the attempt
-                List<TestRunResult> runResultList = new ArrayList<TestRunResult>();
-                int expectedCount = 0;
-                for (ModuleListener attemptListener : mRunListenersResults) {
-                    for (String runName : attemptListener.getTestRunNames()) {
-                        TestRunResult run =
-                                attemptListener.getTestRunAtAttempt(runName, i);
-                        if (run != null) {
-                            runResultList.add(run);
-                            expectedCount += run.getExpectedTestCount();
-                        }
-                    }
-                }
-
-                if (!runResultList.isEmpty()) {
-                    reportFinalResults(
-                            listener,
-                            expectedCount,
-                            runResultList,
-                            i,
-                            interruptedException);
-                } else {
-                    CLog.d("No results to be forwarded for attempt %s.", i);
-                }
-            }
+                            message, TestErrorIdentifier.MODULE_DID_NOT_EXECUTE);
+            FailureDescription description =
+                    CurrentInvocation.createFailure(
+                                    StreamUtil.getStackTrace(interruptedException), null)
+                            .setCause(interruptedException);
+            mCurrentTestWrapper.backfillMissingEvents(listener, description);
         } else {
             listener.testRunStarted(
                     getId(), 0, mTargetPreparerRetryCount, System.currentTimeMillis());

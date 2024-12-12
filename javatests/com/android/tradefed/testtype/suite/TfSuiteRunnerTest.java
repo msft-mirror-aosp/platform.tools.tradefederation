@@ -37,7 +37,6 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
-import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.testtype.Abi;
@@ -52,14 +51,13 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -242,22 +240,15 @@ public class TfSuiteRunnerTest {
         // runs the expanded suite
 
         mRunner.run(testInfo, listener);
-
-        verify(listener, times(2)).testModuleStarted(Mockito.any());
-        verify(listener)
-                .testRunStarted(
-                        Mockito.eq("arm64-v8a suite/stub1"),
-                        Mockito.eq(0),
-                        Mockito.eq(0),
-                        Mockito.anyLong());
-        verify(listener)
-                .testRunStarted(
-                        Mockito.eq("armeabi-v7a suite/stub1"),
-                        Mockito.eq(0),
-                        Mockito.eq(0),
-                        Mockito.anyLong());
-        verify(listener, times(2)).testRunEnded(
-                Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        ArgumentCaptor<IInvocationContext> contextCaptor =
+                ArgumentCaptor.forClass(IInvocationContext.class);
+        verify(listener, times(2)).testModuleStarted(contextCaptor.capture());
+        assertEquals(
+                "arm64-v8a suite/stub1",
+                contextCaptor.getAllValues().get(0).getAttributes().get("module-id").get(0));
+        assertEquals(
+                "armeabi-v7a suite/stub1",
+                contextCaptor.getAllValues().get(1).getAttributes().get("module-id").get(0));
         verify(listener, times(2)).testModuleEnded();
     }
 
