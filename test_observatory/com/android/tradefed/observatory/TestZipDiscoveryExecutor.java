@@ -83,7 +83,7 @@ public class TestZipDiscoveryExecutor {
             logger.setLogLevel(Log.LogLevel.VERBOSE);
             LogRegistry.getLogRegistry().registerLogger(logger);
         }
-
+        mReportNoPossibleDiscovery = true;
         try {
             // Get tests from the configuration.
             List<IRemoteTest> tests = config.getTests();
@@ -103,7 +103,12 @@ public class TestZipDiscoveryExecutor {
             // If sandbox is in use, we always need to download the tradefed zip.
             if (config.getCommandOptions().shouldUseSandboxing()
                     || config.getCommandOptions().shouldUseRemoteSandboxMode()) {
-                testZipRegexSet.add(".*tradefed.zip");
+                // Report targets for compatibility with build commands names
+                testZipRegexSet.add("tradefed.zip");
+                testZipRegexSet.add("tradefed-all.zip");
+                testZipRegexSet.add("google-tradefed.zip");
+                testZipRegexSet.add("google-tradefed-all.zip");
+                mReportNoPossibleDiscovery = false;
             }
 
             if (config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME) != null) {
@@ -114,6 +119,7 @@ public class TestZipDiscoveryExecutor {
             // Retrieve the value of option --sandbox-tests-zips
             if (sandboxOptions != null) {
                 testZipRegexSet.addAll(sandboxOptions.getTestsZips());
+                mReportNoPossibleDiscovery = false;
             }
 
             List<IDeviceConfiguration> list = config.getDeviceConfig();
@@ -128,6 +134,7 @@ public class TestZipDiscoveryExecutor {
                         if (testZipFileFilters != null) {
                             testZipRegexSet.addAll(testZipFileFilters);
                         }
+                        mReportNoPossibleDiscovery = false;
                     }
                 }
             }
@@ -141,12 +148,16 @@ public class TestZipDiscoveryExecutor {
                     testZipRegexSet.addAll(
                             TradefedSandbox.matchSandboxExtraBuildTargetByConfigName(
                                     config.getName()));
+                    mReportNoPossibleDiscovery = false;
                 }
             }
 
-            // If no test zip related info discovered, report a no possible discovery.
-            if (testZipRegexSet.isEmpty()) {
-                mReportNoPossibleDiscovery = true;
+            if (testZipRegexSet.contains(null)) {
+                throw new TestDiscoveryException(
+                        "Tradefed Observatory discovered null test zip regex. This is likely due to a corrupted discovery result. Test config: %s"
+                                .format(config.getName()),
+                        null,
+                        DiscoveryExitCode.DISCOVERY_RESULTS_CORREPUTED);
             }
 
             try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {

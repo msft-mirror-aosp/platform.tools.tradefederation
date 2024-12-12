@@ -90,4 +90,12 @@ public final class RootTargetPreparer extends BaseTargetPreparer {
             CLog.w(message + " " + deviceDescriptor);
         }
     }
+
+    public boolean shouldThrowOnFailure() {
+        return mThrowOnError;
+    }
+
+    public boolean shouldForceRoot() {
+        return mForceRoot;
+    }
 }
