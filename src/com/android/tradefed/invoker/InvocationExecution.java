@@ -1254,6 +1254,7 @@ public class InvocationExecution implements IInvocationExecution {
                     ModuleListener mainGranularRunListener =
                             new ModuleListener(null, info.getContext());
                     ExtraMetricsForwarder listenerWithMetrics = new ExtraMetricsForwarder(listener);
+                    listenerWithMetrics.setEnforceTestCountMismatch(false);
                     RetryLogSaverResultForwarder runListener =
                             initializeListeners(
                                     config, listenerWithMetrics, mainGranularRunListener);
