@@ -183,7 +183,7 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
                 }
             }
         } catch (RuntimeException | IOException e) {
-            CLog.e("Failed to save log data");
+            CLog.e("Failed to save log data: %s", dataName);
             CLog.e(e);
         }
     }
