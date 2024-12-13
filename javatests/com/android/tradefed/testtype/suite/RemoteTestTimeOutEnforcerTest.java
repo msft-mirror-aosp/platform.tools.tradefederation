@@ -66,7 +66,12 @@ public class RemoteTestTimeOutEnforcerTest {
         mListener =
                 new ModuleListener(mock(ITestInvocationListener.class), mModuleInvocationContext);
         mEnforcer =
-                new RemoteTestTimeOutEnforcer(mListener, mModuleDefinition, mIRemoteTest, mTimeout);
+                new RemoteTestTimeOutEnforcer(
+                        mock(ITestInvocationListener.class),
+                        mListener,
+                        mModuleDefinition,
+                        mIRemoteTest,
+                        mTimeout);
     }
 
     @Test
