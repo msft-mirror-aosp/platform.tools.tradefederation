@@ -17,7 +17,6 @@ package com.android.tradefed.testtype.suite;
 
 import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.invoker.IInvocationContext;
-import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
@@ -32,21 +31,14 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.IRemoteTest;
-import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
-import com.google.common.annotations.VisibleForTesting;
-
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 /**
  * Listener attached to each {@link IRemoteTest} of each module in order to collect the list of
  * results.
  */
 public class ModuleListener extends CollectingTestListener {
-
-    private boolean mSkip = false;
     private TestStatus mTestStatus;
     private String mTrace;
     private int mTestsRan = 1;
@@ -56,11 +48,6 @@ public class ModuleListener extends CollectingTestListener {
     private boolean mCollectTestsOnly = false;
     /** Track runs in progress for logging purpose */
     private boolean mRunInProgress = false;
-    /** Track if we are within an isolated run or not */
-    private IsolationGrade mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
-
-    private List<String> mTestMappingSources = new ArrayList<String>();
-    private static final String TEST_MAPPING_SOURCE = "test_mapping_source";
 
     /** Constructor. */
     public ModuleListener(ITestInvocationListener listener, IInvocationContext moduleContext) {
@@ -70,24 +57,9 @@ public class ModuleListener extends CollectingTestListener {
         setIsAggregrateMetrics(true);
     }
 
-    /** Sets whether or not the attempt should be reported as isolated. */
-    public void setAttemptIsolation(IsolationGrade isolation) {
-        mAttemptIsolation = isolation;
-    }
-
     /** Sets whether or not we are only collecting the tests. */
     public void setCollectTestsOnly(boolean collectTestsOnly) {
         mCollectTestsOnly = collectTestsOnly;
-    }
-
-    /** Sets test-mapping sources that will be inserted into metrics. */
-    public void setTestMappingSources(List<String> testMappingSources) {
-        mTestMappingSources = testMappingSources;
-    }
-
-    @VisibleForTesting
-    List<String> getTestMappingSources() {
-        return mTestMappingSources;
     }
 
     @Override
@@ -136,14 +108,6 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
         CLog.d("ModuleListener.testRunEnded(%s) on %s", elapsedTime, getSerial());
-
-        if (!IsolationGrade.NOT_ISOLATED.equals(mAttemptIsolation)) {
-            runMetrics.put(
-                    "run-isolated", TfMetricProtoUtil.stringToMetric(mAttemptIsolation.toString()));
-            // In case something was off, reset isolation.
-            mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
-        }
-
         super.testRunEnded(elapsedTime, runMetrics);
         mRunInProgress = false;
     }
@@ -162,10 +126,6 @@ public class ModuleListener extends CollectingTestListener {
         mTestStatus = TestStatus.PASSED;
         mTrace = null;
         super.testStarted(test, startTime);
-        if (mSkip) {
-            super.testIgnored(test);
-            mTestStatus = TestStatus.IGNORED;
-        }
     }
 
     /** Helper to log the test passed if it didn't fail. */
@@ -204,11 +164,6 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         logTestStatus(test, mTestStatus);
-        if (!mTestMappingSources.isEmpty()) {
-            testMetrics.put(
-                    TEST_MAPPING_SOURCE,
-                    TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
-        }
         super.testEnded(test, endTime, testMetrics);
     }
 
@@ -242,9 +197,6 @@ public class ModuleListener extends CollectingTestListener {
     /** {@inheritDoc} */
     @Override
     public void testFailed(TestDescription test, String trace) {
-        if (mSkip) {
-            return;
-        }
         mTestStatus = TestStatus.FAILURE;
         mTrace = trace;
         super.testFailed(test, trace);
@@ -253,17 +205,9 @@ public class ModuleListener extends CollectingTestListener {
     /** {@inheritDoc} */
     @Override
     public void testFailed(TestDescription test, FailureDescription failure) {
-        if (mSkip) {
-            return;
-        }
         mTestStatus = TestStatus.FAILURE;
         mTrace = failure.toString();
         super.testFailed(test, failure);
-    }
-
-    /** Whether or not to mark all the test cases skipped. */
-    public void setMarkTestsSkipped(boolean skip) {
-        mSkip = skip;
     }
 
     /** {@inheritDoc} */
