@@ -468,7 +468,7 @@ public abstract class SubprocessTfLauncher
             StreamUtil.close(eventParser);
             StreamUtil.close(protoReceiver);
 
-            if (mGlobalConfig != null) {
+            if (mGlobalConfig != null && new File(mGlobalConfig).exists()) {
                 logAndCleanFile(new File(mGlobalConfig), listener);
             }
 
