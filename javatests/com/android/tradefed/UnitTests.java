@@ -1107,6 +1107,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TableFormatterTest.class,
     TarUtilTest.class,
     TestRunnerUtilTest.class,
+    TfTestLauncherTest.class,
     TimeUtilTest.class,
     TimeValTest.class,
     VersionParserTest.class,
