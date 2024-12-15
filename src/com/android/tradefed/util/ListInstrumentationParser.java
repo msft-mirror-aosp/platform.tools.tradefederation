@@ -49,7 +49,9 @@ public class ListInstrumentationParser extends MultiLineReceiver {
             new HashSet<>(
                     Arrays.asList(
                             "android.support.test.runner.AndroidJUnitRunner",
-                            "androidx.test.runner.AndroidJUnitRunner"));
+                            "androidx.test.runner.AndroidJUnitRunner",
+                            // Context b/383366431: This is an extension of AndroidJUnitRunner
+                            "android.testing.TestableInstrumentation"));
 
     private List<InstrumentationTarget> mInstrumentationTargets = new ArrayList<>();
 
