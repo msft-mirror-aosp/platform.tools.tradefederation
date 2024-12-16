@@ -41,6 +41,7 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.avd.AcloudUtil;
+import com.android.tradefed.util.avd.HostOrchestratorClient;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
 import com.android.tradefed.util.avd.LogCollector;
 import com.android.tradefed.util.avd.OxygenClient;
@@ -103,7 +104,6 @@ public class GceManager {
     private String mGceInstanceName = null;
     private String mGceHost = null;
     private GceAvdInfo mGceAvdInfo = null;
-    private HostOrchestratorUtil mHOUtil = null;
 
     private boolean mSkipSerialLogCollection = false;
 
@@ -411,8 +411,9 @@ public class GceManager {
                                 + getTestDeviceOptions().getGceCmdTimeout()
                                 - System.currentTimeMillis();
                 startTime = System.currentTimeMillis();
+                HostOrchestratorUtil hOUtil = null;
                 if (getTestDeviceOptions().useCvdCF()) {
-                    mHOUtil =
+                    hOUtil =
                             new HostOrchestratorUtil(
                                     getTestDeviceOptions().useOxygenationDevice(),
                                     getTestDeviceOptions().getExtraOxygenArgs(),
@@ -423,8 +424,9 @@ public class GceManager {
                                     mGceAvdInfo.getOxygenationDeviceId(),
                                     OxygenUtil.getTargetRegion(getTestDeviceOptions()),
                                     getTestDeviceOptions().getOxygenAccountingUser(),
-                                    oxygenClient);
-                    bootSuccess = mHOUtil.deviceBootCompleted(timeout);
+                                    oxygenClient,
+                                    new HostOrchestratorClient.HoHttpClient());
+                    bootSuccess = hOUtil.deviceBootCompleted(timeout);
                 } else {
                     final String remoteFile =
                             CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR
@@ -455,7 +457,7 @@ public class GceManager {
                 if (!bootSuccess) {
                     if (logger != null) {
                         if (getTestDeviceOptions().useCvdCF()) {
-                            CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvdInfo, mHOUtil, logger);
+                            CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvdInfo, hOUtil, logger);
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
@@ -1290,11 +1292,6 @@ public class GceManager {
     @VisibleForTesting
     IRunUtil getRunUtil() {
         return RunUtil.getDefault();
-    }
-
-    /** Returns the instance of the {@link com.android.tradefed.util.avd.HostOrchestratorUtil}. */
-    public HostOrchestratorUtil getHostOrchestratorUtil() {
-        return mHOUtil;
     }
 
     /**

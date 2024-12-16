@@ -16,7 +16,6 @@
 
 package com.android.tradefed.util.avd;
 
-import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -438,11 +437,10 @@ public class OxygenClient {
                     mode, oxygenClientArgs.toString());
             tunnelLog.write(
                     String.format(
-                                    "\n===[%s]Session id: %s, Server URL: %s, Port: %s===\n",
+                                    "\n===[%s]Session id: %s, Server URL: %s===\n",
                                     dateFormat.format(System.currentTimeMillis()),
                                     sessionId,
-                                    serverUrl,
-                                    portNumber)
+                                    serverUrl)
                             .getBytes());
             lhpTunnel = getRunUtil().runCmdInBackground(oxygenClientArgs, tunnelLog);
             // TODO(b/363861223): reduce the waiting time when LHP is stable.
@@ -452,12 +450,8 @@ public class OxygenClient {
         }
         if (lhpTunnel == null || !lhpTunnel.isAlive()) {
             closeLHPConnection(lhpTunnel);
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricLogger.InvocationMetricKey.PORTFORWARD_LHP_FAIL_COUNT, 1);
             return null;
         }
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricLogger.InvocationMetricKey.PORTFORWARD_LHP_SUCCESS_COUNT, 1);
         return lhpTunnel;
     }
 
