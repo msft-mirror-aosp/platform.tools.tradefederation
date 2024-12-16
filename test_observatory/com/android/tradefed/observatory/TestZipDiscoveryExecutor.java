@@ -186,6 +186,10 @@ public class TestZipDiscoveryExecutor {
     /** Centralize all the logic to handle non-Tradefed command discovery and assumptions. */
     private String nonTradefedDiscovery(String[] args) throws JSONException {
         Set<String> testsZipRegex = new LinkedHashSet<String>();
+        if ("unused".equals(args[0])) {
+            // If the command is unused, then they should not use any tests artifacts
+            return formatResults(false, testsZipRegex);
+        }
         for (String arg : args) {
             if (arg.contains("haiku")) {
                 testsZipRegex.add("haiku-presubmit");
