@@ -54,6 +54,7 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
+import com.android.tradefed.util.avd.HostOrchestratorClient;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -360,7 +361,6 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getGceHandler().cleanUp();
             }
         } finally {
-            mHOUtil.closeTunnelConnection();
             super.tearDownConnection();
         }
     }
@@ -495,6 +495,14 @@ public class AdbSshConnection extends AdbTcpConnection {
     @VisibleForTesting
     GceManager getGceHandler() {
         return mGceHandler;
+    }
+
+    /**
+     * Returns the instance of the {@link com.android.tradefed.device.cloud.HostOrchestratorUtil}.
+     */
+    @VisibleForTesting
+    HostOrchestratorUtil getHostOrchestratorUtil() {
+        return mHOUtil;
     }
 
     /** Capture a remote bugreport by ssh-ing into the device directly. */
@@ -993,10 +1001,10 @@ public class AdbSshConnection extends AdbTcpConnection {
     }
 
     /** Helper to create host orchestrator utility. */
-    public HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
-        if (getGceHandler().getHostOrchestratorUtil() != null) {
+    HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+        if (mHOUtil != null) {
             CLog.i("Host Orchestrator Util has been initialized...");
-            return getGceHandler().getHostOrchestratorUtil();
+            return mHOUtil;
         }
         if (getDevice().getOptions().useCvdCF()) {
             CLog.i("Creating host orchestrator utility...");
@@ -1012,7 +1020,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                             OxygenUtil.getTargetRegion(getDevice().getOptions()),
                             getDevice().getOptions().getOxygenAccountingUser(),
                             OxygenUtil.createOxygenClient(
-                                    getDevice().getOptions().getAvdDriverBinary()));
+                                    getDevice().getOptions().getAvdDriverBinary()),
+                            new HostOrchestratorClient.HoHttpClient());
         }
         return mHOUtil;
     }
