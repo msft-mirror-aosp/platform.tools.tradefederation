@@ -65,6 +65,9 @@ public class TestDiscoveryUtil {
         if (args[0].equals("testing/mobileharness/gateway")) {
             return false;
         }
+        if (args[0].equals("unused")) {
+            return false;
+        }
         return true;
     }
 }
