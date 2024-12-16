@@ -30,7 +30,7 @@ import com.android.tradefed.log.StdoutLogger;
 import com.android.tradefed.sandbox.SandboxOptions;
 import com.android.tradefed.sandbox.TradefedSandbox;
 import com.android.tradefed.testtype.IRemoteTest;
-import com.android.tradefed.testtype.suite.TestMappingSuiteRunner;
+import com.android.tradefed.testtype.suite.ITestSuite;
 import com.android.tradefed.util.FileUtil;
 
 import org.json.JSONArray;
@@ -53,8 +53,6 @@ import java.util.Set;
  */
 public class TestZipDiscoveryExecutor {
 
-    private boolean mReportNoPossibleDiscovery = false;
-
     private static TestDiscoveryUtil mTestDiscoveryUtil;
 
     public TestZipDiscoveryExecutor() {
@@ -73,9 +71,9 @@ public class TestZipDiscoveryExecutor {
      */
     public String discoverTestZips(String[] args)
             throws TestDiscoveryException, ConfigurationException, JSONException {
-        // Create IConfiguration base on command line args.
-        IConfiguration config = mTestDiscoveryUtil.getConfiguration(args);
-
+        if (!mTestDiscoveryUtil.isTradefedConfiguration(args)) {
+            return nonTradefedDiscovery(args);
+        }
         if (mTestDiscoveryUtil.hasOutputResultFile()) {
             DdmPreferences.setLogLevel(Log.LogLevel.VERBOSE.getStringValue());
             Log.setLogOutput(LogRegistry.getLogRegistry());
@@ -83,7 +81,9 @@ public class TestZipDiscoveryExecutor {
             logger.setLogLevel(Log.LogLevel.VERBOSE);
             LogRegistry.getLogRegistry().registerLogger(logger);
         }
-
+        boolean reportNoPossibleDiscovery = true;
+        // Create IConfiguration base on command line args.
+        IConfiguration config = mTestDiscoveryUtil.getConfiguration(args);
         try {
             // Get tests from the configuration.
             List<IRemoteTest> tests = config.getTests();
@@ -98,59 +98,108 @@ public class TestZipDiscoveryExecutor {
             }
 
             Set<String> testZipRegexSet = new LinkedHashSet<>();
+            SandboxOptions sandboxOptions = null;
 
-            // If sandbox is in use, retrieve the value of option --sandbox-tests-zips
+            // If sandbox is in use, we always need to download the tradefed zip.
+            if (config.getCommandOptions().shouldUseSandboxing()
+                    || config.getCommandOptions().shouldUseRemoteSandboxMode()) {
+                // Report targets for compatibility with build commands names
+                testZipRegexSet.add("tradefed.zip");
+                testZipRegexSet.add("tradefed-all.zip");
+                testZipRegexSet.add("google-tradefed.zip");
+                testZipRegexSet.add("google-tradefed-all.zip");
+                reportNoPossibleDiscovery = false;
+            }
+
             if (config.getConfigurationObject(Configuration.SANBOX_OPTIONS_TYPE_NAME) != null) {
-                SandboxOptions sandboxOptions = (SandboxOptions) config.getConfigurationObject(
+                sandboxOptions = (SandboxOptions) config.getConfigurationObject(
                         Configuration.SANBOX_OPTIONS_TYPE_NAME);
+            }
+
+            // Retrieve the value of option --sandbox-tests-zips
+            if (sandboxOptions != null) {
                 testZipRegexSet.addAll(sandboxOptions.getTestsZips());
+                reportNoPossibleDiscovery = false;
             }
 
             List<IDeviceConfiguration> list = config.getDeviceConfig();
 
             if (list != null && list.size() > 0) {
                 for (IDeviceConfiguration deviceConfiguration : list) {
-                    // Attempt to retrieve the value of option "--test-zip-file-filter"
+                    // Attempt to retrieve test zip filters from the build provider."
                     if (deviceConfiguration.getBuildProvider() instanceof IDiscoverDependencies) {
-                        String testZipFileFilter =
+                        Set<String> testZipFileFilters =
                                 ((IDiscoverDependencies) deviceConfiguration.getBuildProvider())
                                         .reportTestZipFileFilter();
-                        if (testZipFileFilter != null) {
-                            testZipRegexSet.add(testZipFileFilter);
+                        if (testZipFileFilters != null) {
+                            testZipRegexSet.addAll(testZipFileFilters);
                         }
+                        reportNoPossibleDiscovery = false;
                     }
                 }
             }
 
             for (IRemoteTest test : tests) {
                 // For test mapping suite, match the corresponding test zip by test config name.
-                if (test instanceof TestMappingSuiteRunner) {
+                // Suppress the extra target if sandbox is not downloading the default zip.
+                if (test instanceof ITestSuite && sandboxOptions != null
+                        && sandboxOptions.getTestsZips().isEmpty()
+                        && sandboxOptions.downloadDefaultZips()) {
                     testZipRegexSet.addAll(
                             TradefedSandbox.matchSandboxExtraBuildTargetByConfigName(
                                     config.getName()));
+                    reportNoPossibleDiscovery = false;
                 }
             }
 
-            // If no test zip related info discovered, report a no possible discovery.
-            if (testZipRegexSet.isEmpty()) {
-                mReportNoPossibleDiscovery = true;
+            if (testZipRegexSet.contains(null)) {
+                throw new TestDiscoveryException(
+                        String.format(
+                                "Tradefed Observatory discovered null test zip regex. This is"
+                                    + " likely due to a corrupted discovery result. Test config:"
+                                    + " %s",
+                                config.getName()),
+                        null,
+                        DiscoveryExitCode.DISCOVERY_RESULTS_CORREPUTED);
             }
 
-            try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {
-                JSONObject j = new JSONObject();
-                j.put(
-                        TestDiscoveryInvoker.TEST_ZIP_REGEXES_LIST_KEY,
-                        new JSONArray(testZipRegexSet));
-                if (mReportNoPossibleDiscovery) {
-                    j.put(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
-                }
-                return j.toString();
-            }
+            return formatResults(reportNoPossibleDiscovery, testZipRegexSet);
         } finally {
             if (mTestDiscoveryUtil.hasOutputResultFile()) {
                 LogRegistry.getLogRegistry().unregisterLogger();
             }
         }
+    }
+
+    private String formatResults(boolean reportNoPossibleDiscovery, Set<String> zipRegex)
+            throws JSONException {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("format_results")) {
+            JSONObject j = new JSONObject();
+            j.put(TestDiscoveryInvoker.TEST_ZIP_REGEXES_LIST_KEY, new JSONArray(zipRegex));
+            if (reportNoPossibleDiscovery) {
+                j.put(TestDiscoveryInvoker.NO_POSSIBLE_TEST_DISCOVERY_KEY, "true");
+            }
+            return j.toString();
+        }
+    }
+
+    /** Centralize all the logic to handle non-Tradefed command discovery and assumptions. */
+    private String nonTradefedDiscovery(String[] args) throws JSONException {
+        Set<String> testsZipRegex = new LinkedHashSet<String>();
+        if ("unused".equals(args[0])) {
+            // If the command is unused, then they should not use any tests artifacts
+            return formatResults(false, testsZipRegex);
+        }
+        for (String arg : args) {
+            if (arg.contains("haiku")) {
+                testsZipRegex.add("haiku-presubmit");
+            }
+            // TODO(b/382159415): Update to the dedicated mobly zip
+            if (arg.contains("mobly")) {
+                testsZipRegex.add("general-tests.zip");
+            }
+        }
+        return formatResults(false, testsZipRegex);
     }
 
     /**
