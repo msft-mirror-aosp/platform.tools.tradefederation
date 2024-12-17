@@ -54,6 +54,15 @@ public class ApkChangeDetector {
     private Set<String> mPackagesHandledInPreviousTestRuns;
     private Boolean incrementalSetupSupportEnsureResult;
 
+    public ApkChangeDetector() {
+        this(null);
+    }
+
+    @VisibleForTesting
+    ApkChangeDetector(Set<String> packagesHandledInPreviousTestRuns) {
+        mPackagesHandledInPreviousTestRuns = packagesHandledInPreviousTestRuns;
+    }
+
     /**
      * Handle app pre-install process.
      *
@@ -69,37 +78,49 @@ public class ApkChangeDetector {
         if (!ensureIncrementalSetupSupported(device)) {
             return false;
         }
+        loadPackagesHandledInPreviousTestRuns(device);
         if (!cleanupAppsIfNecessary(device, testApps)) {
             return false;
         }
         updateInstalledPackageCache(device, packageName);
 
+        boolean couldSkipAppInstallation = true;
         List<String> apkInstallPaths = getApkInstallPaths(packageName, device);
         if (apkInstallPaths.size() != testApps.size()) {
             CLog.d(
                 "The file count of APKs to be installed is not equal to the number of APKs on "
                     + "the device for the package '%s'. Install the APKs.", packageName);
-            return false;
-        }
+            couldSkipAppInstallation = false;
+        } else {
+            Set<String> sha256SetOnDevice = getSha256SumsOnDevice(apkInstallPaths, device);
+            CLog.d("The SHA256Sums on device contains: ");
+            sha256SetOnDevice.forEach(sha256 -> {
+                CLog.d("%s", sha256);
+            });
 
-        Set<String> sha256SetOnDevice = getSha256SumsOnDevice(apkInstallPaths, device);
-        CLog.d("The SHA256Sums on device contains: ");
-        sha256SetOnDevice.forEach(sha256 -> {
-            CLog.d("%s", sha256);
-        });
-
-        try {
-            Set<String> sha256SumsOnHost = new HashSet<>();
-            for (File testApp : testApps) {
-                sha256SumsOnHost.add(calculateSHA256OnHost(testApp));
+            try {
+                Set<String> sha256SumsOnHost = new HashSet<>();
+                for (File testApp : testApps) {
+                    sha256SumsOnHost.add(calculateSHA256OnHost(testApp));
+                }
+                couldSkipAppInstallation = sha256SetOnDevice.equals(sha256SumsOnHost);
+            } catch (IOException ex) {
+                CLog.d(
+                    "Exception occurred when calculating the SHA256Sums of APKs to be installed. "
+                        + "Install the APKs. Error message: %s", ex);
+                couldSkipAppInstallation = false;
             }
-            return sha256SetOnDevice.equals(sha256SumsOnHost);
-        } catch (IOException ex) {
-            CLog.d(
-                "Exception occurred when calculating the SHA256Sums of APKs to be installed. "
-                    + "Install the APKs. Error message: %s", ex);
-            return false;
         }
+
+        if (!couldSkipAppInstallation
+            && getPackagesHandledInPreviousTestRuns(device).contains(packageName)) {
+            // If the package needs installation and it is previously handled by this detector,
+            // uninstall the obsolete package.
+            // TODO(ihcinihsdk): Ideally, only uninstall the package if the user specifies APKs
+            // need cleanup.
+            device.uninstallPackage(packageName);
+        }
+        return couldSkipAppInstallation;
     }
 
     /**
@@ -221,7 +242,7 @@ public class ApkChangeDetector {
             // First, get the list of packages to be uninstalled.
             Set<String> packagesToBeUninstalled =
                 Sets.difference(
-                    loadPackagesHandledInPreviousTestRuns(device),
+                    getPackagesHandledInPreviousTestRuns(device),
                     mPackagesHandledInCurrentTestRun);
 
             // Then, uninstall the packages.
@@ -276,14 +297,14 @@ public class ApkChangeDetector {
     }
 
     /**
-     * Get the set of packages installed on the device and handled by the APK change detector in
-     * previous test runs.
+     * Load the packages installed on the device and handled by the APK change detector in previous
+     * test runs.
      */
     @VisibleForTesting
-    Set<String> loadPackagesHandledInPreviousTestRuns(ITestDevice device)
+    void loadPackagesHandledInPreviousTestRuns(ITestDevice device)
         throws DeviceNotAvailableException {
         if (mPackagesHandledInPreviousTestRuns != null) {
-            return mPackagesHandledInPreviousTestRuns;
+            return;
         }
 
         String fileContents = device.pullFileContents(PACKAGE_INSTALLED_FILE_PATH);
@@ -294,6 +315,14 @@ public class ApkChangeDetector {
         } else {
             mPackagesHandledInPreviousTestRuns = new HashSet<>();
         }
+    }
+
+    /**
+     * Get the set of packages installed on the device and handled by the APK change detector in
+     * previous test runs.
+     */
+    @VisibleForTesting
+    Set<String> getPackagesHandledInPreviousTestRuns(ITestDevice device) {
         return mPackagesHandledInPreviousTestRuns;
     }
 
@@ -332,7 +361,7 @@ public class ApkChangeDetector {
         mPackagesHandledInCurrentTestRun.add(packageName);
         Set<String> packagesHandledByIncrementalSetup =
             Sets.union(
-                loadPackagesHandledInPreviousTestRuns(device),
+                getPackagesHandledInPreviousTestRuns(device),
                 mPackagesHandledInCurrentTestRun);
         device.pushString(
             String.join("\n", packagesHandledByIncrementalSetup),

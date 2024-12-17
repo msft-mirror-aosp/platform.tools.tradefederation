@@ -43,6 +43,7 @@ public class StreamProtoReceiver implements Closeable {
 
     private static final int DEFAULT_AVAILABLE_PORT = 0;
     private static final long PER_MODULE_EXTRA_WAIT_TIME_MS = 5000L;
+    private static final long PER_TESTRUN_EXTRA_WAIT_TIME_MS = 2000L;
 
     private EventReceiverThread mEventReceiver;
     private ITestInvocationListener mListener;
@@ -339,6 +340,11 @@ public class StreamProtoReceiver implements Closeable {
             TestLevel level = mParser.processNewProto(receivedRecord);
             if (TestLevel.MODULE.equals(level) && !mJoinStarted.get()) {
                 mExtraWaitTimeForEvents += PER_MODULE_EXTRA_WAIT_TIME_MS;
+            } else if (TestLevel.TEST_RUN.equals(level)
+                    && !receivedRecord.hasEndTime()
+                    && !mJoinStarted.get()) {
+                // increase wait time for each new test run
+                mExtraWaitTimeForEvents += PER_TESTRUN_EXTRA_WAIT_TIME_MS;
             }
         } catch (Throwable e) {
             CLog.e(e);
