@@ -54,11 +54,19 @@ public final class ApkChangeDetectorTest {
 
     @Before
     public void setUp() throws Exception {
-        mApkChangeDetector = spy(new ApkChangeDetector());
+        mApkChangeDetector = spy(new ApkChangeDetector(new HashSet<>()));
         mApkChangeDetectorLessDiskSpace = spy(new ApkChangeDetector());
-        mApkChangeDetectorDiskSpaceNotObtained = spy(new ApkChangeDetector());
+        mApkChangeDetectorDiskSpaceNotObtained =
+            spy(
+                new ApkChangeDetector(
+                    Sets.newHashSet(
+                        "prev.handled1", "prev.handled2", "prev.handled3", "a.b.c.package")));
         mApkChangeDetectorFileNotAccessible = spy(new ApkChangeDetector());
-        mApkChangeDetectorFileUninstallFailed = spy(new ApkChangeDetector());
+        mApkChangeDetectorFileUninstallFailed =
+            spy(
+                new ApkChangeDetector(
+                    Sets.newHashSet(
+                        "prev.handled1", "prev.handled2", "prev.handled3", "a.b.c.package")));
         mMockDevice = mock(ITestDevice.class);
         mMockDeviceFileUninstallFailed = mock(ITestDevice.class);
         doReturn(null).when(mMockDevice).uninstallPackage(Mockito.any());
@@ -139,11 +147,26 @@ public final class ApkChangeDetectorTest {
         doReturn(sha256SumsOnDevice)
             .when(mApkChangeDetectorDiskSpaceNotObtained)
             .getSha256SumsOnDevice(Mockito.any(), Mockito.any());
+        doNothing()
+            .when(mApkChangeDetector)
+            .loadPackagesHandledInPreviousTestRuns(mMockDevice);
+        doNothing()
+            .when(mApkChangeDetectorLessDiskSpace)
+            .loadPackagesHandledInPreviousTestRuns(mMockDevice);
+        doNothing()
+            .when(mApkChangeDetectorDiskSpaceNotObtained)
+            .loadPackagesHandledInPreviousTestRuns(mMockDevice);
+        doNothing()
+            .when(mApkChangeDetectorFileNotAccessible)
+            .loadPackagesHandledInPreviousTestRuns(mMockDevice);
+        doNothing()
+            .when(mApkChangeDetectorFileUninstallFailed)
+            .loadPackagesHandledInPreviousTestRuns(mMockDevice);
     }
 
     @Test
     public void handleTestAppsPreinstall_doInstallation_noApkInstallPathFound() throws Exception {
-        ApkChangeDetector apkChangeDetector = spy(new ApkChangeDetector());
+    ApkChangeDetector apkChangeDetector = spy(new ApkChangeDetector(new HashSet<>()));
         doReturn(new ArrayList<>()).when(apkChangeDetector)
             .getApkInstallPaths(Mockito.any(), Mockito.any());
         doReturn(2000000000L)
@@ -152,6 +175,7 @@ public final class ApkChangeDetectorTest {
         doReturn(true)
             .when(apkChangeDetector)
             .ensureIncrementalSetupSupported(Mockito.any());
+        doNothing().when(apkChangeDetector).loadPackagesHandledInPreviousTestRuns(mMockDevice);
 
         boolean shouldSkipInstallation =
             apkChangeDetector.handleTestAppsPreinstall(
@@ -252,9 +276,10 @@ public final class ApkChangeDetectorTest {
         doReturn("sha256sum3").when(mApkChangeDetectorLessDiskSpace)
             .calculateSHA256OnHost(mMockFile3);
         doReturn(
-                Sets.newHashSet("prev.handled1", "prev.handled2", "prev.handled3", "a.b.c.package"))
+                Sets.newHashSet("prev.handled1", "prev.handled2", "prev.handled3", "a.b.c.package"),
+                new HashSet<String>())
             .when(mApkChangeDetectorLessDiskSpace)
-            .loadPackagesHandledInPreviousTestRuns(mMockDevice);
+            .getPackagesHandledInPreviousTestRuns(mMockDevice);
         mApkChangeDetectorLessDiskSpace.mPackagesHandledInCurrentTestRun.addAll(
             Sets.newHashSet("prev.handled1", "cur.handled1", "cur.handled2"));
         List<File> testApps = new ArrayList<>();
@@ -282,12 +307,9 @@ public final class ApkChangeDetectorTest {
         throws Exception {
         doReturn("sha256sum1").when(mApkChangeDetectorFileUninstallFailed)
             .calculateSHA256OnHost(mMockFile1);
-        doReturn("sha256sum3").when(mApkChangeDetectorFileUninstallFailed)
-            .calculateSHA256OnHost(mMockFile3);
-        doReturn(
-                Sets.newHashSet("prev.handled1", "prev.handled2", "prev.handled3", "a.b.c.package"))
+        doReturn("sha256sum3")
             .when(mApkChangeDetectorFileUninstallFailed)
-            .loadPackagesHandledInPreviousTestRuns(mMockDeviceFileUninstallFailed);
+            .calculateSHA256OnHost(mMockFile3);
         mApkChangeDetectorFileUninstallFailed.mPackagesHandledInCurrentTestRun.addAll(
             Sets.newHashSet("prev.handled1", "cur.handled1", "cur.handled2"));
         List<File> testApps = new ArrayList<>();
@@ -328,12 +350,9 @@ public final class ApkChangeDetectorTest {
     @Test
     public void handleTestAppsPreinstall_incrementalSetupNotSupported_diskSpaceNotObtained()
         throws Exception {
-        doReturn("sha256sum1").when(mApkChangeDetectorDiskSpaceNotObtained)
-            .calculateSHA256OnHost(mMockFile1);
-        doReturn(
-                Sets.newHashSet("prev.handled1", "prev.handled2", "prev.handled3", "a.b.c.package"))
+        doReturn("sha256sum1")
             .when(mApkChangeDetectorDiskSpaceNotObtained)
-            .loadPackagesHandledInPreviousTestRuns(mMockDevice);
+            .calculateSHA256OnHost(mMockFile1);
         mApkChangeDetectorDiskSpaceNotObtained.mPackagesHandledInCurrentTestRun.addAll(
             Sets.newHashSet("prev.handled1", "cur.handled1", "cur.handled2"));
         List<File> testApps = new ArrayList<>();
@@ -358,6 +377,7 @@ public final class ApkChangeDetectorTest {
         ApkChangeDetector apkChangeDetector = spy(new ApkChangeDetector());
         doReturn("sh: sha256sum: inaccessible or not found").when(mMockDevice)
             .executeShellCommand("sha256sum --help");
+        doNothing().when(apkChangeDetector).loadPackagesHandledInPreviousTestRuns(mMockDevice);
 
         boolean incrementalSetupSupported =
             apkChangeDetector.ensureIncrementalSetupSupported(mMockDevice);
@@ -374,6 +394,7 @@ public final class ApkChangeDetectorTest {
             .doesFileExist(ApkChangeDetector.PACKAGE_INSTALLED_FILE_PATH);
         doReturn(false).when(mMockDevice)
             .pushString("", ApkChangeDetector.PACKAGE_INSTALLED_FILE_PATH);
+        doNothing().when(apkChangeDetector).loadPackagesHandledInPreviousTestRuns(mMockDevice);
 
         boolean incrementalSetupSupported =
             apkChangeDetector.ensureIncrementalSetupSupported(mMockDevice);
@@ -388,6 +409,7 @@ public final class ApkChangeDetectorTest {
         doReturn("").when(mMockDevice).executeShellCommand("sha256sum --help");
         doReturn(true).when(mMockDevice)
             .doesFileExist(ApkChangeDetector.PACKAGE_INSTALLED_FILE_PATH);
+        doNothing().when(apkChangeDetector).loadPackagesHandledInPreviousTestRuns(mMockDevice);
 
         boolean incrementalSetupSupported =
             apkChangeDetector.ensureIncrementalSetupSupported(mMockDevice);
@@ -404,6 +426,7 @@ public final class ApkChangeDetectorTest {
             .doesFileExist(ApkChangeDetector.PACKAGE_INSTALLED_FILE_PATH);
         doReturn(true).when(mMockDevice)
             .pushString("", ApkChangeDetector.PACKAGE_INSTALLED_FILE_PATH);
+        doNothing().when(apkChangeDetector).loadPackagesHandledInPreviousTestRuns(mMockDevice);
 
         boolean incrementalSetupSupported =
             apkChangeDetector.ensureIncrementalSetupSupported(mMockDevice);
@@ -411,4 +434,3 @@ public final class ApkChangeDetectorTest {
         assertThat(incrementalSetupSupported).isTrue();
     }
 }
-
