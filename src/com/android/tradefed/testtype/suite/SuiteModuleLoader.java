@@ -26,9 +26,11 @@ import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.OptionDef;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceFoldableState;
+import com.android.tradefed.device.metric.IMetricCollector;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.postprocessor.IPostProcessor;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.testtype.IAbi;
@@ -956,6 +958,26 @@ public class SuiteModuleLoader {
             optionsToInject.addAll(mModuleOptions.get(fullId));
         }
         config.injectOptionValues(optionsToInject);
+
+        for (IMetricCollector collector : config.getMetricCollectors()) {
+            String className = collector.getClass().getName();
+            if (mTestOrPreparerOptions.containsKey(className)) {
+                OptionSetter collectorSetter = new OptionSetter(collector);
+                for (OptionDef def : mTestOrPreparerOptions.get(className)) {
+                    collectorSetter.setOptionValue(def.name, def.key, def.value);
+                }
+            }
+        }
+
+        for (IPostProcessor postProcessor : config.getPostProcessors()) {
+            String className = postProcessor.getClass().getName();
+            if (mTestOrPreparerOptions.containsKey(className)) {
+                OptionSetter processorSetter = new OptionSetter(postProcessor);
+                for (OptionDef def : mTestOrPreparerOptions.get(className)) {
+                    processorSetter.setOptionValue(def.name, def.key, def.value);
+                }
+            }
+        }
 
         // Set target preparers
         for (IDeviceConfiguration holder : config.getDeviceConfig()) {
