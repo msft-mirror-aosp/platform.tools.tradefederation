@@ -103,6 +103,27 @@ java_library_host {
 }
 
 java_library_host {
+    name: "resultdb-grpc",
+    srcs: ["proto/resultdb/recorder.proto"],
+    libs: [
+        "resultdb-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+        "googleapis-field-behavior-java-proto",
+    ],
+    proto: {
+        include_dirs: [
+            "external/protobuf/src",
+            "external/googleapis",
+        ],
+        plugin: "grpc-java-plugin",
+    },
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+java_library_host {
     name: "tradefed-invocation-grpc",
     srcs: [
         "proto/invocation/invocation_manager.proto",
@@ -221,7 +242,6 @@ tradefed_java_library_host {
     static_libs: [
         "tradefed-lib-core",
         "tradefed-test-framework",
-        "resultdb-protos",
     ],
     required: [
         "loganalysis",
@@ -274,6 +294,8 @@ java_library_host {
         "tradefed-invocation-grpc",
         "tradefed-device-manager-grpc",
         "tradefed-dynamic-sharding-grpc",
+        "resultdb-grpc",
+        "resultdb-protos",
         "aoa-helper",
         "error_prone_annotations",
         "google-api-java-client-assembly",
