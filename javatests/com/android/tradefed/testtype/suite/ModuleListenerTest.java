@@ -22,7 +22,6 @@ import static org.junit.Assert.assertTrue;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
-import com.android.tradefed.result.ExtraMetricsForwarder;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
@@ -201,13 +200,12 @@ public class ModuleListenerTest {
     /** Test that writes test-mapping sources in test run results. */
     @Test
     public void testRecordTestMappingSourcesIntoMetrics() {
-        ExtraMetricsForwarder testmappingSourceListener = new ExtraMetricsForwarder(mListener);
-        testmappingSourceListener.setTestMappingSources(Arrays.asList("source1", "source2"));
-        testmappingSourceListener.testRunStarted("run1", 1);
+        mListener.setTestMappingSources(Arrays.asList("source1", "source2"));
+        mListener.testRunStarted("run1", 1);
         TestDescription tid = new TestDescription("class", "test1");
-        testmappingSourceListener.testStarted(tid);
-        testmappingSourceListener.testEnded(tid, new HashMap<String, Metric>());
-        testmappingSourceListener.testRunEnded(0, new HashMap<String, Metric>());
+        mListener.testStarted(tid);
+        mListener.testEnded(tid, new HashMap<String, Metric>());
+        mListener.testRunEnded(0, new HashMap<String, Metric>());
         List<TestRunResult> results = mListener.getMergedTestRunResults();
         assertEquals(
                 "[source1, source2]",

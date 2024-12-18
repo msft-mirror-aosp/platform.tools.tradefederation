@@ -228,20 +228,23 @@ public class ITestSuiteTest {
         public void run(TestInformation testInfo, ITestInvocationListener listener)
                 throws DeviceNotAvailableException {
             listener.testRunStarted(TEST_CONFIG_NAME, 1);
-            if (mException != null) {
-                throw mException;
+            try {
+                if (mException != null) {
+                    throw mException;
+                }
+                if (mRunException != null) {
+                    throw mRunException;
+                }
+                TestDescription test = new TestDescription(EMPTY_CONFIG, EMPTY_CONFIG);
+                listener.testStarted(test, 0);
+                if (mFailed != null) {
+                    listener.testFailed(
+                            test, FailureDescription.create(mFailed, FailureStatus.TEST_FAILURE));
+                }
+                listener.testEnded(test, 5, new HashMap<String, Metric>());
+            } finally {
+                listener.testRunEnded(0, new HashMap<String, Metric>());
             }
-            if (mRunException != null) {
-                throw mRunException;
-            }
-            TestDescription test = new TestDescription(EMPTY_CONFIG, EMPTY_CONFIG);
-            listener.testStarted(test, 0);
-            if (mFailed != null) {
-                listener.testFailed(
-                        test, FailureDescription.create(mFailed, FailureStatus.TEST_FAILURE));
-            }
-            listener.testEnded(test, 5, new HashMap<String, Metric>());
-            listener.testRunEnded(0, new HashMap<String, Metric>());
         }
 
         @Override
@@ -298,8 +301,6 @@ public class ITestSuiteTest {
         public void run(TestInformation testInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
             // To simulate that no tests would be run.
-            listener.testRunStarted("fake", 0);
-            listener.testRunEnded(0L, new HashMap<String, Metric>());
             return;
         }
     }
@@ -817,6 +818,8 @@ public class ITestSuiteTest {
                         Mockito.eq(1),
                         Mockito.eq(0),
                         Mockito.anyLong());
+        verify(mMockListener, times(2))
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener, times(2)).testModuleEnded();
         ArgumentCaptor<FailureDescription> captureRunFailure =
                 ArgumentCaptor.forClass(FailureDescription.class);
@@ -824,7 +827,7 @@ public class ITestSuiteTest {
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq("NOT_RUN"), Mockito.eq(0), Mockito.eq(0), Mockito.anyLong());
-        verify(mMockListener, times(2)).testRunEnded(0L, new HashMap<String, Metric>());
+        verify(mMockListener).testRunEnded(0L, new HashMap<String, Metric>());
 
         List<FailureDescription> failures = captureRunFailure.getAllValues();
         assertTrue(failures.get(0).getErrorMessage().equals("I failed"));
