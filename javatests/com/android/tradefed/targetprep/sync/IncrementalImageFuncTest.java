@@ -111,6 +111,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                         getBuild().getFile("create_snapshot.zip"),
                         mApplySnapshot,
                         false,
+                        false,
+                        false,
                         SnapuserdWaitPhase.BLOCK_AFTER_UPDATE);
         try {
             updateUtil.updateDevice(null, null);

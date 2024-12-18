@@ -54,6 +54,8 @@ import com.android.tradefed.util.image.IncrementalImageUtil;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
@@ -177,12 +179,22 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             description =
                     "Whether to apply the snapshot after mounting it. "
                             + "This changes the baseline and does require reverting.")
-    private boolean mApplySnapshot = false;
+    private boolean mApplySnapshot = true;
 
     @Option(
             name = "wipe-after-apply-snapshot",
             description = "Whether to issue a wipe after applying snapshots.")
     private boolean mWipeAfterApplySnapshot = false;
+
+    @Option(
+            name = "use-new-incremental-update-flow",
+            description = "A new update flow possible with latest incremental features.")
+    private boolean mNewIncrementalFlow = false;
+
+    @Option(
+            name = "update-bootloader-in-userspace",
+            description = "Allow to update bootloader in userspace in new flow of incremental.")
+    private boolean mUpdateBootloaderFromUserspace = false;
 
     @Option(
             name = "snapuserd-wait-phase",
@@ -202,6 +214,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
+    private Set<String> mAllowedTransition = new HashSet<>();
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -344,8 +357,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mCreateSnapshotBinary,
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
+                                mAllowedTransition,
                                 mApplySnapshot,
                                 mWipeAfterApplySnapshot,
+                                mNewIncrementalFlow,
+                                mUpdateBootloaderFromUserspace,
                                 mWaitPhase);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
@@ -511,42 +527,45 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     private void moveBaseline(
             IDeviceBuildInfo deviceBuild, String serial, boolean useIncrementalFlashing) {
-        if (!getHostOptions().isOptOutOfIncrementalFlashing()) {
-            boolean moveBaseLine = true;
-            if (!mUseIncrementalFlashing || useIncrementalFlashing) {
-                // Do not move baseline if using incremental flashing
-                moveBaseLine = false;
-            }
-            if (mApplySnapshot) {
-                // Move baseline when going with incremental + apply update
-                moveBaseLine = true;
-            }
-            if (moveBaseLine) {
-                File deviceImage = deviceBuild.getDeviceImageFile();
-                File tmpReference = null;
-                try {
-                    if (mAllowUnzippedBaseline
-                            && mIncrementalImageUtil != null
-                            && mIncrementalImageUtil.getExtractedTargetDirectory() != null
-                            && mIncrementalImageUtil.getExtractedTargetDirectory().isDirectory()) {
-                        CLog.d(
-                                "Using unzipped baseline: %s",
-                                mIncrementalImageUtil.getExtractedTargetDirectory());
-                        tmpReference = mIncrementalImageUtil.getExtractedTargetDirectory();
-                        deviceImage = tmpReference;
-                    }
-                    DeviceImageTracker.getDefaultCache()
-                            .trackUpdatedDeviceImage(
-                                    serial,
-                                    deviceImage,
-                                    deviceBuild.getBootloaderImageFile(),
-                                    deviceBuild.getBasebandImageFile(),
-                                    deviceBuild.getBuildId(),
-                                    deviceBuild.getBuildBranch(),
-                                    deviceBuild.getBuildFlavor());
-                } finally {
-                    FileUtil.recursiveDelete(tmpReference);
+        if (getHostOptions().isOptOutOfIncrementalFlashing()) {
+            CLog.d("Opt out of incremental via host_options");
+            return;
+        }
+        boolean moveBaseLine = true;
+        if (!mUseIncrementalFlashing || useIncrementalFlashing) {
+            // Do not move baseline if using incremental flashing
+            moveBaseLine = false;
+        }
+        if (mApplySnapshot) {
+            // Move baseline when going with incremental + apply update
+            moveBaseLine = true;
+        }
+        if (moveBaseLine) {
+            File deviceImage = deviceBuild.getDeviceImageFile();
+            File tmpReference = null;
+            try {
+                if (mAllowUnzippedBaseline
+                        && mIncrementalImageUtil != null
+                        && mIncrementalImageUtil.getExtractedTargetDirectory() != null
+                        && mIncrementalImageUtil.getExtractedTargetDirectory().isDirectory()) {
+                    CLog.d(
+                            "Using unzipped baseline: %s",
+                            mIncrementalImageUtil.getExtractedTargetDirectory());
+                    tmpReference = mIncrementalImageUtil.getExtractedTargetDirectory();
+                    deviceImage = tmpReference;
                 }
+
+                DeviceImageTracker.getDefaultCache()
+                        .trackUpdatedDeviceImage(
+                                serial,
+                                deviceImage,
+                                deviceBuild.getBootloaderImageFile(),
+                                deviceBuild.getBasebandImageFile(),
+                                deviceBuild.getBuildId(),
+                                deviceBuild.getBuildBranch(),
+                                deviceBuild.getBuildFlavor());
+            } finally {
+                FileUtil.recursiveDelete(tmpReference);
             }
         }
     }
@@ -574,8 +593,14 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         // could be an AppBuildInfo and return app build id. Need to be more explicit that we
         // check for the device build here.
         if (!mSkipPostFlashBuildIdCheck) {
-            checkBuildAttribute(deviceBuild.getDeviceBuildId(), device.getBuildId(),
-                    device.getSerialNumber());
+            String dbid = deviceBuild.getDeviceBuildId();
+            if (IDeviceBuildInfo.UNKNOWN_BUILD_ID.equals(dbid)) {
+                // if the device build isn't set, use the build id instead
+                // this happens when device image download is skipped, which could happen when
+                // other kinds of build artifact is used instead for "flashing", e.g. OTA package
+                dbid = deviceBuild.getBuildId();
+            }
+            checkBuildAttribute(dbid, device.getBuildId(), device.getSerialNumber());
         }
     }
 
@@ -681,11 +706,29 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         mWipeAfterApplySnapshot = wipeAfterApplySnapshot;
     }
 
+    public void setUseIncrementalNewFlow(boolean useIncrementalNewFlow) {
+        mNewIncrementalFlow = useIncrementalNewFlow;
+    }
+
+    public void setUpdateBootloaderFromUserspace(boolean updateBootloaderFromUserspace) {
+        mUpdateBootloaderFromUserspace = updateBootloaderFromUserspace;
+    }
+
     public void setAllowUnzipBaseline(boolean allowUnzipBaseline) {
         mAllowUnzippedBaseline = allowUnzipBaseline;
     }
 
     public void setIgnoreHostOptions(boolean ignoreHostOptions) {
         mIgnoreHostOptions = ignoreHostOptions;
+    }
+
+    @Deprecated
+    public void addBranchTransitionInIncremental(String origin, String destination) {
+        mAllowedTransition.add(origin);
+        mAllowedTransition.add(destination);
+    }
+
+    public void addAllowedBranchForTransitionInIncremental(String branch) {
+        mAllowedTransition.add(branch);
     }
 }

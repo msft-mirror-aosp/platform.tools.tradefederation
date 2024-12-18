@@ -309,6 +309,9 @@ public class GkiDeviceFlashPreparerTest {
         File otaBinDir = FileUtil.createNamedTempDir(otaDir, "bin");
         File avbtoolFile = new File(otaBinDir, "avbtool");
         FileUtil.writeToFile("ddd", avbtoolFile);
+        File otaKeyDir = FileUtil.createNamedTempDir(otaDir, "external/avb/test/data/");
+        File keyFile = new File(otaKeyDir, "testkey_rsa4096.pem");
+        FileUtil.writeToFile("xyz", keyFile);
         File otatoolsZip = FileUtil.createTempFile("otatools", ".zip", mTmpDir);
         ZipUtil.createZip(List.of(otaDir.listFiles()), otatoolsZip);
         mBuildInfo.setFile("otatools.zip", otatoolsZip, "0");
@@ -328,6 +331,10 @@ public class GkiDeviceFlashPreparerTest {
                         eq(bootImg.getAbsolutePath()),
                         eq("--partition_size"),
                         eq("53477376"),
+                        eq("--algorithm"),
+                        eq("SHA256_RSA4096"),
+                        eq("--key"),
+                        matches(".*testkey_rsa4096.pem"),
                         eq("--partition_name"),
                         eq("boot"),
                         eq("--prop"),
@@ -381,10 +388,10 @@ public class GkiDeviceFlashPreparerTest {
         FileUtil.writeToFile("ddd", bootImg);
         mBuildInfo.setFile("gki_boot.img", bootImg, "0");
 
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
 
@@ -411,13 +418,46 @@ public class GkiDeviceFlashPreparerTest {
         mBuildInfo.setFile("gki_boot.img", bootImg, "0");
         mOptionSetter.setOptionValue("fastboot-flash-option", "--disable-verity");
 
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "--disable-verity",
                         "flash",
                         "boot",
                         mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
+
+        when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
+
+        mPreparer.setUp(mTestInfo);
+        mPreparer.tearDown(mTestInfo, null);
+
+        verify(mMockDevice).rebootIntoBootloader();
+        verify(mMockRunUtil).allowInterrupt(false);
+        verify(mMockRunUtil).allowInterrupt(true);
+        verify(mMockRunUtil).sleep(anyLong());
+        verify(mMockDevice).rebootUntilOnline();
+        verify(mMockDevice).setDate(null);
+        verify(mMockDevice).waitForDeviceAvailable(anyLong());
+        verify(mMockDevice).setRecoveryMode(RecoveryMode.AVAILABLE);
+        verify(mMockDevice).postBootSetup();
+    }
+
+    /* Verifies that preparer can flash GKI boot image with additional fastboot commands */
+    @Test
+    public void testSetup_Success_with_additional_fastboot_commands() throws Exception {
+        File bootImg = FileUtil.createTempFile("boot", ".img", mTmpDir);
+        bootImg.renameTo(new File(mTmpDir, "boot.img"));
+        FileUtil.writeToFile("ddd", bootImg);
+        mBuildInfo.setFile("gki_boot.img", bootImg, "0");
+        mOptionSetter.setOptionValue("additional-fastboot-command", "erase misc");
+        mOptionSetter.setOptionValue("additional-fastboot-command", "erase devinfo");
+
         when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand(
+                        "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
+                .thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("erase misc")).thenReturn(mSuccessResult);
+        when(mMockDevice.executeLongFastbootCommand("erase devinfo")).thenReturn(mSuccessResult);
 
         when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
 
@@ -493,6 +533,7 @@ public class GkiDeviceFlashPreparerTest {
         mBuildInfo.setFile("vendor_dlkm.img", vendorDlkmImg, "0");
         mBuildInfo.setFile("dtbo.img", dtboImg, "0");
 
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
@@ -514,7 +555,6 @@ public class GkiDeviceFlashPreparerTest {
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "dtbo", mBuildInfo.getFile("dtbo.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
 
@@ -551,6 +591,7 @@ public class GkiDeviceFlashPreparerTest {
         mBuildInfo.setFile("vendor_boot.img", imgZip, "0");
         mBuildInfo.setFile("dtbo.img", imgZip, "0");
 
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         eq("flash"), eq("boot"), matches(".*boot-5.4.img")))
                 .thenReturn(mSuccessResult);
@@ -562,7 +603,6 @@ public class GkiDeviceFlashPreparerTest {
                 .thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(eq("flash"), eq("dtbo"), matches(".*dtbo.img")))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         when(mMockDevice.enableAdbRoot()).thenReturn(Boolean.TRUE);
 
@@ -591,6 +631,7 @@ public class GkiDeviceFlashPreparerTest {
         FileUtil.writeToFile("not an empty file", deviceImg);
         mBuildInfo.setDeviceImageFile(deviceImg, "0");
 
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
                 .thenReturn(mFailureResult);
@@ -618,10 +659,10 @@ public class GkiDeviceFlashPreparerTest {
         FileUtil.writeToFile("not an empty file", deviceImg);
         mBuildInfo.setDeviceImageFile(deviceImg, "0");
 
+        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
         when(mMockDevice.executeLongFastbootCommand(
                         "flash", "boot", mBuildInfo.getFile("gki_boot.img").getAbsolutePath()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeLongFastbootCommand("-w")).thenReturn(mSuccessResult);
 
         doThrow(new DeviceNotAvailableException("test", "serial"))
                 .when(mMockDevice)
@@ -747,4 +788,3 @@ public class GkiDeviceFlashPreparerTest {
         }
     }
 }
-

@@ -19,13 +19,16 @@ package com.android.tradefed.util;
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
+import com.android.tradefed.config.ConfigurationDescriptor;
 import com.android.tradefed.invoker.ExecutionFiles;
 import com.android.tradefed.invoker.ExecutionFiles.FilesKey;
 import com.android.tradefed.invoker.IInvocationContext;
+import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
+import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.AltDirBehavior;
 import com.android.tradefed.testtype.Abi;
@@ -57,7 +60,20 @@ public class SearchArtifactUtil {
      * @return The found artifact file or null if none.
      */
     public static File searchFile(String fileName, boolean targetFirst) {
-        return searchFile(fileName, targetFirst, null, null, null);
+        return searchFile(fileName, targetFirst, null, null, null, null);
+    }
+
+    /**
+     * Searches for a test artifact/dependency file from the test directory.
+     *
+     * @param fileName The name of the file to look for.
+     * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
+     *     search.
+     * @param testInfo The {@link TestInformation} of the current test when available.
+     * @return The found artifact file or null if none.
+     */
+    public static File searchFile(String fileName, boolean targetFirst, TestInformation testInfo) {
+        return searchFile(fileName, targetFirst, null, null, null, testInfo);
     }
 
     /**
@@ -70,7 +86,7 @@ public class SearchArtifactUtil {
      * @return The found artifact file or null if none.
      */
     public static File searchFile(String fileName, boolean targetFirst, IAbi abi) {
-        return searchFile(fileName, targetFirst, abi, null, null);
+        return searchFile(fileName, targetFirst, abi, null, null, null);
     }
 
     /**
@@ -89,7 +105,7 @@ public class SearchArtifactUtil {
             boolean targetFirst,
             List<File> altDirs,
             AltDirBehavior altDirBehavior) {
-        return searchFile(fileName, targetFirst, null, altDirs, altDirBehavior);
+        return searchFile(fileName, targetFirst, null, altDirs, altDirBehavior, null);
     }
 
     /**
@@ -109,9 +125,10 @@ public class SearchArtifactUtil {
             boolean targetFirst,
             IAbi abi,
             List<File> altDirs,
-            AltDirBehavior altDirBehavior) {
+            AltDirBehavior altDirBehavior,
+            TestInformation testInfo) {
         List<File> searchDirectories =
-                singleton.getSearchDirectories(targetFirst, altDirs, altDirBehavior);
+                singleton.getSearchDirectories(targetFirst, altDirs, altDirBehavior, testInfo);
 
         // Search in the test directories
         for (File dir : searchDirectories) {
@@ -121,7 +138,7 @@ public class SearchArtifactUtil {
             }
         }
         // Search in the execution files directly
-        ExecutionFiles executionFiles = singleton.getExecutionFiles();
+        ExecutionFiles executionFiles = singleton.getExecutionFiles(testInfo);
         if (executionFiles != null) {
             File file = executionFiles.get(fileName);
             if (fileExists(file)) {
@@ -137,7 +154,10 @@ public class SearchArtifactUtil {
                 return file;
             } else {
                 // fallback to staging from remote zip files.
-                File stagingDir = CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER);
+                File stagingDir = getModuleDirFromConfig();
+                if (stagingDir == null) {
+                    stagingDir = getWorkFolder(testInfo);
+                }
                 if (fileExists(stagingDir)) {
                     buildInfo.stageRemoteFile(fileName, stagingDir);
                     // multiple matching files can be staged. So do a search with module name and
@@ -158,9 +178,19 @@ public class SearchArtifactUtil {
     /** Returns the list of search locations in correct order. */
     @VisibleForTesting
     List<File> getSearchDirectories(
-            boolean targetFirst, List<File> altDirs, AltDirBehavior altDirBehavior) {
+            boolean targetFirst,
+            List<File> altDirs,
+            AltDirBehavior altDirBehavior,
+            TestInformation testInfo) {
         List<File> dirs = new LinkedList<>();
-        ExecutionFiles executionFiles = singleton.getExecutionFiles();
+        // Prioritize the module directory retrieved from the config obj, as this is the ideal place
+        // for all test artifacts.
+        File moduleDir = getModuleDirFromConfig();
+        if (moduleDir != null) {
+            dirs.add(moduleDir);
+        }
+
+        ExecutionFiles executionFiles = singleton.getExecutionFiles(testInfo);
         if (executionFiles != null) {
             // Add host/testcases or target/testcases directory first
             FilesKey hostOrTarget = FilesKey.HOST_TESTS_DIRECTORY;
@@ -222,7 +252,7 @@ public class SearchArtifactUtil {
         }
 
         // Add working directory at the end as a last resort
-        File workDir = CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER);
+        File workDir = getWorkFolder(testInfo);
         if (fileExists(workDir)) {
             dirs.add(workDir);
         }
@@ -257,7 +287,9 @@ public class SearchArtifactUtil {
                         return retFile;
                     }
                 } else {
-                    CLog.w("we have a module name: %s but no directory found.", moduleName);
+                    CLog.w(
+                            "we have a module name: %s but no directory found in %s.",
+                            moduleName, searchDirectory);
                 }
             } catch (IOException e) {
                 CLog.w(
@@ -303,6 +335,57 @@ public class SearchArtifactUtil {
         return null;
     }
 
+    public static File getModuleDirFromConfig(IInvocationContext moduleContext) {
+        if (moduleContext != null) {
+            List<String> moduleDirPath =
+                    moduleContext
+                            .getConfigurationDescriptor()
+                            .getMetaData(ConfigurationDescriptor.MODULE_DIR_PATH_KEY);
+            if (moduleDirPath != null && !moduleDirPath.isEmpty()) {
+                File moduleDir = new File(moduleDirPath.get(0));
+                if (moduleDir.exists()) {
+                    return moduleDir;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Returns the module directory if present, when called inside a module scope. */
+    public static File getModuleDirFromConfig() {
+        IInvocationContext moduleContext = CurrentInvocation.getModuleContext();
+        return getModuleDirFromConfig(moduleContext);
+    }
+
+    /**
+     * Finds the module directory that matches the given module name
+     *
+     * @param moduleName The name of the module.
+     * @param targetFirst Whether we are favoring target-side vs. host-side for the search.
+     * @return the module directory. Can be null.
+     */
+    public static File findModuleDir(String moduleName, boolean targetFirst) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("findModuleDir")) {
+            List<File> searchDirectories =
+                    singleton.getSearchDirectories(targetFirst, null, null, null);
+            for (File searchDirectory : searchDirectories) {
+                try {
+                    File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
+                    if (moduleDir != null && moduleDir.exists()) {
+                        return moduleDir;
+                    }
+                } catch (IOException e) {
+                    CLog.w(
+                            "Something went wrong while searching for the module '%s' directory in"
+                                    + " %s.",
+                            moduleName, searchDirectory);
+                    CLog.e(e);
+                }
+            }
+            return null;
+        }
+    }
+
     /** returns the module name for the current test invocation if present. */
     @VisibleForTesting
     String findModuleName() {
@@ -339,8 +422,18 @@ public class SearchArtifactUtil {
     }
 
     @VisibleForTesting
-    ExecutionFiles getExecutionFiles() {
+    ExecutionFiles getExecutionFiles(TestInformation testInfo) {
+        if (testInfo != null && testInfo.executionFiles() != null) {
+            return testInfo.executionFiles();
+        }
         return CurrentInvocation.getInvocationFiles();
+    }
+
+    private static File getWorkFolder(TestInformation testInfo) {
+        if (testInfo != null && testInfo.dependenciesFolder() != null) {
+            return testInfo.dependenciesFolder();
+        }
+        return CurrentInvocation.getInfo(InvocationInfo.WORK_FOLDER);
     }
 
     private static boolean fileExists(File file) {

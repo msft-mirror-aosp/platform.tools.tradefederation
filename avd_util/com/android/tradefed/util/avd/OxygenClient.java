@@ -16,6 +16,7 @@
 
 package com.android.tradefed.util.avd;
 
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -23,11 +24,15 @@ import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -97,7 +102,8 @@ public class OxygenClient {
                                     Collectors.toMap(data -> data[0], data -> data[1]),
                                     Collections::<String, String>unmodifiableMap));
 
-    protected IRunUtil getRunUtil() {
+    @VisibleForTesting
+    IRunUtil getRunUtil() {
         return mRunUtil;
     }
 
@@ -107,7 +113,8 @@ public class OxygenClient {
      * @param cmdArgs a {@link List<String>} of commands to run Oxygen client.
      * @param runUtil a {@link IRunUtil} to execute commands.
      */
-    public OxygenClient(List<String> cmdArgs, IRunUtil runUtil) {
+    @VisibleForTesting
+    OxygenClient(List<String> cmdArgs, IRunUtil runUtil) {
         mCmdArgs.addAll(cmdArgs);
         mRunUtil = runUtil;
     }
@@ -369,22 +376,89 @@ public class OxygenClient {
      * Create an adb or ssh tunnel to a given instance name and assign the endpoint to a device via
      * LHP based on the given tunnel mode.
      *
+     * @param mode The mode for oxygen client to talk to the device.
+     * @param portNumber The port number that Host Orchestrator communicates with.
+     * @param sessionId The session id returned by lease method in oxygenation.
+     * @param serverUrl The server url returned by lease method in oxygenation.
+     * @param targetRegion The target region for Oxygen instance
+     * @param accountingUser Oxygen accounting user email
+     * @param oxygenationDeviceId The device id returned by lease method in oxygenation.
+     * @param extraOxygenArgs {@link Map<String, String>} of extra Oxygen lease args
+     * @param tunnelLog {@link FileOutputStream} for storing logs.
      * @return {@link Process} of the adb over LHP tunnel.
      */
     public Process createTunnelViaLHP(
-            LHPTunnelMode mode, String portNumber, String instanceName, String deviceId) {
-        // TODO(easoncylee): Flesh out this section once the oxygen client is ready.
-        // At high level, the logic would look like as following steps:
-        // Step1: Create an unused ServerSocket port for establishing the adb tunnel.
-        // Step2: Establish ssh over LHP connection by running command.
-        // Step3: return the process of the connection, or null if the tunnel can't be established.
+            LHPTunnelMode mode,
+            String portNumber,
+            String sessionId,
+            String serverUrl,
+            String targetRegion,
+            String accountingUser,
+            String oxygenationDeviceId,
+            Map<String, String> extraOxygenArgs,
+            FileOutputStream tunnelLog) {
+        Process lhpTunnel = null;
+        List<String> oxygenClientArgs = Lists.newArrayList(mCmdArgs);
+        oxygenClientArgs.add("-build_lab_host_proxy_tunnel");
+        oxygenClientArgs.add("-server_url");
+        oxygenClientArgs.add(serverUrl);
+        oxygenClientArgs.add("-session_id");
+        oxygenClientArgs.add(sessionId);
+
+        if (extraOxygenArgs != null) {
+            for (Map.Entry<String, String> arg : extraOxygenArgs.entrySet()) {
+                oxygenClientArgs.add("-" + arg.getKey());
+                if (!Strings.isNullOrEmpty(arg.getValue())) {
+                    oxygenClientArgs.add(arg.getValue());
+                }
+            }
+        }
+
+        oxygenClientArgs.add("-target_region");
+        oxygenClientArgs.add(targetRegion);
+        oxygenClientArgs.add("-accounting_user");
+        oxygenClientArgs.add(accountingUser);
+        oxygenClientArgs.add("-use_omnilab");
+        oxygenClientArgs.add("-tunnel_type");
         if (LHPTunnelMode.ADB.equals(mode)) {
-            return null;
+            oxygenClientArgs.add("adb");
         } else if (LHPTunnelMode.CURL.equals(mode)) {
-            return null;
+            oxygenClientArgs.add("curl");
         } else {
+            oxygenClientArgs.add("ssh");
+        }
+        oxygenClientArgs.add("-tunnel_local_port");
+        oxygenClientArgs.add(portNumber);
+        oxygenClientArgs.add("-device_id");
+        oxygenClientArgs.add(oxygenationDeviceId);
+        try {
+            DateFormat dateFormat = new SimpleDateFormat("MM/dd/yy HH:mm:SS");
+            CLog.i(
+                    "Building %s tunnel from oxygen client with command %s...",
+                    mode, oxygenClientArgs.toString());
+            tunnelLog.write(
+                    String.format(
+                                    "\n===[%s]Session id: %s, Server URL: %s, Port: %s===\n",
+                                    dateFormat.format(System.currentTimeMillis()),
+                                    sessionId,
+                                    serverUrl,
+                                    portNumber)
+                            .getBytes());
+            lhpTunnel = getRunUtil().runCmdInBackground(oxygenClientArgs, tunnelLog);
+            // TODO(b/363861223): reduce the waiting time when LHP is stable.
+            getRunUtil().sleep(30 * 1000);
+        } catch (IOException e) {
+            CLog.d("Failed connecting to remote GCE using %s over LHP, %s", mode, e.getMessage());
+        }
+        if (lhpTunnel == null || !lhpTunnel.isAlive()) {
+            closeLHPConnection(lhpTunnel);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricLogger.InvocationMetricKey.PORTFORWARD_LHP_FAIL_COUNT, 1);
             return null;
         }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricLogger.InvocationMetricKey.PORTFORWARD_LHP_SUCCESS_COUNT, 1);
+        return lhpTunnel;
     }
 
     /** Helper to create an unused server socket. */

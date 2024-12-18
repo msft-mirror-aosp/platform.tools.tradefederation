@@ -20,6 +20,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.proto.ProtoResultParser.TestLevel;
 import com.android.tradefed.result.proto.TestRecordProto.TestRecord;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.TimeUtil;
 
@@ -29,6 +30,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -40,6 +43,7 @@ public class StreamProtoReceiver implements Closeable {
 
     private static final int DEFAULT_AVAILABLE_PORT = 0;
     private static final long PER_MODULE_EXTRA_WAIT_TIME_MS = 5000L;
+    private static final long PER_TESTRUN_EXTRA_WAIT_TIME_MS = 2000L;
 
     private EventReceiverThread mEventReceiver;
     private ITestInvocationListener mListener;
@@ -52,11 +56,12 @@ public class StreamProtoReceiver implements Closeable {
     private long mExtraWaitTimeForEvents = 0L;
 
     private AtomicBoolean mJoinStarted = new AtomicBoolean(false);
+
     /**
      * Stop parsing events when this is set. This allows to avoid a thread parsing the events when
      * we don't expect them anymore.
      */
-    private AtomicBoolean mStopParsing = new AtomicBoolean(false);
+    protected AtomicBoolean mStopParsing = new AtomicBoolean(false);
 
     /**
      * Ctor.
@@ -155,16 +160,63 @@ public class StreamProtoReceiver implements Closeable {
         mEventReceiver.start();
     }
 
+    /** Internal thread class that will be parsing the test records asynchronously using a queue. */
+    private class EventParsingThread extends Thread {
+        private Queue<TestRecord> mTestRecordQueue;
+        private boolean mLastTestReceived = false;
+        private boolean mThreadInterrupted = false;
+
+        public EventParsingThread(Queue<TestRecord> testRecordQueue) {
+            super("ProtoEventParsingThread");
+            setDaemon(true);
+            this.mTestRecordQueue = testRecordQueue;
+        }
+
+        public void notifyLastTestReceived() {
+            mLastTestReceived = true;
+        }
+
+        @Override
+        public void interrupt() {
+            mThreadInterrupted = true;
+            super.interrupt();
+        }
+
+        @Override
+        public void run() {
+            Queue<TestRecord> processingQueue = new LinkedList<>();
+            while (!(mLastTestReceived && mTestRecordQueue.isEmpty()) && !mThreadInterrupted) {
+                if (!mTestRecordQueue.isEmpty()) {
+                    synchronized (mTestRecordQueue) {
+                        processingQueue.addAll(mTestRecordQueue);
+                        mTestRecordQueue.clear();
+                    }
+                    while (!processingQueue.isEmpty() && !mThreadInterrupted) {
+                        parse(processingQueue.poll());
+                    }
+                } else {
+                    RunUtil.getDefault().sleep(500L);
+                }
+            }
+            CLog.d("ProtoEventParsingThread done.");
+        }
+    }
+
     /** Internal receiver thread class with a socket. */
     private class EventReceiverThread extends Thread {
         private ServerSocket mSocket;
+        private Socket mClient;
         private CountDownLatch mCountDown;
+        private Queue<TestRecord> mTestRecordQueue;
+        EventParsingThread mEventParsingThread;
 
         public EventReceiverThread() throws IOException {
             super("ProtoEventReceiverThread");
             setDaemon(true);
             mSocket = new ServerSocket(DEFAULT_AVAILABLE_PORT);
             mCountDown = new CountDownLatch(1);
+            mTestRecordQueue = new LinkedList<>();
+            mEventParsingThread = new EventParsingThread(mTestRecordQueue);
         }
 
         protected int getLocalPort() {
@@ -179,22 +231,40 @@ public class StreamProtoReceiver implements Closeable {
             if (mSocket != null) {
                 mSocket.close();
             }
+            if (mClient != null) {
+                mClient.close();
+            }
+            if (mEventParsingThread.isAlive()) {
+                mEventParsingThread.interrupt();
+            }
         }
 
         @Override
         public void run() {
-            Socket client = null;
             try {
-                client = mSocket.accept();
+                mClient = mSocket.accept();
+                mEventParsingThread.start();
                 TestRecord received = null;
-                while ((received = TestRecord.parseDelimitedFrom(client.getInputStream()))
+                while ((received = TestRecord.parseDelimitedFrom(mClient.getInputStream()))
                         != null) {
-                    parse(received);
+                    synchronized (mTestRecordQueue) {
+                        mTestRecordQueue.add(received);
+                    }
+                }
+                // notify EventParsingThread of last test received so it can finish listening.
+                mEventParsingThread.notifyLastTestReceived();
+                // wait for the event parsing thread to finish
+                try {
+                    mEventParsingThread.join();
+                } catch (InterruptedException e) {
+                    // if EventReceiverThread is interrupted, interrupt the EventParsingThread
+                    mEventParsingThread.interrupt();
                 }
             } catch (IOException e) {
                 CLog.e(e);
+                mEventParsingThread.interrupt();
             } finally {
-                StreamUtil.close(client);
+                StreamUtil.close(mClient);
                 mCountDown.countDown();
             }
             CLog.d("ProtoEventReceiverThread done.");
@@ -270,6 +340,11 @@ public class StreamProtoReceiver implements Closeable {
             TestLevel level = mParser.processNewProto(receivedRecord);
             if (TestLevel.MODULE.equals(level) && !mJoinStarted.get()) {
                 mExtraWaitTimeForEvents += PER_MODULE_EXTRA_WAIT_TIME_MS;
+            } else if (TestLevel.TEST_RUN.equals(level)
+                    && !receivedRecord.hasEndTime()
+                    && !mJoinStarted.get()) {
+                // increase wait time for each new test run
+                mExtraWaitTimeForEvents += PER_TESTRUN_EXTRA_WAIT_TIME_MS;
             }
         } catch (Throwable e) {
             CLog.e(e);

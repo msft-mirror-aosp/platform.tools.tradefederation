@@ -518,6 +518,35 @@ public class TestAppInstallSetupTest {
     }
 
     @Test
+    public void testSetup_incrementalSetupDisabledExplicitly_noOp() throws Exception {
+        when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
+                .thenReturn(null);
+        when(mMockTestDevice.installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true)))
+                .thenReturn(null);
+        mPrep.setIncrementalSetupEnabled(false);
+
+        mPrep.setUp(mTestInfo);
+
+        Mockito.verify(mMockTestDevice).installPackage(Mockito.eq(fakeApk), Mockito.eq(true));
+        Mockito.verify(mMockTestDevice)
+            .installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true));
+    }
+
+    @Test
+    public void testSetup_incrementalSetupDisabledByDefault_noOp() throws Exception {
+        when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
+                .thenReturn(null);
+        when(mMockTestDevice.installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true)))
+                .thenReturn(null);
+
+        mPrep.setUp(mTestInfo);
+
+        Mockito.verify(mMockTestDevice).installPackage(Mockito.eq(fakeApk), Mockito.eq(true));
+        Mockito.verify(mMockTestDevice)
+            .installPackages(Mockito.eq(mTestSplitApkFiles), Mockito.eq(true));
+    }
+
+    @Test
     public void testInstallFailure() throws Exception {
         final String failure = "INSTALL_PARSE_FAILED_MANIFEST_MALFORMED";
         when(mMockTestDevice.installPackage(Mockito.eq(fakeApk), Mockito.eq(true)))
@@ -822,7 +851,7 @@ public class TestAppInstallSetupTest {
             fail("Should have thrown an exception");
         } catch (TargetSetupError expected) {
             assertEquals(
-                    String.format("Failed to extract info from `%s` using aapt", fakeApk.getName()),
+                    String.format("Failed to extract info from `%s` using aapt2", fakeApk.getName()),
                     expected.getMessage());
         } finally {
         }

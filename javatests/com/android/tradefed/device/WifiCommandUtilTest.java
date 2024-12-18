@@ -73,6 +73,7 @@ public class WifiCommandUtilTest {
         assertEquals("573", wifiInfo.get("linkSpeed"));
         assertEquals("-60", wifiInfo.get("rssi"));
         assertEquals("82:f2:40:f1:51:be", wifiInfo.get("macAddress"));
+        assertEquals("14", wifiInfo.get("netId"));
     }
 
     private String readTestFile(String filename) {

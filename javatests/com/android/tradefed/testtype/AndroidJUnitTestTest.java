@@ -505,9 +505,8 @@ public class AndroidJUnitTestTest {
         File tmpFileExclude = FileUtil.createTempFile("excludeFile", ".txt");
         FileUtil.writeToFile(TEST2.toString(), tmpFileExclude);
         try {
-            OptionSetter setter = new OptionSetter(mAndroidJUnitTest);
-            setter.setOptionValue("test-file-include-filter", tmpFileInclude.getAbsolutePath());
-            setter.setOptionValue("test-file-exclude-filter", tmpFileExclude.getAbsolutePath());
+            mAndroidJUnitTest.setIncludeTestFile(tmpFileInclude);
+            mAndroidJUnitTest.setExcludeTestFile(tmpFileExclude);
             mAndroidJUnitTest.run(mTestInfo, mMockListener);
             verify(mMockTestDevice, times(2))
                     .pushFile(Mockito.<File>any(), Mockito.<String>any(), Mockito.eq(true));
