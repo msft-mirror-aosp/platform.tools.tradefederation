@@ -18,12 +18,10 @@ package com.android.tradefed.testtype.suite;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
-import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.IRemoteTest;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -33,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Note that this enforcer doesn't interrupt the tests, but will make them fail.
  */
-public class RemoteTestTimeOutEnforcer extends ResultForwarder {
+public class RemoteTestTimeOutEnforcer implements ITestInvocationListener {
 
     // The option name & description we want to share across class that uses the enforcer.
     public static final String REMOTE_TEST_TIMEOUT_OPTION = "remote-test-timeout";
@@ -43,25 +41,22 @@ public class RemoteTestTimeOutEnforcer extends ResultForwarder {
     private IRemoteTest mIRemoteTest;
     private Duration mTimeOut;
     private ModuleDefinition mModuleDefinition;
-    private ModuleListener mGranularListener;
+    private ModuleListener mListener;
 
     /**
      * Create the {@link RemoteTestTimeOutEnforcer} with the given timeout to enforce.
      *
-     * @param mainListener The invocation level {@link ITestInvocationListener}s.
-     * @param granularListener The {@link ModuleListener} for each test run.
+     * @param listener The {@link ModuleListener} for each test run.
      * @param moduleDefinition The {@link ModuleDefinition} of the test module to be executed.
      * @param test The {@link IRemoteTest} to be executed.
      * @param timeOut The {@link Duration} of the time out per test run.
      */
     public RemoteTestTimeOutEnforcer(
-            ITestInvocationListener mainListener,
-            ModuleListener granularListener,
+            ModuleListener listener,
             ModuleDefinition moduleDefinition,
             IRemoteTest test,
             Duration timeOut) {
-        super(Arrays.asList(mainListener, granularListener));
-        mGranularListener = granularListener;
+        mListener = listener;
         mIRemoteTest = test;
         mModuleDefinition = moduleDefinition;
         mTimeOut = timeOut;
@@ -77,14 +72,11 @@ public class RemoteTestTimeOutEnforcer extends ResultForwarder {
                             getMetaData(Integer.toString(mIRemoteTest.hashCode())),
                     TimeUnit.MILLISECONDS.toSeconds(elapsedTime),
                     mTimeOut.toSeconds());
-            if (!mGranularListener.hasLastAttemptFailed()) {
+            if (!mListener.hasLastAttemptFailed()) {
                 FailureDescription failure = FailureDescription.create(
                         failureString, FailureStatus.TIMED_OUT).setRetriable(false);
-                super.testRunFailed(failure);
-                super.testRunEnded(elapsedTime, runMetrics);
-                return;
+                mListener.testRunFailed(failure);
             }
         }
-        super.testRunEnded(elapsedTime, runMetrics);
     }
 }

@@ -58,7 +58,6 @@ import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ByteArrayInputStreamSource;
-import com.android.tradefed.result.ExtraMetricsForwarder;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
@@ -1253,11 +1252,9 @@ public class InvocationExecution implements IInvocationExecution {
                     CLog.d("Using RetryLogSaverResultForwarder to forward results.");
                     ModuleListener mainGranularRunListener =
                             new ModuleListener(null, info.getContext());
-                    ExtraMetricsForwarder listenerWithMetrics = new ExtraMetricsForwarder(listener);
                     RetryLogSaverResultForwarder runListener =
-                            initializeListeners(
-                                    config, listenerWithMetrics, mainGranularRunListener);
-                    listenerWithMetrics.setAttemptIsolation(
+                            initializeListeners(config, listener, mainGranularRunListener);
+                    mainGranularRunListener.setAttemptIsolation(
                             CurrentInvocation.runCurrentIsolation());
                     try {
                         long timeSpentOnTest =
@@ -1304,7 +1301,7 @@ public class InvocationExecution implements IInvocationExecution {
                             }
                             firstCheck = false;
                             CLog.d("auto-retry attempt number '%s'", attemptNumber);
-                            listenerWithMetrics.setAttemptIsolation(
+                            mainGranularRunListener.setAttemptIsolation(
                                     CurrentInvocation.runCurrentIsolation());
                             try {
                                 // Run the tests again
