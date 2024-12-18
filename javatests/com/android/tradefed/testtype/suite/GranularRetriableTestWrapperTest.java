@@ -46,6 +46,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Measurements;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
+import com.android.tradefed.result.ExtraMetricsForwarder;
 import com.android.tradefed.result.FileSystemLogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
@@ -132,11 +133,15 @@ public class GranularRetriableTestWrapperTest {
             return true;
         }
 
+        public List<TestDescription> getTests() {
+            return mTestCases;
+        }
+
         @Override
         public void run(TestInformation testInfo, ITestInvocationListener listener)
                 throws DeviceUnresponsiveException {
-            listener.testRunStarted(RUN_NAME, mTestCases.size());
-            for (TestDescription td : mTestCases) {
+            listener.testRunStarted(RUN_NAME, getTests().size());
+            for (TestDescription td : getTests()) {
                 if (!shouldRun(td)) {
                     continue;
                 }
@@ -168,13 +173,20 @@ public class GranularRetriableTestWrapperTest {
         private ITestDevice mDevice;
         private Set<String> mIncludeFilters = new HashSet<>();
         private Set<String> mExcludeFilters = new HashSet<>();
+        private List<TestDescription> mTestCases = new ArrayList<>();
 
         public FakeTest(ArrayList<TestDescription> testCases) {
             super(testCases);
+            mTestCases = testCases;
         }
 
         public FakeTest() {
             super();
+        }
+
+        @Override
+        public List<TestDescription> getTests() {
+            return mTestCases;
         }
 
         @Override
@@ -200,11 +212,15 @@ public class GranularRetriableTestWrapperTest {
 
         @Override
         public void addExcludeFilter(String filter) {
+            mTestCases =
+                    mTestCases.stream().filter(test -> !test.toString().equals(filter)).toList();
             mExcludeFilters.add(filter);
         }
 
         @Override
         public void addAllExcludeFilters(Set<String> filters) {
+            mTestCases =
+                    mTestCases.stream().filter(test -> !filters.contains(test.toString())).toList();
             mExcludeFilters.addAll(filters);
         }
 
@@ -312,7 +328,7 @@ public class GranularRetriableTestWrapperTest {
             ModuleDefinition module)
             throws Exception {
         GranularRetriableTestWrapper granularTestWrapper =
-                new GranularRetriableTestWrapper(test, module, null, null, maxRunCount);
+                new GranularRetriableTestWrapper(test, module, null, maxRunCount);
         granularTestWrapper.setModuleId("test module");
         granularTestWrapper.setMarkTestsSkipped(false);
         granularTestWrapper.setMetricCollectors(collectors);
@@ -1144,8 +1160,9 @@ public class GranularRetriableTestWrapperTest {
 
         GranularRetriableTestWrapper granularTestWrapper =
                 createGranularTestWrapper(mIRemoteTest, 3, new ArrayList<>(), module);
-        ModuleListener listener = granularTestWrapper.getResultListener();
-        assertEquals(listener.getTestMappingSources(), mTestMappingSources);
+        granularTestWrapper.initializeListeners();
+        ExtraMetricsForwarder metricsListener = granularTestWrapper.getExtraMetricsForwarder();
+        assertEquals(metricsListener.getTestMappingSources(), mTestMappingSources);
     }
 
     /** Collector that track if it was called or not */
