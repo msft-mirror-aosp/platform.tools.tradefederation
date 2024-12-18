@@ -276,6 +276,7 @@ import com.android.tradefed.targetprep.DeviceStorageFillerTest;
 import com.android.tradefed.targetprep.DeviceStringPusherTest;
 import com.android.tradefed.targetprep.DisableSELinuxTargetPreparerTest;
 import com.android.tradefed.targetprep.DynamicSystemPreparerTest;
+import com.android.tradefed.targetprep.FastbootCommandPreparerTest;
 import com.android.tradefed.targetprep.FastbootDeviceFlasherTest;
 import com.android.tradefed.targetprep.FeatureFlagTargetPreparerTest;
 import com.android.tradefed.targetprep.FlashingResourcesParserTest;
@@ -291,6 +292,7 @@ import com.android.tradefed.targetprep.LocalEmulatorLaunchTest;
 import com.android.tradefed.targetprep.MixKernelTargetPreparerTest;
 import com.android.tradefed.targetprep.ModuleOemTargetPreparerTest;
 import com.android.tradefed.targetprep.ModulePusherTest;
+import com.android.tradefed.targetprep.OtaUpdateDeviceFlasherTest;
 import com.android.tradefed.targetprep.PushFilePreparerTest;
 import com.android.tradefed.targetprep.PythonVirtualenvPreparerTest;
 import com.android.tradefed.targetprep.RebootTargetPreparerTest;
@@ -316,6 +318,7 @@ import com.android.tradefed.targetprep.UserCleanerTest;
 import com.android.tradefed.targetprep.VisibleBackgroundUserPreparerTest;
 import com.android.tradefed.targetprep.adb.AdbStopServerPreparerTest;
 import com.android.tradefed.targetprep.app.NoApkTestSkipperTest;
+import com.android.tradefed.targetprep.incremental.ApkChangeDetectorTest;
 import com.android.tradefed.targetprep.multi.MergeMultiBuildTargetPreparerTest;
 import com.android.tradefed.targetprep.multi.MixImageZipPreparerTest;
 import com.android.tradefed.targetprep.multi.PairingMultiTargetPreparerTest;
@@ -439,6 +442,7 @@ import com.android.tradefed.util.GoogleApiClientUtilTest;
 import com.android.tradefed.util.HprofAllocSiteParserTest;
 import com.android.tradefed.util.JUnitXmlParserTest;
 import com.android.tradefed.util.JavaCodeCoverageFlusherTest;
+import com.android.tradefed.util.KernelModuleUtilsTest;
 import com.android.tradefed.util.KeyguardControllerStateTest;
 import com.android.tradefed.util.ListInstrumentationParserTest;
 import com.android.tradefed.util.LocalRunInstructionBuilderTest;
@@ -834,6 +838,7 @@ import org.junit.runners.Suite.SuiteClasses;
     DeviceStringPusherTest.class,
     DisableSELinuxTargetPreparerTest.class,
     DynamicSystemPreparerTest.class,
+    FastbootCommandPreparerTest.class,
     FastbootDeviceFlasherTest.class,
     FeatureFlagTargetPreparerTest.class,
     FlashingResourcesParserTest.class,
@@ -872,12 +877,16 @@ import org.junit.runners.Suite.SuiteClasses;
     SwitchUserTargetPreparerTest.class,
     UserCleanerTest.class,
     VisibleBackgroundUserPreparerTest.class,
+    OtaUpdateDeviceFlasherTest.class,
 
     // targetprep.adb
     AdbStopServerPreparerTest.class,
 
     // targetprep.app
     NoApkTestSkipperTest.class,
+
+    // targetprep.incremental
+    ApkChangeDetectorTest.class,
 
     // targetprep.multi
     MergeMultiBuildTargetPreparerTest.class,
@@ -1060,6 +1069,7 @@ import org.junit.runners.Suite.SuiteClasses;
     HprofAllocSiteParserTest.class,
     JavaCodeCoverageFlusherTest.class,
     JUnitXmlParserTest.class,
+    KernelModuleUtilsTest.class,
     KeyguardControllerStateTest.class,
     LegacySubprocessResultsReporterTest.class,
     ListInstrumentationParserTest.class,
@@ -1097,6 +1107,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TableFormatterTest.class,
     TarUtilTest.class,
     TestRunnerUtilTest.class,
+    TfTestLauncherTest.class,
     TimeUtilTest.class,
     TimeValTest.class,
     VersionParserTest.class,

@@ -148,6 +148,8 @@ public final class GlobalTestFilter {
                     ((BaseTestSuite) test).setIncludeFilter(mStrictIncludeFilters);
                     if (test instanceof TestMappingSuiteRunner) {
                         ((TestMappingSuiteRunner) test).clearTestGroup();
+                        ((TestMappingSuiteRunner) test).clearKeywords();
+                        ((TestMappingSuiteRunner) test).clearTestMappingPaths();
                     }
                 } else if (test instanceof ITestFilterReceiver) {
                     ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
@@ -189,6 +191,8 @@ public final class GlobalTestFilter {
             suite.setIncludeFilter(mStrictIncludeFilters);
             if (suite instanceof TestMappingSuiteRunner) {
                 ((TestMappingSuiteRunner) suite).clearTestGroup();
+                ((TestMappingSuiteRunner) suite).clearKeywords();
+                ((TestMappingSuiteRunner) suite).clearTestMappingPaths();
             }
         }
         suite.reevaluateFilters();

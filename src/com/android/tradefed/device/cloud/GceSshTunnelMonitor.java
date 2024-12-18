@@ -142,6 +142,7 @@ public class GceSshTunnelMonitor extends AbstractTunnelMonitor {
     public void shutdown() {
         mQuit = true;
         closeConnection();
+        FileUtil.deleteFile(mSshTunnelLogs);
         getRunUtil().allowInterrupt(true);
         getRunUtil().interrupt(this, "shutting down the monitor thread.", null);
         interrupt();

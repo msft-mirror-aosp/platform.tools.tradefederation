@@ -20,8 +20,6 @@ import static com.android.tradefed.testtype.python.PythonBinaryHostTest.USE_TEST
 
 import static com.google.common.truth.Truth.assertThat;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -29,10 +27,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.cache.ICacheClient;
-import com.android.tradefed.command.CommandOptions;
-import com.android.tradefed.config.Configuration;
-import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
@@ -51,7 +45,6 @@ import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.IRunUtil.EnvPriority;
-import com.android.tradefed.util.RunUtilTest;
 import com.android.tradefed.util.StreamUtil;
 
 import org.junit.After;
@@ -85,10 +78,10 @@ public final class PythonBinaryHostTestTest {
     @Mock ITestInvocationListener mMockListener;
     private File mFakeAdb;
     private File mFakeAapt;
+    private File mFakeAapt2;
     private File mPythonBinary;
     private File mOutputFile;
     private File mModuleDir;
-    private RunUtilTest.FakeCacheClient mFakeCacheClient;
 
     @Before
     public void setUp() throws Exception {
@@ -96,6 +89,7 @@ public final class PythonBinaryHostTestTest {
 
         mFakeAdb = FileUtil.createTempFile("adb-python-tests", "");
         mFakeAapt = FileUtil.createTempFile("aapt-python-tests", "");
+        mFakeAapt2 = FileUtil.createTempFile("aapt2-python-tests", "");
 
         mTest =
                 new PythonBinaryHostTest() {
@@ -105,13 +99,18 @@ public final class PythonBinaryHostTestTest {
                     }
 
                     @Override
-                    File getAdb() {
-                        return mFakeAdb;
+                    String getAdb() {
+                        return mFakeAdb.getAbsolutePath();
                     }
 
                     @Override
-                    File getAapt() {
-                        return mFakeAapt;
+                    String getAapt() {
+                        return mFakeAapt.getAbsolutePath();
+                    }
+
+                    @Override
+                    String getAapt2() {
+                        return mFakeAapt2.getAbsolutePath();
                     }
 
                     @Override
@@ -132,61 +131,16 @@ public final class PythonBinaryHostTestTest {
         mModuleDir = FileUtil.createTempDir("python-module");
         mPythonBinary = FileUtil.createTempFile("python-dir", "", mModuleDir);
         mTestInfo.executionFiles().put(FilesKey.HOST_TESTS_DIRECTORY, new File("/path-not-exist"));
-        mFakeCacheClient = new RunUtilTest.FakeCacheClient();
     }
 
     @After
     public void tearDown() throws Exception {
         FileUtil.deleteFile(mFakeAdb);
         FileUtil.deleteFile(mFakeAapt);
+        FileUtil.deleteFile(mFakeAapt2);
         FileUtil.deleteFile(mPythonBinary);
         FileUtil.deleteFile(mOutputFile);
         FileUtil.recursiveDelete(mModuleDir);
-        mFakeCacheClient.getAllCache().values().stream()
-                .forEach(
-                        a -> {
-                            FileUtil.deleteFile(a.stdOut());
-                            FileUtil.deleteFile(a.stdErr());
-                        });
-    }
-
-    /** Test that a success python host test run is uploaded to cache service. */
-    @Test
-    public void testRun_upload_cache_for_success_run() throws Exception {
-        PythonBinaryHostTest pyTest =
-                createPythonBinaryHostTestWithCache(
-                        "echo \"hello_world_test (__main__.HelloWorldTest.hello_world_test) ..."
-                            + " ok\n\n"
-                            + "----------------------------------------------------------------------\n"
-                            + "Ran 1 test in 0.001s\n\n"
-                            + "OK\n"
-                            + "\" >&2");
-
-        pyTest.run(mTestInfo, mMockListener);
-
-        assertFalse(mFakeCacheClient.getAllCache().isEmpty());
-    }
-
-    /** Test that a failed python host test run is not uploaded to cache service. */
-    @Test
-    public void testRun_skip_cache_uploading_for_failed_run() throws Exception {
-        PythonBinaryHostTest pyTest =
-                createPythonBinaryHostTestWithCache(
-                        "echo \"hello_world_test (__main__.HelloWorldTest.hello_world_test) ..."
-                            + " FAIL \n\n"
-                            + "======================================================================\n"
-                            + "FAIL: hello_world_test (__main__.HelloWorldTest.hello_world_test)\n"
-                            + "----------------------------------------------------------------------\n"
-                            + "Traceback (most recent call last):\n"
-                            + "  File \"hello_world_test.py\", line 666, in hello_world_test\n"
-                            + "AssertionError: True is not false\n\n"
-                            + "----------------------------------------------------------------------\n"
-                            + "Ran 1 test in 0.001sFAILED (failures=1)\n"
-                            + "\" >&2");
-
-        pyTest.run(mTestInfo, mMockListener);
-
-        assertTrue(mFakeCacheClient.getAllCache().isEmpty());
     }
 
     /** Test that when running a python binary the output is parsed to obtain results. */
@@ -222,7 +176,10 @@ public final class PythonBinaryHostTestTest {
             mTest.run(mTestInfo, mMockListener);
             mTest.run(mTestInfo, mMockListener);
 
-            verify(mMockRunUtil, times(2)).setEnvVariable("PATH", ".:runtime_deps:/usr/bin");
+            verify(mMockRunUtil, times(2))
+                    .setEnvVariable(
+                            "PATH",
+                            String.format("%s:%s:/usr/bin", mFakeAdb.getParent(), mModuleDir));
             verify(mMockRunUtil, times(2))
                     .setEnvVariable(Mockito.eq("LD_LIBRARY_PATH"), Mockito.any());
             verify(mMockListener, times(2))
@@ -1022,30 +979,5 @@ public final class PythonBinaryHostTestTest {
                                 File.separator + "testtype" + File.separator + filename);
         FileUtil.writeToFile(stream, output);
         return output;
-    }
-
-    private PythonBinaryHostTest createPythonBinaryHostTestWithCache(String scriptContent)
-            throws Exception {
-        PythonBinaryHostTest pyTest =
-                new PythonBinaryHostTest() {
-                    @Override
-                    ICacheClient getCacheClient(File workFolder, String instanceName) {
-                        return mFakeCacheClient;
-                    }
-                };
-        File binary =
-                new File(FileUtil.createTempDir("hosttestcases", mModuleDir), "hello_world_test");
-        FileUtil.writeToFile(scriptContent, binary);
-        binary.setExecutable(true);
-        OptionSetter testSetter = new OptionSetter(pyTest);
-        testSetter.setOptionValue("python-binaries", binary.getAbsolutePath());
-        testSetter.setOptionValue("enable-cache", "true");
-        CommandOptions commandOptions = new CommandOptions();
-        OptionSetter commandOptionsSetter = new OptionSetter(commandOptions);
-        commandOptionsSetter.setOptionValue("remote-cache-instance-name", "test_instance");
-        IConfiguration config = new Configuration("config", "Test config");
-        config.setCommandOptions(commandOptions);
-        pyTest.setConfiguration(config);
-        return pyTest;
     }
 }

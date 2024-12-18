@@ -725,14 +725,13 @@ public class FileUtil {
         // Based on empirical testing File.getUsableSpace is a low cost operation (~ 100 us for
         // local disk, ~ 100 ms for network disk). Therefore call it every time tmp file is
         // created
-        long usableSpace = 0L;
         File toCheck = file;
         if (!file.isDirectory() && file.getParentFile() != null) {
             // If the given file is not a directory it might not work properly so using the parent
             // in that case.
             toCheck = file.getParentFile();
         }
-        usableSpace = toCheck.getUsableSpace();
+        long usableSpace = toCheck.getUsableSpace();
 
         long minDiskSpace = mMinDiskSpaceMb * 1024 * 1024;
         if (usableSpace < minDiskSpace) {
@@ -969,11 +968,11 @@ public class FileUtil {
      *
      * @param rootDir the root directory to search in
      * @param relativeParent An optional parent for all {@link File}s returned. If not specified,
-     *            all {@link File}s will be relative to {@code rootDir}.
+     *     all {@link File}s will be relative to {@code rootDir}.
      * @return An set of {@link File}s, representing all directories under {@code rootDir},
-     *         including {@code rootDir} itself. If {@code rootDir} is null, an empty set is
-     *         returned.
+     *     including {@code rootDir} itself. If {@code rootDir} is null, an empty set is returned.
      */
+    @Deprecated
     public static Set<File> findDirsUnder(File rootDir, File relativeParent) {
         Set<File> dirs = new HashSet<File>();
         if (rootDir != null) {

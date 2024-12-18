@@ -18,6 +18,7 @@ package com.android.tradefed.build.content;
 import com.android.tradefed.build.content.ArtifactDetails.ArtifactFileDescriptor;
 import com.android.tradefed.cache.DigestCalculator;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.skipped.AnalysisHeuristic;
 
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
@@ -31,15 +32,16 @@ import java.util.List;
 /** Compute a MerkleTree from the device content information. */
 public class DeviceMerkleTree {
 
-    /** Builds a merkle tree and returns the root digest from the device content informaton */
-    public static Digest buildFromContext(ContentAnalysisContext context) {
+    /** Builds a merkle tree and returns the root digest from the device content information */
+    public static Digest buildFromContext(
+            ContentAnalysisContext context, AnalysisHeuristic analysisLevel) {
         try {
             ArtifactDetails currentContent =
                     ArtifactDetails.parseFile(
                             context.contentInformation().currentContent, context.contentEntry());
             Directory.Builder rootBuilder = Directory.newBuilder();
             List<ArtifactFileDescriptor> allFiles = currentContent.details;
-            ImageContentAnalyzer.normalizeDeviceImage(allFiles);
+            ImageContentAnalyzer.normalizeDeviceImage(allFiles, analysisLevel);
             // Sort to ensure final messages are identical
             Collections.sort(
                     allFiles,

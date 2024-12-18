@@ -51,6 +51,7 @@ public final class IsolationRunner {
     private static final String EXCLUDE_NO_TEST_FAILURE = "org.junit.runner.manipulation.Filter";
     private Socket mSocket = null;
     private ServerSocket mServer = null;
+    private boolean mDoNotSwallowRunnerErrors = false;
 
     public static void main(String[] args)
             throws ParseException, NumberFormatException, IOException {
@@ -66,6 +67,8 @@ public final class IsolationRunner {
 
         // Set a timeout for hearing something from the host when we start a read.
         mSocket.setSoTimeout(config.getTimeout());
+
+        mDoNotSwallowRunnerErrors = config.doNotSwallowRunnerErrors();
 
         OutputStream output = mSocket.getOutputStream();
 
@@ -128,7 +131,6 @@ public final class IsolationRunner {
 
         try {
             for (Class<?> klass : klasses) {
-                System.out.println("INFO: IsolationRunner: Starting class: " + klass);
                 IsolationResultForwarder list = new IsolationResultForwarder(output);
                 JUnitCore runnerCore = new JUnitCore();
                 runnerCore.addListener(list);
@@ -143,24 +145,42 @@ public final class IsolationRunner {
                     boolean isFilterError =
                             EXCLUDE_NO_TEST_FAILURE.equals(
                                     req.getRunner().getDescription().getClassName());
-                    if (!params.hasFilter() && isFilterError) {
-                        System.err.println(
-                                String.format(
-                                        "ERROR: IsolationRunner: Found ErrorRunner when trying to"
-                                                + " run class: %s",
-                                        klass));
-                        runnerCore.run(req.getRunner());
+                    if (mDoNotSwallowRunnerErrors) {
+                        if (params.hasFilter() && isFilterError) {
+                            // In this case, do not report it as an error.
+                            System.out.println(
+                                    String.format(
+                                            "Skipping this class since all methods were filtered"
+                                                + " out: %s",
+                                            klass));
+                        } else {
+                            System.out.println(
+                                    String.format(
+                                            "Found ErrorRunner when trying to run class: %s",
+                                            klass));
+                            runnerCore.run(req.getRunner());
+                        }
                     } else {
-                        System.err.println(
-                                String.format(
-                                        "ERROR: IsolationRunner: Encountered ErrorReportingRunner"
-                                                + " when trying to run: %s",
-                                        klass));
+                        // TODO(b/312517322): Remove this entire else block once the flag is rolled
+                        // out completely.
+                        if (!params.hasFilter() && isFilterError) {
+                            System.err.println(
+                                    String.format(
+                                            "ERROR: IsolationRunner: Found ErrorRunner when trying"
+                                                + " to run class: %s",
+                                            klass));
+                            runnerCore.run(req.getRunner());
+                        } else {
+                            System.err.println(
+                                    String.format(
+                                            "ERROR: IsolationRunner: Encountered"
+                                                + " ErrorReportingRunner when trying to run: %s",
+                                            klass));
+                        }
                     }
                 } else if (req.getRunner() instanceof IgnoredClassRunner) {
                     // Do nothing since class was ignored
                 } else {
-                    System.out.println("INFO: IsolationRunner: Executing class: " + klass);
                     Runner checkRunner = req.getRunner();
 
                     if (params.getDryRun()) {
@@ -192,8 +212,6 @@ public final class IsolationRunner {
     }
 
     private List<Class<?>> getClasses(TestParameters params) {
-        System.out.println("INFO: IsolationRunner: Excluded paths:");
-        params.getExcludePathsList().stream().forEach(path -> System.out.println(path));
         return HostUtils.getJUnitClasses(
                 new HashSet<>(params.getTestClassesList()),
                 new HashSet<>(params.getTestJarAbsPathsList()),
@@ -209,8 +227,10 @@ public final class IsolationRunner {
         private final int mPort;
         private final String mAddress;
         private final int mTimeout;
+        private final boolean mDoNotSwallowRunnerErrors;
 
-        public RunnerConfig(int port, String address, int timeout) {
+        public RunnerConfig(
+                int port, String address, int timeout, boolean doNotSwallowRunnerErrors) {
             if (port > 0) {
                 mPort = port;
             } else {
@@ -228,6 +248,8 @@ public final class IsolationRunner {
             } else {
                 mTimeout = RunnerConfig.DEFAULT_TIMEOUT;
             }
+
+            mDoNotSwallowRunnerErrors = doNotSwallowRunnerErrors;
         }
 
         public int getPort() {
@@ -240,6 +262,10 @@ public final class IsolationRunner {
 
         public int getTimeout() {
             return mTimeout;
+        }
+
+        public boolean doNotSwallowRunnerErrors() {
+            return mDoNotSwallowRunnerErrors;
         }
     }
 
@@ -259,6 +285,12 @@ public final class IsolationRunner {
         timeoutOption.setRequired(false);
         options.addOption(timeoutOption);
 
+        Option doNotSwallowRunnerErrorsOption =
+                new Option(
+                        "e", "do-not-swallow-runner-errors", false, "Do not swallow runner errors");
+        doNotSwallowRunnerErrorsOption.setRequired(false);
+        options.addOption(doNotSwallowRunnerErrorsOption);
+
         CommandLineParser parser = new PosixParser();
         CommandLine cmd;
 
@@ -267,6 +299,7 @@ public final class IsolationRunner {
         String portStr = cmd.getOptionValue("p");
         String addressStr = cmd.getOptionValue("a");
         String timeoutStr = cmd.getOptionValue("t");
+        boolean doNotSwallowRunnerErrors = cmd.hasOption("e");
 
         int port = -1;
         String address = null;
@@ -282,6 +315,6 @@ public final class IsolationRunner {
             timeout = Integer.parseInt(timeoutStr);
         }
 
-        return new RunnerConfig(port, address, timeout);
+        return new RunnerConfig(port, address, timeout, doNotSwallowRunnerErrors);
     }
 }

@@ -298,6 +298,14 @@ public class TestMappingSuiteRunner extends BaseTestSuite {
         mTestGroup = null;
     }
 
+    public void clearTestMappingPaths() {
+        mTestMappingPaths.clear();
+    }
+
+    public void clearKeywords() {
+        mKeywords.clear();
+    }
+
     /**
      * Create individual tests with test infos for a module.
      *

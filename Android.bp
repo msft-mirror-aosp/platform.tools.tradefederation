@@ -27,7 +27,10 @@ java_library_host {
         "//tools/tradefederation/core/test_result_interfaces",
     ],
     srcs: ["proto/**/*.proto"],
-    exclude_srcs: ["proto/virtual_device_manager.proto"],
+    exclude_srcs: [
+        "proto/virtual_device_manager.proto",
+        "proto/resultdb/*",
+    ],
     libs: [
         "libprotobuf-java-full",
     ],
@@ -78,6 +81,44 @@ java_library_host {
         "guava",
         "javax-annotation-api-prebuilt-host-jar",
     ],
+    // b/267831518: Pin tradefed and dependencies to Java 11.
+    java_version: "11",
+}
+
+java_library_host {
+    name: "resultdb-protos",
+    srcs: ["proto/resultdb/*.proto"],
+    libs: [
+        "libprotobuf-java-full",
+        "googleapis-field-behavior-java-proto",
+    ],
+    proto: {
+        include_dirs: [
+            "external/protobuf/src",
+            "external/googleapis",
+        ],
+        type: "full",
+    },
+    java_version: "11",
+}
+
+java_library_host {
+    name: "resultdb-grpc",
+    srcs: ["proto/resultdb/recorder.proto"],
+    libs: [
+        "resultdb-protos",
+        "grpc-java",
+        "guava",
+        "javax-annotation-api-prebuilt-host-jar",
+        "googleapis-field-behavior-java-proto",
+    ],
+    proto: {
+        include_dirs: [
+            "external/protobuf/src",
+            "external/googleapis",
+        ],
+        plugin: "grpc-java-plugin",
+    },
     // b/267831518: Pin tradefed and dependencies to Java 11.
     java_version: "11",
 }
@@ -169,7 +210,7 @@ java_library_host {
 }
 
 // Avoid version number in apk file name
-genrule {
+java_genrule {
     name: "test-services-normalized.apk",
     srcs: [":test-services.apk"],
     out: ["test-services-normalized.apk"],
@@ -177,7 +218,7 @@ genrule {
 }
 
 // Avoid version number in apk file name
-genrule {
+java_genrule {
     name: "test-orchestrator-normalized.apk",
     srcs: [":androidx.test.orchestrator"],
     out: ["test-orchestrator-normalized.apk"],
@@ -191,7 +232,7 @@ tradefed_java_library_host {
     java_resource_dirs: [
         "res",
     ],
-    java_resources: [
+    device_common_java_resources: [
         ":TradefedContentProvider",
         ":TelephonyUtility",
         ":WifiUtil",
@@ -201,6 +242,9 @@ tradefed_java_library_host {
     static_libs: [
         "tradefed-lib-core",
         "tradefed-test-framework",
+    ],
+    required: [
+        "loganalysis",
     ],
     manifest: "MANIFEST.mf",
     // b/267831518: Pin tradefed and dependencies to Java 11.
@@ -250,6 +294,8 @@ java_library_host {
         "tradefed-invocation-grpc",
         "tradefed-device-manager-grpc",
         "tradefed-dynamic-sharding-grpc",
+        "resultdb-grpc",
+        "resultdb-protos",
         "aoa-helper",
         "error_prone_annotations",
         "google-api-java-client-assembly",
@@ -383,8 +429,6 @@ java_genrule_host {
         "soong_zip",
     ],
     srcs: [
-        ":TradeFedTestApp",
-        ":TradeFedUiTestApp",
         ":compatibility-host-util",
         ":compatibility-tradefed",
         ":loganalysis",
@@ -395,6 +439,10 @@ java_genrule_host {
         "script_help.sh",
         "tools/content_uploader.py",
         "tradefed.sh",
+    ],
+    device_common_srcs: [
+        ":TradeFedTestApp",
+        ":TradeFedUiTestApp",
     ],
     uses_order_only_build_number_file: true,
     out: ["tradefed.zip"],

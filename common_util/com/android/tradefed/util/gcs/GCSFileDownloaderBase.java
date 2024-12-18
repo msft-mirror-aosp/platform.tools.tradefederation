@@ -148,14 +148,20 @@ public class GCSFileDownloaderBase extends GCSCommon {
                     remoteFilename = sanitizeDirectoryName(remoteFilename);
                     recursiveDownloadFolder(bucketName, remoteFilename, localFile);
                     return;
-                } catch (SocketException se) {
+                } catch (IOException e) {
                     // Allow one retry in case of flaky connection.
                     if (i >= 2) {
-                        throw se;
+                        throw e;
+                    }
+                    // Allow `Read timed out` exception to be retried.
+                    if (!(e instanceof SocketException)
+                            && !"Read timed out".equals(e.getMessage())) {
+                        throw e;
                     }
                     CLog.e(
                             "Error '%s' while downloading gs://%s/%s. retrying.",
-                            se.getMessage(), bucketName, remoteFilename);
+                            e.getMessage(), bucketName, remoteFilename);
+                    CLog.e(e);
                 }
             } while (true);
         } catch (IOException e) {
@@ -164,6 +170,7 @@ public class GCSFileDownloaderBase extends GCSCommon {
                             "Failed to download gs://%s/%s due to: %s",
                             bucketName, remoteFilename, e.getMessage());
             CLog.e(message);
+            CLog.e(e);
             throw new IOException(message, e);
         }
     }

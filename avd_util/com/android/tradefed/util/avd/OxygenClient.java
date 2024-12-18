@@ -16,6 +16,7 @@
 
 package com.android.tradefed.util.avd;
 
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -30,6 +31,8 @@ import com.google.common.collect.Lists;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -429,23 +432,32 @@ public class OxygenClient {
         oxygenClientArgs.add("-device_id");
         oxygenClientArgs.add(oxygenationDeviceId);
         try {
+            DateFormat dateFormat = new SimpleDateFormat("MM/dd/yy HH:mm:SS");
             CLog.i(
                     "Building %s tunnel from oxygen client with command %s...",
                     mode, oxygenClientArgs.toString());
-            tunnelLog.write(String.format("\n=== Beginning ===\n").getBytes());
             tunnelLog.write(
-                    String.format("\n=== Session id: %s, Server URL: %s===\n", sessionId, serverUrl)
+                    String.format(
+                                    "\n===[%s]Session id: %s, Server URL: %s, Port: %s===\n",
+                                    dateFormat.format(System.currentTimeMillis()),
+                                    sessionId,
+                                    serverUrl,
+                                    portNumber)
                             .getBytes());
             lhpTunnel = getRunUtil().runCmdInBackground(oxygenClientArgs, tunnelLog);
             // TODO(b/363861223): reduce the waiting time when LHP is stable.
-            getRunUtil().sleep(15 * 1000);
+            getRunUtil().sleep(30 * 1000);
         } catch (IOException e) {
             CLog.d("Failed connecting to remote GCE using %s over LHP, %s", mode, e.getMessage());
         }
         if (lhpTunnel == null || !lhpTunnel.isAlive()) {
             closeLHPConnection(lhpTunnel);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricLogger.InvocationMetricKey.PORTFORWARD_LHP_FAIL_COUNT, 1);
             return null;
         }
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricLogger.InvocationMetricKey.PORTFORWARD_LHP_SUCCESS_COUNT, 1);
         return lhpTunnel;
     }
 

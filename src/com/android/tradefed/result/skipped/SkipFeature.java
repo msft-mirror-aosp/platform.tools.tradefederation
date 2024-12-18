@@ -16,6 +16,7 @@
 package com.android.tradefed.result.skipped;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.service.IRemoteFeature;
@@ -80,40 +81,30 @@ public class SkipFeature
     public FeatureResponse execute(FeatureRequest request) {
         FeatureResponse.Builder responseBuilder = FeatureResponse.newBuilder();
         if (mConfig != null) {
-            // Currently only support presubmit
-            boolean presubmit = "WORK_NODE".equals(mInfo.getContext().getAttribute("trigger"));
-            if (mConfig.getSkipManager().reportSkippedModule()) {
-                MultiPartResponse.Builder multiPartBuilder = MultiPartResponse.newBuilder();
-                multiPartBuilder.addResponsePart(
-                        PartResponse.newBuilder()
-                                .setKey(DELIMITER_NAME)
-                                .setValue(ESCAPED_DELIMITER));
-                multiPartBuilder.addResponsePart(
-                        PartResponse.newBuilder()
-                                .setKey(PRESUBMIT)
-                                .setValue(Boolean.toString(presubmit)));
-                multiPartBuilder.addResponsePart(
-                        PartResponse.newBuilder()
-                                .setKey(SKIPPED_MODULES)
-                                .setValue(
-                                        Joiner.on(DELIMITER)
-                                                .join(
-                                                        mConfig.getSkipManager()
-                                                                .getUnchangedModules())));
-                multiPartBuilder.addResponsePart(
-                        PartResponse.newBuilder()
-                                .setKey(IMAGE_DIGESTS)
-                                .setValue(
-                                        Joiner.on(DELIMITER)
-                                                .join(
-                                                        serializeDigest(
-                                                                mConfig.getSkipManager()
-                                                                        .getImageToDigest()))));
-                responseBuilder.setMultiPartResponse(multiPartBuilder);
-            } else {
-                responseBuilder.setErrorInfo(
-                        ErrorInfo.newBuilder().setErrorTrace("report-module-skipped is disabled."));
-            }
+            boolean presubmit = InvocationContext.isPresubmit(mInfo.getContext());
+            MultiPartResponse.Builder multiPartBuilder = MultiPartResponse.newBuilder();
+            multiPartBuilder.addResponsePart(
+                    PartResponse.newBuilder().setKey(DELIMITER_NAME).setValue(ESCAPED_DELIMITER));
+            multiPartBuilder.addResponsePart(
+                    PartResponse.newBuilder()
+                            .setKey(PRESUBMIT)
+                            .setValue(Boolean.toString(presubmit)));
+            multiPartBuilder.addResponsePart(
+                    PartResponse.newBuilder()
+                            .setKey(SKIPPED_MODULES)
+                            .setValue(
+                                    Joiner.on(DELIMITER)
+                                            .join(mConfig.getSkipManager().getUnchangedModules())));
+            multiPartBuilder.addResponsePart(
+                    PartResponse.newBuilder()
+                            .setKey(IMAGE_DIGESTS)
+                            .setValue(
+                                    Joiner.on(DELIMITER)
+                                            .join(
+                                                    serializeDigest(
+                                                            mConfig.getSkipManager()
+                                                                    .getImageToDigest()))));
+            responseBuilder.setMultiPartResponse(multiPartBuilder);
         } else {
             responseBuilder.setErrorInfo(
                     ErrorInfo.newBuilder().setErrorTrace("Configuration not set."));

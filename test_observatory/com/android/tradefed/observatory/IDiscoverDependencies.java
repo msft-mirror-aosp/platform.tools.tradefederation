@@ -16,13 +16,21 @@
 package com.android.tradefed.observatory;
 
 import java.util.Set;
+import javax.annotation.Nullable;
 
-/**
- * Interface allowing a TF non-core object to report extra dependencies to be considered as part of
- * the discovery of dependencies.
- */
 public interface IDiscoverDependencies {
 
-    /** Returns a list of named dependencies that are needed to execute the object. */
-    Set<String> reportDependencies();
+    /**
+    * Returns a set of named dependencies that are needed to execute the object. Return <code>null
+    * </code> if not provided.
+    */
+    default @Nullable Set<String> reportDependencies() {
+        return null;
+    }
+
+    /** Returns a set of zip regexes that are needed to execute the object.
+     * Return <code>null</code> if not provided. */
+    default @Nullable Set<String> reportTestZipFileFilter() {
+        return null;
+    }
 }

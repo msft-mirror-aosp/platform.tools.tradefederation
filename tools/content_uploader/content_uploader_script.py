@@ -373,10 +373,11 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
     for artifact in all_artifacts:
         for f in glob.glob(dist_dir + '/**/' + artifact.source_path, recursive=True):
             start = time.time()
-            name = _artifact_name(os.path.basename(f), artifact.chunk, artifact.unzip)
+            rel_path = _get_relative_path(dist_dir, f)
+            path = _artifact_path(rel_path, artifact.chunk, artifact.unzip)
 
             # Avoid redundant upload if multiple ArtifactConfigs share files.
-            if name in file_digests or name in skip_files:
+            if path in file_digests or path in skip_files:
                 continue
 
             artifact.source_path = f
@@ -384,18 +385,18 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
             result = _upload(cas_info, artifact, working_dir, log_file, metrics_file)
 
             if result and result.digest:
-                file_digests[name] = result.digest
+                file_digests[path] = result.digest
                 if artifact.chunk and (not artifact.chunk_fallback or artifact.unzip):
                     # Skip the regular version even it matches other configs.
-                    skip_files.append(os.path.basename(f))
+                    skip_files.append(rel_path)
             else:
                 logging.warning(
-                    'Skip to save the digest of file %s, the uploading may fail', name
+                    'Skip to save the digest of file %s, the uploading may fail', path
                 )
             if result and result.content_details:
-                content_details.append({"artifact": name, "details": result.content_details})
+                content_details.append({"artifact": path, "details": result.content_details})
             else:
-                logging.warning('Skip to save the content details of file %s', name)
+                logging.warning('Skip to save the content details of file %s', path)
 
             if os.path.exists(metrics_file):
                 _add_artifact_metrics(metrics_file, cas_metrics)
@@ -444,12 +445,20 @@ def _add_fallback_artifacts(artifacts: list[ArtifactConfig]):
             artifacts.append(fallback_artifact)
 
 
-def _artifact_name(basename: str, chunk: bool, unzip: bool) -> str:
+def _get_relative_path(dir: str, file: str) -> str:
+    try:
+        return os.path.relpath(file, dir)
+    except ValueError as e:
+        print(f"Error calculating relative path: {e}")  # should never happen
+        return os.path.basename(file)
+
+
+def _artifact_path(path: str, chunk: bool, unzip: bool) -> str:
     if not chunk:
-        return basename
+        return path
     if unzip:
-        return CHUNKED_DIR_ARTIFACT_NAME_PREFIX + basename
-    return CHUNKED_ARTIFACT_NAME_PREFIX + basename
+        return CHUNKED_DIR_ARTIFACT_NAME_PREFIX + path
+    return CHUNKED_ARTIFACT_NAME_PREFIX + path
 
 
 def main():
@@ -487,6 +496,7 @@ def main():
         logging.info('Total time of uploading build artifacts to CAS: %d seconds',
                      elapsed)
         cas_metrics.time_ms = int(elapsed * 1000)
+        cas_metrics.client_version = '.'.join([str(num) for num in cas_info.client_version])
         serialized_metrics = cas_metrics.SerializeToString()
         if serialized_metrics:
             cas_metrics_file = os.path.join(dist_dir, CAS_METRICS_PATH)

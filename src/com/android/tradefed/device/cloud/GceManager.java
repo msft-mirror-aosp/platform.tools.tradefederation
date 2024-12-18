@@ -103,6 +103,7 @@ public class GceManager {
     private String mGceInstanceName = null;
     private String mGceHost = null;
     private GceAvdInfo mGceAvdInfo = null;
+    private HostOrchestratorUtil mHOUtil = null;
 
     private boolean mSkipSerialLogCollection = false;
 
@@ -410,9 +411,8 @@ public class GceManager {
                                 + getTestDeviceOptions().getGceCmdTimeout()
                                 - System.currentTimeMillis();
                 startTime = System.currentTimeMillis();
-                HostOrchestratorUtil hOUtil = null;
                 if (getTestDeviceOptions().useCvdCF()) {
-                    hOUtil =
+                    mHOUtil =
                             new HostOrchestratorUtil(
                                     getTestDeviceOptions().useOxygenationDevice(),
                                     getTestDeviceOptions().getExtraOxygenArgs(),
@@ -424,7 +424,7 @@ public class GceManager {
                                     OxygenUtil.getTargetRegion(getTestDeviceOptions()),
                                     getTestDeviceOptions().getOxygenAccountingUser(),
                                     oxygenClient);
-                    bootSuccess = hOUtil.deviceBootCompleted(timeout);
+                    bootSuccess = mHOUtil.deviceBootCompleted(timeout);
                 } else {
                     final String remoteFile =
                             CommonLogRemoteFileUtil.OXYGEN_EMULATOR_LOG_DIR
@@ -454,28 +454,8 @@ public class GceManager {
 
                 if (!bootSuccess) {
                     if (logger != null) {
-                        if (hOUtil != null) {
-                            File cvdLogsDir = hOUtil.pullCvdHostLogs();
-                            if (cvdLogsDir != null) {
-                                GceManager.logDirectory(
-                                        cvdLogsDir, null, logger, LogDataType.CUTTLEFISH_LOG);
-                                FileUtil.recursiveDelete(cvdLogsDir);
-                            } else {
-                                CLog.i(
-                                        "CVD Logs is null, no logs collected from host"
-                                                + " orchestrator.");
-                            }
-                            File tempFile =
-                                    hOUtil.collectLogByCommand(
-                                            "host_kernel",
-                                            HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-                            logAndDeleteFile(tempFile, "host_kernel", logger);
-                            tempFile =
-                                    hOUtil.collectLogByCommand(
-                                            "host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
-                            logAndDeleteFile(tempFile, "host_orchestrator", logger);
-                            tempFile = hOUtil.getTunnelLog();
-                            logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
+                        if (getTestDeviceOptions().useCvdCF()) {
+                            CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvdInfo, mHOUtil, logger);
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
@@ -1310,6 +1290,11 @@ public class GceManager {
     @VisibleForTesting
     IRunUtil getRunUtil() {
         return RunUtil.getDefault();
+    }
+
+    /** Returns the instance of the {@link com.android.tradefed.util.avd.HostOrchestratorUtil}. */
+    public HostOrchestratorUtil getHostOrchestratorUtil() {
+        return mHOUtil;
     }
 
     /**

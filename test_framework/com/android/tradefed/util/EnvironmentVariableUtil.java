@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 The Android Open Source Project
+ * Copyright (C) 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,37 +19,60 @@ package com.android.tradefed.util;
 import com.android.tradefed.log.LogUtil.CLog;
 
 import java.io.File;
-import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** A collection of helper methods to prepare environment variables. */
 public class EnvironmentVariableUtil {
 
     /**
-     * Builds the value of PATH with relative paths to the {@code workingDir}.
+     * Builds the value of PATH.
      *
-     * @param workingDir The root of the relative paths in the return.
-     * @param tools A list of tools that will be linked to a folder named `runtime_deps` under the
-     *     {@code workingDir} and included in the return.
+     * @param tools A list of tools that will be added to PATH.
      * @param addition The String that will be appended to the end of the return.
      * @return The value of PATH.
      */
-    public static String buildPathWithRelativePaths(
-            File workingDir, Set<String> tools, String addition) {
-        String runtimeDepsFolderName = "runtime_deps";
+    public static String buildPath(Set<String> tools, String addition) {
+        List<String> paths = new ArrayList<>();
         for (String t : tools) {
             try {
                 File tool = new File(t);
-                RunUtil.linkFile(
-                        workingDir,
-                        runtimeDepsFolderName,
-                        tool.exists() ? tool : DeviceActionUtil.findExecutableOnPath(t));
-            } catch (IOException | DeviceActionUtil.DeviceActionConfigError e) {
-                CLog.e("Failed to link %s to working dir %s", t, workingDir);
+                paths.add(
+                        tool.exists()
+                                ? tool.getParent()
+                                : DeviceActionUtil.findExecutableOnPath(t).getParent());
+            } catch (DeviceActionUtil.DeviceActionConfigError e) {
+                CLog.e("Failed to find %s!", t);
                 CLog.e(e);
             }
         }
 
-        return String.format(".:%s:%s", runtimeDepsFolderName, addition);
+        paths.add(addition);
+        return paths.stream().distinct().collect(Collectors.joining(getPathSeparator()));
+    }
+
+    /**
+     * Builds the value of LD_LIBRARY_PATH that uses the shared libs inside module folder.
+     *
+     * @param moduleDir The root of module folder.
+     * @param subDirs The sub-directories that are relative to the root of module folder.
+     * @return The value of LD_LIBRARY_PATH.
+     */
+    public static String buildMinimalLdLibraryPath(File moduleDir, List<String> subDirs) {
+        List<String> paths = new ArrayList<>();
+        paths.add(moduleDir.getAbsolutePath());
+        paths.addAll(
+                subDirs.stream()
+                        .map(d -> new File(moduleDir, d))
+                        .filter(f -> f.exists())
+                        .map(f -> f.getAbsolutePath())
+                        .collect(Collectors.toList()));
+        return paths.stream().distinct().collect(Collectors.joining(getPathSeparator()));
+    }
+
+    private static String getPathSeparator() {
+        return System.getProperty("path.separator");
     }
 }
