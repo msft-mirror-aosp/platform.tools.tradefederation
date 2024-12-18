@@ -3016,7 +3016,19 @@ public class TestDevice extends NativeDevice {
                 TestDeviceOptions.INSTANCE_TYPE_OPTION, getOptions().getInstanceType().toString());
         microdroid.setTestDeviceOptions(builder.mTestDeviceOptions);
         ((IManagedTestDevice) microdroid).setIDevice(new RemoteAvdIDevice(microdroidSerial));
-        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
+
+        try {
+            adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
+        } catch (DeviceRuntimeException e) {
+            // Before passing the exception, try to pull logs to see what went wrong
+            try {
+                executor.shutdownNow();
+                executor.awaitTermination(2L, TimeUnit.MINUTES);
+            } catch (InterruptedException ex) {
+            }
+            throw e;
+        }
+
         microdroid.setMicrodroidProcess(process);
         try {
             // TODO: Pass the build info
