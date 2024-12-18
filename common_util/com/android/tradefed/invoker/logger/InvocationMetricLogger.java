@@ -314,6 +314,8 @@ public class InvocationMetricLogger {
         ANTS_MODULE_END_TIME("ants_module_end_time", true),
         ANTS_RUN_START_TIME("ants_run_start_time", true),
         ANTS_RUN_END_TIME("ants_run_end_time", true),
+        // Count of modules with missing testIdentifier
+        ANTS_KNOWN_FAILURE_MODULE_ERROR_COUNT("ants_known_failure_module_error_count", true),
 
         DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
 
