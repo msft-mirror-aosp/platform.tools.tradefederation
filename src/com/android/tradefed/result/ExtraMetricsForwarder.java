@@ -40,7 +40,6 @@ public class ExtraMetricsForwarder extends ResultForwarder {
     private int mTestsRan;
     private String mCurrentRunName;
     private boolean mTestRunFailed = false;
-    private boolean mEnforceTestCountMismatch = true;
 
     public ExtraMetricsForwarder(ITestInvocationListener... listener) {
         super(listener);
@@ -63,10 +62,6 @@ public class ExtraMetricsForwarder extends ResultForwarder {
     /** Whether to mark all the test cases skipped. */
     public void setMarkTestsSkipped(boolean skip) {
         mSkip = skip;
-    }
-
-    public void setEnforceTestCountMismatch(boolean enforceTestCountMismatch) {
-        mEnforceTestCountMismatch = enforceTestCountMismatch;
     }
 
     @Override
@@ -156,7 +151,7 @@ public class ExtraMetricsForwarder extends ResultForwarder {
     /** {@inheritDoc} */
     @Override
     public void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
-        if (!mTestRunFailed && mEnforceTestCountMismatch && (mTestsRan != mTestCount)) {
+        if (!mTestRunFailed && (mTestsRan != mTestCount)) {
             String error =
                     String.format(
                             "TestRun %s only ran %d out of %d expected tests.",
@@ -183,7 +178,7 @@ public class ExtraMetricsForwarder extends ResultForwarder {
 
     @Override
     public void testRunEnded(long elapsedTimeMillis, Map<String, String> runMetrics) {
-        if (!mTestRunFailed && mEnforceTestCountMismatch && (mTestsRan != mTestCount)) {
+        if (!mTestRunFailed && (mTestsRan != mTestCount)) {
             String error =
                     String.format(
                             "TestRun %s only ran %d out of %d expected tests.",
