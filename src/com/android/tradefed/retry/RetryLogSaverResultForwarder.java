@@ -30,16 +30,7 @@ public class RetryLogSaverResultForwarder extends LogSaverResultForwarder {
 
     public RetryLogSaverResultForwarder(
             ILogSaver logSaver, List<ITestInvocationListener> listeners, IConfiguration config) {
-        this(logSaver, listeners, config, 0);
-    }
-
-    public RetryLogSaverResultForwarder(
-            ILogSaver logSaver,
-            List<ITestInvocationListener> listeners,
-            IConfiguration config,
-            int prevAttemptCount) {
         super(logSaver, listeners, config);
-        mAttemptNumber = prevAttemptCount;
     }
 
     @Override
@@ -62,9 +53,5 @@ public class RetryLogSaverResultForwarder extends LogSaverResultForwarder {
     /** Increment the attempt number. */
     public void incrementAttempt() {
         mAttemptNumber++;
-    }
-
-    public int getCurrentAttempt() {
-        return mAttemptNumber;
     }
 }
