@@ -29,6 +29,7 @@ import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.invoker.TestInformation;
+import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.targetprep.ITargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
@@ -38,9 +39,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -125,6 +128,10 @@ public class ModuleDefinitionMultiTest {
         when(mMockTargetPrep.isTearDownDisabled()).thenReturn(true);
         mModule.run(moduleInfo, mListener, null, 1);
         verify(mMockTargetPrep, times(2)).isDisabled();
+        verify(mListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME), Mockito.eq(0), Mockito.eq(0), Mockito.anyLong());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockTargetPrep).setUp(moduleInfo);
     }
 
@@ -162,6 +169,10 @@ public class ModuleDefinitionMultiTest {
         when(mMockTargetPrep.isTearDownDisabled()).thenReturn(true);
         mModule.run(moduleInfo, mListener, null, 1);
         verify(mMockTargetPrep, times(2)).isDisabled();
+        verify(mListener)
+                .testRunStarted(
+                        Mockito.eq(MODULE_NAME), Mockito.eq(0), Mockito.eq(0), Mockito.anyLong());
+        verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockTargetPrep).setUp(moduleInfo);
     }
 }
