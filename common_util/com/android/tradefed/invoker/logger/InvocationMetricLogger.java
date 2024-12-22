@@ -314,6 +314,8 @@ public class InvocationMetricLogger {
         ANTS_MODULE_END_TIME("ants_module_end_time", true),
         ANTS_RUN_START_TIME("ants_run_start_time", true),
         ANTS_RUN_END_TIME("ants_run_end_time", true),
+        // Count of modules with missing testIdentifier
+        ANTS_KNOWN_FAILURE_MODULE_ERROR_COUNT("ants_known_failure_module_error_count", true),
 
         DUPLICATE_MAPPING_DIFFERENT_OPTIONS("duplicate_mapping_different_options", true),
 
@@ -418,6 +420,14 @@ public class InvocationMetricLogger {
         MODULE_CACHE_MISS_ID("module_cache_miss_id", true),
         MODULE_CACHE_NO_DIR("module_cache_no_dir", true),
         MODULE_RESULTS_CACHE_DEVICE_MISMATCH("module_results_cache_device_mismatch", true),
+
+        // Oxygenation metrics
+        PORTFORWARD_LHP_SUCCESS_COUNT("portfoward_lhp_success_count", true),
+        PORTFORWARD_LHP_FAIL_COUNT("portfoward_lhp_fail_count", true),
+
+        // Host orchestrator metrics
+        CVD_LONG_OPERATION_TIMEOUT_API("cvd_long_operation_timeout_api", true),
+        UNSUPPORTED_HOST_ORCHESTRATOR_API("unsupported_host_orchestrator_api", true),
         ;
 
         private final String mKeyName;
