@@ -360,7 +360,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getGceHandler().cleanUp();
             }
         } finally {
-            if (getDevice().getOptions().useCvdCF()) {
+            if (mHOUtil != null && getDevice().getOptions().useCvdCF()) {
                 mHOUtil.closeTunnelConnection();
             }
             super.tearDownConnection();
