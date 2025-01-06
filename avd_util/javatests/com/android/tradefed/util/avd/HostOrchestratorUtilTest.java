@@ -16,6 +16,8 @@
 
 package com.android.tradefed.util.avd;
 
+import static com.android.tradefed.util.avd.HostOrchestratorClient.IHoHttpClient;
+
 import static org.mockito.Mockito.times;
 
 import com.android.tradefed.util.CommandResult;
@@ -30,11 +32,22 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.io.OutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+import javax.net.ssl.SSLSession;
 
 /** Unit tests for {@link HostOrchestratorUtil} */
 @RunWith(JUnit4.class)
@@ -49,6 +62,10 @@ public class HostOrchestratorUtilTest {
     private OxygenClient mMockClient;
     private IRunUtil mMockRunUtil;
     private Process mMockProcess;
+    private File mMockFile;
+
+    @Mock private HostOrchestratorClient.IHoHttpClient mMockHttpClient;
+
     private static final String LIST_CVD_RES =
             "{\"cvds\":[{\"group\":\"cvd_1\",\"name\":\"ins-1\",\"build_source\":{},"
                     + "\"status\":\"Running\",\"displays\":[\"720 x 1280 ( 320 )\"],"
@@ -68,6 +85,7 @@ public class HostOrchestratorUtilTest {
 
     @Before
     public void setUp() throws Exception {
+        MockitoAnnotations.initMocks(this);
         mExtraOxygenArgs = new HashMap<>();
         mExtraOxygenArgs.put("arg1", "value1");
         mMockClient = Mockito.mock(OxygenClient.class);
@@ -80,21 +98,12 @@ public class HostOrchestratorUtilTest {
         FileUtil.deleteFile(mHOUtil.getTunnelLog());
     }
 
-
     @Test
-    public void testCreateHostOrchestratorTunnel_Oxygenation() throws Exception {
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        true,
-                        mExtraOxygenArgs,
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        TARGET_REGION,
-                        ACCOUNTING_USER,
-                        mMockClient);
-        mHOUtil.createHostOrchestratorTunnel("1111");
-        Mockito.verify(mMockClient, times(1))
+    public void testCollectLogByCommand_Success() throws Exception {
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
                 .createTunnelViaLHP(
                         Mockito.eq(LHPTunnelMode.CURL),
                         Mockito.eq("1111"),
@@ -105,13 +114,6 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq(OXYGENATION_DEVICE_ID),
                         Mockito.eq(mExtraOxygenArgs),
                         Mockito.any());
-    }
-
-
-    @Test
-    public void testCollectLogByCommand_Success() throws Exception {
-        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
-        Mockito.doReturn(true).when(mMockProcess).isAlive();
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -121,12 +123,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -163,13 +161,24 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("--compressed"),
                         Mockito.eq("-o"),
                         Mockito.any());
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
     }
 
     @Test
     public void testCollectLogByCommand_Fail() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -179,12 +188,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -220,13 +225,24 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-o"),
                         Mockito.any());
         FileUtil.deleteFile(tempFile);
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
     }
 
     @Test
     public void testPullCvdHostLogs_Oxygenation_Success() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -236,12 +252,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -249,7 +261,11 @@ public class HostOrchestratorUtilTest {
 
                     @Override
                     public CommandResult cvdOperationExecution(
-                            String portNumber, String method, String request, long maxWaitTime) {
+                            IHoHttpClient client,
+                            String portNumber,
+                            String method,
+                            String request,
+                            long maxWaitTime) {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("operation_id");
                         return res;
@@ -286,7 +302,6 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("--output"),
                         Mockito.any());
         mHOUtil.pullCvdHostLogs();
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
         Mockito.verify(mMockRunUtil, times(1))
                 .runTimedCmd(
                         Mockito.anyLong(),
@@ -317,6 +332,18 @@ public class HostOrchestratorUtilTest {
     public void testPullCvdHostLogs_Oxygenation_CurlFailedGetCvd() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -326,12 +353,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -348,7 +371,6 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq((OutputStream) null),
                         (String[]) Mockito.any());
         Assert.assertNull(mHOUtil.pullCvdHostLogs());
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
         Mockito.verify(mMockRunUtil, times(1))
                 .runTimedCmd(
                         Mockito.anyLong(),
@@ -379,6 +401,18 @@ public class HostOrchestratorUtilTest {
     public void testPullCvdHostLogs_Oxygenation_CreateHOFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(null)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -388,19 +422,14 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return null;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
         Assert.assertNull(mHOUtil.pullCvdHostLogs());
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(null);
         Mockito.verify(mMockRunUtil, times(0))
                 .runTimedCmd(
                         Mockito.anyLong(),
@@ -431,6 +460,18 @@ public class HostOrchestratorUtilTest {
     public void testPullCvdHostLogs_Oxygenation_FailedDownload() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -440,12 +481,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -453,7 +490,11 @@ public class HostOrchestratorUtilTest {
 
                     @Override
                     public CommandResult cvdOperationExecution(
-                            String portNumber, String method, String request, long maxWaitTime) {
+                            IHoHttpClient client,
+                            String portNumber,
+                            String method,
+                            String request,
+                            long maxWaitTime) {
                         CommandResult res = new CommandResult(CommandStatus.SUCCESS);
                         res.setStdout("operation_id");
                         return res;
@@ -491,13 +532,24 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("--output"),
                         Mockito.any());
         Assert.assertNull(mHOUtil.pullCvdHostLogs());
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
     }
 
     @Test
     public void testPullCvdHostLogs_Oxygenation_404() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -507,12 +559,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -529,7 +577,6 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq((OutputStream) null),
                         (String[]) Mockito.any());
         Assert.assertNull(mHOUtil.pullCvdHostLogs());
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
         Mockito.verify(mMockRunUtil, times(1))
                 .runTimedCmd(
                         Mockito.anyLong(),
@@ -560,6 +607,18 @@ public class HostOrchestratorUtilTest {
     public void testPowerwashGce() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -569,12 +628,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -608,20 +663,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("POST"),
                         Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1/:powerwash"));
-        CommandResult operationRes = new CommandResult(CommandStatus.SUCCESS);
-        operationRes.setStdout(OPERATION_DONE_RES);
-        Mockito.doReturn(operationRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/operations/some_id"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, OPERATION_DONE_RES));
         CommandResult successRes = new CommandResult(CommandStatus.SUCCESS);
         successRes.setStdout("operation_id");
         Mockito.doReturn(successRes)
@@ -665,6 +708,18 @@ public class HostOrchestratorUtilTest {
     public void testPowerwashGce_CreateHOFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(null)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -674,12 +729,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return null;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -714,6 +765,18 @@ public class HostOrchestratorUtilTest {
     public void testPowerwashGce_ListCvdFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -723,12 +786,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -766,6 +825,18 @@ public class HostOrchestratorUtilTest {
     public void testPowerwashGce_ListCvd404() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -775,12 +846,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -818,6 +885,18 @@ public class HostOrchestratorUtilTest {
     public void testPowerwashGce_NoCvdOutput() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -827,12 +906,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -870,6 +945,18 @@ public class HostOrchestratorUtilTest {
     public void testStopGce() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -879,14 +966,10 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
-                    @Override
-                    public IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -918,20 +1001,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("DELETE"),
                         Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
-        CommandResult operationRes = new CommandResult(CommandStatus.SUCCESS);
-        operationRes.setStdout(OPERATION_DONE_RES);
-        Mockito.doReturn(operationRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/operations/some_id"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, OPERATION_DONE_RES));
         CommandResult successRes = new CommandResult(CommandStatus.SUCCESS);
         successRes.setStdout("operation_id");
         Mockito.doReturn(successRes)
@@ -975,6 +1046,18 @@ public class HostOrchestratorUtilTest {
     public void testStopGce_CreateHOFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(null)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -984,14 +1067,10 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return null;
-                    }
-
-                    @Override
-                    public IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1024,6 +1103,18 @@ public class HostOrchestratorUtilTest {
     public void testStopGce_ListCvdFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -1033,14 +1124,10 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
-                    @Override
-                    public IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1076,6 +1163,18 @@ public class HostOrchestratorUtilTest {
     public void testStopGce_ListCvd404() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -1085,14 +1184,10 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
-                    @Override
-                    public IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1128,6 +1223,18 @@ public class HostOrchestratorUtilTest {
     public void testStopGce_NoCvdOutput() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -1137,14 +1244,10 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
-                    @Override
-                    public IRunUtil getRunUtil() {
+                    protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
@@ -1187,7 +1290,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -1210,7 +1314,7 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("http://127.0.0.1:1111/request"));
         Assert.assertEquals(
                 CommandStatus.FAILED,
-                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStatus());
+                mHOUtil.cvdOperationExecution(null, "1111", "POST", "request", 5).getStatus());
     }
 
     @Test
@@ -1224,7 +1328,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -1244,20 +1349,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("POST"),
                         Mockito.eq("http://127.0.0.1:1111/request"));
-        CommandResult operationRes = new CommandResult(CommandStatus.SUCCESS);
-        operationRes.setStdout(OPERATION_DONE_RES);
-        Mockito.doReturn(operationRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/operations/some_id"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, OPERATION_DONE_RES));
         CommandResult failedRes = new CommandResult(CommandStatus.FAILED);
         failedRes.setStdout("some output");
         Mockito.doReturn(failedRes)
@@ -1274,7 +1367,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("http://127.0.0.1:1111/operations/some_id/result"));
         Assert.assertEquals(
                 CommandStatus.FAILED,
-                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStatus());
+                mHOUtil.cvdOperationExecution(mMockHttpClient, "1111", "POST", "request", 5)
+                        .getStatus());
     }
 
     @Test
@@ -1288,7 +1382,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -1308,20 +1403,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("POST"),
                         Mockito.eq("http://127.0.0.1:1111/request"));
-        CommandResult operationRes = new CommandResult(CommandStatus.SUCCESS);
-        operationRes.setStdout(OPERATION_DONE_RES);
-        Mockito.doReturn(operationRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/operations/some_id"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, OPERATION_DONE_RES));
         CommandResult successRes = new CommandResult(CommandStatus.SUCCESS);
         successRes.setStdout("operation_id");
         Mockito.doReturn(successRes)
@@ -1338,7 +1421,8 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("http://127.0.0.1:1111/operations/some_id/result"));
         Assert.assertEquals(
                 "operation_id",
-                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStdout());
+                mHOUtil.cvdOperationExecution(mMockHttpClient, "1111", "POST", "request", 5)
+                        .getStdout());
     }
 
     @Test
@@ -1352,7 +1436,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -1372,23 +1457,12 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("POST"),
                         Mockito.eq("http://127.0.0.1:1111/request"));
-        CommandResult operationRes = new CommandResult(CommandStatus.SUCCESS);
-        commandRes.setStdout(OPERATION_TIMEOUT_RES);
-        Mockito.doReturn(commandRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/operations/some_id"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, OPERATION_TIMEOUT_RES));
         Assert.assertEquals(
                 CommandStatus.TIMED_OUT,
-                mHOUtil.cvdOperationExecution("1111", "POST", "request", 5).getStatus());
+                mHOUtil.cvdOperationExecution(mMockHttpClient, "1111", "POST", "request", 5)
+                        .getStatus());
     }
 
     @Test
@@ -1402,7 +1476,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient);
+                        mMockClient,
+                        mMockHttpClient);
         Assert.assertEquals("cvd_1", mHOUtil.parseListCvdOutput(LIST_CVD_RES, "group"));
     }
 
@@ -1417,7 +1492,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient);
+                        mMockClient,
+                        null);
         Assert.assertEquals("", mHOUtil.parseListCvdOutput(LIST_CVD_BADRES, "group"));
     }
 
@@ -1425,6 +1501,18 @@ public class HostOrchestratorUtilTest {
     public void testDeviceBootCompleted_success() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -1434,12 +1522,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -1460,13 +1544,24 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("GET"),
                         Mockito.eq("http://127.0.0.1:1111/cvds"));
         Assert.assertTrue(mHOUtil.deviceBootCompleted(10));
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
     }
 
     @Test
     public void testDeviceBootCompleted_failed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -1476,12 +1571,8 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return mMockProcess;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
@@ -1502,14 +1593,24 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("GET"),
                         Mockito.eq("http://127.0.0.1:1111/cvds"));
         Assert.assertFalse(mHOUtil.deviceBootCompleted(10));
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(mMockProcess);
-        // Mockito.verify(mMockClient, times(1)).closeLHPConnection(null);
     }
 
     @Test
     public void testDeviceBootCompleted_CreateHOFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(null)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(LHPTunnelMode.CURL),
+                        Mockito.eq("1111"),
+                        Mockito.eq(INSTANCE_NAME),
+                        Mockito.eq(HOST),
+                        Mockito.eq(TARGET_REGION),
+                        Mockito.eq(ACCOUNTING_USER),
+                        Mockito.eq(OXYGENATION_DEVICE_ID),
+                        Mockito.eq(mExtraOxygenArgs),
+                        Mockito.any());
         mHOUtil =
                 new HostOrchestratorUtil(
                         true,
@@ -1519,18 +1620,57 @@ public class HostOrchestratorUtilTest {
                         OXYGENATION_DEVICE_ID,
                         TARGET_REGION,
                         ACCOUNTING_USER,
-                        mMockClient) {
-                    @Override
-                    public Process createHostOrchestratorTunnel(String portNumber) {
-                        return null;
-                    }
-
+                        mMockClient,
+                        mMockHttpClient) {
                     @Override
                     protected IRunUtil getRunUtil() {
                         return mMockRunUtil;
                     }
                 };
         Assert.assertFalse(mHOUtil.deviceBootCompleted(10));
-        Mockito.verify(mMockClient, times(1)).closeLHPConnection(null);
+    }
+
+    private static HttpResponse<String> mockHttpResponse(int statusCode, String body) {
+        return new HttpResponse<>() {
+            @Override
+            public int statusCode() {
+                return statusCode;
+            }
+
+            @Override
+            public HttpHeaders headers() {
+                return HttpHeaders.of(Map.of(), (a, b) -> true);
+            }
+
+            @Override
+            public String body() {
+                return body;
+            }
+
+            @Override
+            public Optional<HttpResponse<String>> previousResponse() {
+                return Optional.empty();
+            }
+
+            @Override
+            public HttpRequest request() {
+                return null;
+            }
+
+            @Override
+            public Optional<SSLSession> sslSession() {
+                return Optional.empty();
+            }
+
+            @Override
+            public URI uri() {
+                return null;
+            }
+
+            @Override
+            public HttpClient.Version version() {
+                return null;
+            }
+        };
     }
 }

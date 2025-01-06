@@ -318,6 +318,7 @@ import com.android.tradefed.targetprep.UserCleanerTest;
 import com.android.tradefed.targetprep.VisibleBackgroundUserPreparerTest;
 import com.android.tradefed.targetprep.adb.AdbStopServerPreparerTest;
 import com.android.tradefed.targetprep.app.NoApkTestSkipperTest;
+import com.android.tradefed.targetprep.incremental.ApkChangeDetectorTest;
 import com.android.tradefed.targetprep.multi.MergeMultiBuildTargetPreparerTest;
 import com.android.tradefed.targetprep.multi.MixImageZipPreparerTest;
 import com.android.tradefed.targetprep.multi.PairingMultiTargetPreparerTest;
@@ -884,6 +885,9 @@ import org.junit.runners.Suite.SuiteClasses;
     // targetprep.app
     NoApkTestSkipperTest.class,
 
+    // targetprep.incremental
+    ApkChangeDetectorTest.class,
+
     // targetprep.multi
     MergeMultiBuildTargetPreparerTest.class,
     MixImageZipPreparerTest.class,
@@ -1103,6 +1107,7 @@ import org.junit.runners.Suite.SuiteClasses;
     TableFormatterTest.class,
     TarUtilTest.class,
     TestRunnerUtilTest.class,
+    TfTestLauncherTest.class,
     TimeUtilTest.class,
     TimeValTest.class,
     VersionParserTest.class,

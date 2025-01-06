@@ -360,6 +360,9 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getGceHandler().cleanUp();
             }
         } finally {
+            if (mHOUtil != null && getDevice().getOptions().useCvdCF()) {
+                mHOUtil.closeTunnelConnection();
+            }
             super.tearDownConnection();
         }
     }
@@ -494,14 +497,6 @@ public class AdbSshConnection extends AdbTcpConnection {
     @VisibleForTesting
     GceManager getGceHandler() {
         return mGceHandler;
-    }
-
-    /**
-     * Returns the instance of the {@link com.android.tradefed.device.cloud.HostOrchestratorUtil}.
-     */
-    @VisibleForTesting
-    HostOrchestratorUtil getHostOrchestratorUtil() {
-        return mHOUtil;
     }
 
     /** Capture a remote bugreport by ssh-ing into the device directly. */
@@ -1000,10 +995,10 @@ public class AdbSshConnection extends AdbTcpConnection {
     }
 
     /** Helper to create host orchestrator utility. */
-    HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
-        if (mHOUtil != null) {
+    public HostOrchestratorUtil createHostOrchestratorUtil(GceAvdInfo gceAvdInfo) {
+        if (getGceHandler().getHostOrchestratorUtil() != null) {
             CLog.i("Host Orchestrator Util has been initialized...");
-            return mHOUtil;
+            return getGceHandler().getHostOrchestratorUtil();
         }
         if (getDevice().getOptions().useCvdCF()) {
             CLog.i("Creating host orchestrator utility...");

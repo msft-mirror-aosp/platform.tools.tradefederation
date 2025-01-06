@@ -79,7 +79,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private static final String OTATOOLS_ZIP = "otatools.zip";
     private static final String KERNEL_IMAGE = "Image.gz";
     // Wait time for device state to stablize in millisecond
-    private static final int STATE_STABLIZATION_WAIT_TIME = 60000;
+    private static final int STATE_STABLIZATION_WAIT_TIME = 10000;
 
     @Option(
             name = "device-boot-time",
@@ -134,6 +134,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private String mSystemDlkmArchiveName = "system_dlkm_staging_archive.tar.gz";
 
     @Option(
+            name = "vbmeta-image-name",
+            description = "The file name in BuildInfo that provides vbmeta image.")
+    private String mVbmetaImageName = "vbmeta.img";
+
+    @Option(
             name = "boot-image-file-name",
             description =
                     "The boot image file name to search for if gki-boot-image-name in "
@@ -177,6 +182,13 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private String mSystemDlkmImageFileName = "system_dlkm.img";
 
     @Option(
+            name = "vbmeta-image-file-name",
+            description =
+                    "The vbmeta image file name to search for if vbmeta-image-name in "
+                            + "BuildInfo is a zip file or directory, for example vbmeta.img.")
+    private String mVbmetaImageFileName = "vbmeta.img";
+
+    @Option(
             name = "post-reboot-device-into-user-space",
             description = "whether to boot the device in user space after flash.")
     private boolean mPostRebootDeviceIntoUserSpace = true;
@@ -204,6 +216,11 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private Collection<String> mFastbootFlashOptions = new ArrayList<>();
 
     @Option(
+            name = "additional-fastboot-command",
+            description = "additional fastboot command to run.")
+    private Collection<String> mFastbootCommands = new ArrayList<>();
+
+    @Option(
             name = "boot-header-version",
             description = "The version of the boot.img header. Set to 3 by default.")
     private int mBootHeaderVersion = 3;
@@ -214,6 +231,29 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                     "Add hash footer to GKI boot image. More info at "
                         + "https://android.googlesource.com/platform/external/avb/+/master/README.md")
     private boolean mAddHashFooter = false;
+
+    @Option(
+            name = "security-patch-level",
+            description =
+                    "The security patch level to sign the boot image when add-hash-footer is"
+                            + " enabled.")
+    private String mSecurityPatchLevel = null;
+
+    @Option(
+            name = "boot-image-key-path",
+            description =
+                    "The key path in otatools to sign the boot image when add-hash-footer is"
+                            + " enabled.")
+    private String mBootImgKeyPath = "external/avb/test/data/testkey_rsa4096.pem";
+
+    @Option(
+            name = "boot-image-key-algorithm",
+            description =
+                    "The key algorithm to sign the boot image when add-hash-footer is enabled.")
+    private String mBootImgKeyAlgorithm = "SHA256_RSA4096";
+
+    @Option(name = "support-fastbootd", description = "Whether the device supports fastbootd mode")
+    private boolean mSupportFastbootd = true;
 
     private File mBootImg = null;
     private File mSystemDlkmImg = null;
@@ -375,7 +415,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mVendorDlkmImageFileName,
                                 buildInfo.getFile(mVendorDlkmImageName),
                                 tmpDir);
-                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                if (mSupportFastbootd
+                        && !TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
                     device.rebootIntoFastbootd();
                 }
                 executeFastbootCmd(device, "flash", "vendor_dlkm", vendorDlkmImg.getAbsolutePath());
@@ -388,12 +429,31 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                                 mSystemDlkmImageFileName,
                                 buildInfo.getFile(mSystemDlkmImageName),
                                 tmpDir);
-                if (!TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                if (mSupportFastbootd
+                        && !TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
                     device.rebootIntoFastbootd();
                 }
                 executeFastbootCmd(device, "flash", "system_dlkm", systemDlkmImg.getAbsolutePath());
             }
 
+            if (buildInfo.getFile(mVbmetaImageName) != null) {
+                File vbmetaImg =
+                        getRequestedFile(
+                                device,
+                                mVbmetaImageFileName,
+                                buildInfo.getFile(mVbmetaImageName),
+                                tmpDir);
+                if (mSupportFastbootd
+                        && !TestDeviceState.FASTBOOTD.equals(device.getDeviceState())) {
+                    device.rebootIntoFastbootd();
+                }
+                executeFastbootCmd(device, "flash", "vbmeta", vbmetaImg.getAbsolutePath());
+            }
+
+            // Run additional fastboot command
+            for (String cmd : mFastbootCommands) {
+                executeFastbootCmd(device, cmd);
+            }
         } finally {
             getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
             // Allow interruption at the end no matter what.
@@ -728,6 +788,8 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         }
         File avbtool = getRequestedFile(device, AVBTOOL, buildInfo.getFile(OTATOOLS_ZIP), tmpDir);
         avbtool.setExecutable(true, false);
+        File boot_img_key =
+                getRequestedFile(device, mBootImgKeyPath, buildInfo.getFile(OTATOOLS_ZIP), tmpDir);
 
         String android_version = device.getProperty("ro.build.version.release");
         if (Strings.isNullOrEmpty(android_version)) {
@@ -735,12 +797,14 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                     "Can not get android version from property ro.build.version.release.",
                     device.getDeviceDescriptor());
         }
-        String security_path_version = device.getProperty("ro.build.version.security_patch");
-        if (Strings.isNullOrEmpty(security_path_version)) {
-            throw new TargetSetupError(
-                    "Can not get security path version from property"
-                            + " ro.build.version.security_patch.",
-                    device.getDeviceDescriptor());
+        if (Strings.isNullOrEmpty(mSecurityPatchLevel)) {
+            mSecurityPatchLevel = device.getProperty("ro.build.version.security_patch");
+            if (Strings.isNullOrEmpty(mSecurityPatchLevel)) {
+                throw new TargetSetupError(
+                        "--security-patch-level is not provided. Can not get security patch version"
+                                + " from property ro.build.version.security_patch.",
+                        device.getDeviceDescriptor());
+            }
         }
 
         String command = String.format("du -b %s", mBootImg.getAbsolutePath());
@@ -750,14 +814,18 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         String cmd =
                 String.format(
                         "%s add_hash_footer --image %s --partition_size %s "
+                                + "--algorithm %s "
+                                + "--key %s "
                                 + "--partition_name boot "
                                 + "--prop com.android.build.boot.os_version:%s "
                                 + "--prop com.android.build.boot.security_patch:%s",
                         avbtool.getAbsolutePath(),
                         mBootImg.getAbsolutePath(),
                         partition_size,
+                        mBootImgKeyAlgorithm,
+                        boot_img_key,
                         android_version,
-                        security_path_version);
+                        mSecurityPatchLevel);
         executeHostCommand(device, cmd);
     }
 
@@ -889,6 +957,14 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         CommandResult result =
                 device.executeLongFastbootCommand(
                         fastbootCmdArgs.toArray(new String[fastbootCmdArgs.size()]));
+        if (result == null) {
+            throw new TargetSetupError(
+                    String.format(
+                            "CommandResult with fastboot command '%s' is null",
+                            String.join(" ", fastbootCmdArgs)),
+                    device.getDeviceDescriptor(),
+                    DeviceErrorIdentifier.ERROR_AFTER_FLASHING);
+        }
         CLog.v("fastboot stdout: " + result.getStdout());
         CLog.v("fastboot stderr: " + result.getStderr());
         CommandStatus cmdStatus = result.getStatus();

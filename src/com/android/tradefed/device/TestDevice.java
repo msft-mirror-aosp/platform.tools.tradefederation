@@ -1278,12 +1278,16 @@ public class TestDevice extends NativeDevice {
             try {
                 // check framework running
                 String output = executeShellCommand("pm path android");
-                if (output == null || !output.contains("package:")) {
+                if (output == null || !output.trim().startsWith("package:")) {
                     CLog.v("framework reboot: can't detect framework running");
                     return false;
                 }
                 notifyRebootStarted();
-                String command = "svc power reboot " + rebootMode.formatRebootCommand(reason);
+                String command = "svc power reboot";
+                String mode = rebootMode.formatRebootCommand(reason);
+                if (mode != null && !mode.isEmpty()) {
+                    command = String.format("%s %s", command, mode);
+                }
                 CommandResult result = executeShellV2Command(command);
                 if (result.getStdout().contains(EARLY_REBOOT)
                         || result.getStderr().contains(EARLY_REBOOT)) {
@@ -3012,7 +3016,19 @@ public class TestDevice extends NativeDevice {
                 TestDeviceOptions.INSTANCE_TYPE_OPTION, getOptions().getInstanceType().toString());
         microdroid.setTestDeviceOptions(builder.mTestDeviceOptions);
         ((IManagedTestDevice) microdroid).setIDevice(new RemoteAvdIDevice(microdroidSerial));
-        adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
+
+        try {
+            adbConnectToMicrodroid(cid, microdroidSerial, vmAdbPort, builder.mAdbConnectTimeoutMs);
+        } catch (DeviceRuntimeException e) {
+            // Before passing the exception, try to pull logs to see what went wrong
+            try {
+                executor.shutdownNow();
+                executor.awaitTermination(2L, TimeUnit.MINUTES);
+            } catch (InterruptedException ex) {
+            }
+            throw e;
+        }
+
         microdroid.setMicrodroidProcess(process);
         try {
             // TODO: Pass the build info

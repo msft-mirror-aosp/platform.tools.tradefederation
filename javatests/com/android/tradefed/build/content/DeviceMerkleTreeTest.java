@@ -16,6 +16,7 @@
 package com.android.tradefed.build.content;
 
 import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
+import com.android.tradefed.result.skipped.AnalysisHeuristic;
 import com.android.tradefed.util.FileUtil;
 
 import build.bazel.remote.execution.v2.Digest;
@@ -43,14 +44,18 @@ public class DeviceMerkleTreeTest {
             ContentAnalysisContext contextBase =
                     new ContentAnalysisContext(
                             "mysuite.zip", infoBase, AnalysisMethod.DEVICE_IMAGE);
-            Digest baseDigest = DeviceMerkleTree.buildFromContext(contextBase);
+            Digest baseDigest =
+                    DeviceMerkleTree.buildFromContext(
+                            contextBase, AnalysisHeuristic.REMOVE_EXEMPTION);
 
             ContentInformation currentBase =
                     new ContentInformation(null, null, currentJson, "8888");
             ContentAnalysisContext contextCurrent =
                     new ContentAnalysisContext(
                             "mysuite.zip", currentBase, AnalysisMethod.DEVICE_IMAGE);
-            Digest currentDigest = DeviceMerkleTree.buildFromContext(contextCurrent);
+            Digest currentDigest =
+                    DeviceMerkleTree.buildFromContext(
+                            contextCurrent, AnalysisHeuristic.REMOVE_EXEMPTION);
 
             Truth.assertThat(baseDigest.getHash()).isNotEqualTo(currentDigest.getHash());
             Truth.assertThat(baseDigest.getHash())
