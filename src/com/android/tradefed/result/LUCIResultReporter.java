@@ -83,6 +83,9 @@ public class LUCIResultReporter extends CollectingTestListener
     )
     private boolean mReportGranularResults = true;
 
+    @Option(name = "json-output-path", description = "Path to save the JSON result file.")
+    private File mJsonOutputPath = null;
+
     private boolean mHasInvocationFailures = false;
     private LinkedHashMap<String, LogFile> mLoggedFiles = new LinkedHashMap<>();
     private File mRootDir = null;
@@ -253,14 +256,19 @@ public class LUCIResultReporter extends CollectingTestListener
     public void saveJsonFile(JSONObject jsonResults) {
         ByteArrayInputStream resultStream = new ByteArrayInputStream(
             jsonResults.toString().getBytes());
-        LogFileSaver saver = new LogFileSaver(mRootDir);
+        LogFileSaver saver;
+        if (mJsonOutputPath != null) {
+            saver = new LogFileSaver(mJsonOutputPath);
+        } else {
+            saver = new LogFileSaver(mRootDir);
+        }
         File generatedDir = saver.getFileDir();
         try {
-          File logFile = saver.saveLogData("LUCIResult", LogDataType.JSON, resultStream);
-          logResultFileLocation(logFile);
+            File logFile = saver.saveLogData("LUCIResult", LogDataType.JSON, resultStream);
+            logResultFileLocation(logFile);
         } catch(IOException e) {
-          CLog.e("Failed to save JSON results to " + generatedDir.toString());
-          CLog.e(e);
+            CLog.e("Failed to save JSON results to " + generatedDir.toString());
+            CLog.e(e);
         }
     }
 
