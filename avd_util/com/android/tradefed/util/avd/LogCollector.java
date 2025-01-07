@@ -54,11 +54,6 @@ public class LogCollector {
                                                     "vcpu hw run failure: 0x7",
                                                     "crosvm_vcpu_hw_run_failure_7")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*launcher.*"),
-                                            new AbstractMap.SimpleEntry<>(
-                                                    "Unable to connect to vsock server",
-                                                    "unable_to_connect_to_vsock_server")),
-                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*(launcher|vdl_stdout).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to initialize fetch system images",
@@ -77,6 +72,11 @@ public class LogCollector {
                                             new AbstractMap.SimpleEntry<>(
                                                     "Could not resolve host: ",
                                                     "fetch_cvd_failure_resolve_host")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Could not connect to server",
+                                                    "fetch_cvd_failure_connect_server")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
