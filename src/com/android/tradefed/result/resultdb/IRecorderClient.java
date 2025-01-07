@@ -32,5 +32,7 @@ public interface IRecorderClient {
 
     public Invocation finalizeInvocation(String invocationId);
 
-    public void uploadTestResult(String invocationId, TestResult result);
+    public void uploadTestResult(TestResult result);
+
+    public void finalizeTestResults();
 }
