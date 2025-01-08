@@ -34,12 +34,23 @@ import com.android.tradefed.util.FileUtil;
 
 import build.bazel.remote.execution.v2.Digest;
 
+import com.google.common.collect.ImmutableSet;
+import com.google.common.hash.HashCode;
+
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 /** Utility to upload and download cache results for a test module. */
 public class SuiteResultCacheUtil {
@@ -47,6 +58,10 @@ public class SuiteResultCacheUtil {
     public static final String DEVICE_IMAGE_KEY = "device_image";
     public static final String MODULE_CONFIG_KEY = "module_config";
     public static final String TRADEFED_JAR_VERSION_KEY = "tradefed.jar_version";
+
+    private static final Set<String> REMOVE_APKS =
+            ImmutableSet.of("TradefedContentProvider.apk", "TelephonyUtility.apk", "WifiUtil.apk");
+    private static final Map<String, Digest> COMPUTE_CACHE = new ConcurrentHashMap<String, Digest>();
 
     /** Describes the cache results. */
     public static class CacheResultDescriptor {
@@ -249,9 +264,47 @@ public class SuiteResultCacheUtil {
         for (String file : classpathStr.split(":")) {
             File currentJar = new File(file);
             if (currentJar.exists() && "tradefed.jar".equals(currentJar.getName())) {
-                return DigestCalculator.compute(currentJar);
+                return processJarFile(currentJar.getAbsolutePath());
             }
         }
         return null;
+    }
+
+    private static Digest processJarFile(String jarFilePath) throws IOException {
+        if (COMPUTE_CACHE.containsKey(jarFilePath)) {
+            return COMPUTE_CACHE.get(jarFilePath);
+        }
+        try (JarFile jarFile = new JarFile(jarFilePath)) {
+            Enumeration<JarEntry> entries = jarFile.entries();
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                if (REMOVE_APKS.contains(entry.getName())) {
+                    continue;
+                }
+                if (!entry.isDirectory()) {
+                    try (InputStream is = jarFile.getInputStream(entry)) {
+                        byte[] buffer = new byte[8192];
+                        int bytesRead;
+
+                        while ((bytesRead = is.read(buffer)) != -1) {
+                            digest.update(buffer, 0, bytesRead);
+                        }
+                    } catch (IOException e) {
+                        CLog.e(e);
+                    }
+                }
+            }
+            Digest tfDigest =
+                    Digest.newBuilder()
+                            .setHash(HashCode.fromBytes(digest.digest()).toString())
+                            .setSizeBytes(digest.getDigestLength())
+                            .build();
+            COMPUTE_CACHE.put(jarFilePath, tfDigest);
+            return tfDigest;
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException(e);
+        }
     }
 }
