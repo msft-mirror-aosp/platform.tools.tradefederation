@@ -431,9 +431,11 @@ public class HostOrchestratorUtil {
         if (shouldDisplay) {
             CLog.logAndDisplay(
                     LogLevel.INFO,
-                    "Executing Host Orchestrator curl command: %s, Output: %s, Status: %s",
+                    "Executing Host Orchestrator curl command: %s, Stdout: %s, Stderr: %s, Status:"
+                            + " %s",
                     cmd,
                     commandRes.getStdout(),
+                    commandRes.getStderr(),
                     commandRes.getStatus());
         }
         if (commandRes.getStdout().contains(UNSUPPORTED_API_RESPONSE)) {
