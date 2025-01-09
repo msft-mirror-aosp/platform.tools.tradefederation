@@ -129,8 +129,19 @@ public class TestInvocationManagementServer extends TestInvocationManagementImpl
     public void shutdown() throws InterruptedException {
         if (mServer != null) {
             CLog.d("Stopping invocation server.");
-            if (mTracker.size() > 0) {
+            // Mobile Harness has a 5s interval of checking test result status.
+            // Wait 30s to ensure Mobile Harness a chance to retrieve test status.
+            long shutdownTime = System.currentTimeMillis() + 30000;
+            while (mTracker.size() > 0 && System.currentTimeMillis() < shutdownTime) {
                 CLog.d("Remaining tracked test invocations: %s", mTracker.size());
+                RunUtil.getDefault().sleep(1000);
+            }
+            if (mTracker.size() > 0) {
+                CLog.w(
+                        "Shutdown invocation server when there's remaining tracked test"
+                            + " invocations: %s. Most likely Mobile Harness will fail to retrieve"
+                            + " the result of those test invocations.",
+                        mTracker.size());
             }
             mServer.shutdown();
             mServer.awaitTermination();
