@@ -337,10 +337,15 @@ public class SearchArtifactUtil {
 
     public static File getModuleDirFromConfig(IInvocationContext moduleContext) {
         if (moduleContext != null) {
+            return getModuleDirFromConfig(moduleContext.getConfigurationDescriptor());
+        }
+        return null;
+    }
+
+    public static File getModuleDirFromConfig(ConfigurationDescriptor descriptor) {
+        if (descriptor != null) {
             List<String> moduleDirPath =
-                    moduleContext
-                            .getConfigurationDescriptor()
-                            .getMetaData(ConfigurationDescriptor.MODULE_DIR_PATH_KEY);
+                    descriptor.getMetaData(ConfigurationDescriptor.MODULE_DIR_PATH_KEY);
             if (moduleDirPath != null && !moduleDirPath.isEmpty()) {
                 File moduleDir = new File(moduleDirPath.get(0));
                 if (moduleDir.exists()) {
