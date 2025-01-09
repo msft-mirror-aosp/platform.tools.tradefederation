@@ -624,11 +624,17 @@ public class TestInvocation implements ITestInvocation {
             invocationPath.doSetup(testInfo, config, listener);
             // Don't run tests if notified of soft/forced shutdown
             if (mSoftStopRequestTime != null || mStopRequestTime != null) {
-                // Throw an exception so that it can be reported as an invocation failure
-                // and command can be un-leased
-                throw new RunInterruptedException(
-                        "Notified of shut down. Will not run tests",
-                        InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+                if (System.getenv("IS_CLOUD_ATE") == null) {
+                    // Throw an exception so that it can be reported as an invocation failure
+                    // and command can be un-leased
+                    throw new RunInterruptedException(
+                            "Notified of shut down. Will not run tests",
+                            InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+                } else {
+                    CLog.d(
+                            "Notified of shut down. Will still run tests and respect grace period"
+                                + " in CI for shutting down.");
+                }
             }
             logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
             mTestStarted = true;
