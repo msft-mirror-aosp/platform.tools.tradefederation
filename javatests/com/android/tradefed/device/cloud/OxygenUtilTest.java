@@ -107,8 +107,42 @@ public class OxygenUtilTest {
                             + "tailing string";
             FileUtil.writeToFile(content, file1);
             List<String> signatures = LogCollector.collectErrorSignatures(tmpDir);
+            assertEquals(2, signatures.size());
             assertEquals("crosvm_vcpu_hw_run_failure_7", signatures.get(0));
             assertEquals("launch_cvd_port_collision", signatures.get(1));
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
+        }
+    }
+
+    /** Test collectErrorSignatures for log file that must contain certain log. */
+    @Test
+    public void testCollectErrorSignatures_mustHaveLogSuccess() throws Exception {
+        File tmpDir = null;
+        try {
+            tmpDir = FileUtil.createTempDir("logs");
+            File file1 = FileUtil.createTempFile("fetch.txt", ".randomstring", tmpDir);
+            String content = "some content\nsome content\nsome content\nCompleted all fetches";
+            FileUtil.writeToFile(content, file1);
+            List<String> signatures = LogCollector.collectErrorSignatures(tmpDir);
+            assertEquals(0, signatures.size());
+        } finally {
+            FileUtil.recursiveDelete(tmpDir);
+        }
+    }
+
+    /** Test collectErrorSignatures for log file that must contain certain log. */
+    @Test
+    public void testCollectErrorSignatures_mustHaveLogFail() throws Exception {
+        File tmpDir = null;
+        try {
+            tmpDir = FileUtil.createTempDir("logs");
+            File file1 = FileUtil.createTempFile("fetch.txt", ".randomstring", tmpDir);
+            String content = "some content\nsome content\nsome content";
+            FileUtil.writeToFile(content, file1);
+            List<String> signatures = LogCollector.collectErrorSignatures(tmpDir);
+            assertEquals(1, signatures.size());
+            assertEquals("fetch_cvd_failure_general", signatures.get(0));
         } finally {
             FileUtil.recursiveDelete(tmpDir);
         }
