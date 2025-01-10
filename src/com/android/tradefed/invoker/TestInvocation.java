@@ -520,7 +520,8 @@ public class TestInvocation implements ITestInvocation {
                     new CloseableTraceScope(InvocationMetricKey.test_cleanup.name())) {
                 // Clean up host.
                 invocationPath.doCleanUp(context, config, exception);
-                waitForSnapuserd(testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
+                waitForSnapuserd(
+                        testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING, false);
                 if (mSoftStopRequestTime != null) { // soft stop occurred
                     long latency = System.currentTimeMillis() - mSoftStopRequestTime;
                     InvocationMetricLogger.addInvocationMetrics(
@@ -623,16 +624,23 @@ public class TestInvocation implements ITestInvocation {
             invocationPath.doSetup(testInfo, config, listener);
             // Don't run tests if notified of soft/forced shutdown
             if (mSoftStopRequestTime != null || mStopRequestTime != null) {
-                // Throw an exception so that it can be reported as an invocation failure
-                // and command can be un-leased
-                throw new RunInterruptedException(
-                        "Notified of shut down. Will not run tests",
-                        InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+                if (System.getenv("IS_CLOUD_ATE") == null) {
+                    // Throw an exception so that it can be reported as an invocation failure
+                    // and command can be un-leased
+                    throw new RunInterruptedException(
+                            "Notified of shut down. Will not run tests",
+                            InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+                } else {
+                    CLog.d(
+                            "Notified of shut down. Will still run tests and respect grace period"
+                                + " in CI for shutting down.");
+                }
             }
             logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
             mTestStarted = true;
             CurrentInvocation.setActionInProgress(ActionInProgress.TEST);
-            waitForSnapuserd(testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_TEST);
+            waitForSnapuserd(
+                    testInfo, config, SnapuserdWaitPhase.BLOCK_BEFORE_TEST, isSubprocess(config));
             invocationPath.runTests(testInfo, config, listener);
         } finally {
             if (mClient != null) {
@@ -2058,11 +2066,19 @@ public class TestInvocation implements ITestInvocation {
 
     /** Always complete snapuserd before proceeding into test. */
     private void waitForSnapuserd(
-            TestInformation testInfo, IConfiguration config, SnapuserdWaitPhase currentPhase)
+            TestInformation testInfo,
+            IConfiguration config,
+            SnapuserdWaitPhase currentPhase,
+            boolean force)
             throws DeviceNotAvailableException {
         for (ITestDevice device : testInfo.getDevices()) {
             if (device instanceof StubDevice) {
                 continue;
+            }
+            if (force) {
+                // Force a notify so we go through a round of detection.
+                // This ensures we will commit the snapshot before tests in subprocess
+                device.notifySnapuserd(currentPhase);
             }
             device.waitForSnapuserd(currentPhase); // Should be inop if not waiting on any updates.
         }

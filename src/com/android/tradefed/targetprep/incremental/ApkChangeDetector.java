@@ -112,8 +112,11 @@ public class ApkChangeDetector {
             }
         }
 
-        if (!couldSkipAppInstallation
-            && getPackagesHandledInPreviousTestRuns(device).contains(packageName)) {
+        if (couldSkipAppInstallation) {
+            CLog.d(
+                "Skipping the installation of %s because incremental setup is turned on.",
+                packageName);
+        } else if (getPackagesHandledInPreviousTestRuns(device).contains(packageName)) {
             // If the package needs installation and it is previously handled by this detector,
             // uninstall the obsolete package.
             // TODO(ihcinihsdk): Ideally, only uninstall the package if the user specifies APKs
@@ -145,6 +148,9 @@ public class ApkChangeDetector {
         // uninstallation.
         String commandToRun = String.format("am force-stop %s", packageName);
         device.executeShellCommand(commandToRun);
+        CLog.d(
+            "Skipping the uninstallation of %s because incremental setup is turned on.",
+            packageName);
         return true;
     }
 

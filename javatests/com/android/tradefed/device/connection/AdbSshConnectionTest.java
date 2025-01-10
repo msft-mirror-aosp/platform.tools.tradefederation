@@ -873,4 +873,26 @@ public class AdbSshConnectionTest {
         mConnection.initializeConnection();
         assertNull(mConnection.createHostOrchestratorUtil(gceAvd));
     }
+
+    /**
+     * Test closeTunnelConnection should not be executed when HostOrchestratorUtil isn't
+     * initialized.
+     */
+    @Test
+    public void testCloseTunnelConnectionNoHOCreated() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+                };
+        mOptions = new TestDeviceOptions();
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        when(mMockDevice.getOptions()).thenReturn(mOptions);
+        mConnection.tearDownConnection();
+    }
 }

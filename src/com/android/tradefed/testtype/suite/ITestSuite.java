@@ -542,6 +542,12 @@ public abstract class ITestSuite
 
             filteredConfig.put(config.getKey(), config.getValue());
             moduleNames.add(config.getValue().getConfigurationDescription().getModuleName());
+            File configPath =
+                    SearchArtifactUtil.getModuleDirFromConfig(
+                            config.getValue().getConfigurationDescription());
+            if (configPath != null) {
+                moduleNames.add(configPath.getName());
+            }
         }
 
         if (stageAtInvocationLevel()) {
@@ -895,12 +901,18 @@ public abstract class ITestSuite
 
                 try (CloseableTraceScope ignore = new CloseableTraceScope(module.getId())) {
                     if (!stageAtInvocationLevel() && stageModuleLevel()) {
-                        stageTestArtifacts(
-                                mDevice,
-                                ImmutableSet.of(
-                                        module.getModuleConfiguration()
-                                                .getConfigurationDescription()
-                                                .getModuleName()));
+                        Set<String> moduleNames = new LinkedHashSet<String>();
+                        moduleNames.add(
+                                module.getModuleConfiguration()
+                                        .getConfigurationDescription()
+                                        .getModuleName());
+                        File configPath =
+                                SearchArtifactUtil.getModuleDirFromConfig(
+                                        module.getModuleInvocationContext());
+                        if (configPath != null) {
+                            moduleNames.add(configPath.getName());
+                        }
+                        stageTestArtifacts(mDevice, moduleNames);
                     }
                     // Populate the module context with devices and builds
                     for (String deviceName : mContext.getDeviceConfigNames()) {
