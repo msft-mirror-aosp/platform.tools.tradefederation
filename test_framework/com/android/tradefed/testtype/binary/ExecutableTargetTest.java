@@ -27,6 +27,7 @@ import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.testtype.GTestResultParser;
 import com.android.tradefed.testtype.IDeviceTest;
+import com.android.tradefed.testtype.PythonUnitTestResultParser;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 
@@ -54,12 +55,17 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
     @Option(name = "skip-binary-check", description = "Skip the binary check in findBinary().")
     private boolean mSkipBinaryCheck = false;
 
-    @Option(name = "parse-gtest", description = "Parse test outputs in GTest format")
+    @Option(name = "parse-gtest", description = "Parse test outputs in GTest format.")
     private boolean mParseGTest = false;
+
+    @Option(
+            name = "parse-python-unit-test",
+            description = "Parse test outputs in Python unit test format.")
+    private boolean mParsePythonUnitTest = false;
 
     @Override
     protected boolean doesRunBinaryGenerateTestResults() {
-        return mParseGTest;
+        return mParseGTest || mParsePythonUnitTest;
     }
 
     @Override
@@ -67,7 +73,11 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
         // when using the GTestParser testRun events are triggered
         // by the TEST_RUN_MARKER in stdout
         // so we should not generate testRuns on the RunBinary event
-        return !mParseGTest;
+
+        // when using the PythonUnitTestResultParser, testRun events are triggered in the parser
+        // with the given run names
+        // so we should not generate testRuns on the RunBinary event
+        return !mParseGTest && !mParsePythonUnitTest;
     }
 
     @Override
@@ -96,6 +106,11 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
 
     @Override
     public FailureDescription shouldAbortRun(TestDescription description) {
+        if (mParseGTest && mParsePythonUnitTest) {
+            return FailureDescription.create(
+                    "Only one of parse-gtest and parse-python-unit-test can be set.",
+                    FailureStatus.CUSTOMER_ISSUE);
+        }
         if (mAbortIfDeviceLost) {
             if (!TestDeviceState.ONLINE.equals(getDevice().getDeviceState())) {
                 return FailureDescription.create(
@@ -164,6 +179,13 @@ public class ExecutableTargetTest extends ExecutableBaseTest implements IDeviceT
                             /** allowRustTestName */
                             );
             parser.processNewLines(result.getStdout().split("\n"));
+            parser.done();
+        } else if (mParsePythonUnitTest) {
+            // the parser automatically reports the test result back to the infra through the
+            // listener.
+            MultiLineReceiver parser =
+                    new PythonUnitTestResultParser(listener, description.getTestName());
+            parser.processNewLines(result.getStderr().split("\n"));
             parser.done();
         } else if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
             String error_message;
