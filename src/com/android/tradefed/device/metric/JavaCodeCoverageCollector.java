@@ -140,62 +140,65 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
             File untarDir = null;
 
             try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-                if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
-                    getCoverageFlusher(device).forceCoverageFlush();
-                }
-
-                // Pull and log the test coverage file.
-                if (testCoveragePath != null) {
-                    if (!new File(testCoveragePath).isAbsolute()) {
-                        testCoveragePath =
-                                "/sdcard/googletest/internal_use/" + testCoveragePath;
+                try {
+                    if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
+                        getCoverageFlusher(device).forceCoverageFlush();
                     }
-                    testCoverage = device.pullFile(testCoveragePath);
-                    if (testCoverage == null) {
-                        // Log a warning only, since multi-device tests will not have this file on
-                        // all devices.
-                        CLog.w(
-                                "Failed to pull test coverage file %s from the device.",
-                                testCoveragePath);
-                    } else {
-                        saveCoverageMeasurement(testCoverage);
+
+                    // Pull and log the test coverage file.
+                    if (testCoveragePath != null) {
+                        if (!new File(testCoveragePath).isAbsolute()) {
+                            testCoveragePath =
+                                    "/sdcard/googletest/internal_use/" + testCoveragePath;
+                        }
+                        testCoverage = device.pullFile(testCoveragePath);
+                        if (testCoverage == null) {
+                            // Log a warning only, since multi-device tests will not have this file
+                            // on
+                            // all devices.
+                            CLog.w(
+                                    "Failed to pull test coverage file %s from the device.",
+                                    testCoveragePath);
+                        } else {
+                            saveCoverageMeasurement(testCoverage);
+                        }
                     }
-                }
 
-                // Stream compressed coverage measurements from /data/misc/trace to the host.
-                coverageTarGz = FileUtil.createTempFile("java_coverage", ".tar.gz");
-                try (OutputStream out =
-                        new BufferedOutputStream(new FileOutputStream(coverageTarGz))) {
-                    CommandResult result =
-                            device.executeShellV2Command(
-                                    COMPRESS_COVERAGE_FILES,
-                                    null,
-                                    out,
-                                    mTimeoutMilli,
-                                    TimeUnit.MILLISECONDS,
-                                    1);
-                    if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                        CLog.e(
-                                "Failed to stream coverage data from the device: %s",
-                                result.toString());
+                    // Stream compressed coverage measurements from /data/misc/trace to the host.
+                    coverageTarGz = FileUtil.createTempFile("java_coverage", ".tar.gz");
+                    try (OutputStream out =
+                            new BufferedOutputStream(new FileOutputStream(coverageTarGz))) {
+                        CommandResult result =
+                                device.executeShellV2Command(
+                                        COMPRESS_COVERAGE_FILES,
+                                        null,
+                                        out,
+                                        mTimeoutMilli,
+                                        TimeUnit.MILLISECONDS,
+                                        1);
+                        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                            CLog.e(
+                                    "Failed to stream coverage data from the device: %s",
+                                    result.toString());
+                        }
                     }
-                }
 
-                // Decompress the files and log the measurements.
-                untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "java_coverage");
-                for (String coveragePath : FileUtil.findFiles(untarDir, ".*\\.ec")) {
-                    saveCoverageMeasurement(new File(coveragePath));
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } finally {
-                // Clean up local coverage files.
-                FileUtil.deleteFile(testCoverage);
-                FileUtil.deleteFile(coverageTarGz);
-                FileUtil.recursiveDelete(untarDir);
+                    // Decompress the files and log the measurements.
+                    untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "java_coverage");
+                    for (String coveragePath : FileUtil.findFiles(untarDir, ".*\\.ec")) {
+                        saveCoverageMeasurement(new File(coveragePath));
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                } finally {
+                    // Clean up local coverage files.
+                    FileUtil.deleteFile(testCoverage);
+                    FileUtil.deleteFile(coverageTarGz);
+                    FileUtil.recursiveDelete(untarDir);
 
-                // Clean up device coverage files.
-                cleanUpDeviceCoverageFiles(device);
+                    // Clean up device coverage files.
+                    cleanUpDeviceCoverageFiles(device);
+                }
             }
         }
 
@@ -249,23 +252,21 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
 
     /** Cleans up .ec files in /data/misc/trace. */
     private void cleanUpDeviceCoverageFiles(ITestDevice device) throws DeviceNotAvailableException {
-        try (AdbRootElevator root = new AdbRootElevator(device)) {
-            List<Integer> activePids = getRunningProcessIds(device);
+        List<Integer> activePids = getRunningProcessIds(device);
 
-            String fileList = device.executeShellCommand(FIND_COVERAGE_FILES);
-            for (String devicePath : Splitter.on('\n').omitEmptyStrings().split(fileList)) {
-                if (devicePath.endsWith(".mm.ec")) {
-                    // Check if the process was still running. The file will have the format
-                    // /data/misc/trace/jacoco-XXXXX.mm.ec where XXXXX is the process id.
-                    int start = devicePath.indexOf('-') + 1;
-                    int end = devicePath.indexOf('.');
-                    int pid = Integer.parseInt(devicePath.substring(start, end));
-                    if (!activePids.contains(pid)) {
-                        device.deleteFile(devicePath);
-                    }
-                } else {
+        String fileList = device.executeShellCommand(FIND_COVERAGE_FILES);
+        for (String devicePath : Splitter.on('\n').omitEmptyStrings().split(fileList)) {
+            if (devicePath.endsWith(".mm.ec")) {
+                // Check if the process was still running. The file will have the format
+                // /data/misc/trace/jacoco-XXXXX.mm.ec where XXXXX is the process id.
+                int start = devicePath.indexOf('-') + 1;
+                int end = devicePath.indexOf('.');
+                int pid = Integer.parseInt(devicePath.substring(start, end));
+                if (!activePids.contains(pid)) {
                     device.deleteFile(devicePath);
                 }
+            } else {
+                device.deleteFile(devicePath);
             }
         }
     }
