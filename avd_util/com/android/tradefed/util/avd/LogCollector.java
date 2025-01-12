@@ -40,6 +40,16 @@ public class LogCollector {
     // Maximum size of tailing part of a file to search for error signature.
     private static final long MAX_FILE_SIZE_FOR_ERROR = 10 * 1024 * 1024;
 
+    // A map of log file name pattern to log content that the log must have.
+    private static final Map<Pattern, AbstractMap.SimpleEntry<String, String>>
+            REMOTE_LOG_NAME_PATTERN_TO_LOG_MUST_HAVE_SIGNATURE_MAP =
+                    Stream.of(
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*fetch.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Completed all fetches",
+                                                    "fetch_cvd_failure_general")))
+                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     private static final Map<Pattern, AbstractMap.SimpleEntry<String, String>>
             REMOTE_LOG_NAME_PATTERN_TO_ERROR_SIGNATURE_MAP =
                     Stream.of(
@@ -54,11 +64,6 @@ public class LogCollector {
                                                     "vcpu hw run failure: 0x7",
                                                     "crosvm_vcpu_hw_run_failure_7")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*launcher.*"),
-                                            new AbstractMap.SimpleEntry<>(
-                                                    "Unable to connect to vsock server",
-                                                    "unable_to_connect_to_vsock_server")),
-                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*(launcher|vdl_stdout).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to initialize fetch system images",
@@ -66,17 +71,13 @@ public class LogCollector {
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*vdl_stdout.*"),
                                             new AbstractMap.SimpleEntry<>(
-                                                    "E fetch_cvd:", "fetch_cvd_failure_general")),
-                                    new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*vdl_stdout.*"),
-                                            new AbstractMap.SimpleEntry<>(
-                                                    "E cvd     : fetch_cvd",
-                                                    "fetch_cvd_failure_general")),
-                                    new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*vdl_stdout.*"),
-                                            new AbstractMap.SimpleEntry<>(
                                                     "Could not resolve host: ",
                                                     "fetch_cvd_failure_resolve_host")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Could not connect to server",
+                                                    "fetch_cvd_failure_connect_server")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
@@ -211,7 +212,15 @@ public class LogCollector {
                         pairs.add(entry.getValue());
                     }
                 }
-                if (pairs.size() == 0) {
+                List<AbstractMap.SimpleEntry<String, String>> pairsMustHave = new ArrayList<>();
+                for (Map.Entry<Pattern, AbstractMap.SimpleEntry<String, String>> entry :
+                        REMOTE_LOG_NAME_PATTERN_TO_LOG_MUST_HAVE_SIGNATURE_MAP.entrySet()) {
+                    Matcher matcher = entry.getKey().matcher(fileName);
+                    if (matcher.find()) {
+                        pairsMustHave.add(entry.getValue());
+                    }
+                }
+                if (pairs.size() == 0 && pairsMustHave.size() == 0) {
                     continue;
                 }
                 try (FileInputStream stream = new FileInputStream(file)) {
@@ -222,6 +231,8 @@ public class LogCollector {
                     try (Scanner scanner = new Scanner(stream)) {
                         List<AbstractMap.SimpleEntry<String, String>> pairsToRemove =
                                 new ArrayList<>();
+                        List<AbstractMap.SimpleEntry<String, String>> pairsMustHaveToRemove =
+                                new ArrayList<>();
                         while (scanner.hasNextLine()) {
                             String line = scanner.nextLine();
                             for (AbstractMap.SimpleEntry<String, String> pair : pairs) {
@@ -230,11 +241,24 @@ public class LogCollector {
                                     signatures.add(pair.getValue());
                                 }
                             }
+                            for (AbstractMap.SimpleEntry<String, String> pair : pairsMustHave) {
+                                if (line.indexOf(pair.getKey()) != -1) {
+                                    pairsMustHaveToRemove.add(pair);
+                                }
+                            }
                             if (pairsToRemove.size() > 0) {
                                 pairs.removeAll(pairsToRemove);
-                                if (pairs.size() == 0) {
-                                    break;
-                                }
+                            }
+                            if (pairsMustHaveToRemove.size() > 0) {
+                                pairsMustHave.removeAll(pairsMustHaveToRemove);
+                            }
+                            if (pairs.size() == 0 && pairsMustHave.size() == 0) {
+                                break;
+                            }
+                        }
+                        if (pairsMustHave.size() > 0) {
+                            for (AbstractMap.SimpleEntry<String, String> pair : pairsMustHave) {
+                                signatures.add(pair.getValue());
                             }
                         }
                     }

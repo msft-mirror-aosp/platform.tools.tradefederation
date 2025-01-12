@@ -63,6 +63,11 @@ public class TestRunnerUtil {
                 if (libFile.exists()) {
                     paths.add(libFile.getAbsolutePath());
                 }
+                // Handle special case of art
+                libFile = new File(new File(testcasesFolderPath, "art_common/out/host/linux-x86/"), lib);
+                if (libFile.exists()) {
+                    paths.add(libFile.getAbsolutePath());
+                }
             }
             // Include ANDROID_HOST_OUT/lib to support local case.
             if (androidHostOut != null) {
