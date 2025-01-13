@@ -212,6 +212,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             description = "Test mode was snapshot to ensure the logic was used and throw if not.")
     private boolean mEnforceSnapshotCompleted = false;
 
+    @Option(
+            name = "use-merkle-tree-comparison",
+            description = "Generate snapshot using the merkle tree on device instead of baseline.")
+    private boolean mUseMerkleTreeComparison = false;
+
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
     private Set<String> mAllowedTransition = new HashSet<>();
@@ -362,7 +367,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 mWipeAfterApplySnapshot,
                                 mNewIncrementalFlow,
                                 mUpdateBootloaderFromUserspace,
-                                mWaitPhase);
+                                mWaitPhase,
+                                mUseMerkleTreeComparison);
                 if (mIncrementalImageUtil == null) {
                     useIncrementalFlashing = false;
                 } else {
@@ -730,5 +736,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
 
     public void addAllowedBranchForTransitionInIncremental(String branch) {
         mAllowedTransition.add(branch);
+    }
+
+    public void useMerkleTreeComparison(boolean enableMerkleTreeComparison) {
+        mUseMerkleTreeComparison = enableMerkleTreeComparison;
     }
 }
