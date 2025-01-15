@@ -227,6 +227,7 @@ import com.android.tradefed.result.XmlResultReporterTest;
 import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarderTest;
 import com.android.tradefed.result.error.ErrorIdentifierTest;
 import com.android.tradefed.result.proto.FileProtoResultReporterTest;
+import com.android.tradefed.result.proto.InvocationProtoResultReporterTest;
 import com.android.tradefed.result.proto.ModuleProtoResultReporterTest;
 import com.android.tradefed.result.proto.ProtoResultParserTest;
 import com.android.tradefed.result.proto.ProtoResultReporterTest;
@@ -805,6 +806,7 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // result.proto
     FileProtoResultReporterTest.class,
+    InvocationProtoResultReporterTest.class,
     ModuleProtoResultReporterTest.class,
     ProtoResultParserTest.class,
     ProtoResultReporterTest.class,
