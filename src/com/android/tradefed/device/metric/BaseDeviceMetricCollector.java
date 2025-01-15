@@ -41,6 +41,7 @@ import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.SearchArtifactUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -690,6 +691,23 @@ public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActio
      *         if file not found.
      */
     private File resolveRelativeFilePath(String fileName) {
+        File src = null;
+        try {
+            src = SearchArtifactUtil.searchFile(fileName, true);
+        } catch (Exception e) {
+            // TODO: handle error when migration is complete.
+            CLog.e(e);
+        }
+        if (src != null && src.exists()) {
+            CLog.d("Found '%s' using SearchArtifactUtil", fileName);
+            return src;
+        } else {
+            CLog.d("Did not find '%s' using SearchArtifactUtil, fall back to old logic", fileName);
+            // Silently report not found and fall back to old logic.
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, 1);
+        }
+
         IBuildInfo buildInfo = getBuildInfos().get(0);
         String mModuleName = null;
         // Retrieve the module name.
@@ -698,7 +716,6 @@ public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActio
                     .get(0);
         }
 
-        File src = null;
         if (buildInfo != null) {
             src = buildInfo.getFile(fileName);
             if (src != null && src.exists()) {
@@ -772,6 +789,13 @@ public class BaseDeviceMetricCollector implements IMetricCollector, IDeviceActio
                 }
             }
         }
+
+        if (src == null) {
+            // if old logic fails too, do not report search artifact failure
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, -1);
+        }
+
         return src;
     }
 
