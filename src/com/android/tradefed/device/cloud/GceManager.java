@@ -457,7 +457,8 @@ public class GceManager {
                 if (!bootSuccess) {
                     if (logger != null) {
                         if (getTestDeviceOptions().useCvdCF()) {
-                            CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvdInfo, mHOUtil, logger);
+                            CommonLogRemoteFileUtil.pullCommonCvdLogs(
+                                    mGceAvdInfo, mHOUtil, logger, getTestDeviceOptions());
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
