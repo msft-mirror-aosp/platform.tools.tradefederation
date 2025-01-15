@@ -21,6 +21,7 @@ import static com.android.tradefed.util.avd.HostOrchestratorClient.IHoHttpClient
 import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
 import com.android.ddmlib.Log.LogLevel;
@@ -44,8 +45,10 @@ import org.json.JSONTokener;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -134,12 +137,12 @@ public class HostOrchestratorUtil {
     }
 
     /**
-     * Execute a command via Host Orchestrator and log its output
+     * Download log files.
      *
      * @param logName the log name to use when reporting to the {@link ITestLogger}
-     * @param url the Host Orchestrator API to be executed.
+     * @param urlPath url path indicating the log to download.
      */
-    public File collectLogByCommand(String logName, String url) {
+    public File downloadLogFile(String logName, String urlPath) {
         File tempFile = null;
         try {
             tempFile = Files.createTempFile(logName, ".txt").toFile();
@@ -150,23 +153,13 @@ public class HostOrchestratorUtil {
                     return null;
                 }
             }
-            CommandResult commandRes =
-                    curlCommandExecution(
-                            mHOPortNumber,
-                            "GET",
-                            url,
-                            false,
-                            "--compressed",
-                            "-o",
-                            tempFile.getAbsolutePath());
-            if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
-                CLog.e("Failed logging cvd logs via Host Orchestrator: %s", commandRes.getStdout());
-                FileUtil.deleteFile(tempFile);
-                return null;
-            }
+            String baseUrl = getHOBaseUrl(mHOPortNumber);
+            HttpRequest request =
+                    HttpRequest.newBuilder().uri(URI.create(baseUrl + "/" + urlPath)).build();
+            saveToFile(mHttpClient, request, Paths.get(tempFile.getAbsolutePath()));
             return tempFile;
-        } catch (IOException e) {
-            CLog.e("Failed logging cvd logs via Host Orchestrator: %s", e);
+        } catch (IOException | InterruptedException | ErrorResponseException e) {
+            CLog.e("Failed downloading logs with url path %s: %s", urlPath, e);
             FileUtil.deleteFile(tempFile);
             return null;
         }
