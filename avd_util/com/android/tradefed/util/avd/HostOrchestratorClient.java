@@ -94,7 +94,7 @@ public class HostOrchestratorClient {
         private final HttpClient mClient;
 
         public HoHttpClient() {
-            mClient = HttpClient.newBuilder().build();
+            mClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
         }
 
         @Override
