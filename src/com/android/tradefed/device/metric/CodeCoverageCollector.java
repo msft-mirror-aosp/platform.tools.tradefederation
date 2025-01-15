@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,13 +56,12 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A {@link com.android.tradefed.device.metric.BaseDeviceMetricCollector} that will pull Java
- * coverage measurements off of the device and log them as test artifacts.
+ * A {@link com.android.tradefed.device.metric.BaseDeviceMetricCollector} that will pull Java and
+ * native coverage measurements off of the device and log them as test artifacts.
  */
-public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
+public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         implements IConfigurationReceiver {
 
-    public static final String MERGE_COVERAGE_MEASUREMENTS_TEST_NAME = "mergeCoverageMeasurements";
     public static final String COVERAGE_MEASUREMENT_KEY = "coverageFilePath";
     public static final String COVERAGE_DIRECTORY = "/data/misc/trace";
     public static final String FIND_COVERAGE_FILES =

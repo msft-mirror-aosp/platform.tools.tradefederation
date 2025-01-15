@@ -58,11 +58,11 @@ import com.google.protobuf.ByteString;
 
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
-import org.jacoco.core.tools.ExecFileLoader;
 import org.jacoco.core.data.ExecutionData;
 import org.jacoco.core.data.ExecutionDataStore;
 import org.jacoco.core.data.ExecutionDataWriter;
 import org.jacoco.core.internal.data.CRC64;
+import org.jacoco.core.tools.ExecFileLoader;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -83,8 +83,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -505,6 +505,24 @@ public class JavaCodeCoverageCollectorTest {
         assertThat(execData.contains(vmName(JavaCodeCoverageCollectorTest.class))).isTrue();
         assertThat(getProbes(JavaCodeCoverageCollectorTest.class, execData))
                 .isEqualTo(partiallyCovered);
+    }
+
+    @Test
+    public void javaCodeCoverageCollector_rootAndUnrootDeviceTwice() throws Exception {
+        enableJavaCoverage();
+        HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
+        mockCoverageFileOnDevice(DEVICE_PATH);
+        when(mMockDevice.isAdbRoot()).thenReturn(false);
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
+
+        verify(mMockDevice, times(2)).enableAdbRoot();
+        verify(mMockDevice, times(2)).disableAdbRoot();
     }
 
     private void mockCoverageFileOnDevice(String devicePath)
