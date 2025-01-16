@@ -125,6 +125,7 @@ import com.android.tradefed.device.metric.BluetoothHciSnoopLogCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnFailureCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnTestCaseFailureCollectorTest;
 import com.android.tradefed.device.metric.ClangCodeCoverageCollectorTest;
+import com.android.tradefed.device.metric.CodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.DebugHostLogOnFailureCollectorTest;
 import com.android.tradefed.device.metric.DeviceMetricDataTest;
 import com.android.tradefed.device.metric.EmulatorMemoryCpuCapturerTest;
@@ -673,6 +674,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BugreportzOnTestCaseFailureCollectorTest.class,
     BugreportzOnFailureCollectorTest.class,
     ClangCodeCoverageCollectorTest.class,
+    CodeCoverageCollectorTest.class,
     DebugHostLogOnFailureCollectorTest.class,
     DeviceMetricDataTest.class,
     EmulatorMemoryCpuCapturerTest.class,
