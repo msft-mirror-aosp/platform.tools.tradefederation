@@ -132,7 +132,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
+    public class TestSyspropConfiguration {
+        List<SyspropConfig> system_properties;
+
+        public class SyspropConfig {
+            Map<String, String> system_properties;
+            List<String> tests;
+        }
+    }
+
     private TestFlagConfiguration testFlagConfiguration;
+    private TestSyspropConfiguration testSyspropConfiguration;
 
     private IRunUtil mRunUtil = new RunUtil();
 
@@ -231,6 +241,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         return testFlagConfiguration;
     }
 
+    public TestSyspropConfiguration getSyspropConfiguration() {
+        return testSyspropConfiguration;
+    }
+
     private int shardIndex = 0;
     private int totalShards = 1;
 
@@ -316,6 +330,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         // Parse the flags config file and initialize the default
         // flags value.
         initFlagsConfig(testDevice, testsConfigFile);
+
+        // Parse the properties config file and initialize the default
+        // sysprops' values.
+        initSystemPropertiesConfig(testsConfigFile);
 
         // Forward allocated host Pandora Server port to actual DUT Pandora
         // Server ports.
@@ -483,6 +501,36 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         throw new RuntimeException(String.format("Cannot list tests for %s", profile));
     }
 
+    private Map<String, String> setPropertiesBeforeTest(String testName, ITestDevice testDevice) {
+        Map<String, String> restoreSyspropConfiguration = new HashMap<>();
+
+        for (TestSyspropConfiguration.SyspropConfig syspropConfig :
+                testSyspropConfiguration.system_properties) {
+            if (syspropConfig.tests.stream().anyMatch(testName::startsWith)
+                    || syspropConfig.tests.stream().anyMatch("all"::equals)) {
+                for (Map.Entry<String, String> entry : syspropConfig.system_properties.entrySet()) {
+                    String currentValue = getProperty(testDevice, entry.getKey());
+                    // Save current value to restore it after the test
+                    restoreSyspropConfiguration.put(entry.getKey(), currentValue);
+                    // Set the value from the config
+                    setProperty(testDevice, entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        return restoreSyspropConfiguration;
+    }
+
+    private void restorePropertiesAfterTest(
+            ITestDevice testDevice, Map<String, String> restoreSyspropConfiguration) {
+        if (restoreSyspropConfiguration == null) {
+            CLog.e("Unable to restore sysprops - configuration is null");
+            return;
+        }
+        for (Map.Entry<String, String> entry : restoreSyspropConfiguration.entrySet()) {
+            setProperty(testDevice, entry.getKey(), entry.getValue());
+        }
+    }
+
     private void runPtsBotTests(
             String[] tests, TestInformation testInfo, ITestInvocationListener listener) {
 
@@ -505,8 +553,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                 ITestDevice testDevice = testInfo.getDevice();
                 long startTimestamp = System.currentTimeMillis();
                 for (String testName : profileTests) {
-                    toggleA2dpSinkIfNeeded(testDevice, testName);
-                    toggleHfpHfIfNeeded(testDevice, testName);
+                    Map<String, String> restoreSyspropConfiguration =
+                            setPropertiesBeforeTest(testName, testDevice);
                     boolean matchingFlagConfig = false;
                     boolean unflagged = false;
                     for (TestFlagConfiguration.FlagConfig flagConfig :
@@ -526,6 +574,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                     if (!matchingFlagConfig || unflagged) {
                         runPtsBotTest(profile, testName, testInfo, listener);
                     }
+                    restorePropertiesAfterTest(testDevice, restoreSyspropConfiguration);
                     try {
                         File snoopFile = FileUtil.createTempFile("android_snoop_log", ".log");
                         testDevice.pullFile("/data/misc/bluetooth/logs/btsnoop_hci.log", snoopFile);
@@ -596,36 +645,21 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
-    private void toggleA2dpSinkIfNeeded(ITestDevice testDevice, String testName) {
-        CLog.i("toggleA2dpSinkIfNeeded: " + testName);
-        if (testName.startsWith("A2DP/SNK")
-                || testName.startsWith("AVCTP/CT")
-                || testName.startsWith("AVDTP/SNK")
-                || (testName.startsWith("AVRCP/CT") && !testName.startsWith("AVRCP/CT/VLH"))
-                || testName.startsWith("AVRCP/TG/VLH")) {
-            setProperty(testDevice, A2DP_SNK_PROPERTY, true);
-            setProperty(testDevice, A2DP_SRC_PROPERTY, false);
-        } else if (!getProperty(testDevice, A2DP_SRC_PROPERTY).equals("true")) {
-            setProperty(testDevice, A2DP_SNK_PROPERTY, false);
-            setProperty(testDevice, A2DP_SRC_PROPERTY, true);
-        }
-    }
-
-    private void toggleHfpHfIfNeeded(ITestDevice testDevice, String testName) {
-        CLog.i("toggleHfpHfIfNeeded: " + testName);
-        if (testName.startsWith("HFP/HF")) {
-            setProperty(testDevice, HFP_HF_PROPERTY, true);
-            setProperty(testDevice, HFP_AG_PROPERTY, false);
-        } else if (!getProperty(testDevice, HFP_HF_PROPERTY).equals("true")) {
-            setProperty(testDevice, HFP_HF_PROPERTY, false);
-            setProperty(testDevice, HFP_AG_PROPERTY, true);
-        }
-    }
-
-    private void setProperty(ITestDevice testDevice, String property, boolean enable) {
-        CLog.i("setProperty: " + property);
+    public void initSystemPropertiesConfig(File testConfigFile) {
+        CLog.i("initSystemPropertiesConfig");
         try {
-            String cmd = String.format("setprop %s %s", property, enable);
+            Gson gson = new Gson();
+            FileReader reader = new FileReader(testConfigFile);
+            testSyspropConfiguration = gson.fromJson(reader, TestSyspropConfiguration.class);
+        } catch (IOException | JsonSyntaxException e) {
+            CLog.e("Error initSystemPropertiesConfig: " + e);
+        }
+    }
+
+    private void setProperty(ITestDevice testDevice, String property, String value) {
+        CLog.i("setProperty: " + property + " value: " + value);
+        try {
+            String cmd = String.format("setprop %s %s", property, (value != null ? value : ""));
             CommandResult result = testDevice.executeShellV2Command(cmd);
             if (result.getExitCode() != 0) {
                 CLog.e("Failed to set property: " + property + ": " + result.getStderr());
