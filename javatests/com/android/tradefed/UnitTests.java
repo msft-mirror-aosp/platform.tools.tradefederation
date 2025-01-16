@@ -125,6 +125,7 @@ import com.android.tradefed.device.metric.BluetoothHciSnoopLogCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnFailureCollectorTest;
 import com.android.tradefed.device.metric.BugreportzOnTestCaseFailureCollectorTest;
 import com.android.tradefed.device.metric.ClangCodeCoverageCollectorTest;
+import com.android.tradefed.device.metric.CodeCoverageCollectorTest;
 import com.android.tradefed.device.metric.DebugHostLogOnFailureCollectorTest;
 import com.android.tradefed.device.metric.DeviceMetricDataTest;
 import com.android.tradefed.device.metric.EmulatorMemoryCpuCapturerTest;
@@ -227,10 +228,12 @@ import com.android.tradefed.result.XmlResultReporterTest;
 import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarderTest;
 import com.android.tradefed.result.error.ErrorIdentifierTest;
 import com.android.tradefed.result.proto.FileProtoResultReporterTest;
+import com.android.tradefed.result.proto.InvocationProtoResultReporterTest;
 import com.android.tradefed.result.proto.ModuleProtoResultReporterTest;
 import com.android.tradefed.result.proto.ProtoResultParserTest;
 import com.android.tradefed.result.proto.ProtoResultReporterTest;
 import com.android.tradefed.result.proto.StreamProtoResultReporterTest;
+import com.android.tradefed.result.resultdb.ResultDBReporterTest;
 import com.android.tradefed.result.skipped.SkipFeatureTest;
 import com.android.tradefed.result.skipped.SkipManagerTest;
 import com.android.tradefed.result.skipped.SkipReasonTest;
@@ -671,6 +674,7 @@ import org.junit.runners.Suite.SuiteClasses;
     BugreportzOnTestCaseFailureCollectorTest.class,
     BugreportzOnFailureCollectorTest.class,
     ClangCodeCoverageCollectorTest.class,
+    CodeCoverageCollectorTest.class,
     DebugHostLogOnFailureCollectorTest.class,
     DeviceMetricDataTest.class,
     EmulatorMemoryCpuCapturerTest.class,
@@ -804,10 +808,14 @@ import org.junit.runners.Suite.SuiteClasses;
 
     // result.proto
     FileProtoResultReporterTest.class,
+    InvocationProtoResultReporterTest.class,
     ModuleProtoResultReporterTest.class,
     ProtoResultParserTest.class,
     ProtoResultReporterTest.class,
     StreamProtoResultReporterTest.class,
+
+    // result.resultdb
+    ResultDBReporterTest.class,
 
     // result.skipped
     SkipFeatureTest.class,

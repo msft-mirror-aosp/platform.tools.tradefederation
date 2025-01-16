@@ -168,7 +168,7 @@ public abstract class ProtoResultReporter
     // Invocation events
 
     @Override
-    public final void invocationStarted(IInvocationContext context) {
+    public void invocationStarted(IInvocationContext context) {
         mLatestChild = new Stack<>();
         mInvocationRecordBuilder = TestRecord.newBuilder();
         // Set invocation unique id

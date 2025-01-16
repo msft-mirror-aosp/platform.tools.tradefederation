@@ -370,6 +370,17 @@ public class CommandOptions implements ICommandOptions {
             description = "Actually enable the reporting of caching status in presubmit.")
     private boolean mEnableCachingResultsInPresubmit = false;
 
+    @Option(
+            name = "upload-cached-invocation-results",
+            description = "Whether or not to upload the results of a test invocation to the cache")
+    private boolean mUploadInvocationCachedResults = false;
+
+    @Option(
+            name = "report-cache-invocation-results-presubmit",
+            description =
+                    "Actually enable the reporting of invocation caching status in presubmit.")
+    private boolean mEnableCachingInvocationResultsInPresubmit = false;
+
     /**
      * Set the help mode for the config.
      * <p/>
@@ -905,5 +916,17 @@ public class CommandOptions implements ICommandOptions {
     @Override
     public boolean reportCacheResultsInPresubmit() {
         return mEnableCachingResultsInPresubmit;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean shouldUploadInvocationCacheResults() {
+        return mUploadInvocationCachedResults;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean reportInvocationCacheResultsInPresubmit() {
+        return mEnableCachingInvocationResultsInPresubmit;
     }
 }
