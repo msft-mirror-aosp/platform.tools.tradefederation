@@ -56,11 +56,7 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
 
     @Override
     protected void beforeModuleStart() {
-        IInvocationContext stubContext = new InvocationContext();
-        if (mInvocationId != null) {
-            CLog.d("Copying property into module results: %s", mInvocationId);
-            stubContext.addInvocationAttribute(INVOCATION_ID_KEY, mInvocationId);
-        }
+        IInvocationContext stubContext = createCachedContext();
         invocationStarted(stubContext);
     }
 
@@ -75,7 +71,7 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
             super.processTestCaseEnded(testCaseRecord);
         }
         if (testCaseRecord.getStatus().equals(TestStatus.FAIL)) {
-            mStopCache = true;
+            reportStopCaching();
         }
     }
 
@@ -85,7 +81,7 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
             super.processTestRunEnded(runRecord, moduleInProgress);
         }
         if (runRecord.hasDebugInfo()) {
-            mStopCache = true;
+            reportStopCaching();
         }
     }
 
@@ -93,12 +89,29 @@ public class ModuleProtoResultReporter extends FileProtoResultReporter {
     public void processTestModuleEnd(TestRecord moduleRecord) {
         super.processTestModuleEnd(moduleRecord);
         if (moduleRecord.hasSkipReason()) {
-            mStopCache = true;
+            reportStopCaching();
         }
     }
 
     public boolean stopCaching() {
         return mStopCache;
+    }
+
+    public void reportStopCaching() {
+        mStopCache = true;
+    }
+
+    public boolean reportGranularResults() {
+        return mGranularResults;
+    }
+
+    protected IInvocationContext createCachedContext() {
+        IInvocationContext stubContext = new InvocationContext();
+        if (mInvocationId != null) {
+            CLog.d("Copying property into module results: %s", mInvocationId);
+            stubContext.addInvocationAttribute(INVOCATION_ID_KEY, mInvocationId);
+        }
+        return stubContext;
     }
 
     private void copyAttributes(IInvocationContext mainContext) {

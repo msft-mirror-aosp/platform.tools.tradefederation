@@ -119,6 +119,14 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         mConfiguration = configuration;
     }
 
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        if (isClangCoverageEnabled()
+                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
+            getNativeCoverageFlusher(device).deleteCoverageMeasurements();
+        }
+    }
+
     private JavaCodeCoverageFlusher getJavaCoverageFlusher(ITestDevice device) {
         if (mJavaFlusher == null) {
             mJavaFlusher =

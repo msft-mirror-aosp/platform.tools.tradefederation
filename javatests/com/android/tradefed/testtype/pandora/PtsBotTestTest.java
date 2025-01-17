@@ -25,6 +25,7 @@ import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.util.FileUtil;
 
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,7 +42,7 @@ public class PtsBotTestTest {
     private ITestDevice mMockDevice;
     private TestInformation mTestInfo;
     private File mPandoraTestDir;
-    private File mConfigFlagsFile;
+    private File mConfigFile;
 
     @Before
     public void setup() throws Exception {
@@ -50,8 +51,7 @@ public class PtsBotTestTest {
         IInvocationContext context = new InvocationContext();
         context.addAllocatedDevice("device", mMockDevice);
         mPandoraTestDir = FileUtil.createTempDir("pandora_tests");
-        mConfigFlagsFile =
-                FileUtil.createTempFile("pts_bot_tests_config", ".json", mPandoraTestDir);
+        mConfigFile = FileUtil.createTempFile("pts_bot_tests_config", ".json", mPandoraTestDir);
     }
 
     @After
@@ -65,9 +65,9 @@ public class PtsBotTestTest {
         String jsonString =
                 String.format(
                         "{\"flags\":[{\"flags\":[\"%s\"],\"tests\":[\"test1\",\"test2\"]}]}", flag);
-        FileUtil.writeToFile(jsonString, mConfigFlagsFile);
+        FileUtil.writeToFile(jsonString, mConfigFile);
 
-        mSpyTest.initFlagsConfig(mMockDevice, mConfigFlagsFile);
+        mSpyTest.initFlagsConfig(mMockDevice, mConfigFile);
         PtsBotTest.TestFlagConfiguration config = mSpyTest.getTestFlagConfiguration();
 
         assertThat(config.flags).isNotEmpty();
@@ -80,10 +80,42 @@ public class PtsBotTestTest {
     @Test
     public void testParse_emptyConfigFlagsFile() throws Exception {
         String json_string = String.format("{\"flags\": []}");
-        FileUtil.writeToFile(json_string, mConfigFlagsFile);
+        FileUtil.writeToFile(json_string, mConfigFile);
 
-        mSpyTest.initFlagsConfig(mMockDevice, mConfigFlagsFile);
+        mSpyTest.initFlagsConfig(mMockDevice, mConfigFile);
 
         assertThat(mSpyTest.getTestFlagConfiguration().flags).isEmpty();
+    }
+
+    @Test
+    public void testParse_configSystemPropertiesFile() throws Exception {
+        String jsonString =
+                String.format(
+                        "{\"system_properties\":[{\"system_properties\":"
+                            + " {\"prop1\":\"true\",\"prop2\":\"false\",\"prop3\":null},\"tests\":[\"test1\",\"test2\"]}]}");
+
+        FileUtil.writeToFile(jsonString, mConfigFile);
+
+        mSpyTest.initSystemPropertiesConfig(mConfigFile);
+        PtsBotTest.TestSyspropConfiguration config = mSpyTest.getSyspropConfiguration();
+
+        assertThat(config.system_properties).isNotEmpty();
+        Assert.assertEquals(config.system_properties.get(0).system_properties.get("prop1"), "true");
+        Assert.assertEquals(
+                config.system_properties.get(0).system_properties.get("prop2"), "false");
+        Assert.assertEquals(config.system_properties.get(0).system_properties.get("prop3"), null);
+        assertThat(config.system_properties.get(0).tests).containsExactly("test1", "test2");
+
+        mSpyTest.getSyspropConfiguration().system_properties.clear();
+    }
+
+    @Test
+    public void testParse_emptyConfigSystemPropertiesFile() throws Exception {
+        String json_string = String.format("{\"system_properties\": []}");
+        FileUtil.writeToFile(json_string, mConfigFile);
+
+        mSpyTest.initSystemPropertiesConfig(mConfigFile);
+
+        assertThat(mSpyTest.getSyspropConfiguration().system_properties).isEmpty();
     }
 }

@@ -167,6 +167,10 @@ public class SkipManager implements IDisableable {
 
     /** Reports whether we should skip the current invocation. */
     public boolean shouldSkipInvocation(TestInformation information) {
+        if (InvocationContext.isOnDemand(information.getContext())) {
+            // Avoid skipping invocation for on-demand testing
+            return false;
+        }
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("SkipManager#shouldSkipInvocation")) {
             // Build heuristic for skipping invocation
