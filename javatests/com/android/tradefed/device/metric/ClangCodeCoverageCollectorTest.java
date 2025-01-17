@@ -33,7 +33,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.build.IBuildProvider;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -109,7 +108,6 @@ public class ClangCodeCoverageCollectorTest {
     @Mock IBuildInfo mMockBuildInfo;
 
     @Mock IConfiguration mMockConfiguration;
-    @Mock IBuildProvider mMockBuildProvider;
     @Mock ITestDevice mMockDevice;
     @Mock IInvocationContext mMockContext;
     @Spy CommandArgumentCaptor mCommandArgumentCaptor;
@@ -134,13 +132,12 @@ public class ClangCodeCoverageCollectorTest {
         mCoverageOptionsSetter = new OptionSetter(mCoverageOptions);
 
         doReturn(mCoverageOptions).when(mMockConfiguration).getCoverageOptions();
-        doReturn(mMockBuildProvider).when(mMockConfiguration).getBuildProvider();
-        doReturn(mMockBuildInfo).when(mMockBuildProvider).getBuild();
 
         doReturn(ImmutableList.of(mMockDevice)).when(mMockContext).getDevices();
         when(mMockContext.getAttributes())
                 .thenReturn(
                         new MultiMap(ImmutableMap.of(ModuleDefinition.MODULE_NAME, "myModule")));
+        when(mMockContext.getBuildInfos()).thenReturn(ImmutableList.of(mMockBuildInfo));
 
         doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
 
