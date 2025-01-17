@@ -200,4 +200,9 @@ public interface IDeviceFlasher {
     public default Set<String> getAdditionalFileFilters() {
         return Collections.<String>emptySet();
     }
+
+    /** Last opportunity for the flasher implementation to clean up after itself */
+    public default void tearDownFlasher() {
+        // Empty on purpose
+    }
 }
