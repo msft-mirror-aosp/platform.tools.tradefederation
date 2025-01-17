@@ -128,6 +128,11 @@ public class HostOptions implements IHostOptions {
     private List<String> mPreconfiguredVirtualDevicePool = new ArrayList<>();
 
     @Option(
+            name = "preconfigured-native-device-pool",
+            description = "Preconfigured Native virtual device pool. (Value format: $hostname.)")
+    private List<String> mPreconfiguredNativeDevicePool = new ArrayList<>();
+
+    @Option(
             name = "flash-with-fuse-zip",
             description = "Use `fastboot flashall` on a folder of fuse mounted device image zip "
                     + "instead of `fastboot update` with zip")
@@ -256,6 +261,12 @@ public class HostOptions implements IHostOptions {
     @Override
     public List<String> getKnownPreconfigureVirtualDevicePool() {
         return new ArrayList<>(mPreconfiguredVirtualDevicePool);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<String> getKnownPreconfigureNativeDevicePool() {
+        return new ArrayList<>(mPreconfiguredNativeDevicePool);
     }
 
     /** {@inheritDoc} */
