@@ -18,6 +18,7 @@ package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
 import com.android.tradefed.device.DeviceManager.FastbootDevice;
+import com.android.tradefed.device.IDeviceSelection.BaseDeviceType;
 import com.android.tradefed.device.IManagedTestDevice.DeviceEventResponse;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.ConditionPriorityBlockingQueue.IMatcher;
@@ -289,6 +290,17 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
      * @return the {@link IManagedTestDevice}.
      */
     public IManagedTestDevice findOrCreate(IDevice idevice) {
+        return findOrCreate(idevice, false);
+    }
+
+    /**
+     * Find the {@link IManagedTestDevice} corresponding to the {@link IDevice}. If it does not
+     * exist, create a new one.
+     *
+     * @param idevice
+     * @return the {@link IManagedTestDevice}.
+     */
+    public IManagedTestDevice findOrCreate(IDevice idevice, boolean nativeDevice) {
         String serial = idevice.getSerialNumber();
         if (!isValidDeviceSerial(serial)) {
             return null;
@@ -320,7 +332,13 @@ class ManagedDeviceList implements Iterable<IManagedTestDevice> {
             IManagedTestDevice d = find(serial);
             if (d == null || DeviceAllocationState.Unavailable.equals(d.getAllocationState())) {
                 mList.remove(d);
-                d = mDeviceFactory.createDevice(idevice);
+                if (nativeDevice) {
+                    DeviceSelectionOptions creationOptions = new DeviceSelectionOptions();
+                    creationOptions.setBaseDeviceTypeRequested(BaseDeviceType.NATIVE_DEVICE);
+                    d = mDeviceFactory.createRequestedDevice(idevice, creationOptions);
+                } else {
+                    d = mDeviceFactory.createDevice(idevice);
+                }
                 if (setTracking) {
                     d.setTrackingSerial(serial);
                 }
