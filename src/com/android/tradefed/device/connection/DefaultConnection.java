@@ -23,6 +23,7 @@ import com.android.tradefed.device.ManagedTestDeviceFactory;
 import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.TestDeviceOptions.InstanceType;
 import com.android.tradefed.device.cloud.GceAvdInfo;
 import com.android.tradefed.device.cloud.RemoteAndroidVirtualDevice;
@@ -46,6 +47,7 @@ public class DefaultConnection extends AbstractConnection {
     private final Integer mInitialDeviceNumOffset;
     private final String mInitialSerial;
     private final ITestLogger mTestLogger;
+    private final boolean mPreExisting;
 
     private final boolean mTemporaryHolder;
 
@@ -61,25 +63,30 @@ public class DefaultConnection extends AbstractConnection {
         }
 
         final InstanceType type = device.getOptions().getInstanceType();
-        CLog.d("Instance type for connection: %s", type);
-
-        final boolean isCuttlefish = type.equals(InstanceType.CUTTLEFISH)
-                || type.equals(InstanceType.REMOTE_NESTED_AVD);
-
-        if (device instanceof RemoteAndroidVirtualDevice) {
-            ((NativeDevice) device).setFastbootEnabled(isCuttlefish);
-            ((NativeDevice) device).setLogStartDelay(0);
-            return new AdbSshConnection(builder);
+        final boolean isRemoteAvd =
+                type.equals(InstanceType.CUTTLEFISH) || type.equals(InstanceType.REMOTE_NESTED_AVD);
+        if (!device.getOptions().evaluateDeviceConnection()) {
+            CLog.d("Instance type for connection: %s", type);
+            if (device instanceof RemoteAndroidVirtualDevice) {
+                ((NativeDevice) device).setFastbootEnabled(isRemoteAvd);
+                ((NativeDevice) device).setLogStartDelay(0);
+                return new AdbSshConnection(builder);
+            }
+            if (device instanceof RemoteAndroidDevice) {
+                return new AdbTcpConnection(builder);
+            }
         }
-        if (device instanceof RemoteAndroidDevice) {
-            return new AdbTcpConnection(builder);
-        }
 
-        CLog.d("Instance type for connection: %s", type);
-        if (isCuttlefish) {
+        CLog.d("Instance type for connection: %s. Evaluating for connection type.", type);
+        if (isRemoteAvd) {
             if (ManagedTestDeviceFactory.isTcpDeviceSerial(device.getSerialNumber())) {
                 // TODO: Add support for remote environment
                 // If the device is already started just go for TcpConnection
+                return new AdbTcpConnection(builder);
+            } else if (type.equals(InstanceType.REMOTE_NESTED_AVD)
+                    && device.getIDevice() instanceof RemoteAvdIDevice
+                    && ((RemoteAvdIDevice) device.getIDevice()).getKnownDeviceIp() != null) {
+                builder.markPreexisting();
                 return new AdbTcpConnection(builder);
             } else {
                 ((NativeDevice) device).setLogStartDelay(0);
@@ -99,6 +106,7 @@ public class DefaultConnection extends AbstractConnection {
         IRunUtil runUtil;
         ITestLogger logger;
         GceAvdInfo existingAvdInfo;
+        boolean preExisting;
 
         public ConnectionBuilder(
                 IRunUtil runUtil, ITestDevice device, IBuildInfo buildInfo, ITestLogger logger) {
@@ -118,6 +126,11 @@ public class DefaultConnection extends AbstractConnection {
             existingAvdInfo = info;
             return this;
         }
+
+        public ConnectionBuilder markPreexisting() {
+            preExisting = true;
+            return this;
+        }
     }
 
     /** Constructor */
@@ -129,6 +142,7 @@ public class DefaultConnection extends AbstractConnection {
         IDevice idevice = mDevice.getIDevice();
         mInitialSerial = mDevice.getSerialNumber();
         mTestLogger = builder.logger;
+        mPreExisting = builder.preExisting;
         if (idevice instanceof IConfigurableVirtualDevice) {
             mInitialIpDevice = ((IConfigurableVirtualDevice) idevice).getKnownDeviceIp();
             mInitialUser = ((IConfigurableVirtualDevice) idevice).getKnownUser();
@@ -191,5 +205,9 @@ public class DefaultConnection extends AbstractConnection {
 
     public boolean wasTemporaryHolder() {
         return mTemporaryHolder;
+    }
+
+    public boolean wasPreExisting() {
+        return mPreExisting;
     }
 }

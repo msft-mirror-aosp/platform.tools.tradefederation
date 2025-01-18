@@ -220,6 +220,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
     private Set<String> mAllowedTransition = new HashSet<>();
+    private IDeviceFlasher mFlasher;
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -386,7 +387,14 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
         try {
             checkDeviceProductType(device, deviceBuild);
             device.setRecoveryMode(RecoveryMode.ONLINE);
-            IDeviceFlasher flasher = createFlasher(device);
+            IDeviceFlasher flasher = null;
+            if (mFlasher != null) {
+                flasher = mFlasher;
+                CLog.d("Reusing flasher object.");
+            } else {
+                flasher = createFlasher(device);
+                mFlasher = flasher;
+            }
             flasher.setWipeTimeout(mWipeTimeout);
             boolean tookPermit = false;
             // only surround fastboot related operations with flashing permit restriction
@@ -650,6 +658,9 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             } finally {
                 testInfo.getDevice().setRecoveryMode(mode);
             }
+        }
+        if (mFlasher != null) {
+            mFlasher.tearDownFlasher();
         }
         if (mEnforceSnapshotCompleted && e == null) {
             if (mIncrementalImageUtil == null || !mIncrementalImageUtil.updateCompleted()) {
