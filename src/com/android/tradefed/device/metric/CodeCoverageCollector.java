@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 package com.android.tradefed.device.metric;
+
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
 
 import static com.google.common.base.Verify.verifyNotNull;
 import static com.google.common.io.Files.getNameWithoutExtension;
@@ -34,9 +36,12 @@ import com.android.tradefed.util.AdbRootElevator;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.JavaCodeCoverageFlusher;
+import com.android.tradefed.util.NativeCodeCoverageFlusher;
 import com.android.tradefed.util.ProcessInfo;
 import com.android.tradefed.util.PsParser;
+import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -56,13 +61,12 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A {@link com.android.tradefed.device.metric.BaseDeviceMetricCollector} that will pull Java
- * coverage measurements off of the device and log them as test artifacts.
+ * A {@link com.android.tradefed.device.metric.BaseDeviceMetricCollector} that will pull Java and
+ * native coverage measurements off of the device and log them as test artifacts.
  */
-public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
+public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         implements IConfigurationReceiver {
 
-    public static final String MERGE_COVERAGE_MEASUREMENTS_TEST_NAME = "mergeCoverageMeasurements";
     public static final String COVERAGE_MEASUREMENT_KEY = "coverageFilePath";
     public static final String COVERAGE_DIRECTORY = "/data/misc/trace";
     public static final String FIND_COVERAGE_FILES =
@@ -72,7 +76,11 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
 
     private ExecFileLoader mExecFileLoader;
 
-    private JavaCodeCoverageFlusher mFlusher;
+    private JavaCodeCoverageFlusher mJavaFlusher;
+
+    private IRunUtil mRunUtil = RunUtil.getDefault();
+    private NativeCodeCoverageFlusher mClangFlusher;
+
     private IConfiguration mConfiguration;
     // Timeout for pulling coverage files from the device, in milliseconds.
     private long mTimeoutMilli = 20 * 60 * 1000;
@@ -85,11 +93,22 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
         verifyNotNull(mConfiguration);
         setCoverageOptions(mConfiguration.getCoverageOptions());
 
-        if (isJavaCoverageEnabled()
-                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
+        boolean initJavaCoverage = isJavaCoverageEnabled();
+        boolean initClangCoverage = isClangCoverageEnabled();
+
+        if (!initJavaCoverage && !initClangCoverage) {
+            return;
+        }
+
+        if (mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
             for (ITestDevice device : getRealDevices()) {
                 try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
-                    getCoverageFlusher(device).resetCoverage();
+                    if (initJavaCoverage) {
+                        getJavaCoverageFlusher(device).resetCoverage();
+                    }
+                    if (initClangCoverage) {
+                        getNativeCoverageFlusher(device).deleteCoverageMeasurements();
+                    }
                 }
             }
         }
@@ -100,18 +119,33 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
         mConfiguration = configuration;
     }
 
-    private JavaCodeCoverageFlusher getCoverageFlusher(ITestDevice device) {
-        if (mFlusher == null) {
-            mFlusher =
+    private JavaCodeCoverageFlusher getJavaCoverageFlusher(ITestDevice device) {
+        if (mJavaFlusher == null) {
+            mJavaFlusher =
                     new JavaCodeCoverageFlusher(
                             device, mConfiguration.getCoverageOptions().getCoverageProcesses());
         }
-        return mFlusher;
+        return mJavaFlusher;
+    }
+
+    /**
+     * Creates a {@link NativeCodeCoverageFlusher} if one does not already exist.
+     *
+     * @return a NativeCodeCoverageFlusher
+     */
+    private NativeCodeCoverageFlusher getNativeCoverageFlusher(ITestDevice device) {
+        if (mClangFlusher == null) {
+            verifyNotNull(mConfiguration);
+            mClangFlusher =
+                    new NativeCodeCoverageFlusher(device, mConfiguration.getCoverageOptions());
+            mClangFlusher.setRunUtil(mRunUtil);
+        }
+        return mClangFlusher;
     }
 
     @VisibleForTesting
     void setCoverageFlusher(JavaCodeCoverageFlusher flusher) {
-        mFlusher = flusher;
+        mJavaFlusher = flusher;
     }
 
     @Override
@@ -142,7 +176,7 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
             try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                 try {
                     if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
-                        getCoverageFlusher(device).forceCoverageFlush();
+                        getJavaCoverageFlusher(device).forceCoverageFlush();
                     }
 
                     // Pull and log the test coverage file.
@@ -290,6 +324,12 @@ public final class JavaCodeCoverageCollector extends BaseDeviceMetricCollector
                         .getCoverageOptions()
                         .getCoverageToolchains()
                         .contains(CoverageOptions.Toolchain.JACOCO);
+    }
+
+    private boolean isClangCoverageEnabled() {
+        return mConfiguration != null
+                && mConfiguration.getCoverageOptions().isCoverageEnabled()
+                && mConfiguration.getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 
     private boolean shouldMergeCoverage() {

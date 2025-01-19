@@ -20,6 +20,7 @@ import static com.android.tradefed.util.avd.HostOrchestratorClient.HoHttpClient;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.IHoHttpClient;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
 import com.android.ddmlib.Log.LogLevel;
@@ -63,7 +64,6 @@ public class HostOrchestratorUtil {
     private static final String URL_CVD_BUGREPORTS = "cvdbugreports/%s";
     private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
     private static final String URL_HO_STOP = "cvds/%s/%s";
-    private static final String URL_QUERY_OPERATION_RESULT = "operations/%s/result";
     private static final String UNSUPPORTED_API_RESPONSE = "404 page not found";
 
     private File mTunnelLog;
@@ -210,12 +210,15 @@ public class HostOrchestratorUtil {
                         curlRes.getStdout());
                 return null;
             }
-            String operationId = curlRes.getStdout().strip().replaceAll("\"", "");
+            String operationId = parseCvdContent(curlRes.getStdout(), "name");
+            String baseUrl = getHOBaseUrl(mHOPortNumber);
+            HttpRequest httpRequest = buildGetOperationResultRequest(baseUrl, operationId);
+            String bugreportId = sendRequest(mHttpClient, httpRequest, String.class);
             curlRes =
                     curlCommandExecution(
                             mHOPortNumber,
                             "GET",
-                            String.format(URL_CVD_BUGREPORTS, operationId),
+                            String.format(URL_CVD_BUGREPORTS, bugreportId),
                             true,
                             "--output",
                             cvdLogsZip.getAbsolutePath());
@@ -431,9 +434,11 @@ public class HostOrchestratorUtil {
         if (shouldDisplay) {
             CLog.logAndDisplay(
                     LogLevel.INFO,
-                    "Executing Host Orchestrator curl command: %s, Output: %s, Status: %s",
+                    "Executing Host Orchestrator curl command: %s, Stdout: %s, Stderr: %s, Status:"
+                            + " %s",
                     cmd,
                     commandRes.getStdout(),
+                    commandRes.getStderr(),
                     commandRes.getStatus());
         }
         if (commandRes.getStdout().contains(UNSUPPORTED_API_RESPONSE)) {
@@ -516,8 +521,7 @@ public class HostOrchestratorUtil {
                 buildGetOperationRequest(getHOBaseUrl(portNumber), operationId);
             Operation op = sendRequest(client, httpRequest, Operation.class);
             if (op.done) {
-                request = String.format(URL_QUERY_OPERATION_RESULT, operationId);
-                return curlCommandExecution(portNumber, "GET", request, true);
+                return commandRes;
             }
             getRunUtil().sleep(WAIT_FOR_OPERATION_MS);
         }

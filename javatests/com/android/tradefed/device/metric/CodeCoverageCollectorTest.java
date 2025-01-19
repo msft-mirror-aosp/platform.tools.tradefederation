@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -90,9 +90,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/** Unit tests for {@link JavaCodeCoverageCollector}. */
+/** Unit tests for {@link CodeCoverageCollector}. */
 @RunWith(JUnit4.class)
-public class JavaCodeCoverageCollectorTest {
+public class CodeCoverageCollectorTest {
 
     private static final int PROBE_COUNT = 10;
 
@@ -114,7 +114,7 @@ public class JavaCodeCoverageCollectorTest {
     @Spy LogFileReader mFakeListener = new LogFileReader();
 
     /** Object under test. */
-    JavaCodeCoverageCollector mCodeCoverageCollector;
+    CodeCoverageCollector mCodeCoverageCollector;
 
     CoverageOptions mCoverageOptions = null;
     OptionSetter mCoverageOptionsSetter = null;
@@ -140,7 +140,7 @@ public class JavaCodeCoverageCollectorTest {
         when(mMockDevice.enableAdbRoot()).thenReturn(true);
         when(mMockDevice.disableAdbRoot()).thenReturn(true);
 
-        mCodeCoverageCollector = new JavaCodeCoverageCollector();
+        mCodeCoverageCollector = new CodeCoverageCollector();
         mCodeCoverageCollector.setConfiguration(mMockConfiguration);
     }
 
@@ -316,7 +316,7 @@ public class JavaCodeCoverageCollectorTest {
         doReturn("").when(mMockDevice).executeShellCommand("ps -e");
         doReturn("")
                 .when(mMockDevice)
-                .executeShellCommand(JavaCodeCoverageCollector.FIND_COVERAGE_FILES);
+                .executeShellCommand(CodeCoverageCollector.FIND_COVERAGE_FILES);
         returnFileContentsOnShellCommand(mMockDevice, createTarGz(coverageData));
 
         mCodeCoverageCollector.setCoverageFlusher(mMockFlusher);
@@ -428,7 +428,7 @@ public class JavaCodeCoverageCollectorTest {
 
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
 
-        ByteString measurement = measurement(firstHalfCovered(JavaCodeCoverageCollector.class));
+        ByteString measurement = measurement(firstHalfCovered(CodeCoverageCollector.class));
         File tarGz = createTarGz(ImmutableMap.of("path/to/coverage.ec", measurement));
         returnFileContentsOnShellCommand(mMockDevice, tarGz);
 
@@ -450,8 +450,8 @@ public class JavaCodeCoverageCollectorTest {
             firstHalf[i] = true;
         }
 
-        assertThat(execData.contains(vmName(JavaCodeCoverageCollector.class))).isTrue();
-        assertThat(getProbes(JavaCodeCoverageCollector.class, execData)).isEqualTo(firstHalf);
+        assertThat(execData.contains(vmName(CodeCoverageCollector.class))).isTrue();
+        assertThat(getProbes(CodeCoverageCollector.class, execData)).isEqualTo(firstHalf);
     }
 
     @Test
@@ -461,18 +461,17 @@ public class JavaCodeCoverageCollectorTest {
 
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
 
-        ByteString firstHalfCollector =
-                measurement(firstHalfCovered(JavaCodeCoverageCollector.class));
+        ByteString firstHalfCollector = measurement(firstHalfCovered(CodeCoverageCollector.class));
         ByteString secondHalfCollector =
-                measurement(secondHalfCovered(JavaCodeCoverageCollector.class));
+                measurement(secondHalfCovered(CodeCoverageCollector.class));
         ByteString partialCollectorTest =
-                measurement(partiallyCovered(JavaCodeCoverageCollectorTest.class));
+                measurement(partiallyCovered(CodeCoverageCollectorTest.class));
         File tarGz =
                 createTarGz(
                         ImmutableMap.of(
-                                "JavaCodeCoverageColletor1.ec", firstHalfCollector,
-                                "JavaCodeCoverageCollector2.ec", secondHalfCollector,
-                                "JavaCodeCoverageCollectorTest.ec", partialCollectorTest));
+                                "CodeCoverageCollector1.ec", firstHalfCollector,
+                                "CodeCoverageCollector2.ec", secondHalfCollector,
+                                "CodeCoverageCollectorTest.ec", partialCollectorTest));
         returnFileContentsOnShellCommand(mMockDevice, tarGz);
 
         // Simulate a test run.
@@ -489,26 +488,26 @@ public class JavaCodeCoverageCollectorTest {
 
         ExecutionDataStore execData = execFileLoader.getExecutionDataStore();
 
-        // Check coverage data for JavaCodeCoverageCollector. All probes should be true if the data
+        // Check coverage data for CodeCoverageCollector. All probes should be true if the data
         // merged successfully.
         boolean[] fullyCovered = new boolean[PROBE_COUNT];
         Arrays.fill(fullyCovered, Boolean.TRUE);
 
-        assertThat(execData.contains(vmName(JavaCodeCoverageCollector.class))).isTrue();
-        assertThat(getProbes(JavaCodeCoverageCollector.class, execData)).isEqualTo(fullyCovered);
+        assertThat(execData.contains(vmName(CodeCoverageCollector.class))).isTrue();
+        assertThat(getProbes(CodeCoverageCollector.class, execData)).isEqualTo(fullyCovered);
 
-        // Check coverage data for JavaCodeCoverageCollectorTest. Only the first probe should be
+        // Check coverage data for CodeCoverageCollectorTest. Only the first probe should be
         // true.
         boolean[] partiallyCovered = new boolean[PROBE_COUNT];
         partiallyCovered[0] = true;
 
-        assertThat(execData.contains(vmName(JavaCodeCoverageCollectorTest.class))).isTrue();
-        assertThat(getProbes(JavaCodeCoverageCollectorTest.class, execData))
+        assertThat(execData.contains(vmName(CodeCoverageCollectorTest.class))).isTrue();
+        assertThat(getProbes(CodeCoverageCollectorTest.class, execData))
                 .isEqualTo(partiallyCovered);
     }
 
     @Test
-    public void javaCodeCoverageCollector_rootAndUnrootDeviceTwice() throws Exception {
+    public void codeCoverageCollector_rootAndUnrootDeviceTwice() throws Exception {
         enableJavaCoverage();
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
         mockCoverageFileOnDevice(DEVICE_PATH);
@@ -608,7 +607,7 @@ public class JavaCodeCoverageCollectorTest {
                         })
                 .when(device)
                 .executeShellV2Command(
-                        eq(JavaCodeCoverageCollector.COMPRESS_COVERAGE_FILES),
+                        eq(CodeCoverageCollector.COMPRESS_COVERAGE_FILES),
                         any(),
                         any(OutputStream.class),
                         anyLong(),
@@ -660,4 +659,3 @@ public class JavaCodeCoverageCollectorTest {
         public void testLog(String dataName, LogDataType dataType, ByteString data) {}
     }
 }
-

@@ -19,6 +19,7 @@ package com.android.tradefed.util.avd;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.ErrorResponseException;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
 import org.junit.After;
@@ -60,6 +61,13 @@ public class HostOrchestratorClientTest {
         HttpRequest r = buildGetOperationRequest("https://ho.test", "opfoo");
 
         Assert.assertEquals("https://ho.test/operations/opfoo", r.uri().toString());
+    }
+
+    @Test
+    public void testBuildGetOperationResultRequest() throws Exception {
+        HttpRequest r = buildGetOperationResultRequest("https://ho.test", "opfoo");
+
+        Assert.assertEquals("https://ho.test/operations/opfoo/result", r.uri().toString());
     }
 
     @Test
