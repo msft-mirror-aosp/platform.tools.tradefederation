@@ -319,7 +319,7 @@ public class CodeCoverageCollectorTest {
                 .executeShellCommand(CodeCoverageCollector.FIND_COVERAGE_FILES);
         returnFileContentsOnShellCommand(mMockDevice, createTarGz(coverageData));
 
-        mCodeCoverageCollector.setCoverageFlusher(mMockFlusher);
+        mCodeCoverageCollector.setJavaCoverageFlusher(mMockFlusher);
 
         // Simulate a test run.
         mCodeCoverageCollector.init(mMockContext, mFakeListener);
