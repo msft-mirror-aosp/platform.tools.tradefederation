@@ -537,6 +537,12 @@ public class DeviceManager implements IDeviceManager {
                             String.format("%s-%s", GCE_DEVICE_SERIAL_PREFIX, ip), ip));
         }
 
+        for (String ip :
+                getGlobalConfig().getHostOptions().getKnownPreconfigureNativeDevicePool()) {
+            addAvailableNativeDevice(
+                    new RemoteAvdIDevice(String.format("%s-%s", GCE_DEVICE_SERIAL_PREFIX, ip), ip));
+        }
+
         Map<String, List<String>> preconfigureHostUsers = new HashMap<>();
         for (String preconfigureDevice :
                 getGlobalConfig().getHostOptions().getKnownPreconfigureVirtualDevicePool()) {
@@ -588,6 +594,15 @@ public class DeviceManager implements IDeviceManager {
             mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FORCE_AVAILABLE);
         } else {
             CLog.e("Could not create stub device");
+        }
+    }
+
+    public void addAvailableNativeDevice(IDevice stubDevice) {
+        IManagedTestDevice d = mManagedDeviceList.findOrCreate(stubDevice, true);
+        if (d != null) {
+            mManagedDeviceList.handleDeviceEvent(d, DeviceEvent.FORCE_AVAILABLE);
+        } else {
+            CLog.e("Could not create native stub device");
         }
     }
 
