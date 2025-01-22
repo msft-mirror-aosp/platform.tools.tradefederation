@@ -208,24 +208,42 @@ public class MixImageZipPreparer extends BaseMultiTargetPreparer {
         File mixedSuperImage = null;
         File mixedImageZip = null;
         try {
-            deviceImageZip = new ZipFile(deviceBuildInfo.getDeviceImageFile());
-
             // Get all files from device build.
-            Map<String, InputStreamFactory> files =
-                    getInputStreamFactoriesFromImageZip(deviceImageZip, file -> true);
+            Map<String, InputStreamFactory> files = new HashMap<>();
+            File deviceImageFile = deviceBuildInfo.getDeviceImageFile();
+            if (deviceImageFile.isDirectory()) {
+                files = getInputStreamFactoriesFromUncompressedImageZip(deviceImageFile,
+                        file -> true);
+            } else {
+                files = getInputStreamFactoriesFromImageZip(new ZipFile(deviceImageFile),
+                        file -> true);
+            }
+
             Map<String, InputStreamFactory> filesNotInDeviceBuild =
                     new HashMap<String, InputStreamFactory>();
 
             // Map system build file names to contents by file name.
-            systemImageZip = new ZipFile(systemBuildInfo.getDeviceImageFile());
-            Map<String, InputStreamFactory> systemFiles =
-                    getInputStreamFactoriesFromImageZip(
-                            systemImageZip, file -> mSystemFileNames.contains(file));
-
+            Map<String, InputStreamFactory> systemFiles = new HashMap<>();
             // Map system build file names to contents by file name map values
-            Map<String, InputStreamFactory> extraSystemFiles =
-                    getInputStreamFactoriesFromImageZip(
-                            systemImageZip, file -> mSystemFileNameMaps.containsValue(file));
+            Map<String, InputStreamFactory> extraSystemFiles = new HashMap<>();
+            File systemImageFile = systemBuildInfo.getDeviceImageFile();
+            if (systemImageFile.isDirectory()) {
+                systemFiles =
+                        getInputStreamFactoriesFromUncompressedImageZip(
+                                systemImageFile, file -> mSystemFileNames.contains(file));
+                extraSystemFiles =
+                        getInputStreamFactoriesFromUncompressedImageZip(
+                                systemImageFile, file -> mSystemFileNameMaps.containsValue(file));
+            } else {
+                systemImageZip = new ZipFile(systemImageFile);
+                systemFiles =
+                        getInputStreamFactoriesFromImageZip(
+                                systemImageZip, file -> mSystemFileNames.contains(file));
+                extraSystemFiles =
+                        getInputStreamFactoriesFromImageZip(
+                                systemImageZip, file -> mSystemFileNameMaps.containsValue(file));
+            }
+
             // Map device build file names to contents.
             for (Entry<String, String> entry : mSystemFileNameMaps.entrySet()) {
                 InputStreamFactory value = extraSystemFiles.get(entry.getValue());
@@ -394,6 +412,52 @@ public class MixImageZipPreparer extends BaseMultiTargetPreparer {
                         @Override
                         public long getCrc32() {
                             return entry.getCrc();
+                        }
+                    });
+        }
+        return factories;
+    }
+
+    /**
+     * Get {@link InputStreamFactory} from entries in an image dir (uncompressed image zip).
+     *
+     * @param imageDir image directory.
+     * @param predicate function that takes a file name as the argument and determines whether the
+     *     file name and the content should be added to the output map.
+     * @return map from file name to {@link InputStreamFactory}.
+     * @throws IOException if fails to create the temporary directory.
+     */
+    private static Map<String, InputStreamFactory> getInputStreamFactoriesFromUncompressedImageZip(
+            final File imageDir, Predicate<String> predicate) throws IOException {
+        Map<String, InputStreamFactory> factories = new HashMap<String, InputStreamFactory>();
+        for (File file : imageDir.listFiles()) {
+            if (file.isDirectory()) {
+                CLog.w("Image zip contains subdirectory %s.", file.getName());
+                continue;
+            }
+            String name = file.getName();
+            if (!predicate.test(name)) {
+                continue;
+            }
+
+            factories.put(
+                    name,
+                    new InputStreamFactory() {
+                        @Override
+                        public InputStream createInputStream() throws IOException {
+                            return new FileInputStream(file);
+                        }
+
+                        @Override
+                        public long getSize() {
+                            return file.length();
+                        }
+
+                        @Override
+                        public long getCrc32() throws IOException {
+                            try (InputStream in = createInputStream()) {
+                                return StreamUtil.calculateCrc32(in);
+                            }
                         }
                     });
         }

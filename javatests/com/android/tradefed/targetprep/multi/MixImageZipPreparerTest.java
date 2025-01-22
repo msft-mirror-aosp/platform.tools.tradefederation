@@ -224,9 +224,14 @@ public class MixImageZipPreparerTest {
     }
 
     private void setUpDevice() throws IOException {
+        setUpDevice(false);
+    }
+
+    private void setUpDevice(boolean imageZipUncompressed) throws IOException {
         ITestDevice mockDevice = Mockito.mock(ITestDevice.class);
         mDeviceImageZip =
                 createImageZip(
+                        imageZipUncompressed,
                         DEVICE_CONTENT,
                         BOOT_IMAGE_NAME,
                         VENDOR_IMAGE_NAME,
@@ -316,7 +321,7 @@ public class MixImageZipPreparerTest {
         if (mResourceBuild != null) {
             mResourceBuild.cleanUp();
         }
-        FileUtil.deleteFile(mDeviceImageZip);
+        FileUtil.recursiveDelete(mDeviceImageZip);
         FileUtil.deleteFile(mSystemImageZip);
         FileUtil.deleteFile(mMiscInfoFile);
         FileUtil.deleteFile(mOtaToolsZip);
@@ -350,6 +355,10 @@ public class MixImageZipPreparerTest {
     }
 
     private File createImageZip(String content, String... fileNames) throws IOException {
+      return createImageZip(false, content, fileNames);
+    }
+
+    private File createImageZip(boolean uncompressed, String content, String... fileNames) throws IOException {
         // = new ArrayList<File>(fileNames.length);
         File tempDir = null;
         try {
@@ -360,9 +369,14 @@ public class MixImageZipPreparerTest {
                 tempFiles.add(new File(tempDir, fileName));
             }
 
+            if (uncompressed) {
+                return tempDir;
+            }
             return ZipUtil.createZip(tempFiles);
         } finally {
-            FileUtil.recursiveDelete(tempDir);
+            if (!uncompressed) {
+                FileUtil.recursiveDelete(tempDir);
+            }
         }
     }
 
@@ -467,6 +481,17 @@ public class MixImageZipPreparerTest {
             throws TargetSetupError, BuildError, DeviceNotAvailableException, IOException {
         setUpPreparerAndSystem();
         setUpDevice();
+        runPreparerTest();
+    }
+
+    /**
+     * Test that the mixing works with an uncompressed device image zip.
+     */
+    @Test
+    public void testSetUpWithSystemUsingUncompressedImage()
+            throws TargetSetupError, BuildError, DeviceNotAvailableException, IOException {
+        setUpPreparerAndSystem();
+        setUpDevice(true);
         runPreparerTest();
     }
 
