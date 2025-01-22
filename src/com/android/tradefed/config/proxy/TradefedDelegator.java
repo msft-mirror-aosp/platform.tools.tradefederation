@@ -105,7 +105,7 @@ public class TradefedDelegator {
     }
 
     /** Remove a given option from the command line. */
-    private static String[] clearCommandlineFromOneArg(String[] originalCommand, String optionName)
+    public static String[] clearCommandlineFromOneArg(String[] originalCommand, String optionName)
             throws ConfigurationException {
         List<String> argsList = new ArrayList<>(Arrays.asList(originalCommand));
         try {
