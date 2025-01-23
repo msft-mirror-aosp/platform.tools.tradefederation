@@ -41,6 +41,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -138,27 +139,10 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq((OutputStream) null),
                         Mockito.eq((OutputStream) null),
                         (String[]) Mockito.any());
-        File tempFile =
-                mHOUtil.collectLogByCommand("log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+        Mockito.when(mMockHttpClient.send(Mockito.any(), Mockito.any()))
+                .thenReturn(mockHttpResponse(200, Paths.get("logs.txt")));
+        File tempFile = mHOUtil.downloadLogFile("log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
         FileUtil.deleteFile(tempFile);
-
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq(
-                                String.format(
-                                        "http://127.0.0.1:1111/%s",
-                                        HostOrchestratorUtil.URL_HOST_KERNEL_LOG)),
-                        Mockito.eq("--compressed"),
-                        Mockito.eq("-o"),
-                        Mockito.any());
     }
 
     @Test
@@ -203,25 +187,9 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq((OutputStream) null),
                         Mockito.eq((OutputStream) null),
                         (String[]) Mockito.any());
-        File tempFile =
-                mHOUtil.collectLogByCommand("log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq(
-                                String.format(
-                                        "http://127.0.0.1:1111/%s",
-                                        HostOrchestratorUtil.URL_HOST_KERNEL_LOG)),
-                        Mockito.eq("--compressed"),
-                        Mockito.eq("-o"),
-                        Mockito.any());
+        Mockito.when(mMockHttpClient.send(Mockito.any(), Mockito.any()))
+                .thenReturn(mockHttpResponse(200, Paths.get("logs.txt")));
+        File tempFile = mHOUtil.downloadLogFile("log", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
         FileUtil.deleteFile(tempFile);
     }
 
@@ -1572,7 +1540,7 @@ public class HostOrchestratorUtilTest {
         Assert.assertFalse(mHOUtil.deviceBootCompleted(10));
     }
 
-    private static HttpResponse<String> mockHttpResponse(int statusCode, String body) {
+    private static <T> HttpResponse<T> mockHttpResponse(int statusCode, T body) {
         return new HttpResponse<>() {
             @Override
             public int statusCode() {
@@ -1585,12 +1553,12 @@ public class HostOrchestratorUtilTest {
             }
 
             @Override
-            public String body() {
+            public T body() {
                 return body;
             }
 
             @Override
-            public Optional<HttpResponse<String>> previousResponse() {
+            public Optional<HttpResponse<T>> previousResponse() {
                 return Optional.empty();
             }
 
