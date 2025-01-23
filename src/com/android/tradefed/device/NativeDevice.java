@@ -645,17 +645,13 @@ public class NativeDevice
                     recoverDevice();
                 } else {
                     if (mStateMonitor.waitForDeviceOnline() == null) {
-                        CLog.w(
-                                "Waited for device %s to be online but it is in state '%s', cannot "
-                                        + "get property %s.",
-                                getSerialNumber(), getDeviceState(), name);
-                        CLog.w(
-                                new RuntimeException(
-                                        "This is not an actual exception but to help"
-                                                + " debugging. If this happens deterministically, "
-                                                + " it means the caller has wrong assumption of "
-                                                + " device state and is wasting time in waiting."));
-                        return null;
+                        String message =
+                                String.format(
+                                        "Waited for device %s to be online but it is in state '%s',"
+                                                + " cannot get property %s.",
+                                        getSerialNumber(), getDeviceState(), name);
+                        CLog.w(message);
+                        throw new DeviceNotAvailableException(message, getSerialNumber());
                     }
                 }
             }
