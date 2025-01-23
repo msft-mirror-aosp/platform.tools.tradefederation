@@ -18,6 +18,7 @@ package com.android.tradefed.util.avd;
 
 import static com.android.tradefed.util.avd.HostOrchestratorClient.ErrorResponseException;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBugreportRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
@@ -71,6 +72,13 @@ public class HostOrchestratorClientTest {
         HttpRequest r = buildGetOperationResultRequest("https://ho.test", "opfoo");
 
         Assert.assertEquals("https://ho.test/operations/opfoo/result", r.uri().toString());
+    }
+
+    @Test
+    public void testBuildCreateBugreportRequest() throws Exception {
+        HttpRequest r = buildCreateBugreportRequest("https://ho.test", "foo");
+
+        Assert.assertEquals("https://ho.test/cvds/foo/:bugreport", r.uri().toString());
     }
 
     @Test
