@@ -136,8 +136,7 @@ public class KUnitModuleTestTest {
         setter.setOptionValue("ktap-result-parser-resolution", "AGGREGATED_SUITE");
 
         // For 2 modules: first rmmod call expect fail, second rmmod call expect pass
-        when(mMockDevice.executeShellV2Command(
-                        startsWith(String.format(KUnitModuleTest.RMMOD_COMMAND_FMT, ""))))
+        when(mMockDevice.executeShellV2Command(startsWith("rmmod")))
                 .thenReturn(mFailedResult)
                 .thenReturn(mSuccessResult)
                 .thenReturn(mFailedResult)
@@ -150,10 +149,7 @@ public class KUnitModuleTestTest {
                 .thenReturn(new String[0]) // module 2, call 1
                 .thenReturn(new String[] {MODULE_NAME_02}); // module 2, call 2
 
-        when(mMockDevice.executeShellV2Command(
-                        startsWith(String.format(KUnitModuleTest.INSMOD_COMMAND_FMT, "")),
-                        anyLong(),
-                        any()))
+        when(mMockDevice.executeShellV2Command(startsWith("insmod"), anyLong(), any()))
                 .thenReturn(mSuccessResult);
 
         when(mMockDevice.pullFileContents(
@@ -197,15 +193,11 @@ public class KUnitModuleTestTest {
 
         // First module loads successfully
         when(mMockDevice.executeShellV2Command(
-                        startsWith(String.format(KUnitModuleTest.INSMOD_COMMAND_FMT, MODULE_01_KO)),
-                        anyLong(),
-                        any()))
+                        startsWith(String.format("insmod %s", MODULE_01_KO)), anyLong(), any()))
                 .thenReturn(mSuccessResult);
         // Second module set fail on load
         when(mMockDevice.executeShellV2Command(
-                        startsWith(String.format(KUnitModuleTest.INSMOD_COMMAND_FMT, MODULE_02_KO)),
-                        anyLong(),
-                        any()))
+                        startsWith(String.format("insmod %s", MODULE_02_KO)), anyLong(), any()))
                 .thenReturn(mFailedResult);
 
         // Run test

@@ -157,9 +157,9 @@ public class InstallKernelModulePreparerTest {
                 .thenReturn(mSuccessResult);
         mPreparer.setUp(mTestInfo);
         InOrder inOrder = Mockito.inOrder(mMockDevice);
-        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit_test"));
-        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod time_test"));
-        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit"));
+        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit_test"));
+        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod time_test"));
+        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit"));
     }
 
     /** Test {@link InstallKernelModulePreparer#setUp()} by successfully installing 1 ko file */
@@ -203,7 +203,8 @@ public class InstallKernelModulePreparerTest {
         when(mMockDevice.executeShellV2Command(
                         matches(KUNIT_MODULE_INSTALLATION_COMMAND), anyLong(), any()))
                 .thenReturn(mSuccessResult);
-        when(mMockDevice.executeShellCommand(matches("rmmod kunit_test"))).thenReturn("");
+        when(mMockDevice.executeShellV2Command(matches("rmmod kunit_test")))
+                .thenReturn(mSuccessResult);
         when(mMockDevice.executeShellV2Command(
                         matches("insmod /data/kunit/kunit-test.ko enable=1"), anyLong(), any()))
                 .thenReturn(mSuccessResult);
@@ -246,7 +247,7 @@ public class InstallKernelModulePreparerTest {
                     ConfigurationException {
         when(mMockDevice.executeShellCommand(matches(LIST_MODULE_COMMAND)))
                 .thenReturn(PREEXISTING_MODULE_OUTPUT);
-        when(mMockDevice.executeShellCommand(matches("rmmod kunit"))).thenReturn("");
+        when(mMockDevice.executeShellV2Command(matches("rmmod kunit"))).thenReturn(mSuccessResult);
         mPreparer.tearDown(mTestInfo, null);
     }
 
@@ -267,7 +268,7 @@ public class InstallKernelModulePreparerTest {
         when(mMockDevice.executeShellCommand(matches("rmmod kunit"))).thenReturn("");
         mPreparer.tearDown(mTestInfo, null);
         InOrder inOrder = Mockito.inOrder(mMockDevice);
-        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit_test"));
-        inOrder.verify(mMockDevice).executeShellCommand(matches("rmmod kunit"));
+        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit_test"));
+        inOrder.verify(mMockDevice).executeShellV2Command(matches("rmmod kunit"));
     }
 }
