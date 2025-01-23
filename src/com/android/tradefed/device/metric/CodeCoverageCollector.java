@@ -172,6 +172,14 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         mJavaFlusher = flusher;
     }
 
+    @VisibleForTesting
+    void setClangFlusherRunUtil(IRunUtil runUtil) {
+        mRunUtil = runUtil;
+        if (mClangFlusher != null) {
+            mClangFlusher.setRunUtil(runUtil);
+        }
+    }
+
     @Override
     public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics)
             throws DeviceNotAvailableException {
