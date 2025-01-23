@@ -21,7 +21,6 @@ import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.C
 import static com.google.common.base.Verify.verifyNotNull;
 import static com.google.common.io.Files.getNameWithoutExtension;
 
-import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
@@ -480,21 +479,7 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
                 return mLlvmProfileTool;
             }
         }
-        try {
-            // TODO: Delete this, we shouldn't have re-entry in the build
-            // provider this can cause quite a lot of overhead.
-            IBuildInfo buildInfo = mConfiguration.getBuildProvider().getBuild();
-            profileToolZip =
-                    verifyNotNull(
-                            buildInfo.getFile("llvm-profdata.zip"),
-                            "Could not get llvm-profdata.zip from the build.");
-            mLlvmProfileTool = ZipUtil.extractZipToTemp(profileToolZip, "llvm-profdata");
-            return mLlvmProfileTool;
-        } catch (BuildRetrievalError e) {
-            throw new RuntimeException(e);
-        } finally {
-            FileUtil.deleteFile(profileToolZip);
-        }
+        return mLlvmProfileTool;
     }
 
     private boolean shouldMergeCoverage() {
