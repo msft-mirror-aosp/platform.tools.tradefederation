@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.invoker;
 
+import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.cache.ExecutableAction;
 import com.android.tradefed.cache.ExecutableActionResult;
 import com.android.tradefed.cache.ICacheClient;
@@ -25,6 +26,7 @@ import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.util.CacheClientFactory;
+import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 
 import build.bazel.remote.execution.v2.Digest;
@@ -64,15 +66,24 @@ public class InvocationCacheHelper {
      *
      * @param mainConfig
      * @param protoResults
-     * @param invocationTestsDir
+     * @param testInfo
      */
     public static void uploadInvocationResults(
-            IConfiguration mainConfig, File protoResults, File invocationTestsDir) {
+            IConfiguration mainConfig, File protoResults, TestInformation testInfo) {
+        if (testInfo.getDevices().size() > 1) {
+            return;
+        }
+        boolean emptyTestsDir = false;
+        File invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
                     CacheClientFactory.createCacheClient(
                             CurrentInvocation.getWorkFolder(), cacheInstance);
+            if (invocationTestsDir == null) {
+                emptyTestsDir = true;
+                invocationTestsDir = FileUtil.createTempDir("invoc-cache-tmp");
+            }
             ExecutableAction action =
                     ExecutableAction.create(
                             invocationTestsDir,
@@ -84,11 +95,18 @@ public class InvocationCacheHelper {
             cacheClient.uploadCache(action, result);
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
+        } finally {
+            if (emptyTestsDir) {
+                FileUtil.recursiveDelete(invocationTestsDir);
+            }
         }
     }
 
     public static CacheInvocationResultDescriptor lookupInvocationResults(
-            IConfiguration mainConfig, File invocationTestsDir) {
+            IConfiguration mainConfig, TestInformation testInfo) {
+        if (testInfo.getDevices().size() > 1) {
+            return null;
+        }
         // TODO: Implement
         return null;
     }
