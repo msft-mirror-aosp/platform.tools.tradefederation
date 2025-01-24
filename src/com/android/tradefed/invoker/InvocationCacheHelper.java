@@ -25,6 +25,7 @@ import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.proto.ModuleProtoResultReporter;
 import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.QuotationAwareTokenizer;
@@ -75,7 +76,7 @@ public class InvocationCacheHelper {
         }
         boolean emptyTestsDir = false;
         File invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
-        try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_module_results")) {
+        try (CloseableTraceScope ignored = new CloseableTraceScope("upload_invocation_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
                     CacheClientFactory.createCacheClient(
@@ -107,7 +108,54 @@ public class InvocationCacheHelper {
         if (testInfo.getDevices().size() > 1) {
             return null;
         }
-        // TODO: Implement
+        if (mainConfig.getSkipManager().getImageToDigest().containsValue(null)) {
+            CLog.d("No digest for device.");
+            return new CacheInvocationResultDescriptor(false, null);
+        }
+        boolean emptyTestsDir = false;
+        File invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_invocation_results")) {
+            String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
+            ICacheClient cacheClient =
+                    CacheClientFactory.createCacheClient(
+                            CurrentInvocation.getWorkFolder(), cacheInstance);
+            if (invocationTestsDir == null) {
+                emptyTestsDir = true;
+                invocationTestsDir = FileUtil.createTempDir("invoc-cache-tmp");
+            }
+            ExecutableAction action =
+                    ExecutableAction.create(
+                            invocationTestsDir,
+                            getCommonCommandLine(mainConfig.getCommandLine()),
+                            computeEnvironment(mainConfig),
+                            60000L);
+            CLog.d("Looking up cache for %s", action);
+            ExecutableActionResult cachedResults = cacheClient.lookupCache(action);
+            if (cachedResults == null) {
+                CLog.d("No cached results for the invocation.");
+                return null;
+            } else {
+                String details = "Cached results.";
+                Map<String, String> metadata =
+                        ModuleProtoResultReporter.parseResultsMetadata(cachedResults.stdOut());
+                if (metadata.containsKey(ModuleProtoResultReporter.INVOCATION_ID_KEY)) {
+                    details +=
+                            String.format(
+                                    " origin of results: http://ab/%s",
+                                    metadata.get(ModuleProtoResultReporter.INVOCATION_ID_KEY));
+                    CLog.d(details);
+                }
+                FileUtil.deleteFile(cachedResults.stdOut());
+                FileUtil.deleteFile(cachedResults.stdErr());
+                return new CacheInvocationResultDescriptor(true, details);
+            }
+        } catch (IOException | RuntimeException | InterruptedException e) {
+            CLog.e(e);
+        } finally {
+            if (emptyTestsDir) {
+                FileUtil.recursiveDelete(invocationTestsDir);
+            }
+        }
         return null;
     }
 
