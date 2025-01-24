@@ -1279,14 +1279,17 @@ public class TestInvocation implements ITestInvocation {
                 boolean skipInvocation = config.getSkipManager().shouldSkipInvocation(info);
                 String skipReason = config.getSkipManager().getInvocationSkipReason();
                 if (!skipInvocation) {
-                    CacheInvocationResultDescriptor descriptor =
-                            InvocationCacheHelper.lookupInvocationResults(config, info);
-                    if (descriptor != null && descriptor.isCacheHit()) {
-                        skipReason = descriptor.getDetails();
-                        if (InvocationContext.isPresubmit(context)
-                                && config.getCommandOptions()
-                                        .reportInvocationCacheResultsInPresubmit()) {
-                            skipInvocation = true;
+                    if (config.getCommandOptions().getRemoteCacheInstanceName() != null
+                            && config.getCommandOptions().shouldUploadInvocationCacheResults()) {
+                        CacheInvocationResultDescriptor descriptor =
+                                InvocationCacheHelper.lookupInvocationResults(config, info);
+                        if (descriptor != null && descriptor.isCacheHit()) {
+                            skipReason = descriptor.getDetails();
+                            if (InvocationContext.isPresubmit(context)
+                                    && config.getCommandOptions()
+                                            .reportInvocationCacheResultsInPresubmit()) {
+                                skipInvocation = true;
+                            }
                         }
                     }
                 }
