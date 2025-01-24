@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
@@ -47,6 +49,7 @@ import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.JavaCodeCoverageFlusher;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.TarUtil;
@@ -104,6 +107,10 @@ public class CodeCoverageCollectorTest {
     private static final ByteString COVERAGE_MEASUREMENT =
             ByteString.copyFromUtf8("Mi estas kovrado mezurado");
 
+    private static final String PS_OUTPUT =
+            "USER       PID   PPID  VSZ   RSS   WCHAN       PC  S NAME\n"
+                    + "shell       123  1366  123    456   SyS_epoll+   0  S adbd\n";
+
     @Rule public TemporaryFolder folder = new TemporaryFolder();
 
     @Mock IConfiguration mMockConfiguration;
@@ -111,7 +118,11 @@ public class CodeCoverageCollectorTest {
     @Mock ITestDevice mMockDevice;
     @Mock JavaCodeCoverageFlusher mMockFlusher;
 
+    @Mock IBuildInfo mMockBuildInfo;
+
     @Spy LogFileReader mFakeListener = new LogFileReader();
+
+    @Spy CommandArgumentCaptor mCommandArgumentCaptor;
 
     /** Object under test. */
     CodeCoverageCollector mCodeCoverageCollector;
@@ -120,16 +131,37 @@ public class CodeCoverageCollectorTest {
     OptionSetter mCoverageOptionsSetter = null;
     List<File> mFilesToClean;
 
+    abstract static class CommandArgumentCaptor implements IRunUtil {
+        private List<String> mCommand = new ArrayList<>();
+        private CommandResult mResult = new CommandResult(CommandStatus.SUCCESS);
+
+        /** Stores the command for retrieval later. */
+        @Override
+        public CommandResult runTimedCmd(long timeout, String... cmd) {
+            mCommand = Arrays.asList(cmd);
+            return mResult;
+        }
+
+        void setResult(CommandStatus status) {
+            mResult = new CommandResult(status);
+        }
+
+        List<String> getCommand() {
+            return mCommand;
+        }
+
+        /** Ignores sleep calls. */
+        @Override
+        public void sleep(long ms) {}
+    }
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-
         mCoverageOptions = new CoverageOptions();
         mCoverageOptionsSetter = new OptionSetter(mCoverageOptions);
-        mFilesToClean = new ArrayList<>();
 
         when(mMockConfiguration.getCoverageOptions()).thenReturn(mCoverageOptions);
-
         when(mMockContext.getDevices()).thenReturn(ImmutableList.of(mMockDevice));
         when(mMockContext.getAttributes())
                 .thenReturn(
@@ -142,6 +174,18 @@ public class CodeCoverageCollectorTest {
 
         mCodeCoverageCollector = new CodeCoverageCollector();
         mCodeCoverageCollector.setConfiguration(mMockConfiguration);
+
+        mFilesToClean = new ArrayList<>();
+
+        // Native specific setup
+        mCodeCoverageCollector.setClangFlusherRunUtil(mCommandArgumentCaptor);
+        when(mMockContext.getBuildInfos()).thenReturn(ImmutableList.of(mMockBuildInfo));
+
+        doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        result.setStdout("ffffffffff\n");
+        result.setExitCode(0);
+        when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
     }
 
     @After
@@ -524,6 +568,29 @@ public class CodeCoverageCollectorTest {
         verify(mMockDevice, times(2)).disableAdbRoot();
     }
 
+    @Test
+    public void testClangCollector_whenCoverageFlushEnabled_flushCalled() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+        mCoverageOptionsSetter.setOptionValue("coverage-flush", "true");
+        Map<String, String> metric = new HashMap<>();
+
+        // Setup mocks.
+        doReturn(true).when(mMockDevice).isAdbRoot();
+        File emptyTarGz = createTarGz(ImmutableMap.of());
+        returnFileContentsOnShellCommand(mMockDevice, "/data/misc/trace", emptyTarGz);
+        returnFileContentsOnShellCommand(mMockDevice, "/data/local/tmp", emptyTarGz);
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        // Verify flush-coverage command was called at the end of the test run.
+        verify(mMockDevice).executeShellCommand("kill -37 123");
+    }
+
     private void mockCoverageFileOnDevice(String devicePath)
             throws IOException, DeviceNotAvailableException {
         File coverageFile = folder.newFile(new File(devicePath).getName());
@@ -612,6 +679,26 @@ public class CodeCoverageCollectorTest {
                         any(OutputStream.class),
                         anyLong(),
                         any(TimeUnit.class),
+                        anyInt());
+    }
+
+    private void returnFileContentsOnShellCommand(ITestDevice device, String path, File file)
+            throws DeviceNotAvailableException, IOException {
+        doAnswer(
+                        invocation -> {
+                            OutputStream out = (OutputStream) invocation.getArgument(2);
+                            try (InputStream in = new FileInputStream(file)) {
+                                in.transferTo(out);
+                            }
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        })
+                .when(device)
+                .executeShellV2Command(
+                        contains(path),
+                        (File) any(),
+                        any(OutputStream.class),
+                        anyLong(),
+                        any(),
                         anyInt());
     }
 
