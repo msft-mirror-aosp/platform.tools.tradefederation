@@ -113,6 +113,18 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     TEST_MAPPING_FILE_FORMAT_ISSUE(505_257, FailureStatus.CUSTOMER_ISSUE),
     TEST_MAPPING_FILE_NOT_EXIST(505_258, FailureStatus.CUSTOMER_ISSUE),
 
+    // 505_301 - 505_400: Cuttlefish launch failure
+    // Cuttlefish boot failure signature: bluetooth_failed
+    CUTTLEFISH_LAUNCH_FAILURE_BLUETOOTH(505_301, FailureStatus.DEPENDENCY_ISSUE),
+    // Cuttlefish boot failure signature: fetch_cvd_failure_resolve_host
+    CUTTLEFISH_LAUNCH_FAILURE_CVD_RESOLVE_HOST(505_302, FailureStatus.DEPENDENCY_ISSUE),
+    // Cuttlefish boot failure signature: fetch_cvd_failure_connect_server
+    CUTTLEFISH_LAUNCH_FAILURE_CVD_SERVER_CONNECTION(505_303, FailureStatus.DEPENDENCY_ISSUE),
+    // Cuttlefish boot failure signature: launch_cvd_port_collision
+    CUTTLEFISH_LAUNCH_FAILURE_CVD_PORT_COLLISION(505_304, FailureStatus.DEPENDENCY_ISSUE),
+    // Cuttlefish boot failure signature: fetch_cvd_failure_general
+    CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH(505_305, FailureStatus.DEPENDENCY_ISSUE),
+
     UNDETERMINED(510_000, FailureStatus.UNSET);
 
     private final long code;
