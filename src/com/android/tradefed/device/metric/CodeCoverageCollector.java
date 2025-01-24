@@ -143,43 +143,6 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         }
     }
 
-    private JavaCodeCoverageFlusher getJavaCoverageFlusher(ITestDevice device) {
-        if (mJavaFlusher == null) {
-            mJavaFlusher =
-                    new JavaCodeCoverageFlusher(
-                            device, mConfiguration.getCoverageOptions().getCoverageProcesses());
-        }
-        return mJavaFlusher;
-    }
-
-    /**
-     * Creates a {@link NativeCodeCoverageFlusher} if one does not already exist.
-     *
-     * @return a NativeCodeCoverageFlusher
-     */
-    private NativeCodeCoverageFlusher getNativeCoverageFlusher(ITestDevice device) {
-        if (mClangFlusher == null) {
-            verifyNotNull(mConfiguration);
-            mClangFlusher =
-                    new NativeCodeCoverageFlusher(device, mConfiguration.getCoverageOptions());
-            mClangFlusher.setRunUtil(mRunUtil);
-        }
-        return mClangFlusher;
-    }
-
-    @VisibleForTesting
-    void setJavaCoverageFlusher(JavaCodeCoverageFlusher flusher) {
-        mJavaFlusher = flusher;
-    }
-
-    @VisibleForTesting
-    void setClangFlusherRunUtil(IRunUtil runUtil) {
-        mRunUtil = runUtil;
-        if (mClangFlusher != null) {
-            mClangFlusher.setRunUtil(runUtil);
-        }
-    }
-
     @Override
     public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics)
             throws DeviceNotAvailableException {
@@ -296,6 +259,28 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         }
     }
 
+    @VisibleForTesting
+    void setJavaCoverageFlusher(JavaCodeCoverageFlusher flusher) {
+        mJavaFlusher = flusher;
+    }
+
+    @VisibleForTesting
+    void setClangFlusherRunUtil(IRunUtil runUtil) {
+        mRunUtil = runUtil;
+        if (mClangFlusher != null) {
+            mClangFlusher.setRunUtil(runUtil);
+        }
+    }
+
+    private JavaCodeCoverageFlusher getJavaCoverageFlusher(ITestDevice device) {
+        if (mJavaFlusher == null) {
+            mJavaFlusher =
+                    new JavaCodeCoverageFlusher(
+                            device, mConfiguration.getCoverageOptions().getCoverageProcesses());
+        }
+        return mJavaFlusher;
+    }
+
     /** Saves Java coverage file data. */
     private void saveJavaCoverageMeasurement(File coverageFile) throws IOException {
         if (shouldMergeCoverage()) {
@@ -374,6 +359,21 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         return mConfiguration != null
                 && mConfiguration.getCoverageOptions().isCoverageEnabled()
                 && mConfiguration.getCoverageOptions().getCoverageToolchains().contains(CLANG);
+    }
+
+    /**
+     * Creates a {@link NativeCodeCoverageFlusher} if one does not already exist.
+     *
+     * @return a NativeCodeCoverageFlusher
+     */
+    private NativeCodeCoverageFlusher getNativeCoverageFlusher(ITestDevice device) {
+        if (mClangFlusher == null) {
+            verifyNotNull(mConfiguration);
+            mClangFlusher =
+                    new NativeCodeCoverageFlusher(device, mConfiguration.getCoverageOptions());
+            mClangFlusher.setRunUtil(mRunUtil);
+        }
+        return mClangFlusher;
     }
 
     /** Generate the .profdata file prefix in format "$moduleName_MODULE_$runName". */
