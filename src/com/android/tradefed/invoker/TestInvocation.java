@@ -1139,6 +1139,8 @@ public class TestInvocation implements ITestInvocation {
             allListeners.add(mConditionalFailureMonitor);
             if (config.getCommandOptions().shouldUploadInvocationCacheResults()) {
                 mInvocationProtoResultReporter = new InvocationProtoResultReporter();
+                File outputFile = FileUtil.createTempFile("invocation-results-cache", ".pb");
+                mInvocationProtoResultReporter.setOutputFile(outputFile);
                 allListeners.add(mInvocationProtoResultReporter);
             }
 
@@ -1278,7 +1280,7 @@ public class TestInvocation implements ITestInvocation {
                 String skipReason = config.getSkipManager().getInvocationSkipReason();
                 if (!skipInvocation) {
                     CacheInvocationResultDescriptor descriptor =
-                            InvocationCacheHelper.lookupInvocationResults();
+                            InvocationCacheHelper.lookupInvocationResults(config, info);
                     if (descriptor != null && descriptor.isCacheHit()) {
                         skipReason = descriptor.getDetails();
                         if (InvocationContext.isPresubmit(context)
@@ -1457,11 +1459,15 @@ public class TestInvocation implements ITestInvocation {
             setExitCode(ExitCode.NO_ERROR, null);
             if (mInvocationProtoResultReporter != null
                     && !mInvocationProtoResultReporter.stopCaching()) {
-                InvocationCacheHelper.uploadInvocationResults();
+                InvocationCacheHelper.uploadInvocationResults(
+                        config, mInvocationProtoResultReporter.getOutputFile(), info);
             }
         } catch (IOException e) {
             CLog.e(e);
         } finally {
+            if (mInvocationProtoResultReporter != null) {
+                FileUtil.deleteFile(mInvocationProtoResultReporter.getOutputFile());
+            }
             TfObjectTracker.clearTracking();
             CurrentInvocation.clearInvocationInfos();
             config.getSkipManager().clearManager();

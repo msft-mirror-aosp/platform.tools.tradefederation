@@ -168,7 +168,7 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @VisibleForTesting
-    void setCoverageFlusher(JavaCodeCoverageFlusher flusher) {
+    void setJavaCoverageFlusher(JavaCodeCoverageFlusher flusher) {
         mJavaFlusher = flusher;
     }
 
@@ -225,7 +225,7 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
                                         "Failed to pull test coverage file %s from the device.",
                                         testCoveragePath);
                             } else {
-                                saveCoverageMeasurement(testCoverage);
+                                saveJavaCoverageMeasurement(testCoverage);
                             }
                         }
 
@@ -252,7 +252,7 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
                         // Decompress the files and log the measurements.
                         untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "java_coverage");
                         for (String coveragePath : FileUtil.findFiles(untarDir, ".*\\.ec")) {
-                            saveCoverageMeasurement(new File(coveragePath));
+                            saveJavaCoverageMeasurement(new File(coveragePath));
                         }
                     }
                     if (isClangCoverageEnabled()) {
@@ -278,7 +278,7 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
             try {
                 mergedCoverage = FileUtil.createTempFile("merged_java_coverage", ".ec");
                 mExecFileLoader.save(mergedCoverage, false);
-                logCoverageMeasurement(mergedCoverage);
+                logJavaCoverageMeasurement(mergedCoverage);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {
@@ -289,26 +289,26 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     /** Saves Java coverage file data. */
-    private void saveCoverageMeasurement(File coverageFile) throws IOException {
+    private void saveJavaCoverageMeasurement(File coverageFile) throws IOException {
         if (shouldMergeCoverage()) {
             if (mExecFileLoader == null) {
                 mExecFileLoader = new ExecFileLoader();
             }
             mExecFileLoader.load(coverageFile);
         } else {
-            logCoverageMeasurement(coverageFile);
+            logJavaCoverageMeasurement(coverageFile);
         }
     }
 
     /** Logs files as Java coverage measurements. */
-    private void logCoverageMeasurement(File coverageFile) {
+    private void logJavaCoverageMeasurement(File coverageFile) {
         try (FileInputStreamSource source = new FileInputStreamSource(coverageFile, true)) {
-            testLog(generateMeasurementFileName(coverageFile), LogDataType.COVERAGE, source);
+            testLog(generateJavaMeasurementFileName(coverageFile), LogDataType.COVERAGE, source);
         }
     }
 
     /** Generate the .ec file prefix in format "$moduleName_MODULE_$runName". */
-    private String generateMeasurementFileName(File coverageFile) {
+    private String generateJavaMeasurementFileName(File coverageFile) {
         String moduleName = Strings.nullToEmpty(getModuleName());
         if (moduleName.length() > 0) {
             moduleName += "_MODULE_";
