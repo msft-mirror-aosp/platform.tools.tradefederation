@@ -160,6 +160,12 @@ public class AdbTcpConnection extends DefaultConnection {
      */
     public boolean adbTcpConnect(String host, String port) {
         try (CloseableTraceScope ignored = new CloseableTraceScope("adbTcpConnect")) {
+            String adbConnectionLogMsg =
+                    mAdbConnectLogs == null
+                            ? ""
+                            : String.format(
+                                    " Found more details in adb connection log: %s",
+                                    mAdbConnectLogs);
             for (int i = 0; i < MAX_RETRIES; i++) {
                 CommandResult result = adbConnect(host, port);
                 CLog.d(
@@ -177,11 +183,17 @@ public class AdbTcpConnection extends DefaultConnection {
                         && result.getStdout().contains(ADB_CONN_REFUSED)) {
                     // If we find "Connection Refused", we bail out directly as more connect won't
                     // help
+                    CLog.e(
+                            "Adb connection to %s:%s was refused.%s",
+                            host, port, adbConnectionLogMsg);
                     return false;
                 }
                 CLog.d("adb connect retrying");
                 getRunUtil().sleep((i + 1) * RETRY_INTERVAL_MS);
             }
+            CLog.e(
+                    "All attempts to connect to %s:%s with adb failed.%s",
+                    host, port, adbConnectionLogMsg);
             return false;
         }
     }
