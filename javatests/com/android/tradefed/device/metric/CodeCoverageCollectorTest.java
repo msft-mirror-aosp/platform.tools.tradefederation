@@ -569,6 +569,21 @@ public class CodeCoverageCollectorTest {
     }
 
     @Test
+    public void testClangCollector_whenClangCoverageDisabled_noCoverageLog() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        Map<String, String> metric = new HashMap<>();
+
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+
+        // Simulate a test run.
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        assertThat(mFakeListener.getLogs()).isEmpty();
+    }
+
+    @Test
     public void testClangCollector_whenCoverageFlushEnabled_flushCalled() throws Exception {
         mCoverageOptionsSetter.setOptionValue("coverage", "true");
         mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
@@ -729,6 +744,8 @@ public class CodeCoverageCollectorTest {
 
     /** An {@link ITestInvocationListener} which reads test log data streams for verification. */
     private static class LogFileReader implements ITestInvocationListener {
+        private List<ByteString> mLogs = new ArrayList<>();
+
         /**
          * Reads the contents of the {@code dataStream} and forwards it to the {@link
          * #testLog(String, LogDataType, ByteString)} method.
@@ -737,6 +754,7 @@ public class CodeCoverageCollectorTest {
         public void testLog(String dataName, LogDataType dataType, InputStreamSource dataStream) {
             try (InputStream input = dataStream.createInputStream()) {
                 testLog(dataName, dataType, ByteString.readFrom(input));
+                mLogs.add(ByteString.readFrom(input));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -744,5 +762,9 @@ public class CodeCoverageCollectorTest {
 
         /** No-op method for {@link Spy} verification. */
         public void testLog(String dataName, LogDataType dataType, ByteString data) {}
+
+        List<ByteString> getLogs() {
+            return new ArrayList<>(mLogs);
+        }
     }
 }
