@@ -16,14 +16,17 @@
 package com.android.tradefed.device.connection;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
 import com.android.tradefed.device.internal.DeviceSnapshotHandler;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -73,9 +76,35 @@ public class AdbTcpConnection extends DefaultConnection {
     }
 
     @Override
+    public void initializeConnection() throws TargetSetupError, DeviceNotAvailableException {
+        super.initializeConnection();
+        if (wasPreExisting()) {
+            int port = 5555;
+            if (getInitialDeviceNumOffset() != null) {
+                port += getInitialDeviceNumOffset();
+            }
+            String serial = getInitialIp() + ":" + Integer.toString(port);
+            adbTcpDisconnect(getInitialIp(), Integer.toString(port));
+            ((IManagedTestDevice) getDevice())
+                    .setIDevice(new RemoteAvdIDevice(serial, getInitialIp()));
+            reconnect(serial);
+        }
+    }
+
+    @Override
     public void tearDownConnection() {
         super.tearDownConnection();
         FileUtil.deleteFile(mAdbConnectLogs);
+        if (wasPreExisting()) {
+            // Resotre the placeholder
+            ((IManagedTestDevice) getDevice())
+                    .setIDevice(
+                            new RemoteAvdIDevice(
+                                    getInitialSerial(),
+                                    getInitialIp(),
+                                    getInitialUser(),
+                                    getInitialDeviceNumOffset()));
+        }
     }
 
     @Override

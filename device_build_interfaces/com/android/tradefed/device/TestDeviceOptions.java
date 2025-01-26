@@ -420,6 +420,9 @@ public class TestDeviceOptions {
                             + " tests against an oxygenation device.")
     private boolean mUseOxygenationDevice = false;
 
+    @Option(name = "force-evaluate-connection")
+    private boolean mForceEvaluateDeviceConnection = false;
+
     // END ====================== Options Related to Virtual Devices ======================
 
     // Option related to Remote Device only
@@ -1047,6 +1050,10 @@ public class TestDeviceOptions {
             return true;
         }
         return false;
+    }
+
+    public boolean evaluateDeviceConnection() {
+        return mForceEvaluateDeviceConnection;
     }
 }
 

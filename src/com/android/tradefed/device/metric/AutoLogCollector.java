@@ -22,6 +22,8 @@ public enum AutoLogCollector {
     BUGREPORTZ_ON_FAILURE(BugreportzOnFailureCollector.class),
     BUGREPORTZ_ON_TESTCASE_FAILURE(BugreportzOnTestCaseFailureCollector.class),
     CLANG_COVERAGE(ClangCodeCoverageCollector.class),
+    // TODO: Remove this temporary value after the new collector is verified to work as expected.
+    CODE_COVERAGE(CodeCoverageCollector.class),
     GCOV_COVERAGE(GcovCodeCoverageCollector.class),
     GCOV_KERNEL_COVERAGE(GcovKernelCodeCoverageCollector.class),
     HOSTLOG_ON_FAILURE(DebugHostLogOnFailureCollector.class),

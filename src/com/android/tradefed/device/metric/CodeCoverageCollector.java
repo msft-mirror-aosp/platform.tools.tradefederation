@@ -21,6 +21,7 @@ import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.C
 import static com.google.common.base.Verify.verifyNotNull;
 import static com.google.common.io.Files.getNameWithoutExtension;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.device.DeviceNotAvailableException;
@@ -33,6 +34,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.util.AdbRootElevator;
+import com.android.tradefed.util.ClangProfileIndexer;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -43,6 +45,7 @@ import com.android.tradefed.util.ProcessInfo;
 import com.android.tradefed.util.PsParser;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.TarUtil;
+import com.android.tradefed.util.ZipUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
@@ -56,8 +59,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -74,12 +80,22 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
     public static final String COMPRESS_COVERAGE_FILES =
             String.format("%s | tar -czf - -T - 2>/dev/null", FIND_COVERAGE_FILES);
 
+    // Finds .profraw files and compresses those files only. Stores the full
+    // path of the file on the device.
+    private static final String ZIP_CLANG_FILES_COMMAND_FORMAT =
+            "find %s -name '*.profraw' | tar -czf - -T - 2>/dev/null";
+
+    // Deletes .profraw files in the directory.
+    private static final String DELETE_COVERAGE_FILES_COMMAND_FORMAT =
+            "find %s -name '*.profraw' -delete";
+
     private ExecFileLoader mExecFileLoader;
 
     private JavaCodeCoverageFlusher mJavaFlusher;
 
     private IRunUtil mRunUtil = RunUtil.getDefault();
     private NativeCodeCoverageFlusher mClangFlusher;
+    private File mLlvmProfileTool;
 
     private IConfiguration mConfiguration;
     // Timeout for pulling coverage files from the device, in milliseconds.
@@ -119,6 +135,14 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         mConfiguration = configuration;
     }
 
+    @Override
+    public void rebootEnded(ITestDevice device) throws DeviceNotAvailableException {
+        if (isClangCoverageEnabled()
+                && mConfiguration.getCoverageOptions().shouldResetCoverageBeforeTest()) {
+            getNativeCoverageFlusher(device).deleteCoverageMeasurements();
+        }
+    }
+
     private JavaCodeCoverageFlusher getJavaCoverageFlusher(ITestDevice device) {
         if (mJavaFlusher == null) {
             mJavaFlusher =
@@ -144,27 +168,29 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     @VisibleForTesting
-    void setCoverageFlusher(JavaCodeCoverageFlusher flusher) {
+    void setJavaCoverageFlusher(JavaCodeCoverageFlusher flusher) {
         mJavaFlusher = flusher;
     }
 
     @Override
     public void onTestRunEnd(DeviceMetricData runData, final Map<String, Metric> runMetrics)
             throws DeviceNotAvailableException {
-        if (!isJavaCoverageEnabled()) {
+        if (!isJavaCoverageEnabled() && !isClangCoverageEnabled()) {
             return;
         }
 
         String testCoveragePath = null;
 
-        // Get the path of the coverage measurement on the device.
-        Metric devicePathMetric = runMetrics.get(COVERAGE_MEASUREMENT_KEY);
-        if (devicePathMetric == null) {
-            CLog.d("No Java code coverage measurement.");
-        } else {
-            testCoveragePath = devicePathMetric.getMeasurements().getSingleString();
-            if (testCoveragePath == null) {
+        if (isJavaCoverageEnabled()) {
+            // Get the path of the coverage measurement on the device.
+            Metric devicePathMetric = runMetrics.get(COVERAGE_MEASUREMENT_KEY);
+            if (devicePathMetric == null) {
                 CLog.d("No Java code coverage measurement.");
+            } else {
+                testCoveragePath = devicePathMetric.getMeasurements().getSingleString();
+                if (testCoveragePath == null) {
+                    CLog.d("No Java code coverage measurement.");
+                }
             }
         }
 
@@ -176,51 +202,61 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
             try (AdbRootElevator adbRoot = new AdbRootElevator(device)) {
                 try {
                     if (mConfiguration.getCoverageOptions().isCoverageFlushEnabled()) {
-                        getJavaCoverageFlusher(device).forceCoverageFlush();
-                    }
-
-                    // Pull and log the test coverage file.
-                    if (testCoveragePath != null) {
-                        if (!new File(testCoveragePath).isAbsolute()) {
-                            testCoveragePath =
-                                    "/sdcard/googletest/internal_use/" + testCoveragePath;
+                        if (isJavaCoverageEnabled()) {
+                            getJavaCoverageFlusher(device).forceCoverageFlush();
                         }
-                        testCoverage = device.pullFile(testCoveragePath);
-                        if (testCoverage == null) {
-                            // Log a warning only, since multi-device tests will not have this file
-                            // on
-                            // all devices.
-                            CLog.w(
-                                    "Failed to pull test coverage file %s from the device.",
-                                    testCoveragePath);
-                        } else {
-                            saveCoverageMeasurement(testCoverage);
+                        if (isClangCoverageEnabled()) {
+                            getNativeCoverageFlusher(device).forceCoverageFlush();
                         }
                     }
 
-                    // Stream compressed coverage measurements from /data/misc/trace to the host.
-                    coverageTarGz = FileUtil.createTempFile("java_coverage", ".tar.gz");
-                    try (OutputStream out =
-                            new BufferedOutputStream(new FileOutputStream(coverageTarGz))) {
-                        CommandResult result =
-                                device.executeShellV2Command(
-                                        COMPRESS_COVERAGE_FILES,
-                                        null,
-                                        out,
-                                        mTimeoutMilli,
-                                        TimeUnit.MILLISECONDS,
-                                        1);
-                        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                            CLog.e(
-                                    "Failed to stream coverage data from the device: %s",
-                                    result.toString());
+                    if (isJavaCoverageEnabled()) {
+                        // Pull and log the test coverage file.
+                        if (testCoveragePath != null) {
+                            if (!new File(testCoveragePath).isAbsolute()) {
+                                testCoveragePath =
+                                        "/sdcard/googletest/internal_use/" + testCoveragePath;
+                            }
+                            testCoverage = device.pullFile(testCoveragePath);
+                            if (testCoverage == null) {
+                                // Log a warning only, since multi-device tests will not have this
+                                // file on all devices.
+                                CLog.w(
+                                        "Failed to pull test coverage file %s from the device.",
+                                        testCoveragePath);
+                            } else {
+                                saveJavaCoverageMeasurement(testCoverage);
+                            }
+                        }
+
+                        // Stream compressed coverage measurements from /data/misc/trace to the
+                        // host.
+                        coverageTarGz = FileUtil.createTempFile("java_coverage", ".tar.gz");
+                        try (OutputStream out =
+                                new BufferedOutputStream(new FileOutputStream(coverageTarGz))) {
+                            CommandResult result =
+                                    device.executeShellV2Command(
+                                            COMPRESS_COVERAGE_FILES,
+                                            null,
+                                            out,
+                                            mTimeoutMilli,
+                                            TimeUnit.MILLISECONDS,
+                                            1);
+                            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+                                CLog.e(
+                                        "Failed to stream coverage data from the device: %s",
+                                        result.toString());
+                            }
+                        }
+
+                        // Decompress the files and log the measurements.
+                        untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "java_coverage");
+                        for (String coveragePath : FileUtil.findFiles(untarDir, ".*\\.ec")) {
+                            saveJavaCoverageMeasurement(new File(coveragePath));
                         }
                     }
-
-                    // Decompress the files and log the measurements.
-                    untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "java_coverage");
-                    for (String coveragePath : FileUtil.findFiles(untarDir, ".*\\.ec")) {
-                        saveCoverageMeasurement(new File(coveragePath));
+                    if (isClangCoverageEnabled()) {
+                        logNativeCoverageMeasurement(device, generateNativeMeasurementFileName());
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
@@ -242,7 +278,7 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
             try {
                 mergedCoverage = FileUtil.createTempFile("merged_java_coverage", ".ec");
                 mExecFileLoader.save(mergedCoverage, false);
-                logCoverageMeasurement(mergedCoverage);
+                logJavaCoverageMeasurement(mergedCoverage);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             } finally {
@@ -253,26 +289,26 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
     }
 
     /** Saves Java coverage file data. */
-    private void saveCoverageMeasurement(File coverageFile) throws IOException {
+    private void saveJavaCoverageMeasurement(File coverageFile) throws IOException {
         if (shouldMergeCoverage()) {
             if (mExecFileLoader == null) {
                 mExecFileLoader = new ExecFileLoader();
             }
             mExecFileLoader.load(coverageFile);
         } else {
-            logCoverageMeasurement(coverageFile);
+            logJavaCoverageMeasurement(coverageFile);
         }
     }
 
     /** Logs files as Java coverage measurements. */
-    private void logCoverageMeasurement(File coverageFile) {
+    private void logJavaCoverageMeasurement(File coverageFile) {
         try (FileInputStreamSource source = new FileInputStreamSource(coverageFile, true)) {
-            testLog(generateMeasurementFileName(coverageFile), LogDataType.COVERAGE, source);
+            testLog(generateJavaMeasurementFileName(coverageFile), LogDataType.COVERAGE, source);
         }
     }
 
     /** Generate the .ec file prefix in format "$moduleName_MODULE_$runName". */
-    private String generateMeasurementFileName(File coverageFile) {
+    private String generateJavaMeasurementFileName(File coverageFile) {
         String moduleName = Strings.nullToEmpty(getModuleName());
         if (moduleName.length() > 0) {
             moduleName += "_MODULE_";
@@ -330,6 +366,120 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
         return mConfiguration != null
                 && mConfiguration.getCoverageOptions().isCoverageEnabled()
                 && mConfiguration.getCoverageOptions().getCoverageToolchains().contains(CLANG);
+    }
+
+    /** Generate the .profdata file prefix in format "$moduleName_MODULE_$runName". */
+    private String generateNativeMeasurementFileName() {
+        String moduleName = Strings.nullToEmpty(getModuleName());
+        if (moduleName.length() > 0) {
+            moduleName += "_MODULE_";
+        }
+        return moduleName + getRunName().replace(' ', '_');
+    }
+
+    /**
+     * Logs Clang coverage measurements from the device.
+     *
+     * @param runName name used in the log file
+     * @throws DeviceNotAvailableException
+     * @throws IOException
+     */
+    private void logNativeCoverageMeasurement(ITestDevice device, String runName)
+            throws DeviceNotAvailableException, IOException {
+        Map<String, File> untarDirs = new HashMap<>();
+        File profileTool = null;
+        File indexedProfileFile = null;
+        try {
+            Set<String> rawProfileFiles = new HashSet<>();
+            for (String devicePath : mConfiguration.getCoverageOptions().getDeviceCoveragePaths()) {
+                File coverageTarGz = FileUtil.createTempFile("clang_coverage", ".tar.gz");
+
+                try {
+                    // Compress coverage measurements on the device before streaming to the host.
+                    try (OutputStream out =
+                            new BufferedOutputStream(new FileOutputStream(coverageTarGz))) {
+                        device.executeShellV2Command(
+                                String.format(
+                                        ZIP_CLANG_FILES_COMMAND_FORMAT, devicePath), // Command
+                                null, // File pipe as input
+                                out, // OutputStream to write to
+                                mTimeoutMilli, // Timeout in milliseconds
+                                TimeUnit.MILLISECONDS, // Timeout units
+                                1); // Retry count
+                    }
+
+                    File untarDir = TarUtil.extractTarGzipToTemp(coverageTarGz, "clang_coverage");
+                    untarDirs.put(devicePath, untarDir);
+                    rawProfileFiles.addAll(
+                            FileUtil.findFiles(
+                                    untarDir,
+                                    mConfiguration.getCoverageOptions().getProfrawFilter()));
+                } catch (IOException e) {
+                    CLog.e("Failed to pull Clang coverage data from %s", devicePath);
+                    CLog.e(e);
+                } finally {
+                    FileUtil.deleteFile(coverageTarGz);
+                }
+            }
+
+            if (rawProfileFiles.isEmpty()) {
+                CLog.i("No Clang code coverage measurements found.");
+                return;
+            }
+
+            CLog.i("Received %d Clang code coverage measurements.", rawProfileFiles.size());
+
+            ClangProfileIndexer indexer = new ClangProfileIndexer(getProfileTool(), mRunUtil);
+
+            // Create the output file.
+            indexedProfileFile =
+                    FileUtil.createTempFile(runName + "_clang_runtime_coverage", ".profdata");
+            indexer.index(rawProfileFiles, indexedProfileFile);
+
+            try (FileInputStreamSource source =
+                    new FileInputStreamSource(indexedProfileFile, true)) {
+                testLog(runName + "_clang_runtime_coverage", LogDataType.CLANG_COVERAGE, source);
+            }
+        } finally {
+            // Delete coverage files on the device.
+            for (String devicePath : mConfiguration.getCoverageOptions().getDeviceCoveragePaths()) {
+                device.executeShellCommand(
+                        String.format(DELETE_COVERAGE_FILES_COMMAND_FORMAT, devicePath));
+            }
+            for (File untarDir : untarDirs.values()) {
+                FileUtil.recursiveDelete(untarDir);
+            }
+            FileUtil.recursiveDelete(mLlvmProfileTool);
+            FileUtil.deleteFile(indexedProfileFile);
+        }
+    }
+
+    /**
+     * Retrieves the profile tool and dependencies from the build, and extracts them.
+     *
+     * @return the directory containing the profile tool and dependencies
+     */
+    private File getProfileTool() throws IOException {
+        // If llvm-profdata-path was set in the Configuration, pass it through. Don't save the path
+        // locally since the parent process is responsible for cleaning it up.
+        File configurationTool = mConfiguration.getCoverageOptions().getLlvmProfdataPath();
+        if (configurationTool != null) {
+            return configurationTool;
+        }
+        if (mLlvmProfileTool != null && mLlvmProfileTool.exists()) {
+            return mLlvmProfileTool;
+        }
+
+        // Otherwise, try to download llvm-profdata.zip from the build and cache it.
+        File profileToolZip = null;
+        for (IBuildInfo info : getBuildInfos()) {
+            if (info.getFile("llvm-profdata.zip") != null) {
+                profileToolZip = info.getFile("llvm-profdata.zip");
+                mLlvmProfileTool = ZipUtil.extractZipToTemp(profileToolZip, "llvm-profdata");
+                return mLlvmProfileTool;
+            }
+        }
+        return mLlvmProfileTool;
     }
 
     private boolean shouldMergeCoverage() {
