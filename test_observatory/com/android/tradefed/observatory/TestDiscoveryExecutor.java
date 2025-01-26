@@ -221,7 +221,7 @@ public class TestDiscoveryExecutor {
                             "Tradefed Observatory can't do test discovery on non suite-based test"
                                     + " runner.",
                             null,
-                            DiscoveryExitCode.ERROR);
+                            DiscoveryExitCode.HAS_NON_SUITE_BASED_TEST_RUNNER_ERROR);
                 }
                 if (test instanceof TestMappingSuiteRunner) {
                     ((TestMappingSuiteRunner) test).loadTestInfos();

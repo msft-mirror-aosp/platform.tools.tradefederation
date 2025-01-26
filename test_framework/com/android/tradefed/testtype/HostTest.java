@@ -37,6 +37,7 @@ import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
+import com.android.tradefed.observatory.IDiscoverTestClasses;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ResultForwarder;
@@ -112,7 +113,8 @@ public class HostTest
                 IAbiReceiver,
                 IShardableTest,
                 IRuntimeHintProvider,
-                IConfigurationReceiver {
+                IConfigurationReceiver,
+                IDiscoverTestClasses {
 
     @Option(name = "class", description = "The JUnit test classes to run, in the format "
             + "<package>.<class>. eg. \"com.android.foo.Bar\". This field can be repeated.",
@@ -432,7 +434,7 @@ public class HostTest
         mClasses.add(className);
     }
 
-    @VisibleForTesting
+    @Override
     public Set<String> getClassNames() {
         return mClasses;
     }
