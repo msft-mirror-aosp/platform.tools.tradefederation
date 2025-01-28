@@ -79,6 +79,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -92,6 +93,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /** Unit tests for {@link CodeCoverageCollector}. */
 @RunWith(JUnit4.class)
@@ -606,6 +609,112 @@ public class CodeCoverageCollectorTest {
         verify(mMockDevice).executeShellCommand("kill -37 123");
     }
 
+    @Test
+    public void testClangCollector_logsCoverageFileFromMiscTrace() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+        mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
+
+        // Setup mocks.
+        doReturn(true).when(mMockDevice).isAdbRoot();
+        File tarGz =
+                createTarGz(
+                        ImmutableMap.of(
+                                "path/to/coverage.profraw",
+                                ByteString.copyFromUtf8("coverage.profraw"),
+                                "path/to/.hidden/coverage2.profraw",
+                                ByteString.copyFromUtf8("coverage2.profraw")));
+        returnFileContentsOnShellCommand(mMockDevice, "/data/misc/trace", tarGz);
+        File emptyTarGz = createTarGz(ImmutableMap.of());
+        returnFileContentsOnShellCommand(mMockDevice, "/data/local/tmp", emptyTarGz);
+        doReturn(createProfileToolZip()).when(mMockBuildInfo).getFile(anyString());
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, createEmptyMetrics());
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        // Verify the timeout is set.
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/misc/trace -name '*.profraw' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        eq(314159L),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/local/tmp -name '*.profraw' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        anyLong(),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+        // Verify that the command line contains the files above.
+        List<String> command = mCommandArgumentCaptor.getCommand();
+        checkListContainsSuffixes(
+                command,
+                ImmutableList.of(
+                        "llvm-profdata",
+                        "path/to/coverage.profraw",
+                        "path/to/.hidden/coverage2.profraw"));
+
+        // Verify testLog(..) was called with a single indexed profile data.
+        List<ByteString> logs = mFakeListener.getLogs();
+        assertThat(logs).hasSize(1);
+    }
+
+    @Test
+    public void testClangCollector_logsCoverageFileFromLocalTmp() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+
+        // Set up mocks.
+        doReturn(true).when(mMockDevice).isAdbRoot();
+        File tarGz =
+                createTarGz(
+                        ImmutableMap.of(
+                                "path/to/coverage.profraw",
+                                ByteString.copyFromUtf8("coverage.profraw"),
+                                "path/to/.hidden/coverage2.profraw",
+                                ByteString.copyFromUtf8("coverage2.profraw")));
+        File emptyTarGz = createTarGz(ImmutableMap.of());
+        returnFileContentsOnShellCommand(mMockDevice, "/data/misc/trace", emptyTarGz);
+        returnFileContentsOnShellCommand(mMockDevice, "/data/local/tmp", tarGz);
+        doReturn(createProfileToolZip()).when(mMockBuildInfo).getFile(anyString());
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, createEmptyMetrics());
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        // Verify coverage was pulled.
+        verify(mMockDevice, times(2))
+                .executeShellV2Command(
+                        contains("tar -czf"),
+                        any(),
+                        any(),
+                        anyLong(),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+
+        // Verify that the command line contains the files above.
+        List<String> command = mCommandArgumentCaptor.getCommand();
+        checkListContainsSuffixes(
+                command,
+                ImmutableList.of(
+                        "llvm-profdata",
+                        "path/to/coverage.profraw",
+                        "path/to/.hidden/coverage2.profraw"));
+
+        // Verify testLog(...) was called with a single indexed profile data file.
+        List<ByteString> logs = mFakeListener.getLogs();
+        assertThat(logs).hasSize(1);
+    }
+
     private void mockCoverageFileOnDevice(String devicePath)
             throws IOException, DeviceNotAvailableException {
         File coverageFile = folder.newFile(new File(devicePath).getName());
@@ -671,6 +780,11 @@ public class CodeCoverageCollectorTest {
     private static <T> boolean[] getProbes(Class<T> clazz, ExecutionDataStore execData)
             throws IOException {
         return execData.get(classId(clazz), vmName(clazz), PROBE_COUNT).getProbesCopy();
+    }
+
+    private static HashMap<String, Metric> createEmptyMetrics() {
+        Map<String, String> metric = new HashMap<>();
+        return TfMetricProtoUtil.upgradeConvert(metric);
     }
 
     private static HashMap<String, Metric> createMetricsWithCoverageMeasurement(String devicePath) {
@@ -765,6 +879,35 @@ public class CodeCoverageCollectorTest {
 
         List<ByteString> getLogs() {
             return new ArrayList<>(mLogs);
+        }
+    }
+
+    private File createProfileToolZip() throws IOException {
+        File profileToolZip = folder.newFile("llvm-profdata.zip");
+        try (FileOutputStream stream = new FileOutputStream(profileToolZip);
+                ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(stream))) {
+            // Add bin/llvm-profdata.
+            ZipEntry entry = new ZipEntry("bin/llvm-profdata");
+            out.putNextEntry(entry);
+            out.closeEntry();
+        }
+        return profileToolZip;
+    }
+
+    /** Verifies that certain suffixes are contained in the List. */
+    void checkListContainsSuffixes(List<String> list, List<String> suffixes) {
+        for (String suffix : suffixes) {
+            boolean found = false;
+            for (String item : list) {
+                if (item.endsWith(suffix)) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                fail("List " + list.toString() + " does not contain suffix '" + suffix + "'");
+            }
         }
     }
 }
