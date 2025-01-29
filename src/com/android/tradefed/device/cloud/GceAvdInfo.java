@@ -40,6 +40,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -48,6 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** Structure to hold relevant data for a given GCE AVD instance. */
 public class GceAvdInfo {
@@ -63,6 +66,28 @@ public class GceAvdInfo {
             Pattern.compile(
                     "session_id:\\s?\"(.*?)\".*?server_url:\\s?\"(.*?)\".*?oxygen_version:\\s?\"(.*?)\".*?device_id:\\s?\"(.*?)\"",
                     Pattern.DOTALL);
+
+    private static final Map<String, InfraErrorIdentifier> ERROR_SIGNATURE_TO_IDENTIFIER_MAP =
+            Stream.of(
+                            new AbstractMap.SimpleEntry<>(
+                                    "bluetooth_failed",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_BLUETOOTH),
+                            new AbstractMap.SimpleEntry<>(
+                                    "fetch_cvd_failure_resolve_host",
+                                    InfraErrorIdentifier
+                                            .CUTTLEFISH_LAUNCH_FAILURE_CVD_RESOLVE_HOST),
+                            new AbstractMap.SimpleEntry<>(
+                                    "fetch_cvd_failure_connect_server",
+                                    InfraErrorIdentifier
+                                            .CUTTLEFISH_LAUNCH_FAILURE_CVD_SERVER_CONNECTION),
+                            new AbstractMap.SimpleEntry<>(
+                                    "launch_cvd_port_collision",
+                                    InfraErrorIdentifier
+                                            .CUTTLEFISH_LAUNCH_FAILURE_CVD_PORT_COLLISION),
+                            new AbstractMap.SimpleEntry<>(
+                                    "fetch_cvd_failure_general",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     static {
         OXYGEN_ERROR_PATTERN_MAP = new LinkedHashMap<InfraErrorIdentifier, String>();
@@ -622,5 +647,25 @@ public class GceAvdInfo {
                 .containsKey(InvocationMetricKey.CF_INSTANCE_COUNT.toString())) {
             InvocationMetricLogger.addInvocationMetrics(InvocationMetricKey.CF_INSTANCE_COUNT, 1);
         }
+    }
+
+    /**
+     * Convert error signature to InfraErrorIdentifier
+     *
+     * @return {@link InfraErrorIdentifier}
+     */
+    public static InfraErrorIdentifier convertErrorSignatureToIdentifier() {
+        String errorSignatures =
+                InvocationMetricLogger.getInvocationMetrics()
+                        .get(InvocationMetricKey.DEVICE_ERROR_SIGNATURES.toString());
+        if (errorSignatures == null) {
+            return null;
+        }
+        for (String signature : errorSignatures.split(",")) {
+            if (ERROR_SIGNATURE_TO_IDENTIFIER_MAP.containsKey(signature)) {
+                return ERROR_SIGNATURE_TO_IDENTIFIER_MAP.get(signature);
+            }
+        }
+        return null;
     }
 }

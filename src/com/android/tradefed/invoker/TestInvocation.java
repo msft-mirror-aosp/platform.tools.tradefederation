@@ -1139,6 +1139,8 @@ public class TestInvocation implements ITestInvocation {
             allListeners.add(mConditionalFailureMonitor);
             if (config.getCommandOptions().shouldUploadInvocationCacheResults()) {
                 mInvocationProtoResultReporter = new InvocationProtoResultReporter();
+                File outputFile = FileUtil.createTempFile("invocation-results-cache", ".pb");
+                mInvocationProtoResultReporter.setOutputFile(outputFile);
                 allListeners.add(mInvocationProtoResultReporter);
             }
 
@@ -1277,14 +1279,17 @@ public class TestInvocation implements ITestInvocation {
                 boolean skipInvocation = config.getSkipManager().shouldSkipInvocation(info);
                 String skipReason = config.getSkipManager().getInvocationSkipReason();
                 if (!skipInvocation) {
-                    CacheInvocationResultDescriptor descriptor =
-                            InvocationCacheHelper.lookupInvocationResults(config, null);
-                    if (descriptor != null && descriptor.isCacheHit()) {
-                        skipReason = descriptor.getDetails();
-                        if (InvocationContext.isPresubmit(context)
-                                && config.getCommandOptions()
-                                        .reportInvocationCacheResultsInPresubmit()) {
-                            skipInvocation = true;
+                    if (config.getCommandOptions().getRemoteCacheInstanceName() != null
+                            && config.getCommandOptions().shouldUploadInvocationCacheResults()) {
+                        CacheInvocationResultDescriptor descriptor =
+                                InvocationCacheHelper.lookupInvocationResults(config, info);
+                        if (descriptor != null && descriptor.isCacheHit()) {
+                            skipReason = descriptor.getDetails();
+                            if (InvocationContext.isPresubmit(context)
+                                    && config.getCommandOptions()
+                                            .reportInvocationCacheResultsInPresubmit()) {
+                                skipInvocation = true;
+                            }
                         }
                     }
                 }
@@ -1458,12 +1463,14 @@ public class TestInvocation implements ITestInvocation {
             if (mInvocationProtoResultReporter != null
                     && !mInvocationProtoResultReporter.stopCaching()) {
                 InvocationCacheHelper.uploadInvocationResults(
-                        config, mInvocationProtoResultReporter.getOutputFile(), null);
-                FileUtil.deleteFile(mInvocationProtoResultReporter.getOutputFile());
+                        config, mInvocationProtoResultReporter.getOutputFile(), info);
             }
         } catch (IOException e) {
             CLog.e(e);
         } finally {
+            if (mInvocationProtoResultReporter != null) {
+                FileUtil.deleteFile(mInvocationProtoResultReporter.getOutputFile());
+            }
             TfObjectTracker.clearTracking();
             CurrentInvocation.clearInvocationInfos();
             config.getSkipManager().clearManager();
