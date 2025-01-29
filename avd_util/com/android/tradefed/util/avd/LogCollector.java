@@ -127,7 +127,12 @@ public class LogCollector {
                                                     "BluetoothShellCommand:"
                                                         + " wait-for-state:STATE_OFF: Failed with"
                                                         + " status=-1",
-                                                    "bluetooth_failed_to_stop")))
+                                                    "bluetooth_failed_to_stop")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*launcher.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Assertion `mutex->__data.__owner == 0' failed",
+                                                    "cf_webrtc_crash")))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**
