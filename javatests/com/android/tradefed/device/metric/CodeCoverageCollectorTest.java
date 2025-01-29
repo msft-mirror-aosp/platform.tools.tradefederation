@@ -264,7 +264,10 @@ public class CodeCoverageCollectorTest {
 
         // Verify testLog(..) was called with the coverage file.
         verify(mFakeListener)
-                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+                .testLog(
+                        eq("SomeTest_device_runtime_coverage"),
+                        eq(LogDataType.COVERAGE),
+                        eq(COVERAGE_MEASUREMENT));
     }
 
     @Test
