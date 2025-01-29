@@ -72,10 +72,7 @@ public class ImageContentAnalyzer {
                     Arrays.asList(
                             // b/335722003
                             "/boot_otas/boot_ota_4k.zip",
-                            "/boot_otas/boot_ota_16k.zip",
-                            // b/383555703
-                            "SYSTEM/apex/com.google.android.virt.apex",
-                            "SYSTEM/apex/com.android.virt.apex")) {
+                            "/boot_otas/boot_ota_16k.zip")) {
                 removed = allDescriptors.removeIf(d -> d.path.endsWith(path)) || removed;
             }
             if (removed) {
