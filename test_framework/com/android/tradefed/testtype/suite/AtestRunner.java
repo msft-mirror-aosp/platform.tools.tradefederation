@@ -18,6 +18,7 @@ package com.android.tradefed.testtype.suite;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.Option.Importance;
 import com.android.tradefed.config.OptionCopier;
@@ -280,9 +281,11 @@ public class AtestRunner extends BaseTestSuite {
      */
     private static void setIncrementalSetupEnabledForTargetPreparers(
         IConfiguration testConfig, boolean shouldEnable) {
-        for (ITargetPreparer targetPreparer : testConfig.getTargetPreparers()) {
-            if (targetPreparer instanceof IIncrementalSetup) {
-                ((IIncrementalSetup) targetPreparer).setIncrementalSetupEnabled(shouldEnable);
+        for (IDeviceConfiguration deviceConfig : testConfig.getDeviceConfig()) {
+            for (ITargetPreparer targetPreparer : deviceConfig.getTargetPreparers()) {
+                if (targetPreparer instanceof IIncrementalSetup) {
+                    ((IIncrementalSetup) targetPreparer).setIncrementalSetupEnabled(shouldEnable);
+                }
             }
         }
     }
