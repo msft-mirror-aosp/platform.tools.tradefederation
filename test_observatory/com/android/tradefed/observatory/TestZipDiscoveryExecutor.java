@@ -191,8 +191,6 @@ public class TestZipDiscoveryExecutor {
             for (String arg : args) {
                 if (arg.contains("liblyric")) {
                     testsZipRegex.add("camera-hal-tests.zip");
-                    // TODO: Clean up after properly migrated to camera-hal-tests.zip
-                    testsZipRegex.add("device-tests.zip");
                 }
             }
             return formatResults(false, testsZipRegex);
