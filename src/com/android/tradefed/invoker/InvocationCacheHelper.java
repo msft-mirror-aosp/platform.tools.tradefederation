@@ -83,7 +83,9 @@ public class InvocationCacheHelper {
                             CurrentInvocation.getWorkFolder(), cacheInstance);
             if (invocationTestsDir == null) {
                 emptyTestsDir = true;
-                invocationTestsDir = FileUtil.createTempDir("invoc-cache-tmp");
+                invocationTestsDir =
+                        FileUtil.createNamedTempDir(
+                                CurrentInvocation.getWorkFolder(), "invoc-cache");
             }
             ExecutableAction action =
                     ExecutableAction.create(
@@ -121,7 +123,9 @@ public class InvocationCacheHelper {
                             CurrentInvocation.getWorkFolder(), cacheInstance);
             if (invocationTestsDir == null) {
                 emptyTestsDir = true;
-                invocationTestsDir = FileUtil.createTempDir("invoc-cache-tmp");
+                invocationTestsDir =
+                        FileUtil.createNamedTempDir(
+                                CurrentInvocation.getWorkFolder(), "invoc-cache");
             }
             ExecutableAction action =
                     ExecutableAction.create(
