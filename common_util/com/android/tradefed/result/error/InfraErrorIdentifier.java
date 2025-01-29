@@ -124,6 +124,8 @@ public enum InfraErrorIdentifier implements ErrorIdentifier {
     CUTTLEFISH_LAUNCH_FAILURE_CVD_PORT_COLLISION(505_304, FailureStatus.DEPENDENCY_ISSUE),
     // Cuttlefish boot failure signature: fetch_cvd_failure_general
     CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH(505_305, FailureStatus.DEPENDENCY_ISSUE),
+    // Cuttlefish boot failure signature: cf_webrtc_crash
+    CUTTLEFISH_LAUNCH_FAILURE_WEBRTC_CRASH(505_306, FailureStatus.DEPENDENCY_ISSUE),
 
     UNDETERMINED(510_000, FailureStatus.UNSET);
 

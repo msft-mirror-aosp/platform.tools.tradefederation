@@ -86,7 +86,10 @@ public class GceAvdInfo {
                                             .CUTTLEFISH_LAUNCH_FAILURE_CVD_PORT_COLLISION),
                             new AbstractMap.SimpleEntry<>(
                                     "fetch_cvd_failure_general",
-                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH))
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH),
+                            new AbstractMap.SimpleEntry<>(
+                                    "cf_webrtc_crash",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_WEBRTC_CRASH))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     static {
