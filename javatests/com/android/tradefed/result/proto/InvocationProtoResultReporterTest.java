@@ -43,6 +43,7 @@ import org.mockito.MockitoAnnotations;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 
 /** Unit tests for {@link InvocationProtoResultReporter}. */
 @RunWith(JUnit4.class)
@@ -57,8 +58,6 @@ public class InvocationProtoResultReporterTest {
         MockitoAnnotations.initMocks(this);
 
         mOutput = FileUtil.createTempFile("proto-file-reporter-test", ".pb");
-        mReporter = new InvocationProtoResultReporter();
-        mReporter.setFileOutput(mOutput);
     }
 
     @After
@@ -69,6 +68,9 @@ public class InvocationProtoResultReporterTest {
     @Test
     public void testInvocationReporting() throws Exception {
         IInvocationContext context = new InvocationContext();
+        context.addInvocationAttribute("invocation_id", "I9999");
+        mReporter = new InvocationProtoResultReporter(context, false);
+        mReporter.setFileOutput(mOutput);
         TestDescription test1 = new TestDescription("class1", "test1");
 
         mReporter.invocationStarted(context);
@@ -100,11 +102,15 @@ public class InvocationProtoResultReporterTest {
         verify(mMockListener).testModuleEnded();
         verify(mMockListener).invocationEnded(anyLong());
         assertFalse(mReporter.stopCaching());
+        Map<String, String> metadata = ModuleProtoResultReporter.parseResultsMetadata(mOutput);
+        assertTrue(metadata.containsKey(ModuleProtoResultReporter.INVOCATION_ID_KEY));
     }
 
     @Test
     public void testInvocationReporting_failure() throws Exception {
         IInvocationContext context = new InvocationContext();
+        mReporter = new InvocationProtoResultReporter(context, false);
+        mReporter.setFileOutput(mOutput);
 
         mReporter.invocationStarted(context);
         mReporter.invocationFailed(new RuntimeException("failure"));
