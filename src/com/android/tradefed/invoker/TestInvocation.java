@@ -1138,7 +1138,8 @@ public class TestInvocation implements ITestInvocation {
             allListeners.add(mUnavailableMonitor);
             allListeners.add(mConditionalFailureMonitor);
             if (config.getCommandOptions().shouldUploadInvocationCacheResults()) {
-                mInvocationProtoResultReporter = new InvocationProtoResultReporter();
+                mInvocationProtoResultReporter =
+                        new InvocationProtoResultReporter(info.getContext(), false);
                 File outputFile = FileUtil.createTempFile("invocation-results-cache", ".pb");
                 mInvocationProtoResultReporter.setOutputFile(outputFile);
                 allListeners.add(mInvocationProtoResultReporter);
