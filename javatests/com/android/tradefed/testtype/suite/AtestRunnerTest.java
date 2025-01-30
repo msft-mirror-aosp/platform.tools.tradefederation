@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.IDeviceConfiguration;
 import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
@@ -79,6 +80,8 @@ public class AtestRunnerTest {
     private AbiAtestRunner mRunner;
     private OptionSetter setter;
     private IConfiguration mConfig;
+    private IDeviceConfiguration mDeviceConfig;
+    private IDeviceConfiguration mDeviceConfig2;
     private IDeviceBuildInfo mBuildInfo;
     private ITestDevice mMockDevice;
     private String classA = "fully.qualified.classA";
@@ -106,6 +109,7 @@ public class AtestRunnerTest {
         mRunner.setBuild(mBuildInfo);
         mRunner.setDevice(mMockDevice);
         mConfig = mock(IConfiguration.class);
+        mDeviceConfig = mock(IDeviceConfiguration.class);
 
         when(mBuildInfo.getTestsDir()).thenReturn(mTempFolder.newFolder());
 
@@ -305,8 +309,18 @@ public class AtestRunnerTest {
         List<ITargetPreparer> targetPreparers = new ArrayList<>();
         PseudoTargetPreparer preparer = spy(new PseudoTargetPreparer());
         targetPreparers.add(preparer);
+        List<ITargetPreparer> targetPreparers2 = new ArrayList<>();
+        PseudoTargetPreparer preparer2 = spy(new PseudoTargetPreparer());
+        targetPreparers2.add(preparer2);
+        List<IDeviceConfiguration> deviceConfigs = new ArrayList<>();
+        IDeviceConfiguration deviceConfig = mock(IDeviceConfiguration.class);
+        when(deviceConfig.getTargetPreparers()).thenReturn(targetPreparers);
+        deviceConfigs.add(deviceConfig);
+        when(mDeviceConfig.getTargetPreparers()).thenReturn(targetPreparers2);
+        deviceConfigs.add(mDeviceConfig);
+        when(mConfig.getDeviceConfig()).thenReturn(deviceConfigs);
         when(mConfig.getName()).thenReturn("custom-configuration");
-        when(mConfig.getTargetPreparers()).thenReturn(targetPreparers);
+        when(mConfig.getDeviceConfig()).thenReturn(deviceConfigs);
 
         LinkedHashMap<String, IConfiguration> pseudoConfigMap = new LinkedHashMap<>();
         pseudoConfigMap.put("pseudo-config", mConfig);
@@ -332,8 +346,18 @@ public class AtestRunnerTest {
         List<ITargetPreparer> targetPreparers = new ArrayList<>();
         PseudoTargetPreparer preparer = spy(new PseudoTargetPreparer());
         targetPreparers.add(preparer);
+        List<ITargetPreparer> targetPreparers2 = new ArrayList<>();
+        PseudoTargetPreparer preparer2 = spy(new PseudoTargetPreparer());
+        targetPreparers2.add(preparer2);
+        List<IDeviceConfiguration> deviceConfigs = new ArrayList<>();
+        IDeviceConfiguration deviceConfig = mock(IDeviceConfiguration.class);
+        when(deviceConfig.getTargetPreparers()).thenReturn(targetPreparers);
+        deviceConfigs.add(deviceConfig);
+        when(mDeviceConfig.getTargetPreparers()).thenReturn(targetPreparers2);
+        deviceConfigs.add(mDeviceConfig);
+        when(mConfig.getDeviceConfig()).thenReturn(deviceConfigs);
         when(mConfig.getName()).thenReturn("custom-configuration");
-        when(mConfig.getTargetPreparers()).thenReturn(targetPreparers);
+        when(mConfig.getDeviceConfig()).thenReturn(deviceConfigs);
 
         LinkedHashMap<String, IConfiguration> pseudoConfigMap = new LinkedHashMap<>();
         pseudoConfigMap.put("pseudo-config", mConfig);
@@ -359,8 +383,18 @@ public class AtestRunnerTest {
         List<ITargetPreparer> targetPreparers = new ArrayList<>();
         PseudoTargetPreparer preparer = spy(new PseudoTargetPreparer());
         targetPreparers.add(preparer);
+        List<ITargetPreparer> targetPreparers2 = new ArrayList<>();
+        PseudoTargetPreparer preparer2 = spy(new PseudoTargetPreparer());
+        targetPreparers2.add(preparer2);
+        List<IDeviceConfiguration> deviceConfigs = new ArrayList<>();
+        IDeviceConfiguration deviceConfig = mock(IDeviceConfiguration.class);
+        when(deviceConfig.getTargetPreparers()).thenReturn(targetPreparers);
+        deviceConfigs.add(deviceConfig);
+        when(mDeviceConfig.getTargetPreparers()).thenReturn(targetPreparers2);
+        deviceConfigs.add(mDeviceConfig);
+        when(mConfig.getDeviceConfig()).thenReturn(deviceConfigs);
         when(mConfig.getName()).thenReturn("custom-configuration");
-        when(mConfig.getTargetPreparers()).thenReturn(targetPreparers);
+        when(mConfig.getDeviceConfig()).thenReturn(deviceConfigs);
 
         LinkedHashMap<String, IConfiguration> pseudoConfigMap = new LinkedHashMap<>();
         pseudoConfigMap.put("pseudo-config", mConfig);
