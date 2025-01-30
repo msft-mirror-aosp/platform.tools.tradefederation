@@ -208,7 +208,8 @@ public class NativeDevice
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
-
+    /** The time in ms to pause after a trade-in mode reboot. */
+    private long mTradeInModePause = 6000;
 
     /**
      * The delimiter that separates the actual shell output and the exit status.
@@ -6235,6 +6236,54 @@ public class NativeDevice
                     "'" + UNMOUNT_DEBUGFS_COMMAND + "' has failed: " + result,
                     DeviceErrorIdentifier.SHELL_COMMAND_ERROR);
         }
+    }
+
+    /**
+     * Enable testing trade-in mode. The device will be wiped and will reboot.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    @Override
+    public boolean startTradeInModeTesting(final int timeoutMs) throws DeviceNotAvailableException {
+        if (!enableAdbRoot()) {
+            CLog.w("Trade in mode requires root.");
+            return false;
+        }
+
+        final CommandResult result =
+                executeShellV2Command(
+                        "tradeinmode wait-until-ready testing start",
+                        timeoutMs,
+                        TimeUnit.MILLISECONDS);
+        // Wait a few seconds before issuing more commands.
+        getRunUtil().sleep(mTradeInModePause);
+        RecoveryMode mode = getRecoveryMode();
+        try {
+            setRecoveryMode(RecoveryMode.NONE);
+            // TIM does not support normal ADB commands so we must not accidentally go into the
+            // recovery flow.
+            IDevice online = mStateMonitor.waitForDeviceOnline(timeoutMs);
+            if (online != null) {
+                return true;
+            }
+            CLog.w("Device did not come online after tradeinmode start request");
+            return false;
+        } finally {
+            setRecoveryMode(mode);
+        }
+    }
+
+    /** Stop trade-in mode testing. */
+    @Override
+    public void stopTradeInModeTesting() throws DeviceNotAvailableException {
+        // Either: we're still in trade-in mode, or we just factory reset and we're still in
+        // SUW.
+        executeShellV2Command("tradeinmode wait-until-ready evaluate");
+        getRunUtil().sleep(mTradeInModePause);
+        enableAdbRoot();
+        executeShellV2Command("tradeinmode wait-until-ready testing stop");
+        getRunUtil().sleep(mTradeInModePause);
+        waitForDeviceAvailable();
     }
 
     /**

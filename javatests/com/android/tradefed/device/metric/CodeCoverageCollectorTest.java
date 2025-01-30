@@ -246,13 +246,31 @@ public class CodeCoverageCollectorTest {
     }
 
     @Test
-    public void testRunEnded_rootEnabled_noModuleName_logsCoverageMeasurement() throws Exception {
+    public void testJavaCollector_logCoverageWithModuleName() throws Exception {
+        enableJavaCoverage();
+        HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
+        mockCoverageFileOnDevice(DEVICE_PATH);
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
+
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
+
+        verify(mFakeListener)
+                .testLog(
+                        eq("myModule_MODULE_SomeTest_device_runtime_coverage"),
+                        eq(LogDataType.COVERAGE),
+                        eq(COVERAGE_MEASUREMENT));
+    }
+
+    @Test
+    public void testJavaCollector_logCoverageWithoutModuleName() throws Exception {
         enableJavaCoverage();
 
         // Setup mocks.
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
         mockCoverageFileOnDevice(DEVICE_PATH);
-        when(mMockDevice.isAdbRoot()).thenReturn(true);
         when(mMockContext.getAttributes()).thenReturn(new MultiMap(ImmutableMap.of()));
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
         returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
@@ -264,7 +282,10 @@ public class CodeCoverageCollectorTest {
 
         // Verify testLog(..) was called with the coverage file.
         verify(mFakeListener)
-                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+                .testLog(
+                        eq("SomeTest_device_runtime_coverage"),
+                        eq(LogDataType.COVERAGE),
+                        eq(COVERAGE_MEASUREMENT));
     }
 
     @Test
