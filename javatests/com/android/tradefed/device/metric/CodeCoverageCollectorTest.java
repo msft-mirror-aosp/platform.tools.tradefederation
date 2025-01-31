@@ -214,7 +214,8 @@ public class CodeCoverageCollectorTest {
     }
 
     @Test
-    public void testRunEnded_rootEnabled_logsCoverageMeasurement() throws Exception {
+    public void testJavaCollector_pullCrossProcessCoverageFilesWithUserDefinedTimeout()
+            throws Exception {
         enableJavaCoverage();
         mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
 
@@ -240,7 +241,7 @@ public class CodeCoverageCollectorTest {
                         eq(TimeUnit.MILLISECONDS),
                         eq(1));
 
-        // Verify testLog(..) was called with the coverage file.
+        // Verify coverage file was logged if file pulling didn't timeout.
         verify(mFakeListener)
                 .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
     }
