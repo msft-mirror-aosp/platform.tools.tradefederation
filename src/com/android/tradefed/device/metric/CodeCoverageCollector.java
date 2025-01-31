@@ -98,7 +98,7 @@ public final class CodeCoverageCollector extends BaseDeviceMetricCollector
     private File mLlvmProfileTool;
 
     private IConfiguration mConfiguration;
-    // Timeout for pulling coverage files from the device, in milliseconds.
+    // Timeout for pulling cross-process coverage files from the device, in milliseconds.
     private long mTimeoutMilli = 20 * 60 * 1000;
 
     @Override
