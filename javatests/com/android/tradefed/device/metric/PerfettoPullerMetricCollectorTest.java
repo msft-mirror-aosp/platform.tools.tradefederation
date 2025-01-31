@@ -323,12 +323,13 @@ public class PerfettoPullerMetricCollectorTest {
         Assert.assertTrue(args.contains(path));
         Assert.assertTrue(args.contains("--run-metrics"));
         Assert.assertTrue(args.contains("--metrics-output=text"));
-
+        Assert.assertFalse(args.contains("--compute-metrics-v2"));
+        Assert.assertFalse(args.contains("--summary-spec"));
     }
 
     /**
-     * Test that trace processor run metrics are used when running the trace
-     * processor shell command.
+     * Test that trace processor run metrics are used when running the trace processor shell
+     * command.
      *
      * @throws Exception
      */
@@ -352,8 +353,9 @@ public class PerfettoPullerMetricCollectorTest {
         cr.setStatus(CommandStatus.SUCCESS);
         cr.setStdout("abc:efg");
 
-        Mockito.doReturn(cr).when(mPerfettoMetricCollector).runHostCommand(Mockito.anyLong(),
-                Mockito.any(), Mockito.any(), Mockito.any());
+        Mockito.doReturn(cr)
+                .when(mPerfettoMetricCollector)
+                .runHostCommand(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
 
         mPerfettoMetricCollector.testRunStarted("runName", 1);
         mPerfettoMetricCollector.testStarted(testDesc);
@@ -362,8 +364,8 @@ public class PerfettoPullerMetricCollectorTest {
         tmpFile.delete();
 
         ArgumentCaptor<String[]> captor = ArgumentCaptor.forClass(String[].class);
-        Mockito.verify(mPerfettoMetricCollector).runHostCommand(Mockito.anyLong(),
-                captor.capture(), Mockito.any(), Mockito.any());
+        Mockito.verify(mPerfettoMetricCollector)
+                .runHostCommand(Mockito.anyLong(), captor.capture(), Mockito.any(), Mockito.any());
         Mockito.verify(mPerfettoMetricCollector).getCompressedFile(Mockito.any());
         List<String> args = Arrays.asList(captor.getValue());
         // Verifies all the overridden values are taken into account and trace processor
@@ -371,6 +373,134 @@ public class PerfettoPullerMetricCollectorTest {
         Assert.assertTrue(args.contains(tmpFile.getAbsolutePath()));
         Assert.assertTrue(args.contains("android_cpu,android_mem"));
         Assert.assertTrue(args.contains("--metrics-output=text"));
+    }
+
+    /**
+     * Test that trace processor run metrics V2 only are used when running the trace processor shell
+     * command.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testTraceProcessorMetricV2Args() throws Exception {
+        OptionSetter setter = new OptionSetter(mPerfettoMetricCollector);
+        setter.setOptionValue("pull-pattern-keys", "perfettofile");
+        setter.setOptionValue("perfetto-v1-metrics", "false");
+        setter.setOptionValue("perfetto-v2-metrics", "true");
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+
+        currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
+                .thenReturn(new File("trace"));
+
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+        CommandResult cr = new CommandResult();
+        cr.setStatus(CommandStatus.SUCCESS);
+        cr.setStdout("sometext");
+
+        File tmpFile = File.createTempFile("trace_processor_shell", "");
+        File tmpSummarySpecFile =
+                File.createTempFile("memory_per_process-avg_rss_and_swap.textproto", "");
+
+        // Verifies the trace processor shell lookup in test artifacts file path map.
+        Mockito.doReturn(tmpFile)
+                .when(mPerfettoMetricCollector)
+                .getFileFromTestArtifacts("trace_processor_shell");
+        Mockito.doReturn(tmpSummarySpecFile)
+                .when(mPerfettoMetricCollector)
+                .getFileFromTestArtifacts("memory_per_process-avg_rss_and_swap.textproto");
+        Mockito.doReturn(cr)
+                .when(mPerfettoMetricCollector)
+                .runHostCommand(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        mPerfettoMetricCollector.testRunStarted("runName", 1);
+        mPerfettoMetricCollector.testStarted(testDesc);
+        mPerfettoMetricCollector.testEnded(testDesc, currentMetrics);
+        mPerfettoMetricCollector.testRunEnded(100L, new HashMap<String, Metric>());
+
+        String path = tmpFile.getAbsolutePath();
+        tmpFile.delete();
+        String summarySpecPath = tmpSummarySpecFile.getAbsolutePath();
+        tmpSummarySpecFile.delete();
+
+        ArgumentCaptor<String[]> captor = ArgumentCaptor.forClass(String[].class);
+        Mockito.verify(mPerfettoMetricCollector)
+                .runHostCommand(Mockito.anyLong(), captor.capture(), Mockito.any(), Mockito.any());
+        List<String> args = Arrays.asList(captor.getValue());
+
+        Assert.assertTrue(args.contains(path));
+        Assert.assertTrue(args.contains("--compute-metrics-v2"));
+        Assert.assertTrue(args.contains("memory_per_process"));
+        Assert.assertTrue(args.contains("--summary-spec"));
+        Assert.assertTrue(args.contains(summarySpecPath));
+        Assert.assertFalse(args.contains("--run-metrics"));
+    }
+
+    /**
+     * Test that trace processor run metrics V1 and V2 are used when running the trace processor
+     * shell command.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testTraceProcessorMetricV1andV2Args() throws Exception {
+        OptionSetter setter = new OptionSetter(mPerfettoMetricCollector);
+        setter.setOptionValue("pull-pattern-keys", "perfettofile");
+        setter.setOptionValue("perfetto-v1-metrics", "true");
+        setter.setOptionValue("perfetto-v2-metrics", "true");
+        HashMap<String, Metric> currentMetrics = new HashMap<>();
+
+        currentMetrics.put("perfettofile", TfMetricProtoUtil.stringToMetric("/data/trace.pb"));
+        Mockito.when(mMockDevice.pullFile(Mockito.eq("/data/trace.pb"), Mockito.eq(0)))
+                .thenReturn(new File("trace"));
+
+        TestDescription testDesc = new TestDescription("xyz", "abc");
+        CommandResult cr = new CommandResult();
+        cr.setStatus(CommandStatus.SUCCESS);
+        cr.setStdout("sometext");
+
+        File tmpFile = File.createTempFile("trace_processor_shell", "");
+        File tmpSummarySpecFile =
+                File.createTempFile("memory_per_process-avg_rss_and_swap.textproto", "");
+
+        // Verifies the trace processor shell lookup in test artifacts file path map.
+        Mockito.doReturn(tmpFile)
+                .when(mPerfettoMetricCollector)
+                .getFileFromTestArtifacts("trace_processor_shell");
+        Mockito.doReturn(tmpSummarySpecFile)
+                .when(mPerfettoMetricCollector)
+                .getFileFromTestArtifacts("memory_per_process-avg_rss_and_swap.textproto");
+        Mockito.doReturn(cr)
+                .when(mPerfettoMetricCollector)
+                .runHostCommand(Mockito.anyLong(), Mockito.any(), Mockito.any(), Mockito.any());
+
+        mPerfettoMetricCollector.testRunStarted("runName", 1);
+        mPerfettoMetricCollector.testStarted(testDesc);
+        mPerfettoMetricCollector.testEnded(testDesc, currentMetrics);
+        mPerfettoMetricCollector.testRunEnded(100L, new HashMap<String, Metric>());
+
+        String path = tmpFile.getAbsolutePath();
+        tmpFile.delete();
+        String summarySpecPath = tmpSummarySpecFile.getAbsolutePath();
+        tmpSummarySpecFile.delete();
+
+        ArgumentCaptor<String[]> captor = ArgumentCaptor.forClass(String[].class);
+        Mockito.verify(mPerfettoMetricCollector, times(2))
+                .runHostCommand(Mockito.anyLong(), captor.capture(), Mockito.any(), Mockito.any());
+        List<String[]> args = captor.getAllValues();
+
+        // Verify metric v1 args.
+        Assert.assertEquals(args.get(0)[0], path);
+        Assert.assertEquals(args.get(0)[1], "--run-metrics");
+        Assert.assertEquals(args.get(0)[2], "android_mem");
+        Assert.assertEquals(args.get(0)[3], "--metrics-output=text");
+
+        // Verify metric v2 args.
+        Assert.assertEquals(args.get(1)[0], path);
+        Assert.assertEquals(args.get(1)[1], "--compute-metrics-v2");
+        Assert.assertEquals(args.get(1)[2], "memory_per_process");
+        Assert.assertEquals(args.get(1)[3], "--summary-spec");
+        Assert.assertEquals(args.get(1)[4], summarySpecPath);
     }
 
     /** Test that the trace processor shell outputs run time and status. */
@@ -526,6 +656,4 @@ public class PerfettoPullerMetricCollectorTest {
                 PerfettoPullerMetricCollector.splitKeyValue("a:b:c:xyz"),
                 new Pair<>("a:b:c", "xyz"));
     }
-
 }
-
