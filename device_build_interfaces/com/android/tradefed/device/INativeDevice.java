@@ -1728,4 +1728,19 @@ public interface INativeDevice {
      * @throws DeviceNotAvailableException
      */
     public void unmountDebugfs() throws DeviceNotAvailableException;
+
+    /**
+     * Enable testing trade-in mode. The device will be wiped and will reboot.
+     *
+     * @throws DeviceNotAvailableException
+     * @return True if we were successful, false otherwise
+     */
+    public boolean startTradeInModeTesting(final int timeoutMs) throws DeviceNotAvailableException;
+
+    /**
+     * Stop testing trade-in mode. The device will reboot.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    public void stopTradeInModeTesting() throws DeviceNotAvailableException;
 }
