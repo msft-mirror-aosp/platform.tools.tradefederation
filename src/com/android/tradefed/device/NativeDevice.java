@@ -6255,6 +6255,10 @@ public class NativeDevice
                         "tradeinmode wait-until-ready testing start",
                         timeoutMs,
                         TimeUnit.MILLISECONDS);
+        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+            CLog.w("tradeinmode start didn't succeed");
+            return false;
+        }
         // Wait a few seconds before issuing more commands.
         getRunUtil().sleep(mTradeInModePause);
         RecoveryMode mode = getRecoveryMode();
@@ -6278,10 +6282,18 @@ public class NativeDevice
     public void stopTradeInModeTesting() throws DeviceNotAvailableException {
         // Either: we're still in trade-in mode, or we just factory reset and we're still in
         // SUW.
-        executeShellV2Command("tradeinmode wait-until-ready evaluate");
+        CommandResult evaluateResult =
+                executeShellV2Command("tradeinmode wait-until-ready evaluate");
+        if (!CommandStatus.SUCCESS.equals(evaluateResult.getStatus())) {
+            CLog.w("tradeinmode evaluate didn't succeed");
+        }
         getRunUtil().sleep(mTradeInModePause);
         enableAdbRoot();
-        executeShellV2Command("tradeinmode wait-until-ready testing stop");
+        CommandResult stopResult =
+                executeShellV2Command("tradeinmode wait-until-ready testing stop");
+        if (!CommandStatus.SUCCESS.equals(stopResult.getStatus())) {
+            CLog.w("tradeinmode stop didn't succeed");
+        }
         getRunUtil().sleep(mTradeInModePause);
         waitForDeviceAvailable();
     }
