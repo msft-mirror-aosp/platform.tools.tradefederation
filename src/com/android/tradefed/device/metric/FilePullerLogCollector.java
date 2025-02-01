@@ -84,6 +84,9 @@ public class FilePullerLogCollector extends FilePullerDeviceMetricCollector {
             return LogDataType.BT_SNOOP_LOG;
         } else if (".json".equals(ext)) {
             return LogDataType.JSON;
+        } else if (FileUtil.getBaseName(metricFile.getName()).contains("winscope")
+                || FileUtil.getBaseName(metricFile.getName()).contains("uiTrace_")) {
+            return LogDataType.WINSCOPE;
         }
         return LogDataType.TEXT;
     }
