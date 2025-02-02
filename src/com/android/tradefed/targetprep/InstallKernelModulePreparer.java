@@ -63,7 +63,8 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
         mPreExistingAdbRootState = device.isAdbRoot();
 
         for (String modulePath : mModulePaths) {
-            KernelModuleUtils.removeModule(device, modulePath);
+            KernelModuleUtils.removeModuleWithDependency(
+                    device, KernelModuleUtils.getDisplayedModuleName(modulePath));
         }
 
         for (String modulePath : mModulePaths) {
@@ -79,7 +80,8 @@ public class InstallKernelModulePreparer extends BaseTargetPreparer implements I
         List<String> reversedModulePaths = new ArrayList<>(mModulePaths);
         Collections.reverse(reversedModulePaths);
         for (String modulePath : reversedModulePaths) {
-            KernelModuleUtils.removeModule(device, modulePath);
+            KernelModuleUtils.removeModuleWithDependency(
+                    device, KernelModuleUtils.getDisplayedModuleName(modulePath));
         }
         if (!mPreExistingAdbRootState) {
             device.disableAdbRoot();

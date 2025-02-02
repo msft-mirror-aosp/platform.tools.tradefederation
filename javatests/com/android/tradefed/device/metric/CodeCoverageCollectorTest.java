@@ -23,6 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.OptionSetter;
@@ -47,6 +49,7 @@ import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.JavaCodeCoverageFlusher;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.TarUtil;
@@ -76,6 +79,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -89,6 +93,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /** Unit tests for {@link CodeCoverageCollector}. */
 @RunWith(JUnit4.class)
@@ -104,6 +110,10 @@ public class CodeCoverageCollectorTest {
     private static final ByteString COVERAGE_MEASUREMENT =
             ByteString.copyFromUtf8("Mi estas kovrado mezurado");
 
+    private static final String PS_OUTPUT =
+            "USER       PID   PPID  VSZ   RSS   WCHAN       PC  S NAME\n"
+                    + "shell       123  1366  123    456   SyS_epoll+   0  S adbd\n";
+
     @Rule public TemporaryFolder folder = new TemporaryFolder();
 
     @Mock IConfiguration mMockConfiguration;
@@ -111,7 +121,11 @@ public class CodeCoverageCollectorTest {
     @Mock ITestDevice mMockDevice;
     @Mock JavaCodeCoverageFlusher mMockFlusher;
 
+    @Mock IBuildInfo mMockBuildInfo;
+
     @Spy LogFileReader mFakeListener = new LogFileReader();
+
+    @Spy CommandArgumentCaptor mCommandArgumentCaptor;
 
     /** Object under test. */
     CodeCoverageCollector mCodeCoverageCollector;
@@ -120,16 +134,37 @@ public class CodeCoverageCollectorTest {
     OptionSetter mCoverageOptionsSetter = null;
     List<File> mFilesToClean;
 
+    abstract static class CommandArgumentCaptor implements IRunUtil {
+        private List<String> mCommand = new ArrayList<>();
+        private CommandResult mResult = new CommandResult(CommandStatus.SUCCESS);
+
+        /** Stores the command for retrieval later. */
+        @Override
+        public CommandResult runTimedCmd(long timeout, String... cmd) {
+            mCommand = Arrays.asList(cmd);
+            return mResult;
+        }
+
+        void setResult(CommandStatus status) {
+            mResult = new CommandResult(status);
+        }
+
+        List<String> getCommand() {
+            return mCommand;
+        }
+
+        /** Ignores sleep calls. */
+        @Override
+        public void sleep(long ms) {}
+    }
+
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
-
         mCoverageOptions = new CoverageOptions();
         mCoverageOptionsSetter = new OptionSetter(mCoverageOptions);
-        mFilesToClean = new ArrayList<>();
 
         when(mMockConfiguration.getCoverageOptions()).thenReturn(mCoverageOptions);
-
         when(mMockContext.getDevices()).thenReturn(ImmutableList.of(mMockDevice));
         when(mMockContext.getAttributes())
                 .thenReturn(
@@ -142,6 +177,18 @@ public class CodeCoverageCollectorTest {
 
         mCodeCoverageCollector = new CodeCoverageCollector();
         mCodeCoverageCollector.setConfiguration(mMockConfiguration);
+
+        mFilesToClean = new ArrayList<>();
+
+        // Native specific setup
+        mCodeCoverageCollector.setClangFlusherRunUtil(mCommandArgumentCaptor);
+        when(mMockContext.getBuildInfos()).thenReturn(ImmutableList.of(mMockBuildInfo));
+
+        doReturn(PS_OUTPUT).when(mMockDevice).executeShellCommand("ps -e");
+        CommandResult result = new CommandResult(CommandStatus.SUCCESS);
+        result.setStdout("ffffffffff\n");
+        result.setExitCode(0);
+        when(mMockDevice.executeShellV2Command(anyString())).thenReturn(result);
     }
 
     @After
@@ -199,13 +246,31 @@ public class CodeCoverageCollectorTest {
     }
 
     @Test
-    public void testRunEnded_rootEnabled_noModuleName_logsCoverageMeasurement() throws Exception {
+    public void testJavaCollector_logCoverageWithModuleName() throws Exception {
+        enableJavaCoverage();
+        HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
+        mockCoverageFileOnDevice(DEVICE_PATH);
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
+
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
+
+        verify(mFakeListener)
+                .testLog(
+                        eq("myModule_MODULE_SomeTest_device_runtime_coverage"),
+                        eq(LogDataType.COVERAGE),
+                        eq(COVERAGE_MEASUREMENT));
+    }
+
+    @Test
+    public void testJavaCollector_logCoverageWithoutModuleName() throws Exception {
         enableJavaCoverage();
 
         // Setup mocks.
         HashMap<String, Metric> runMetrics = createMetricsWithCoverageMeasurement(DEVICE_PATH);
         mockCoverageFileOnDevice(DEVICE_PATH);
-        when(mMockDevice.isAdbRoot()).thenReturn(true);
         when(mMockContext.getAttributes()).thenReturn(new MultiMap(ImmutableMap.of()));
         doReturn("").when(mMockDevice).executeShellCommand(anyString());
         returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
@@ -217,7 +282,10 @@ public class CodeCoverageCollectorTest {
 
         // Verify testLog(..) was called with the coverage file.
         verify(mFakeListener)
-                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+                .testLog(
+                        eq("SomeTest_device_runtime_coverage"),
+                        eq(LogDataType.COVERAGE),
+                        eq(COVERAGE_MEASUREMENT));
     }
 
     @Test
@@ -524,6 +592,150 @@ public class CodeCoverageCollectorTest {
         verify(mMockDevice, times(2)).disableAdbRoot();
     }
 
+    @Test
+    public void testClangCollector_whenClangCoverageDisabled_noCoverageLog() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        Map<String, String> metric = new HashMap<>();
+
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+
+        // Simulate a test run.
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        assertThat(mFakeListener.getLogs()).isEmpty();
+    }
+
+    @Test
+    public void testClangCollector_whenCoverageFlushEnabled_flushCalled() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+        mCoverageOptionsSetter.setOptionValue("coverage-flush", "true");
+        Map<String, String> metric = new HashMap<>();
+
+        // Setup mocks.
+        doReturn(true).when(mMockDevice).isAdbRoot();
+        File emptyTarGz = createTarGz(ImmutableMap.of());
+        returnFileContentsOnShellCommand(mMockDevice, "/data/misc/trace", emptyTarGz);
+        returnFileContentsOnShellCommand(mMockDevice, "/data/local/tmp", emptyTarGz);
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, TfMetricProtoUtil.upgradeConvert(metric));
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        // Verify flush-coverage command was called at the end of the test run.
+        verify(mMockDevice).executeShellCommand("kill -37 123");
+    }
+
+    @Test
+    public void testClangCollector_logsCoverageFileFromMiscTrace() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+        mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
+
+        // Setup mocks.
+        doReturn(true).when(mMockDevice).isAdbRoot();
+        File tarGz =
+                createTarGz(
+                        ImmutableMap.of(
+                                "path/to/coverage.profraw",
+                                ByteString.copyFromUtf8("coverage.profraw"),
+                                "path/to/.hidden/coverage2.profraw",
+                                ByteString.copyFromUtf8("coverage2.profraw")));
+        returnFileContentsOnShellCommand(mMockDevice, "/data/misc/trace", tarGz);
+        File emptyTarGz = createTarGz(ImmutableMap.of());
+        returnFileContentsOnShellCommand(mMockDevice, "/data/local/tmp", emptyTarGz);
+        doReturn(createProfileToolZip()).when(mMockBuildInfo).getFile(anyString());
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, createEmptyMetrics());
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        // Verify the timeout is set.
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/misc/trace -name '*.profraw' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        eq(314159L),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+        verify(mMockDevice, times(1))
+                .executeShellV2Command(
+                        eq("find /data/local/tmp -name '*.profraw' | tar -czf - -T - 2>/dev/null"),
+                        any(),
+                        any(),
+                        anyLong(),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+        // Verify that the command line contains the files above.
+        List<String> command = mCommandArgumentCaptor.getCommand();
+        checkListContainsSuffixes(
+                command,
+                ImmutableList.of(
+                        "llvm-profdata",
+                        "path/to/coverage.profraw",
+                        "path/to/.hidden/coverage2.profraw"));
+
+        // Verify testLog(..) was called with a single indexed profile data.
+        List<ByteString> logs = mFakeListener.getLogs();
+        assertThat(logs).hasSize(1);
+    }
+
+    @Test
+    public void testClangCollector_logsCoverageFileFromLocalTmp() throws Exception {
+        mCoverageOptionsSetter.setOptionValue("coverage", "true");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
+
+        // Set up mocks.
+        doReturn(true).when(mMockDevice).isAdbRoot();
+        File tarGz =
+                createTarGz(
+                        ImmutableMap.of(
+                                "path/to/coverage.profraw",
+                                ByteString.copyFromUtf8("coverage.profraw"),
+                                "path/to/.hidden/coverage2.profraw",
+                                ByteString.copyFromUtf8("coverage2.profraw")));
+        File emptyTarGz = createTarGz(ImmutableMap.of());
+        returnFileContentsOnShellCommand(mMockDevice, "/data/misc/trace", emptyTarGz);
+        returnFileContentsOnShellCommand(mMockDevice, "/data/local/tmp", tarGz);
+        doReturn(createProfileToolZip()).when(mMockBuildInfo).getFile(anyString());
+
+        // Simulate a test run.
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, createEmptyMetrics());
+        mCodeCoverageCollector.invocationEnded(ELAPSED_TIME);
+
+        // Verify coverage was pulled.
+        verify(mMockDevice, times(2))
+                .executeShellV2Command(
+                        contains("tar -czf"),
+                        any(),
+                        any(),
+                        anyLong(),
+                        eq(TimeUnit.MILLISECONDS),
+                        eq(1));
+
+        // Verify that the command line contains the files above.
+        List<String> command = mCommandArgumentCaptor.getCommand();
+        checkListContainsSuffixes(
+                command,
+                ImmutableList.of(
+                        "llvm-profdata",
+                        "path/to/coverage.profraw",
+                        "path/to/.hidden/coverage2.profraw"));
+
+        // Verify testLog(...) was called with a single indexed profile data file.
+        List<ByteString> logs = mFakeListener.getLogs();
+        assertThat(logs).hasSize(1);
+    }
+
     private void mockCoverageFileOnDevice(String devicePath)
             throws IOException, DeviceNotAvailableException {
         File coverageFile = folder.newFile(new File(devicePath).getName());
@@ -591,6 +803,11 @@ public class CodeCoverageCollectorTest {
         return execData.get(classId(clazz), vmName(clazz), PROBE_COUNT).getProbesCopy();
     }
 
+    private static HashMap<String, Metric> createEmptyMetrics() {
+        Map<String, String> metric = new HashMap<>();
+        return TfMetricProtoUtil.upgradeConvert(metric);
+    }
+
     private static HashMap<String, Metric> createMetricsWithCoverageMeasurement(String devicePath) {
         return TfMetricProtoUtil.upgradeConvert(ImmutableMap.of("coverageFilePath", devicePath));
     }
@@ -612,6 +829,26 @@ public class CodeCoverageCollectorTest {
                         any(OutputStream.class),
                         anyLong(),
                         any(TimeUnit.class),
+                        anyInt());
+    }
+
+    private void returnFileContentsOnShellCommand(ITestDevice device, String path, File file)
+            throws DeviceNotAvailableException, IOException {
+        doAnswer(
+                        invocation -> {
+                            OutputStream out = (OutputStream) invocation.getArgument(2);
+                            try (InputStream in = new FileInputStream(file)) {
+                                in.transferTo(out);
+                            }
+                            return new CommandResult(CommandStatus.SUCCESS);
+                        })
+                .when(device)
+                .executeShellV2Command(
+                        contains(path),
+                        (File) any(),
+                        any(OutputStream.class),
+                        anyLong(),
+                        any(),
                         anyInt());
     }
 
@@ -642,6 +879,8 @@ public class CodeCoverageCollectorTest {
 
     /** An {@link ITestInvocationListener} which reads test log data streams for verification. */
     private static class LogFileReader implements ITestInvocationListener {
+        private List<ByteString> mLogs = new ArrayList<>();
+
         /**
          * Reads the contents of the {@code dataStream} and forwards it to the {@link
          * #testLog(String, LogDataType, ByteString)} method.
@@ -650,6 +889,7 @@ public class CodeCoverageCollectorTest {
         public void testLog(String dataName, LogDataType dataType, InputStreamSource dataStream) {
             try (InputStream input = dataStream.createInputStream()) {
                 testLog(dataName, dataType, ByteString.readFrom(input));
+                mLogs.add(ByteString.readFrom(input));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -657,5 +897,38 @@ public class CodeCoverageCollectorTest {
 
         /** No-op method for {@link Spy} verification. */
         public void testLog(String dataName, LogDataType dataType, ByteString data) {}
+
+        List<ByteString> getLogs() {
+            return new ArrayList<>(mLogs);
+        }
+    }
+
+    private File createProfileToolZip() throws IOException {
+        File profileToolZip = folder.newFile("llvm-profdata.zip");
+        try (FileOutputStream stream = new FileOutputStream(profileToolZip);
+                ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(stream))) {
+            // Add bin/llvm-profdata.
+            ZipEntry entry = new ZipEntry("bin/llvm-profdata");
+            out.putNextEntry(entry);
+            out.closeEntry();
+        }
+        return profileToolZip;
+    }
+
+    /** Verifies that certain suffixes are contained in the List. */
+    void checkListContainsSuffixes(List<String> list, List<String> suffixes) {
+        for (String suffix : suffixes) {
+            boolean found = false;
+            for (String item : list) {
+                if (item.endsWith(suffix)) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) {
+                fail("List " + list.toString() + " does not contain suffix '" + suffix + "'");
+            }
+        }
     }
 }

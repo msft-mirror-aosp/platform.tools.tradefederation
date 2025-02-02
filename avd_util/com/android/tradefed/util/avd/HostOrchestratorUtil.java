@@ -19,8 +19,10 @@ import static com.android.tradefed.util.avd.HostOrchestratorClient.ErrorResponse
 import static com.android.tradefed.util.avd.HostOrchestratorClient.HoHttpClient;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.IHoHttpClient;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBugreportRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
 import com.android.ddmlib.Log.LogLevel;
@@ -44,11 +46,14 @@ import org.json.JSONTokener;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 /** Utility to execute commands via Host Orchestrator on remote instances. */
 public class HostOrchestratorUtil {
@@ -60,7 +65,6 @@ public class HostOrchestratorUtil {
     private static final long WAIT_FOR_OPERATION_MS = 5 * 1000; // 5 sec
     private static final long WAIT_FOR_OPERATION_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
     private static final String CVD_HOST_LOGZ = "cvd_hostlog_zip";
-    private static final String URL_CVD_DEVICE_LOG = "cvds/%s/:bugreport";
     private static final String URL_CVD_BUGREPORTS = "cvdbugreports/%s";
     private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
     private static final String URL_HO_STOP = "cvds/%s/%s";
@@ -134,12 +138,12 @@ public class HostOrchestratorUtil {
     }
 
     /**
-     * Execute a command via Host Orchestrator and log its output
+     * Download log files.
      *
      * @param logName the log name to use when reporting to the {@link ITestLogger}
-     * @param url the Host Orchestrator API to be executed.
+     * @param urlPath url path indicating the log to download.
      */
-    public File collectLogByCommand(String logName, String url) {
+    public File downloadLogFile(String logName, String urlPath) {
         File tempFile = null;
         try {
             tempFile = Files.createTempFile(logName, ".txt").toFile();
@@ -150,23 +154,13 @@ public class HostOrchestratorUtil {
                     return null;
                 }
             }
-            CommandResult commandRes =
-                    curlCommandExecution(
-                            mHOPortNumber,
-                            "GET",
-                            url,
-                            false,
-                            "--compressed",
-                            "-o",
-                            tempFile.getAbsolutePath());
-            if (!CommandStatus.SUCCESS.equals(commandRes.getStatus())) {
-                CLog.e("Failed logging cvd logs via Host Orchestrator: %s", commandRes.getStdout());
-                FileUtil.deleteFile(tempFile);
-                return null;
-            }
+            String baseUrl = getHOBaseUrl(mHOPortNumber);
+            HttpRequest request =
+                    HttpRequest.newBuilder().uri(URI.create(baseUrl + "/" + urlPath)).build();
+            saveToFile(mHttpClient, request, Paths.get(tempFile.getAbsolutePath()));
             return tempFile;
-        } catch (IOException e) {
-            CLog.e("Failed logging cvd logs via Host Orchestrator: %s", e);
+        } catch (IOException | InterruptedException | ErrorResponseException e) {
+            CLog.e("Failed downloading logs with url path %s: %s", urlPath, e);
             FileUtil.deleteFile(tempFile);
             return null;
         }
@@ -197,22 +191,11 @@ public class HostOrchestratorUtil {
                 return null;
             }
             String cvdGroup = parseListCvdOutput(curlRes.getStdout(), "group");
-            curlRes =
-                    cvdOperationExecution(
-                            mHttpClient,
-                            mHOPortNumber,
-                            "POST",
-                            String.format(URL_CVD_DEVICE_LOG, cvdGroup),
-                            WAIT_FOR_OPERATION_TIMEOUT_MS);
-            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
-                CLog.e(
-                        "Failed running cvd operation via Host Orchestrator: %s",
-                        curlRes.getStdout());
-                return null;
-            }
-            String operationId = parseCvdContent(curlRes.getStdout(), "name");
             String baseUrl = getHOBaseUrl(mHOPortNumber);
-            HttpRequest httpRequest = buildGetOperationResultRequest(baseUrl, operationId);
+            HttpRequest httpRequest = buildCreateBugreportRequest(baseUrl, cvdGroup);
+            Operation operation = sendRequest(mHttpClient, httpRequest, Operation.class);
+            waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
+            httpRequest = buildGetOperationResultRequest(baseUrl, operation.name);
             String bugreportId = sendRequest(mHttpClient, httpRequest, String.class);
             curlRes =
                     curlCommandExecution(
@@ -229,7 +212,7 @@ public class HostOrchestratorUtil {
                 return null;
             }
             cvdLogsDir = ZipUtil2.extractZipToTemp(cvdLogsZip, "cvd_logs");
-        } catch (IOException | InterruptedException | ErrorResponseException e) {
+        } catch (IOException | InterruptedException | ErrorResponseException | TimeoutException e) {
             CLog.e("Failed pulling cvd host logs via Host Orchestrator: %s", e);
         } finally {
             cvdLogsZip.delete();
@@ -531,6 +514,29 @@ public class HostOrchestratorUtil {
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricLogger.InvocationMetricKey.CVD_LONG_OPERATION_TIMEOUT_API, request);
         return commandRes;
+    }
+
+    /**
+     * Wait for operation to finish or timeout.
+     *
+     * @param client http client to perm
+     * @param name Operation name.
+     * @param maxWaitTime waiting time, if reached out, an execption will be thrown.
+     */
+    public void waitForOperation(
+            IHoHttpClient client, String baseUrl, String name, long maxWaitTimeMs)
+            throws IOException, InterruptedException, TimeoutException, ErrorResponseException {
+        long maxEndTime = System.currentTimeMillis() + maxWaitTimeMs;
+        while (System.currentTimeMillis() < maxEndTime) {
+            HttpRequest httpRequest = buildGetOperationRequest(baseUrl, name);
+            Operation op = sendRequest(client, httpRequest, Operation.class);
+            if (op.done) {
+                return;
+            }
+            getRunUtil().sleep(WAIT_FOR_OPERATION_MS);
+        }
+        CLog.e("Timeout waiting for operation: " + name);
+        throw new TimeoutException("Operation wait timeout, operation name: " + name);
     }
 
     /** Get {@link IRunUtil} to use. Exposed for unit testing. */

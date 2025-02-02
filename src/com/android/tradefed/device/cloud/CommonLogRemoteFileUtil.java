@@ -407,14 +407,14 @@ public class CommonLogRemoteFileUtil {
             CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
         }
         File tempFile =
-                hOUtil.collectLogByCommand("host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+                hOUtil.downloadLogFile("host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
         GceManager.logAndDeleteFile(tempFile, "host_kernel", logger);
-        tempFile = hOUtil.collectLogByCommand("host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+        tempFile = hOUtil.downloadLogFile("host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
         GceManager.logAndDeleteFile(tempFile, "host_orchestrator", logger);
         tempFile = hOUtil.getTunnelLog();
         GceManager.logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
         tempFile =
-                hOUtil.collectLogByCommand(
+                hOUtil.downloadLogFile(
                         "oxygen_container_log", HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
         GceManager.logAndDeleteFile(tempFile, "oxygen_container_log", logger);
     }
