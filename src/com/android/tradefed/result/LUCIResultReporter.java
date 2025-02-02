@@ -83,8 +83,8 @@ public class LUCIResultReporter extends CollectingTestListener
     )
     private boolean mReportGranularResults = true;
 
-    @Option(name = "json-output-path", description = "Path to save the JSON result file.")
-    private File mJsonOutputPath = null;
+    @Option(name = "log-output-dir", description = "Path to save the JSON result file and other log files.")
+    private File mLogOutputDir = null;
 
     private boolean mHasInvocationFailures = false;
     private LinkedHashMap<String, LogFile> mLoggedFiles = new LinkedHashMap<>();
@@ -160,6 +160,17 @@ public class LUCIResultReporter extends CollectingTestListener
             String dataName = entry.getKey();
             LogFile logFile = entry.getValue();
             printLog(dataName, logFile);
+            if (mLogOutputDir != null) {
+              // If the output path is specified, copy all log artifacts there.
+              try {
+                  File logFullPathFile = new File(logFile.getPath());
+                  FileUtil.copyFile(logFullPathFile,
+                      new File(mLogOutputDir, logFullPathFile.getName()));
+              } catch (IOException e) {
+                  CLog.e("Failed to copy JSON result file to " + mLogOutputDir.toString());
+                  CLog.e(e);
+              }
+            }
         }
     }
 
@@ -257,8 +268,8 @@ public class LUCIResultReporter extends CollectingTestListener
         ByteArrayInputStream resultStream = new ByteArrayInputStream(
             jsonResults.toString().getBytes());
         LogFileSaver saver;
-        if (mJsonOutputPath != null) {
-            saver = new LogFileSaver(mJsonOutputPath);
+        if (mLogOutputDir != null) {
+            saver = new LogFileSaver(mLogOutputDir);
         } else {
             saver = new LogFileSaver(mRootDir);
         }
@@ -327,7 +338,7 @@ public class LUCIResultReporter extends CollectingTestListener
 
     /** A helper method to format and print result file's name and location to console. */
     private void printLog(String dataName, LogFile logFile) {
-        String logDesc = logFile.getUrl() == null ? logFile.getPath() : logFile.getUrl();
-        CLog.logAndDisplay(LogLevel.DEBUG, "%s: %s\r\n", dataName, logDesc);
+        CLog.logAndDisplay(LogLevel.DEBUG, "%s: %s (size: %.2f KB)\r\n", dataName,
+                logFile.getPath(), logFile.getSize() / 1024.0);
     }
 }
