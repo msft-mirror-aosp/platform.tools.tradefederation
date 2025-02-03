@@ -68,6 +68,7 @@ import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.DeviceInspectionResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.KeyguardControllerState;
@@ -2798,6 +2799,16 @@ public class NativeDevice
             try {
                 mRecovery.recoverDevice(mStateMonitor, mRecoveryMode.equals(RecoveryMode.ONLINE));
             } catch (DeviceUnresponsiveException due) {
+                // Default error identifier to DEVICE_UNAVAILABLE
+                DeviceErrorIdentifier errorIdentifier = DeviceErrorIdentifier.DEVICE_UNAVAILABLE;
+                DeviceInspectionResult inspectionResult = debugDeviceNotAvailable();
+                String extraErrorMessage = "";
+                if (inspectionResult != null
+                        && inspectionResult.getDeviceErrorIdentifier() != null) {
+                    errorIdentifier = inspectionResult.getDeviceErrorIdentifier();
+                    extraErrorMessage =
+                            String.format(" Extra details: %s", inspectionResult.getDetails());
+                }
                 RecoveryMode previousRecoveryMode = mRecoveryMode;
                 mRecoveryMode = RecoveryMode.NONE;
                 try {
@@ -2817,14 +2828,22 @@ public class NativeDevice
                                 || adbException.wasErrorDuringDeviceSelection()) {
                             // Upgrade exception to DNAE to reflect gravity
                             throw new DeviceNotAvailableException(
-                                    cause.getMessage(),
+                                    String.format("%s%s", cause.getMessage(), extraErrorMessage),
                                     adbException,
                                     getSerialNumber(),
-                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                                    errorIdentifier);
                         }
                     }
                 }
                 mRecoveryMode = previousRecoveryMode;
+                if (inspectionResult != null
+                        && inspectionResult.getDeviceErrorIdentifier() != null) {
+                    throw new DeviceNotAvailableException(
+                            String.format("%s%s", due.getMessage(), extraErrorMessage),
+                            due,
+                            getSerialNumber(),
+                            errorIdentifier);
+                }
                 throw due;
             }
             if (mRecoveryMode.equals(RecoveryMode.AVAILABLE)) {
@@ -6404,5 +6423,10 @@ public class NativeDevice
 
     public void invalidatePropertyCache() {
         mPropertiesCache.invalidateAll();
+    }
+
+    @Override
+    public DeviceInspectionResult debugDeviceNotAvailable() {
+        return null;
     }
 }
