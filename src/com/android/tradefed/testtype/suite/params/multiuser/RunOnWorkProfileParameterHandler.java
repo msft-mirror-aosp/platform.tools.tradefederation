@@ -19,14 +19,18 @@ package com.android.tradefed.testtype.suite.params.multiuser;
 import com.android.tradefed.targetprep.RunOnWorkProfileTargetPreparer;
 import com.android.tradefed.testtype.suite.params.IModuleParameterHandler;
 
+import java.util.List;
+
 public class RunOnWorkProfileParameterHandler extends ProfileParameterHandler
         implements IModuleParameterHandler {
 
-    private static final String REQUIRE_RUN_ON_WORK_PROFILE_NAME =
-            "com.android.bedstead.enterprise.annotations.RequireRunOnWorkProfile";
+    private static final List<String> REQUIRE_RUN_ON_WORK_PROFILE_NAMES = List.of(
+            "com.android.bedstead.enterprise.annotations.RequireRunOnWorkProfile",
+            "com.android.bedstead.harrier.annotations.RequireRunOnWorkProfile"
+    );
 
     public RunOnWorkProfileParameterHandler() {
-        super(REQUIRE_RUN_ON_WORK_PROFILE_NAME, new RunOnWorkProfileTargetPreparer());
+        super(REQUIRE_RUN_ON_WORK_PROFILE_NAMES, new RunOnWorkProfileTargetPreparer());
     }
 
     @Override

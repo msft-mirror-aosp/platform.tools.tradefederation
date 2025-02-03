@@ -35,20 +35,20 @@ import java.util.Set;
 /** Base parameter handler for any profile user. */
 public abstract class ProfileParameterHandler {
 
-    private final String mRequireRunOnProfileAnnotation;
+    private final List<String> mRequireRunOnProfileAnnotations;
     private final ProfileTargetPreparer mProfileTargetPreparer;
     private final List<IModuleController> mModuleControllers;
 
     ProfileParameterHandler(
-            String requireRunOnProfileAnnotation, ProfileTargetPreparer profileTargetPreparer) {
-        this(requireRunOnProfileAnnotation, profileTargetPreparer, new ArrayList<>());
+            List<String> requireRunOnProfileAnnotations, ProfileTargetPreparer profileTargetPreparer) {
+        this(requireRunOnProfileAnnotations, profileTargetPreparer, new ArrayList<>());
     }
 
     ProfileParameterHandler(
-            String requireRunOnProfileAnnotation,
+            List<String> requireRunOnProfileAnnotations,
             ProfileTargetPreparer profileTargetPreparer,
             List<IModuleController> moduleControllers) {
-        mRequireRunOnProfileAnnotation = requireRunOnProfileAnnotation;
+        mRequireRunOnProfileAnnotations = requireRunOnProfileAnnotations;
         mProfileTargetPreparer = profileTargetPreparer;
         mModuleControllers = moduleControllers;
     }
@@ -72,10 +72,11 @@ public abstract class ProfileParameterHandler {
             if (test instanceof ITestAnnotationFilterReceiver) {
                 ITestAnnotationFilterReceiver filterTest = (ITestAnnotationFilterReceiver) test;
                 filterTest.clearIncludeAnnotations();
-                filterTest.addIncludeAnnotation(mRequireRunOnProfileAnnotation);
-
                 Set<String> excludeAnnotations = new HashSet<>(filterTest.getExcludeAnnotations());
-                excludeAnnotations.remove(mRequireRunOnProfileAnnotation);
+                for (String requireRunOnProfileAnnotation : mRequireRunOnProfileAnnotations) {
+                    filterTest.addIncludeAnnotation(requireRunOnProfileAnnotation);
+                    excludeAnnotations.remove(requireRunOnProfileAnnotation);
+                }
                 filterTest.clearExcludeAnnotations();
                 filterTest.addAllExcludeAnnotation(excludeAnnotations);
             }
