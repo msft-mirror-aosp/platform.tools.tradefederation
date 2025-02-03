@@ -39,7 +39,7 @@ import java.util.Set;
 public class RunOnCloneProfileParameterHandlerTest {
 
     private static final String REQUIRE_RUN_ON_CLONE_PROFILE_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnCloneProfile";
+            "com.android.bedstead.multiuser.annotations.RequireRunOnCloneProfile";
     private static final String EXISTING_ANNOTATION_FILTER = "existing.annotation.filter";
 
     private RunOnCloneProfileParameterHandler mHandler;
