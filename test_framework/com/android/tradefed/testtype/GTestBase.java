@@ -224,6 +224,11 @@ public abstract class GTestBase
                             + "resolved.")
     private boolean mChangeToWorkingDirectory = false;
 
+    @Option(
+            name = "use-gunit-namings",
+            description = "Use the internal gunit version name of flags.")
+    private boolean mSwitchToGunitNamings = false;
+
     // GTest flags...
     protected static final String GTEST_FLAG_PRINT_TIME = "--gtest_print_time";
     protected static final String GTEST_FLAG_FILTER = "--gtest_filter";
@@ -567,7 +572,7 @@ public abstract class GTestBase
         if (filterFlag.length() > 500) {
             String tmpFlag = createFlagFile(filterFlag);
             if (tmpFlag != null) {
-                return String.format("%s=%s", GTEST_FLAG_FILE, tmpFlag);
+                return String.format("%s=%s", convertName(GTEST_FLAG_FILE), tmpFlag);
             }
         }
 
@@ -602,14 +607,15 @@ public abstract class GTestBase
      * @return the {@link String} of all the GTest flags that should be passed to the GTest
      */
     protected String getAllGTestFlags(String path) throws DeviceNotAvailableException {
-        String flags = String.format("%s %s", GTEST_FLAG_PRINT_TIME, getGTestFilters(path));
+        String flags =
+                String.format("%s %s", convertName(GTEST_FLAG_PRINT_TIME), getGTestFilters(path));
 
         if (getRunDisabledTests()) {
-            flags = String.format("%s %s", flags, GTEST_FLAG_RUN_DISABLED_TESTS);
+            flags = String.format("%s %s", flags, convertName(GTEST_FLAG_RUN_DISABLED_TESTS));
         }
 
         if (isCollectTestsOnly()) {
-            flags = String.format("%s %s", flags, GTEST_FLAG_LIST_TESTS);
+            flags = String.format("%s %s", flags, convertName(GTEST_FLAG_LIST_TESTS));
         }
 
         for (String gTestFlag : getGTestFlags()) {
@@ -856,5 +862,12 @@ public abstract class GTestBase
                 && mPrevTestRunCompleted
                 && mPrevFailedTests != null
                 && !mPrevFailedTests.isEmpty();
+    }
+
+    protected String convertName(String gtestFlagName) {
+        if (mSwitchToGunitNamings) {
+            return gtestFlagName.replaceAll("--gtest", "--gunit");
+        }
+        return gtestFlagName;
     }
 }
