@@ -992,10 +992,6 @@ public class TestInvocation implements ITestInvocation {
         DynamicRemoteFileResolver resolver =
                 new DynamicRemoteFileResolver(true /* allow parallelization */);
         try {
-            // Don't resolve for remote invocation, wait until we are inside the remote.
-            if (RunMode.REMOTE_INVOCATION.equals(mode)) {
-                return true;
-            }
             CurrentInvocation.setActionInProgress(ActionInProgress.FETCHING_ARTIFACTS);
             resolver.setDevice(context.getDevices().get(0));
             resolver.addExtraArgs(config.getCommandOptions().getDynamicDownloadArgs());
