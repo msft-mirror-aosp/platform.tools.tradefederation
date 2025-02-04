@@ -32,6 +32,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -552,23 +553,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
             for (String testName : profileTests) {
                 Map<String, String> restoreSyspropConfiguration =
                         setPropertiesBeforeTest(testName, testDevice);
-                boolean matchingFlagConfig = false;
-                boolean unflagged = false;
-                for (TestFlagConfiguration.FlagConfig flagConfig : mTestFlagConfiguration.flags) {
-                    if (flagConfig.tests.stream().anyMatch(testName::startsWith)) {
-                        matchingFlagConfig = true;
-                        flagConfig.flags.forEach(flag -> enableBluetoothFlag(testDevice, flag));
-                        runPtsBotTest(profile, testName, testInfo, listener);
-                        flagConfig.flags.forEach(flag -> restoreBluetoothFlag(testDevice, flag));
-
-                        if (flagConfig.flags.stream().anyMatch("unflagged"::equals)) {
-                            unflagged = true;
-                        }
-                    }
-                }
-                if (!matchingFlagConfig || unflagged) {
-                    runPtsBotTest(profile, testName, testInfo, listener);
-                }
+                runPtsBotTestWithFlag(profile, testName, testInfo, listener);
                 restorePropertiesAfterTest(testDevice, restoreSyspropConfiguration);
                 try {
                     File snoopFile = FileUtil.createTempFile("android_snoop_log", ".log");
@@ -588,7 +573,42 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
-    private void shell(ITestDevice testDevice, String cmd) {
+    private void runPtsBotTestWithFlag(
+            String profile,
+            String testName,
+            TestInformation testInfo,
+            ITestInvocationListener listener) {
+        ITestDevice testDevice = testInfo.getDevice();
+        boolean matchingFlagConfig = false;
+        // If specified in the config, will run the test both with and without flags.
+        // This allow to test "no-op" flag before releasing them
+        boolean unflagged = false;
+        for (TestFlagConfiguration.FlagConfig flagConfig : mTestFlagConfiguration.flags) {
+            if (!flagConfig.tests.stream().anyMatch(testName::startsWith)) {
+                continue;
+            }
+            if (flagConfig.flags.stream().anyMatch("unflagged"::equals)) {
+                unflagged = true;
+            }
+            matchingFlagConfig = true;
+            if (flagConfig.flags.stream().anyMatch(f -> isFlagDisabledAndReadOnly(testDevice, f))) {
+                TestDescription testDescription = new TestDescription(profile, testName);
+                SkipReason reason =
+                        new SkipReason("The test device doesn't support flag override", "");
+                Log.w(testDevice, "Test Ended [Skipped]: " + testName + " " + reason);
+                listener.testSkipped(testDescription, reason);
+                continue;
+            }
+            flagConfig.flags.forEach(flag -> enableBluetoothFlag(testDevice, flag));
+            runPtsBotTest(profile, testName, testInfo, listener);
+            flagConfig.flags.forEach(flag -> restoreBluetoothFlag(testDevice, flag));
+        }
+        if (!matchingFlagConfig || unflagged) {
+            runPtsBotTest(profile, testName, testInfo, listener);
+        }
+    }
+
+    private static void shell(ITestDevice testDevice, String cmd) {
         try {
             CommandResult cmdResult = testDevice.executeShellV2Command(cmd);
             if (cmdResult.getExitCode() != 0) {
@@ -599,7 +619,59 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
+    private boolean isFlagEnabledAndReadOnly(ITestDevice testDevice, String flag) {
+        try {
+            String cmd = "aflags list -c com.android.bt | grep 'flags." + flag + " '";
+            CommandResult cmdResult = testDevice.executeShellV2Command(cmd);
+            if (cmdResult.getExitCode() != 0) {
+                CLog.e("Failed to run" + cmd + ": " + cmdResult.getStderr());
+                return false;
+            }
+            String[] out = cmdResult.getStdout().trim().toLowerCase().split("\\R");
+            if (out.length != 1) {
+                CLog.e(
+                        "Check the config or the target for flag=%s. out=[%s]",
+                        flag, Arrays.toString(out));
+                return false;
+            }
+            CLog.v("Flag is: [[" + out[0] + "]]");
+            return out[0].matches(
+                    "com.android.bluetooth.flags." + flag + " .*enabled.*read-only.*");
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("Device not available: " + e);
+            return false;
+        }
+    }
+
+    private boolean isFlagDisabledAndReadOnly(ITestDevice testDevice, String flag) {
+        try {
+            String cmd = "aflags list -c com.android.bt | grep 'flags." + flag + " '";
+            CommandResult cmdResult = testDevice.executeShellV2Command(cmd);
+            if (cmdResult.getExitCode() != 0) {
+                CLog.e("Failed to run" + cmd + ": " + cmdResult.getStderr());
+                return true;
+            }
+            String[] out = cmdResult.getStdout().trim().split("\\R");
+            if (out.length != 1) {
+                CLog.e(
+                        "Check the config or the target for flag=%s. out=[%s]",
+                        flag, Arrays.toString(out));
+                return true;
+            }
+            CLog.v("Flag is: [[" + out[0] + "]]");
+            return !out[0].matches(
+                    "com.android.bluetooth.flags." + flag + " .*(enabled.*read-only|read-write).*");
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("Device not available: " + e);
+            return true;
+        }
+    }
+
     private void enableBluetoothFlag(ITestDevice testDevice, String flag) {
+        if (isFlagEnabledAndReadOnly(testDevice, flag)) {
+            Log.i(testDevice, "enableBluetoothFlag: skip %s: already ENABLED + READ_ONLY", flag);
+            return;
+        }
         Log.i(testDevice, "enableBluetoothFlag: %s", flag);
         String setNativeFlagCmd = String.format("%s.%s true", NATIVE_BLUETOOTH_FLAG, flag);
         shell(testDevice, setNativeFlagCmd);
@@ -612,6 +684,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     }
 
     private void restoreBluetoothFlag(ITestDevice testDevice, String flag) {
+        if (isFlagEnabledAndReadOnly(testDevice, flag)) {
+            Log.i(testDevice, "enableBluetoothFlag: skip %s: already ENABLED + READ_ONLY", flag);
+            return;
+        }
         Log.i(testDevice, "restoreBluetoothFlag: %s", flag);
         String clearOverrideCmd =
                 String.format(
