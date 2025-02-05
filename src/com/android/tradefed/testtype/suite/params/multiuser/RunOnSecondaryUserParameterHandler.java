@@ -31,8 +31,10 @@ import java.util.Set;
 
 public class RunOnSecondaryUserParameterHandler implements IModuleParameterHandler {
 
-    private static final String REQUIRE_RUN_ON_SECONDARY_USER_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnSecondaryUser";
+    private static final List<String> REQUIRE_RUN_ON_SECONDARY_USER_NAMES = List.of(
+            "com.android.bedstead.multiuser.annotations.RequireRunOnSecondaryUser",
+            "com.android.bedstead.harrier.annotations.RequireRunOnSecondaryUser"
+    );
 
     @Override
     public String getParameterIdentifier() {
@@ -59,10 +61,11 @@ public class RunOnSecondaryUserParameterHandler implements IModuleParameterHandl
             if (test instanceof ITestAnnotationFilterReceiver) {
                 ITestAnnotationFilterReceiver filterTest = (ITestAnnotationFilterReceiver) test;
                 filterTest.clearIncludeAnnotations();
-                filterTest.addIncludeAnnotation(REQUIRE_RUN_ON_SECONDARY_USER_NAME);
-
                 Set<String> excludeAnnotations = new HashSet<>(filterTest.getExcludeAnnotations());
-                excludeAnnotations.remove(REQUIRE_RUN_ON_SECONDARY_USER_NAME);
+                for (String requireRunOnSecondaryUserName : REQUIRE_RUN_ON_SECONDARY_USER_NAMES) {
+                    filterTest.addIncludeAnnotation(requireRunOnSecondaryUserName);
+                    excludeAnnotations.remove(requireRunOnSecondaryUserName);
+                }
                 filterTest.clearExcludeAnnotations();
                 filterTest.addAllExcludeAnnotation(excludeAnnotations);
             }

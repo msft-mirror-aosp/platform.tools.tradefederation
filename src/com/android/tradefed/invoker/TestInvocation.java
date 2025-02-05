@@ -992,10 +992,6 @@ public class TestInvocation implements ITestInvocation {
         DynamicRemoteFileResolver resolver =
                 new DynamicRemoteFileResolver(true /* allow parallelization */);
         try {
-            // Don't resolve for remote invocation, wait until we are inside the remote.
-            if (RunMode.REMOTE_INVOCATION.equals(mode)) {
-                return true;
-            }
             CurrentInvocation.setActionInProgress(ActionInProgress.FETCHING_ARTIFACTS);
             resolver.setDevice(context.getDevices().get(0));
             resolver.addExtraArgs(config.getCommandOptions().getDynamicDownloadArgs());
@@ -1138,7 +1134,8 @@ public class TestInvocation implements ITestInvocation {
             allListeners.add(mUnavailableMonitor);
             allListeners.add(mConditionalFailureMonitor);
             if (config.getCommandOptions().shouldUploadInvocationCacheResults()) {
-                mInvocationProtoResultReporter = new InvocationProtoResultReporter();
+                mInvocationProtoResultReporter =
+                        new InvocationProtoResultReporter(info.getContext(), false);
                 File outputFile = FileUtil.createTempFile("invocation-results-cache", ".pb");
                 mInvocationProtoResultReporter.setOutputFile(outputFile);
                 allListeners.add(mInvocationProtoResultReporter);

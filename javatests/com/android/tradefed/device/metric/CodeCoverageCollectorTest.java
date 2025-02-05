@@ -45,6 +45,7 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.testtype.coverage.CoverageOptions;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.util.CommandResult;
@@ -214,7 +215,8 @@ public class CodeCoverageCollectorTest {
     }
 
     @Test
-    public void testRunEnded_rootEnabled_logsCoverageMeasurement() throws Exception {
+    public void testJavaCollector_pullCrossProcessCoverageFilesWithUserDefinedTimeout()
+            throws Exception {
         enableJavaCoverage();
         mCoverageOptionsSetter.setOptionValue("pull-timeout", "314159");
 
@@ -240,8 +242,33 @@ public class CodeCoverageCollectorTest {
                         eq(TimeUnit.MILLISECONDS),
                         eq(1));
 
-        // Verify testLog(..) was called with the coverage file.
+        // Verify coverage file was logged if file pulling didn't timeout.
         verify(mFakeListener)
+                .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
+    }
+
+    @Test
+    public void testJavaCollector_crossProcessCoveragePullingTimeout_noLog() throws Exception {
+        enableJavaCoverage();
+        HashMap<String, Metric> runMetrics = createEmptyMetrics();
+        doReturn("").when(mMockDevice).executeShellCommand(anyString());
+        returnFileContentsOnShellCommand(mMockDevice, createTarGz(ImmutableMap.of()));
+        when(mMockDevice.executeShellV2Command(
+                        anyString(),
+                        any(),
+                        any(OutputStream.class),
+                        anyLong(),
+                        any(TimeUnit.class),
+                        anyInt()))
+                .thenThrow(
+                        new DeviceNotAvailableException(
+                                "msg", "device serial", DeviceErrorIdentifier.DEVICE_UNRESPONSIVE));
+
+        mCodeCoverageCollector.init(mMockContext, mFakeListener);
+        mCodeCoverageCollector.testRunStarted(RUN_NAME, TEST_COUNT);
+        mCodeCoverageCollector.testRunEnded(ELAPSED_TIME, runMetrics);
+
+        verify(mFakeListener, never())
                 .testLog(anyString(), eq(LogDataType.COVERAGE), eq(COVERAGE_MEASUREMENT));
     }
 

@@ -420,6 +420,9 @@ public class InvocationMetricLogger {
         MODULE_CACHE_MISS_ID("module_cache_miss_id", true),
         MODULE_CACHE_NO_DIR("module_cache_no_dir", true),
         MODULE_RESULTS_CACHE_DEVICE_MISMATCH("module_results_cache_device_mismatch", true),
+        // Invocation level caching
+        INVOCATION_RESULTS_CHECKING_CACHE("invocation_results_checking_cache", true),
+        INVOCATION_CACHE_HIT("invocation_cache_hit", true),
 
         // Oxygenation metrics
         PORTFORWARD_LHP_SUCCESS_COUNT("portfoward_lhp_success_count", true),
