@@ -94,7 +94,6 @@ public class GceManager {
                             InfraErrorIdentifier.OXYGEN_SERVER_CONNECTION_FAILURE,
                             InfraErrorIdentifier.OXYGEN_SERVER_LB_CONNECTION_ERROR,
                             InfraErrorIdentifier.OXYGEN_SERVER_SHUTTING_DOWN));
-
     private static final int MAX_LEASE_RETRIES = 3;
     private DeviceDescriptor mDeviceDescriptor;
     private TestDeviceOptions mDeviceOptions;
@@ -461,7 +460,12 @@ public class GceManager {
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
                         }
                     }
-                    mGceAvdInfo.setErrorType(InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT);
+                    InfraErrorIdentifier errorIdentifier =
+                            GceAvdInfo.convertErrorSignatureToIdentifier();
+                    if (errorIdentifier == null) {
+                        errorIdentifier = InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT;
+                    }
+                    mGceAvdInfo.setErrorType(errorIdentifier);
                     mGceAvdInfo.setStatus(GceStatus.BOOT_FAIL);
                     // Align the error message raised when Oxygen lease timed out.
                     mGceAvdInfo.setErrors("Timed out waiting for virtual device to start.");
@@ -840,6 +844,10 @@ public class GceManager {
             // to clean it.
             if (res || notFromGceAvd) {
                 mBuildInfo.addBuildAttribute(GCE_INSTANCE_CLEANED_KEY, "true");
+            }
+            if (!res && !notFromGceAvd) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.ACLOUD_DEVICE_RELEASE_FAILURE_COUNT, 1);
             }
             return res;
         } finally {

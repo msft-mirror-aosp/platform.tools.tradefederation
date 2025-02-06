@@ -29,6 +29,7 @@ import build.bazel.remote.execution.v2.Digest;
 import com.google.api.client.util.Joiner;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -66,22 +67,14 @@ public class ImageContentAnalyzer {
         allDescriptors.removeIf(d -> d.path.startsWith("RADIO/"));
 
         if (analysisLevel.ordinal() >= AnalysisHeuristic.REMOVE_EXEMPTION.ordinal()) {
-            // b/335722003
-            boolean removed =
-                    allDescriptors.removeIf(d -> d.path.endsWith("/boot_otas/boot_ota_4k.zip"));
-            removed =
-                    removed
-                            || allDescriptors.removeIf(
-                                    d -> d.path.endsWith("/boot_otas/boot_ota_16k.zip"));
-            // b/383555703
-            removed =
-                    removed
-                            || allDescriptors.removeIf(
-                                    d -> d.path.equals("SYSTEM/apex/com.google.android.virt.apex"));
-            removed =
-                    removed
-                            || allDescriptors.removeIf(
-                                    d -> d.path.equals("SYSTEM/apex/com.android.virt.apex"));
+            boolean removed = false;
+            for (String path :
+                    Arrays.asList(
+                            // b/335722003
+                            "/boot_otas/boot_ota_4k.zip",
+                            "/boot_otas/boot_ota_16k.zip")) {
+                removed = allDescriptors.removeIf(d -> d.path.endsWith(path)) || removed;
+            }
             if (removed) {
                 InvocationMetricLogger.addInvocationMetrics(
                         InvocationMetricKey.DEVICE_IMAGE_USED_HEURISTIC, analysisLevel.name());

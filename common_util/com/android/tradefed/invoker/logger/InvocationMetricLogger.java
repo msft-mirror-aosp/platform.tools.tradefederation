@@ -209,6 +209,7 @@ public class InvocationMetricLogger {
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
+        ACLOUD_DEVICE_RELEASE_FAILURE_COUNT("acloud_device_release_failure_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
@@ -420,6 +421,9 @@ public class InvocationMetricLogger {
         MODULE_CACHE_MISS_ID("module_cache_miss_id", true),
         MODULE_CACHE_NO_DIR("module_cache_no_dir", true),
         MODULE_RESULTS_CACHE_DEVICE_MISMATCH("module_results_cache_device_mismatch", true),
+        // Invocation level caching
+        INVOCATION_RESULTS_CHECKING_CACHE("invocation_results_checking_cache", true),
+        INVOCATION_CACHE_HIT("invocation_cache_hit", true),
 
         // Oxygenation metrics
         PORTFORWARD_LHP_SUCCESS_COUNT("portfoward_lhp_success_count", true),

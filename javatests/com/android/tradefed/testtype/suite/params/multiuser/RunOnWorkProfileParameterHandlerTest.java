@@ -40,6 +40,8 @@ public class RunOnWorkProfileParameterHandlerTest {
 
     private static final String REQUIRE_RUN_ON_WORK_PROFILE_NAME =
             "com.android.bedstead.enterprise.annotations.RequireRunOnWorkProfile";
+    private static final String REQUIRE_RUN_ON_WORK_PROFILE_LEGACY_NAME =
+            "com.android.bedstead.harrier.annotations.RequireRunOnWorkProfile";
     private static final String EXISTING_ANNOTATION_FILTER = "existing.annotation.filter";
 
     private RunOnWorkProfileParameterHandler mHandler;
@@ -63,16 +65,19 @@ public class RunOnWorkProfileParameterHandlerTest {
 
         mHandler.applySetup(mModuleConfig);
 
-        assertEquals(1, test.getIncludeAnnotations().size());
-        assertEquals(
-                REQUIRE_RUN_ON_WORK_PROFILE_NAME, test.getIncludeAnnotations().iterator().next());
+        assertEquals(2, test.getIncludeAnnotations().size());
+        assertTrue(test.getIncludeAnnotations().contains(REQUIRE_RUN_ON_WORK_PROFILE_NAME));
+        assertTrue(test.getIncludeAnnotations().contains(REQUIRE_RUN_ON_WORK_PROFILE_LEGACY_NAME));
     }
 
     @Test
     public void applySetup_removesRequireRunOnWorkProfileFromExcludeFilters() {
         TestFilterable test = new TestFilterable();
-        test.addAllExcludeAnnotation(
-                Set.of(EXISTING_ANNOTATION_FILTER, REQUIRE_RUN_ON_WORK_PROFILE_NAME));
+        test.addAllExcludeAnnotation(Set.of(
+                EXISTING_ANNOTATION_FILTER,
+                REQUIRE_RUN_ON_WORK_PROFILE_NAME,
+                REQUIRE_RUN_ON_WORK_PROFILE_LEGACY_NAME)
+        );
         mModuleConfig.setTest(test);
 
         mHandler.applySetup(mModuleConfig);

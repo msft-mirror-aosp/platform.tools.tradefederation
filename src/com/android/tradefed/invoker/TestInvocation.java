@@ -58,6 +58,7 @@ import com.android.tradefed.device.internal.DeviceReleaseReporter;
 import com.android.tradefed.error.HarnessException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.error.IHarnessException;
+import com.android.tradefed.invoker.InvocationCacheHelper.CacheInvocationResultDescriptor;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
 import com.android.tradefed.invoker.logger.CurrentInvocation.InvocationInfo;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
@@ -90,6 +91,7 @@ import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
+import com.android.tradefed.result.proto.InvocationProtoResultReporter;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.IRetryDecision;
@@ -217,6 +219,7 @@ public class TestInvocation implements ITestInvocation {
     private List<IScheduledInvocationListener> mSchedulerListeners = new ArrayList<>();
     private DeviceUnavailableMonitor mUnavailableMonitor = new DeviceUnavailableMonitor();
     private ConditionFailureMonitor mConditionalFailureMonitor = new ConditionFailureMonitor();
+    private InvocationProtoResultReporter mInvocationProtoResultReporter = null;
     private ExitCode mExitCode = ExitCode.NO_ERROR;
     private Throwable mExitStack = null;
     private EventsLoggerListener mEventsLogger = null;
@@ -624,11 +627,17 @@ public class TestInvocation implements ITestInvocation {
             invocationPath.doSetup(testInfo, config, listener);
             // Don't run tests if notified of soft/forced shutdown
             if (mSoftStopRequestTime != null || mStopRequestTime != null) {
-                // Throw an exception so that it can be reported as an invocation failure
-                // and command can be un-leased
-                throw new RunInterruptedException(
-                        "Notified of shut down. Will not run tests",
-                        InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+                if (System.getenv("IS_CLOUD_ATE") == null) {
+                    // Throw an exception so that it can be reported as an invocation failure
+                    // and command can be un-leased
+                    throw new RunInterruptedException(
+                            "Notified of shut down. Will not run tests",
+                            InfraErrorIdentifier.TRADEFED_SKIPPED_TESTS_DURING_SHUTDOWN);
+                } else {
+                    CLog.d(
+                            "Notified of shut down. Will still run tests and respect grace period"
+                                + " in CI for shutting down.");
+                }
             }
             logDeviceBatteryLevel(testInfo.getContext(), "setup -> test");
             mTestStarted = true;
@@ -983,10 +992,6 @@ public class TestInvocation implements ITestInvocation {
         DynamicRemoteFileResolver resolver =
                 new DynamicRemoteFileResolver(true /* allow parallelization */);
         try {
-            // Don't resolve for remote invocation, wait until we are inside the remote.
-            if (RunMode.REMOTE_INVOCATION.equals(mode)) {
-                return true;
-            }
             CurrentInvocation.setActionInProgress(ActionInProgress.FETCHING_ARTIFACTS);
             resolver.setDevice(context.getDevices().get(0));
             resolver.addExtraArgs(config.getCommandOptions().getDynamicDownloadArgs());
@@ -1128,6 +1133,13 @@ public class TestInvocation implements ITestInvocation {
             allListeners.addAll(Arrays.asList(extraListeners));
             allListeners.add(mUnavailableMonitor);
             allListeners.add(mConditionalFailureMonitor);
+            if (config.getCommandOptions().shouldUploadInvocationCacheResults()) {
+                mInvocationProtoResultReporter =
+                        new InvocationProtoResultReporter(info.getContext(), false);
+                File outputFile = FileUtil.createTempFile("invocation-results-cache", ".pb");
+                mInvocationProtoResultReporter.setOutputFile(outputFile);
+                allListeners.add(mInvocationProtoResultReporter);
+            }
 
             // Auto retry feature
             IRetryDecision decision = config.getRetryDecision();
@@ -1262,6 +1274,22 @@ public class TestInvocation implements ITestInvocation {
                             .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
                     && !RunMode.DELEGATED_INVOCATION.equals(mode)) {
                 boolean skipInvocation = config.getSkipManager().shouldSkipInvocation(info);
+                String skipReason = config.getSkipManager().getInvocationSkipReason();
+                if (!skipInvocation) {
+                    if (config.getCommandOptions().getRemoteCacheInstanceName() != null
+                            && config.getCommandOptions().shouldUploadInvocationCacheResults()) {
+                        CacheInvocationResultDescriptor descriptor =
+                                InvocationCacheHelper.lookupInvocationResults(config, info);
+                        if (descriptor != null && descriptor.isCacheHit()) {
+                            skipReason = descriptor.getDetails();
+                            if (InvocationContext.isPresubmit(context)
+                                    && config.getCommandOptions()
+                                            .reportInvocationCacheResultsInPresubmit()) {
+                                skipInvocation = true;
+                            }
+                        }
+                    }
+                }
                 if (skipInvocation) {
                     CLog.d("Skipping invocation early.");
                     startInvocation(config, info.getContext(), listener);
@@ -1282,8 +1310,7 @@ public class TestInvocation implements ITestInvocation {
                             InvocationMetricKey.TEARDOWN_PAIR, timestamp, timestamp);
                     InvocationMetricLogger.addInvocationPairMetrics(
                             InvocationMetricKey.TEST_TEARDOWN_PAIR, timestamp, timestamp);
-                    listener.invocationSkipped(
-                            new SkipReason(config.getSkipManager().getInvocationSkipReason(), ""));
+                    listener.invocationSkipped(new SkipReason(skipReason, ""));
                     reportModuleSkip(config, listener);
                     reportHostLog(listener, config);
                     reportInvocationEnded(config, info.getContext(), listener, 0L);
@@ -1430,9 +1457,17 @@ public class TestInvocation implements ITestInvocation {
 
             performInvocation(config, info, invocationPath, listener, deviceInit);
             setExitCode(ExitCode.NO_ERROR, null);
+            if (mInvocationProtoResultReporter != null
+                    && !mInvocationProtoResultReporter.stopCaching()) {
+                InvocationCacheHelper.uploadInvocationResults(
+                        config, mInvocationProtoResultReporter.getOutputFile(), info);
+            }
         } catch (IOException e) {
             CLog.e(e);
         } finally {
+            if (mInvocationProtoResultReporter != null) {
+                FileUtil.deleteFile(mInvocationProtoResultReporter.getOutputFile());
+            }
             TfObjectTracker.clearTracking();
             CurrentInvocation.clearInvocationInfos();
             config.getSkipManager().clearManager();

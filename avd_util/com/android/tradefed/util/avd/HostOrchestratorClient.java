@@ -15,6 +15,8 @@
  */
 package com.android.tradefed.util.avd;
 
+import com.android.tradefed.log.LogUtil.CLog;
+
 import com.google.gson.Gson;
 
 import java.io.IOException;
@@ -23,6 +25,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.nio.file.Path;
 
 /**
  * Java implementation of Cuttlefish Host Orchestator API.
@@ -47,8 +50,26 @@ public class HostOrchestratorClient {
                 .build();
     }
 
+    // https://github.com/google/android-cuttlefish/blob/fff7e3487c924435e6f6120345edf1dddb49d50b/frontend/src/host_orchestrator/orchestrator/controller.go#L82
+    public static HttpRequest buildGetOperationResultRequest(String baseURL, String name) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(String.format("%s/operations/%s/result", baseURL, name)))
+                .build();
+    }
+
+    // https://github.com/google/android-cuttlefish/blob/fff7e3487c924435e6f6120345edf1dddb49d50b/frontend/src/host_orchestrator/orchestrator/controller.go#L69
+    public static HttpRequest buildCreateBugreportRequest(String baseURL, String group) {
+        return HttpRequest.newBuilder()
+                .uri(URI.create(String.format("%s/cvds/%s/:bugreport", baseURL, group)))
+                .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
+                .build();
+    }
+
     public static interface IHoHttpClient {
         HttpResponse<String> send(HttpRequest request)
+                throws IOException, InterruptedException, ErrorResponseException;
+
+        HttpResponse<Path> send(HttpRequest request, Path dst)
                 throws IOException, InterruptedException, ErrorResponseException;
     }
 
@@ -63,6 +84,12 @@ public class HostOrchestratorClient {
         public HttpResponse<String> send(HttpRequest request)
                 throws IOException, InterruptedException, ErrorResponseException {
             return mClient.send(request, BodyHandlers.ofString());
+        }
+
+        @Override
+        public HttpResponse<Path> send(HttpRequest request, Path dst)
+                throws IOException, InterruptedException, ErrorResponseException {
+            return mClient.send(request, BodyHandlers.ofFile(dst));
         }
     }
 
@@ -96,5 +123,14 @@ public class HostOrchestratorClient {
             throw new ErrorResponseException(res.statusCode(), res.body());
         }
         return new Gson().fromJson(res.body(), responseClass);
+    }
+
+    public static void saveToFile(IHoHttpClient client, HttpRequest request, Path dst)
+            throws IOException, InterruptedException, ErrorResponseException {
+        HttpResponse<Path> res = client.send(request, dst);
+        if (res.statusCode() != 200) {
+            throw new ErrorResponseException(res.statusCode(), "");
+        }
+        CLog.i("Response body for \"%s\" successfully saved to \"%s\"", request.uri(), dst);
     }
 }

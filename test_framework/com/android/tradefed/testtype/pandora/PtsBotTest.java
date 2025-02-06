@@ -32,6 +32,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.IShardableTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -76,7 +77,6 @@ import java.util.stream.Collectors;
  * https://www.bluetooth.com/develop-with-bluetooth/qualification-listing/qualification-test-tools/profile-tuning-suite/).
  */
 public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableTest, ITestLogger {
-
     private static final String TAG = "PandoraPtsBot";
 
     // This is the fixed port of the Pandora gRPC server running on the DUT.
@@ -115,11 +115,6 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     // does not explicitly close the underlying BLE ACL link.
     private static final int PTS_INACTIVITY_TIMEOUT = 90;
 
-    private static final String A2DP_SNK_PROPERTY = "bluetooth.profile.a2dp.sink.enabled";
-    private static final String A2DP_SRC_PROPERTY = "bluetooth.profile.a2dp.source.enabled";
-    private static final String HFP_HF_PROPERTY = "bluetooth.profile.hfp.hf.enabled";
-    private static final String HFP_AG_PROPERTY = "bluetooth.profile.hfp.ag.enabled";
-
     private static final String NATIVE_BLUETOOTH_FLAG =
             "setprop persist.device_config.aconfig_flags.bluetooth.com.android.bluetooth.flags";
 
@@ -132,7 +127,17 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
-    private TestFlagConfiguration testFlagConfiguration;
+    public class TestSyspropConfiguration {
+        List<SyspropConfig> system_properties; // snake_case naming to match the json
+
+        public class SyspropConfig {
+            Map<String, String> system_properties;
+            List<String> tests;
+        }
+    }
+
+    private TestFlagConfiguration mTestFlagConfiguration;
+    private TestSyspropConfiguration mTestSyspropConfiguration;
 
     private IRunUtil mRunUtil = new RunUtil();
 
@@ -228,7 +233,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     }
 
     public TestFlagConfiguration getTestFlagConfiguration() {
-        return testFlagConfiguration;
+        return mTestFlagConfiguration;
+    }
+
+    public TestSyspropConfiguration getSyspropConfiguration() {
+        return mTestSyspropConfiguration;
     }
 
     private int shardIndex = 0;
@@ -316,6 +325,10 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         // Parse the flags config file and initialize the default
         // flags value.
         initFlagsConfig(testDevice, testsConfigFile);
+
+        // Parse the properties config file and initialize the default
+        // sysprops' values.
+        initSystemPropertiesConfig(testsConfigFile);
 
         // Forward allocated host Pandora Server port to actual DUT Pandora
         // Server ports.
@@ -483,6 +496,36 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         throw new RuntimeException(String.format("Cannot list tests for %s", profile));
     }
 
+    private Map<String, String> setPropertiesBeforeTest(String testName, ITestDevice testDevice) {
+        Map<String, String> restoreSyspropConfiguration = new HashMap<>();
+
+        for (TestSyspropConfiguration.SyspropConfig syspropConfig :
+                mTestSyspropConfiguration.system_properties) {
+            if (syspropConfig.tests.stream().anyMatch(testName::startsWith)
+                    || syspropConfig.tests.stream().anyMatch("all"::equals)) {
+                for (Map.Entry<String, String> entry : syspropConfig.system_properties.entrySet()) {
+                    String currentValue = getProperty(testDevice, entry.getKey());
+                    // Save current value to restore it after the test
+                    restoreSyspropConfiguration.put(entry.getKey(), currentValue);
+                    // Set the value from the config
+                    setProperty(testDevice, entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        return restoreSyspropConfiguration;
+    }
+
+    private void restorePropertiesAfterTest(
+            ITestDevice testDevice, Map<String, String> restoreSyspropConfiguration) {
+        if (restoreSyspropConfiguration == null) {
+            CLog.e("Unable to restore sysprops - configuration is null");
+            return;
+        }
+        for (Map.Entry<String, String> entry : restoreSyspropConfiguration.entrySet()) {
+            setProperty(testDevice, entry.getKey(), entry.getValue());
+        }
+    }
+
     private void runPtsBotTests(
             String[] tests, TestInformation testInfo, ITestInvocationListener listener) {
 
@@ -498,57 +541,74 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                             .filter(testName -> testName.startsWith(profile))
                             .toArray(String[]::new);
 
-            if (profileTests.length > 0) {
-                Map<String, String> runMetrics = new HashMap<>();
-
-                listener.testRunStarted(profile, profileTests.length);
-                ITestDevice testDevice = testInfo.getDevice();
-                long startTimestamp = System.currentTimeMillis();
-                for (String testName : profileTests) {
-                    toggleA2dpSinkIfNeeded(testDevice, testName);
-                    toggleHfpHfIfNeeded(testDevice, testName);
-                    boolean matchingFlagConfig = false;
-                    boolean unflagged = false;
-                    for (TestFlagConfiguration.FlagConfig flagConfig :
-                            testFlagConfiguration.flags) {
-                        if (flagConfig.tests.stream().anyMatch(testName::startsWith)) {
-                            matchingFlagConfig = true;
-                            flagConfig.flags.forEach(flag -> enableBluetoothFlag(testDevice, flag));
-                            runPtsBotTest(profile, testName, testInfo, listener);
-                            flagConfig.flags.forEach(
-                                    flag -> restoreBluetoothFlag(testDevice, flag));
-
-                            if (flagConfig.flags.stream().anyMatch("unflagged"::equals)) {
-                                unflagged = true;
-                            }
-                        }
-                    }
-                    if (!matchingFlagConfig || unflagged) {
-                        runPtsBotTest(profile, testName, testInfo, listener);
-                    }
-                    try {
-                        File snoopFile = FileUtil.createTempFile("android_snoop_log", ".log");
-                        testDevice.pullFile("/data/misc/bluetooth/logs/btsnoop_hci.log", snoopFile);
-                        try (InputStreamSource source =
-                                new FileInputStreamSource(snoopFile, true)) {
-                            listener.testLog(
-                                    String.format("android_btsnoop_%s", testName),
-                                    LogDataType.BT_SNOOP_LOG,
-                                    source);
-                        }
-                    } catch (DeviceNotAvailableException | IOException e) {
-                        CLog.e("Cannot fetch Android snoop logs: " + e.toString());
-                    }
-                }
-                long endTimestamp = System.currentTimeMillis();
-                listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
-            } else {
+            if (profileTests.length == 0) {
                 CLog.i("No tests applicable for %s", profile);
+                continue;
             }
+            Map<String, String> runMetrics = new HashMap<>();
+
+            listener.testRunStarted(profile, profileTests.length);
+            ITestDevice testDevice = testInfo.getDevice();
+            long startTimestamp = System.currentTimeMillis();
+            for (String testName : profileTests) {
+                Map<String, String> restoreSyspropConfiguration =
+                        setPropertiesBeforeTest(testName, testDevice);
+                runPtsBotTestWithFlag(profile, testName, testInfo, listener);
+                restorePropertiesAfterTest(testDevice, restoreSyspropConfiguration);
+                try {
+                    File snoopFile = FileUtil.createTempFile("android_snoop_log", ".log");
+                    testDevice.pullFile("/data/misc/bluetooth/logs/btsnoop_hci.log", snoopFile);
+                    try (InputStreamSource source = new FileInputStreamSource(snoopFile, true)) {
+                        listener.testLog(
+                                String.format("android_btsnoop_%s", testName),
+                                LogDataType.BT_SNOOP_LOG,
+                                source);
+                    }
+                } catch (DeviceNotAvailableException | IOException e) {
+                    CLog.e("Cannot fetch Android snoop logs: " + e.toString());
+                }
+            }
+            long endTimestamp = System.currentTimeMillis();
+            listener.testRunEnded(endTimestamp - startTimestamp, runMetrics);
         }
     }
 
-    private void shell(ITestDevice testDevice, String cmd) {
+    private void runPtsBotTestWithFlag(
+            String profile,
+            String testName,
+            TestInformation testInfo,
+            ITestInvocationListener listener) {
+        ITestDevice testDevice = testInfo.getDevice();
+        boolean matchingFlagConfig = false;
+        // If specified in the config, will run the test both with and without flags.
+        // This allow to test "no-op" flag before releasing them
+        boolean unflagged = false;
+        for (TestFlagConfiguration.FlagConfig flagConfig : mTestFlagConfiguration.flags) {
+            if (!flagConfig.tests.stream().anyMatch(testName::startsWith)) {
+                continue;
+            }
+            if (flagConfig.flags.stream().anyMatch("unflagged"::equals)) {
+                unflagged = true;
+            }
+            matchingFlagConfig = true;
+            if (flagConfig.flags.stream().anyMatch(f -> isFlagDisabledAndReadOnly(testDevice, f))) {
+                TestDescription testDescription = new TestDescription(profile, testName);
+                SkipReason reason =
+                        new SkipReason("The test device doesn't support flag override", "");
+                Log.w(testDevice, "Test Ended [Skipped]: " + testName + " " + reason);
+                listener.testSkipped(testDescription, reason);
+                continue;
+            }
+            flagConfig.flags.forEach(flag -> enableBluetoothFlag(testDevice, flag));
+            runPtsBotTest(profile, testName, testInfo, listener);
+            flagConfig.flags.forEach(flag -> restoreBluetoothFlag(testDevice, flag));
+        }
+        if (!matchingFlagConfig || unflagged) {
+            runPtsBotTest(profile, testName, testInfo, listener);
+        }
+    }
+
+    private static void shell(ITestDevice testDevice, String cmd) {
         try {
             CommandResult cmdResult = testDevice.executeShellV2Command(cmd);
             if (cmdResult.getExitCode() != 0) {
@@ -559,7 +619,60 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
+    private boolean isFlagEnabledAndReadOnly(ITestDevice testDevice, String flag) {
+        try {
+            String cmd = "aflags list -c com.android.bt | grep 'flags." + flag + " '";
+            CommandResult cmdResult = testDevice.executeShellV2Command(cmd);
+            if (cmdResult.getExitCode() != 0) {
+                CLog.e("Failed to run" + cmd + ": " + cmdResult.getStderr());
+                return false;
+            }
+            String[] out = cmdResult.getStdout().trim().toLowerCase().split("\\R");
+            if (out.length != 1) {
+                CLog.e(
+                        "Check the config or the target for flag=%s. out=[%s]",
+                        flag, Arrays.toString(out));
+                return false;
+            }
+            CLog.v("Flag is: [[" + out[0] + "]]");
+            return out[0].matches(
+                    "com.android.bluetooth.flags." + flag + " .*enabled.*read-only.*");
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("Device not available: " + e);
+            return false;
+        }
+    }
+
+    private boolean isFlagDisabledAndReadOnly(ITestDevice testDevice, String flag) {
+        try {
+            String cmd = "aflags list -c com.android.bt | grep 'flags." + flag + " '";
+            CommandResult cmdResult = testDevice.executeShellV2Command(cmd);
+            if (cmdResult.getExitCode() != 0) {
+                CLog.e("Failed to run" + cmd + ": " + cmdResult.getStderr());
+                return true;
+            }
+            String[] out = cmdResult.getStdout().trim().split("\\R");
+            if (out.length != 1) {
+                CLog.e(
+                        "Check the config or the target for flag=%s. out=[%s]",
+                        flag, Arrays.toString(out));
+                return true;
+            }
+            CLog.v("Flag is: [[" + out[0] + "]]");
+            return !out[0].matches(
+                    "com.android.bluetooth.flags." + flag + " .*(enabled.*read-only|read-write).*");
+        } catch (DeviceNotAvailableException e) {
+            CLog.e("Device not available: " + e);
+            return true;
+        }
+    }
+
     private void enableBluetoothFlag(ITestDevice testDevice, String flag) {
+        if (isFlagEnabledAndReadOnly(testDevice, flag)) {
+            Log.i(testDevice, "enableBluetoothFlag: skip %s: already ENABLED + READ_ONLY", flag);
+            return;
+        }
+        Log.i(testDevice, "enableBluetoothFlag: %s", flag);
         String setNativeFlagCmd = String.format("%s.%s true", NATIVE_BLUETOOTH_FLAG, flag);
         shell(testDevice, setNativeFlagCmd);
 
@@ -571,6 +684,11 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     }
 
     private void restoreBluetoothFlag(ITestDevice testDevice, String flag) {
+        if (isFlagEnabledAndReadOnly(testDevice, flag)) {
+            Log.i(testDevice, "enableBluetoothFlag: skip %s: already ENABLED + READ_ONLY", flag);
+            return;
+        }
+        Log.i(testDevice, "restoreBluetoothFlag: %s", flag);
         String clearOverrideCmd =
                 String.format(
                         "device_config clear_override bluetooth com.android.bluetooth.flags.%s",
@@ -586,46 +704,27 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         try {
             Gson gson = new Gson();
             FileReader reader = new FileReader(testConfigFile);
-            testFlagConfiguration = gson.fromJson(reader, TestFlagConfiguration.class);
-            List<TestFlagConfiguration.FlagConfig> flags = testFlagConfiguration.flags;
-            if (flags.isEmpty()) {
-                return;
-            }
+            mTestFlagConfiguration = gson.fromJson(reader, TestFlagConfiguration.class);
         } catch (IOException | JsonSyntaxException e) {
             CLog.e("Error initFlagsConfig: " + e);
         }
     }
 
-    private void toggleA2dpSinkIfNeeded(ITestDevice testDevice, String testName) {
-        CLog.i("toggleA2dpSinkIfNeeded: " + testName);
-        if (testName.startsWith("A2DP/SNK")
-                || testName.startsWith("AVCTP/CT")
-                || testName.startsWith("AVDTP/SNK")
-                || (testName.startsWith("AVRCP/CT") && !testName.startsWith("AVRCP/CT/VLH"))
-                || testName.startsWith("AVRCP/TG/VLH")) {
-            setProperty(testDevice, A2DP_SNK_PROPERTY, true);
-            setProperty(testDevice, A2DP_SRC_PROPERTY, false);
-        } else if (!getProperty(testDevice, A2DP_SRC_PROPERTY).equals("true")) {
-            setProperty(testDevice, A2DP_SNK_PROPERTY, false);
-            setProperty(testDevice, A2DP_SRC_PROPERTY, true);
-        }
-    }
-
-    private void toggleHfpHfIfNeeded(ITestDevice testDevice, String testName) {
-        CLog.i("toggleHfpHfIfNeeded: " + testName);
-        if (testName.startsWith("HFP/HF")) {
-            setProperty(testDevice, HFP_HF_PROPERTY, true);
-            setProperty(testDevice, HFP_AG_PROPERTY, false);
-        } else if (!getProperty(testDevice, HFP_HF_PROPERTY).equals("true")) {
-            setProperty(testDevice, HFP_HF_PROPERTY, false);
-            setProperty(testDevice, HFP_AG_PROPERTY, true);
-        }
-    }
-
-    private void setProperty(ITestDevice testDevice, String property, boolean enable) {
-        CLog.i("setProperty: " + property);
+    public void initSystemPropertiesConfig(File testConfigFile) {
+        CLog.i("initSystemPropertiesConfig");
         try {
-            String cmd = String.format("setprop %s %s", property, enable);
+            Gson gson = new Gson();
+            FileReader reader = new FileReader(testConfigFile);
+            mTestSyspropConfiguration = gson.fromJson(reader, TestSyspropConfiguration.class);
+        } catch (IOException | JsonSyntaxException e) {
+            CLog.e("Error initSystemPropertiesConfig: " + e);
+        }
+    }
+
+    private void setProperty(ITestDevice testDevice, String property, String value) {
+        Log.i(testDevice, "setProperty: " + property + " value: " + value);
+        try {
+            String cmd = String.format("setprop %s %s", property, (value != null ? value : ""));
             CommandResult result = testDevice.executeShellV2Command(cmd);
             if (result.getExitCode() != 0) {
                 CLog.e("Failed to set property: " + property + ": " + result.getStderr());
@@ -636,7 +735,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
     }
 
     private String getProperty(ITestDevice testDevice, String property) {
-        CLog.i("getProperty: " + property);
+        Log.i(testDevice, "getProperty: " + property);
         try {
             String cmd = String.format("getprop %s", property);
             CommandResult result = testDevice.executeShellV2Command(cmd);
@@ -659,8 +758,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         TestDescription testDescription = new TestDescription(profile, testName);
 
         listener.testStarted(testDescription);
-        CLog.i(testName);
-        androidLogInfo(testInfo.getDevice(), "Test Started: " + testName);
+        Log.i(testInfo.getDevice(), "Test Started: " + testName);
 
         boolean success = false;
         boolean inconclusive = false;
@@ -734,7 +832,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
             // At the first retry, increment flaky tests count.
             if (retryCount == 1) flakyCount++;
             if (flakyCount <= maxFlakyTests && retryCount <= maxRetriesPerTest) {
-                androidLogWarning(
+                Log.w(
                         testInfo.getDevice(),
                         String.format(
                                 "Test %s: %s, retrying [count=%s]",
@@ -745,9 +843,9 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
 
         if (success) {
-            androidLogInfo(testInfo.getDevice(), "Test Ended [Success]: " + testName);
+            Log.i(testInfo.getDevice(), "Test Ended [Success]: " + testName);
         } else {
-            androidLogError(testInfo.getDevice(), "Test Ended [Failed]: " + testName);
+            Log.e(testInfo.getDevice(), "Test Ended [Failed]: " + testName);
             listener.testFailed(
                     testDescription,
                     String.format(
@@ -801,7 +899,7 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         return builder;
     }
 
-    private int adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)
+    private static int adbForwardPort(ITestDevice testDevice, int hostPort, int dutPort)
             throws DeviceNotAvailableException {
         return Integer.parseInt(
                 testDevice
@@ -812,7 +910,8 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                         .trim());
     }
 
-    private int adbForwardVsockPort(ITestDevice testDevice, int hostPort, int dutCid, int dutPort)
+    private static int adbForwardVsockPort(
+            ITestDevice testDevice, int hostPort, int dutCid, int dutPort)
             throws DeviceNotAvailableException {
         return Integer.parseInt(
                 testDevice
@@ -823,12 +922,12 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
                         .trim());
     }
 
-    private void adbForwardRemovePort(ITestDevice testDevice, int hostPort)
+    private static void adbForwardRemovePort(ITestDevice testDevice, int hostPort)
             throws DeviceNotAvailableException {
         testDevice.executeAdbCommand("forward", "--remove", String.format("tcp:%s", hostPort));
     }
 
-    private void androidLog(ITestDevice testDevice, String priority, String content) {
+    private static void androidLog(ITestDevice testDevice, String priority, String content) {
         try {
             String timeStamp = new SimpleDateFormat("HH:mm:ss.SSS").format(new Date());
             String command =
@@ -847,15 +946,24 @@ public class PtsBotTest implements IRemoteTest, ITestFilterReceiver, IShardableT
         }
     }
 
-    private void androidLogInfo(ITestDevice testDevice, String content) {
-        androidLog(testDevice, "i", content);
-    }
+    // Log simultaneously in host and in android
+    static class Log {
+        public static void i(ITestDevice testDevice, String format, Object... args) {
+            String content = String.format(format, args);
+            androidLog(testDevice, "i", content);
+            CLog.i(content);
+        }
 
-    private void androidLogWarning(ITestDevice testDevice, String content) {
-        androidLog(testDevice, "w", content);
-    }
+        public static void w(ITestDevice testDevice, String format, Object... args) {
+            String content = String.format(format, args);
+            androidLog(testDevice, "w", content);
+            CLog.w(content);
+        }
 
-    private void androidLogError(ITestDevice testDevice, String content) {
-        androidLog(testDevice, "e", content);
+        public static void e(ITestDevice testDevice, String format, Object... args) {
+            String content = String.format(format, args);
+            androidLog(testDevice, "e", content);
+            CLog.e(content);
+        }
     }
 }

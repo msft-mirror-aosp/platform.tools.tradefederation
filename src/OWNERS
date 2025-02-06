@@ -1,1 +1,2 @@
 per-file com/android/tradefed/targetprep/*User* = file:/MULTIUSER_OWNERS
+per-file com/android/tradefed/device/metric/CodeCoverageCollector.java = file:/COVERAGE_OWNERS

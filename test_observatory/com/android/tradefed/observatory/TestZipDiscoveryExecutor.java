@@ -186,8 +186,13 @@ public class TestZipDiscoveryExecutor {
     /** Centralize all the logic to handle non-Tradefed command discovery and assumptions. */
     private String nonTradefedDiscovery(String[] args) throws JSONException {
         Set<String> testsZipRegex = new LinkedHashSet<String>();
+        // special setup by camera team
         if ("unused".equals(args[0])) {
-            // If the command is unused, then they should not use any tests artifacts
+            for (String arg : args) {
+                if (arg.contains("liblyric")) {
+                    testsZipRegex.add("camera-hal-tests.zip");
+                }
+            }
             return formatResults(false, testsZipRegex);
         }
         for (String arg : args) {

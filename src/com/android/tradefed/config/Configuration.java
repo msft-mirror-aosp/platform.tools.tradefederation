@@ -1358,7 +1358,8 @@ public class Configuration implements IConfiguration {
             } else if (options.getShardCount() != null
                     && options.getShardCount() > 1
                     && options.getShardIndex() == null
-                    && !getCommandOptions().shouldUseSandboxing()) {
+                    && !getCommandOptions().shouldUseSandboxing()
+                    && !getCommandOptions().shouldUseRemoteSandboxMode()) {
                 CLog.w("Skipping dynamic download due to local sharding detected.");
                 return;
             }

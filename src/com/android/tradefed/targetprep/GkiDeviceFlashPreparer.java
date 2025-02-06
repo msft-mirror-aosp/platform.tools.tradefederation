@@ -196,7 +196,7 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     @Option(
             name = "wipe-device-before-gki-flash",
             description = "Whether to wipe device before GKI boot image flash.")
-    private boolean mShouldWipeDeviceBeforeFlash = true;
+    private boolean mShouldWipeDeviceBeforeFlash = false;
 
     @Deprecated
     @Option(
@@ -347,6 +347,9 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
             device.reboot();
         }
         device.rebootIntoBootloader();
+        if (mShouldWipeDeviceBeforeFlash) {
+            executeFastbootCmd(device, "-w");
+        }
         if (mShouldDisableOemVerity) {
             executeFastbootCmd(device, "oem disable-verity");
         }
@@ -360,10 +363,6 @@ public class GkiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
         // Don't allow interruptions during flashing operations.
         getRunUtil().allowInterrupt(false);
         try {
-            if (mShouldWipeDeviceBeforeFlash) {
-                executeFastbootCmd(device, "-w");
-            }
-
             if (buildInfo.getFile(mVendorBootImageName) != null) {
                 File vendorBootImg =
                         getRequestedFile(

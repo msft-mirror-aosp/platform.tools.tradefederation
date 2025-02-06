@@ -311,4 +311,10 @@ public interface ICommandOptions {
 
     /** Returns true if we should report cache results when available in presubmit. */
     public boolean reportCacheResultsInPresubmit();
+
+    /** Returns true if we should capture the invocation results in the cache. */
+    public boolean shouldUploadInvocationCacheResults();
+
+    /** Returns true if we should report invocation cache results when available in presubmit. */
+    public boolean reportInvocationCacheResultsInPresubmit();
 }

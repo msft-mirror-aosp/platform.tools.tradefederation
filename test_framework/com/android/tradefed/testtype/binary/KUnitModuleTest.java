@@ -27,8 +27,10 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.skipped.SkipReason;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.KernelModuleUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -37,7 +39,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /** Test runner for running KUnit test modules on device. */
 @OptionClass(alias = "kunit-module-test")
@@ -49,44 +50,10 @@ public class KUnitModuleTest extends ExecutableTargetTest {
     private KTapResultParser.ParseResolution mKTapResultParserResolution =
             KTapResultParser.ParseResolution.AGGREGATED_MODULE;
 
-    public static final String RMMOD_COMMAND_FMT = "rmmod %s";
-    public static final String INSMOD_COMMAND_FMT = "insmod %s";
     public static final String KUNIT_DEBUGFS_PATH =
             String.format("%s/kunit", NativeDevice.DEBUGFS_PATH);
     public static final String KUNIT_RESULTS_FMT =
             String.format("%s/%%s/results", KUNIT_DEBUGFS_PATH);
-
-    /** Remove `.ko` extension if present */
-    private static String removeKoExtension(String s) {
-        return s.endsWith(".ko") ? s.substring(0, s.length() - 3) : s;
-    }
-
-    /**
-     * Return module name as it's displayed after loading.
-     *
-     * <p>For example, see the difference between the file name and that returned by `lsmod`:
-     *
-     * <pre>{@code
-     * $ insmod kunit-example-test.ko
-     * $ lsmod | grep kunit
-     * kunit_example_test 20480 0
-     * }</pre>
-     */
-    private String getDisplayedModuleName(String fullPath) {
-
-        // Extract filename from full path
-        int sepPos = fullPath.lastIndexOf('/');
-        String moduleName = sepPos == -1 ? fullPath : fullPath.substring(sepPos + 1);
-        if (moduleName.isEmpty()) {
-            throw new IllegalArgumentException("input should not end with \"/\"");
-        }
-
-        // Remove `.ko` extension if present
-        moduleName = removeKoExtension(moduleName);
-
-        // Replace all '-' with '_'
-        return moduleName.replace('-', '_');
-    }
 
     @Override
     protected boolean doesRunBinaryGenerateTestResults() {
@@ -107,7 +74,8 @@ public class KUnitModuleTest extends ExecutableTargetTest {
         Map<String, String> originalTestCommands = super.getAllTestCommands();
         Map<String, String> modifiedTestCommands = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : originalTestCommands.entrySet()) {
-            modifiedTestCommands.put(removeKoExtension(entry.getKey()), entry.getValue());
+            modifiedTestCommands.put(
+                    KernelModuleUtils.removeKoExtension(entry.getKey()), entry.getValue());
         }
         return modifiedTestCommands;
     }
@@ -125,11 +93,10 @@ public class KUnitModuleTest extends ExecutableTargetTest {
         if (getDevice() == null) {
             throw new IllegalArgumentException("Device has not been set");
         }
-        String kunitModule = getDisplayedModuleName(modulePath);
+        String kunitModule = KernelModuleUtils.getDisplayedModuleName(modulePath);
 
         // Unload module before hand in case it's already loaded for some reason
-        CommandResult result =
-                getDevice().executeShellV2Command(String.format(RMMOD_COMMAND_FMT, kunitModule));
+        CommandResult result = KernelModuleUtils.removeSingleModule(getDevice(), kunitModule);
 
         if (CommandStatus.SUCCESS.equals(result.getStatus())) {
             CLog.w("Module '%s' unexpectedly still loaded, it has been unloaded.", kunitModule);
@@ -151,17 +118,12 @@ public class KUnitModuleTest extends ExecutableTargetTest {
                         String.join(",", kunitTestSuitesBefore));
             }
 
-            result =
-                    getDevice()
-                            .executeShellV2Command(
-                                    String.format(INSMOD_COMMAND_FMT, modulePath),
-                                    getTimeoutPerBinaryMs(),
-                                    TimeUnit.MILLISECONDS);
-            if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
-                String errorMessage =
-                        String.format(
-                                "binary returned non-zero. Exit code: %d, stderr: %s, stdout: %s",
-                                result.getExitCode(), result.getStderr(), result.getStdout());
+            try {
+                result =
+                        KernelModuleUtils.installModule(
+                                getDevice(), modulePath, "", getTimeoutPerBinaryMs());
+            } catch (TargetSetupError e) {
+                String errorMessage = e.toString();
                 listener.testStarted(description);
                 listener.testFailed(
                         description,
@@ -219,9 +181,7 @@ public class KUnitModuleTest extends ExecutableTargetTest {
             }
 
             // Clean up, unload module.
-            result =
-                    getDevice()
-                            .executeShellV2Command(String.format(RMMOD_COMMAND_FMT, kunitModule));
+            result = KernelModuleUtils.removeSingleModule(getDevice(), kunitModule);
 
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                 String errorMessage =

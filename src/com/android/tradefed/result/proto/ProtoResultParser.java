@@ -530,7 +530,7 @@ public class ProtoResultParser {
 
     /** Handles the test cases level of the invocation. */
     private void handleTestCase(TestRecord testcaseProto) {
-        String[] info = testcaseProto.getTestRecordId().split("#");
+        String[] info = testcaseProto.getTestRecordId().split("#", 2);
         TestDescription description = new TestDescription(info[0], info[1]);
         if (testcaseProto.hasEndTime()) {
             // Allow end event that also report start in one go. When using

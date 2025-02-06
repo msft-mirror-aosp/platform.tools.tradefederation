@@ -16,14 +16,17 @@
 package com.android.tradefed.device.connection;
 
 import com.android.tradefed.device.DeviceNotAvailableException;
+import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.RemoteAndroidDevice;
+import com.android.tradefed.device.RemoteAvdIDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
 import com.android.tradefed.device.internal.DeviceSnapshotHandler;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
 import com.android.tradefed.util.FileUtil;
@@ -73,9 +76,35 @@ public class AdbTcpConnection extends DefaultConnection {
     }
 
     @Override
+    public void initializeConnection() throws TargetSetupError, DeviceNotAvailableException {
+        super.initializeConnection();
+        if (wasPreExisting()) {
+            int port = 5555;
+            if (getInitialDeviceNumOffset() != null) {
+                port += getInitialDeviceNumOffset();
+            }
+            String serial = getInitialIp() + ":" + Integer.toString(port);
+            adbTcpDisconnect(getInitialIp(), Integer.toString(port));
+            ((IManagedTestDevice) getDevice())
+                    .setIDevice(new RemoteAvdIDevice(serial, getInitialIp()));
+            reconnect(serial);
+        }
+    }
+
+    @Override
     public void tearDownConnection() {
         super.tearDownConnection();
         FileUtil.deleteFile(mAdbConnectLogs);
+        if (wasPreExisting()) {
+            // Resotre the placeholder
+            ((IManagedTestDevice) getDevice())
+                    .setIDevice(
+                            new RemoteAvdIDevice(
+                                    getInitialSerial(),
+                                    getInitialIp(),
+                                    getInitialUser(),
+                                    getInitialDeviceNumOffset()));
+        }
     }
 
     @Override
@@ -131,6 +160,12 @@ public class AdbTcpConnection extends DefaultConnection {
      */
     public boolean adbTcpConnect(String host, String port) {
         try (CloseableTraceScope ignored = new CloseableTraceScope("adbTcpConnect")) {
+            String adbConnectionLogMsg =
+                    mAdbConnectLogs == null
+                            ? ""
+                            : String.format(
+                                    " Found more details in adb connection log: %s",
+                                    mAdbConnectLogs);
             for (int i = 0; i < MAX_RETRIES; i++) {
                 CommandResult result = adbConnect(host, port);
                 CLog.d(
@@ -148,11 +183,17 @@ public class AdbTcpConnection extends DefaultConnection {
                         && result.getStdout().contains(ADB_CONN_REFUSED)) {
                     // If we find "Connection Refused", we bail out directly as more connect won't
                     // help
+                    CLog.e(
+                            "Adb connection to %s:%s was refused.%s",
+                            host, port, adbConnectionLogMsg);
                     return false;
                 }
                 CLog.d("adb connect retrying");
                 getRunUtil().sleep((i + 1) * RETRY_INTERVAL_MS);
             }
+            CLog.e(
+                    "All attempts to connect to %s:%s with adb failed.%s",
+                    host, port, adbConnectionLogMsg);
             return false;
         }
     }

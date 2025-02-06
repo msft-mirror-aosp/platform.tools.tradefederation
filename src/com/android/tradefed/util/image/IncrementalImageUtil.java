@@ -119,7 +119,8 @@ public class IncrementalImageUtil {
             boolean wipeAfterApply,
             boolean newFlow,
             boolean updateBootloaderFromUserspace,
-            SnapuserdWaitPhase waitPhase)
+            SnapuserdWaitPhase waitPhase,
+            boolean useMerkleTree)
             throws DeviceNotAvailableException {
         // With apply snapshot, device reset is supported
         if (isIsolatedSetup && !applySnapshot) {
@@ -166,7 +167,7 @@ public class IncrementalImageUtil {
             }
         }
 
-        if (!isSnapshotSupported(device, applySnapshot)) {
+        if (!isSnapshotSupported(device, applySnapshot, useMerkleTree)) {
             CLog.d("Incremental flashing not supported.");
             return null;
         }
@@ -206,6 +207,29 @@ public class IncrementalImageUtil {
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
                 String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
+        File merkleTreeDir = null;
+        if (useMerkleTree) {
+            device.executeShellV2Command("mkdir -p /data/verity-hash/");
+            CommandResult merkleDump =
+                    device.executeShellV2Command("snapshotctl dump-verity-hash /data/verity-hash/");
+            if (CommandStatus.SUCCESS.equals(merkleDump.getStatus())) {
+                try {
+                    merkleTreeDir =
+                            FileUtil.createTempDir(
+                                    "device-merkle-tree", CurrentInvocation.getWorkFolder());
+                    boolean res = device.pullDir("/data/verity-hash/", merkleTreeDir);
+                    if (!res) {
+                        CLog.w("Failed to pull merkle tree");
+                        FileUtil.recursiveDelete(merkleTreeDir);
+                        merkleTreeDir = null;
+                    }
+                } catch (IOException e) {
+                    CLog.e(e);
+                    FileUtil.recursiveDelete(merkleTreeDir);
+                    merkleTreeDir = null;
+                }
+            }
+        }
         return new IncrementalImageUtil(
                 device,
                 deviceImage,
@@ -217,7 +241,8 @@ public class IncrementalImageUtil {
                 wipeAfterApply,
                 newFlow,
                 updateBootloaderFromUserspace,
-                waitPhase);
+                waitPhase,
+                merkleTreeDir);
     }
 
     public IncrementalImageUtil(
@@ -231,7 +256,8 @@ public class IncrementalImageUtil {
             boolean wipeAfterApply,
             boolean newFlow,
             boolean updateBootloaderFromUserspace,
-            SnapuserdWaitPhase waitPhase) {
+            SnapuserdWaitPhase waitPhase,
+            File deviceMerkleTree) {
         mDevice = device;
         mSrcImage = deviceImage;
         mSrcBootloader = bootloader;
@@ -264,7 +290,10 @@ public class IncrementalImageUtil {
         }
         mParallelSetup =
                 new ParallelPreparation(
-                        Thread.currentThread().getThreadGroup(), mSrcImage, mTargetImage);
+                        Thread.currentThread().getThreadGroup(),
+                        mSrcImage,
+                        mTargetImage,
+                        deviceMerkleTree);
         mParallelSetup.start();
     }
 
@@ -290,7 +319,8 @@ public class IncrementalImageUtil {
     }
 
     /** Returns whether or not we can use the snapshot logic to update the device */
-    public static boolean isSnapshotSupported(ITestDevice device, boolean applySnapshot)
+    public static boolean isSnapshotSupported(
+            ITestDevice device, boolean applySnapshot, boolean useMerkle)
             throws DeviceNotAvailableException {
         // Ensure snapshotctl exists
         CommandResult whichOutput = device.executeShellV2Command("which snapshotctl");
@@ -300,6 +330,12 @@ public class IncrementalImageUtil {
         }
         CommandResult helpOutput = device.executeShellV2Command("snapshotctl");
         CLog.d("stdout: %s, stderr: %s", helpOutput.getStdout(), helpOutput.getStderr());
+        if (useMerkle) {
+            if (!helpOutput.getStdout().contains("dump-verity-hash")
+                    && !helpOutput.getStderr().contains("dump-verity-hash")) {
+                return false;
+            }
+        }
         if (applySnapshot) {
             if (helpOutput.getStdout().contains("apply-update")
                     || helpOutput.getStderr().contains("apply-update")) {
@@ -827,7 +863,7 @@ public class IncrementalImageUtil {
         }
     }
 
-    private void blockCompare(File srcImage, File targetImage, File workDir) {
+    private void blockCompare(File srcImage, File srcMerkleTree, File targetImage, File workDir) {
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("block_compare:" + srcImage.getName())) {
             mRunUtil.setWorkingDir(workDir);
@@ -836,12 +872,25 @@ public class IncrementalImageUtil {
             if (mCreateSnapshotBinary != null && mCreateSnapshotBinary.exists()) {
                 createSnapshot = mCreateSnapshotBinary.getAbsolutePath();
             }
-            CommandResult result =
-                    mRunUtil.runTimedCmd(
-                            0L,
+            String[] command = null;
+            if (srcMerkleTree.exists()) {
+                command =
+                        new String[] {
+                            createSnapshot,
+                            "--source=" + srcMerkleTree.getAbsolutePath(),
+                            "--target=" + targetImage.getAbsolutePath(),
+                            "--merkel_tree"
+                        };
+            } else {
+                command =
+                        new String[] {
                             createSnapshot,
                             "--source=" + srcImage.getAbsolutePath(),
-                            "--target=" + targetImage.getAbsolutePath());
+                            "--target=" + targetImage.getAbsolutePath()
+                        };
+            }
+
+            CommandResult result = mRunUtil.runTimedCmd(0L, command);
             if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
                 throw new RuntimeException(
                         String.format("%s\n%s", result.getStdout(), result.getStderr()));
@@ -979,6 +1028,7 @@ public class IncrementalImageUtil {
     private class ParallelPreparation extends Thread {
 
         private final File mSetupSrcImage;
+        private final File mDeviceOriginMerkleTree;
         private final File mSetupTargetImage;
 
         private File mSrcDirectory;
@@ -986,10 +1036,12 @@ public class IncrementalImageUtil {
         private File mWorkDir;
         private TargetSetupError mError;
 
-        public ParallelPreparation(ThreadGroup currentGroup, File srcImage, File targetImage) {
+        public ParallelPreparation(
+                ThreadGroup currentGroup, File srcImage, File targetImage, File deviceMerkleTree) {
             super(currentGroup, "incremental-flashing-preparation");
             setDaemon(true);
             this.mSetupSrcImage = srcImage;
+            this.mDeviceOriginMerkleTree = deviceMerkleTree;
             this.mSetupTargetImage = targetImage;
         }
 
@@ -1079,14 +1131,20 @@ public class IncrementalImageUtil {
 
             List<Callable<Boolean>> callableTasks = new ArrayList<>();
             for (String partition : mSrcDirectory.list()) {
+                String merklePartition = partition.replaceAll(".img", ".pb");
                 File possibleSrc = new File(mSrcDirectory, partition);
+                File sourceMerkleTree = new File(mDeviceOriginMerkleTree, merklePartition);
                 File possibleTarget = new File(mTargetDirectory, partition);
                 File workDirectory = mWorkDir;
                 if (possibleSrc.exists() && possibleTarget.exists()) {
                     if (DYNAMIC_PARTITIONS_TO_DIFF.contains(partition)) {
                         callableTasks.add(
                                 () -> {
-                                    blockCompare(possibleSrc, possibleTarget, workDirectory);
+                                    blockCompare(
+                                            possibleSrc,
+                                            sourceMerkleTree,
+                                            possibleTarget,
+                                            workDirectory);
                                     return true;
                                 });
                     }

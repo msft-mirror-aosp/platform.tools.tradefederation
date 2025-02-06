@@ -404,7 +404,7 @@ public class GTest extends GTestBase implements IDeviceTest {
             String testRunName = fullPath.substring(fullPath.lastIndexOf("/") + 1);
             tmpOutput = FileUtil.createTempFile(testRunName, ".xml");
             String tmpResName = fullPath + "_res.xml";
-            String extraFlag = String.format(GTEST_XML_OUTPUT, tmpResName);
+            String extraFlag = String.format(convertName(GTEST_XML_OUTPUT), tmpResName);
             String fullFlagCmd =  String.format("%s %s", flags, extraFlag);
 
             // Run the tests with modified flags

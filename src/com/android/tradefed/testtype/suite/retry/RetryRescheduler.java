@@ -387,7 +387,7 @@ public final class RetryRescheduler implements IRemoteTest, IConfigurationReceiv
         // Since we always have 1 default reporter, avoid carrying it for no reason. Only carry
         // reporters if some actual ones were specified.
         if (retryConfig.getTestInvocationListeners().size() == 1
-                && (mConfiguration.getTestInvocationListeners().get(0)
+                && (retryConfig.getTestInvocationListeners().get(0)
                         instanceof TextResultReporter)) {
             return;
         }

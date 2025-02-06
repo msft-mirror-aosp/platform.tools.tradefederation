@@ -18,7 +18,10 @@ package com.android.tradefed.util.avd;
 
 import static com.android.tradefed.util.avd.HostOrchestratorClient.ErrorResponseException;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBugreportRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
 import org.junit.After;
@@ -36,6 +39,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Optional;
 
@@ -60,6 +65,20 @@ public class HostOrchestratorClientTest {
         HttpRequest r = buildGetOperationRequest("https://ho.test", "opfoo");
 
         Assert.assertEquals("https://ho.test/operations/opfoo", r.uri().toString());
+    }
+
+    @Test
+    public void testBuildGetOperationResultRequest() throws Exception {
+        HttpRequest r = buildGetOperationResultRequest("https://ho.test", "opfoo");
+
+        Assert.assertEquals("https://ho.test/operations/opfoo/result", r.uri().toString());
+    }
+
+    @Test
+    public void testBuildCreateBugreportRequest() throws Exception {
+        HttpRequest r = buildCreateBugreportRequest("https://ho.test", "foo");
+
+        Assert.assertEquals("https://ho.test/cvds/foo/:bugreport", r.uri().toString());
     }
 
     @Test
@@ -93,7 +112,37 @@ public class HostOrchestratorClientTest {
         Assert.assertEquals(mE.getBody(), body);
     }
 
-    private static HttpResponse<String> buildFakeResponse(int statusCode, String body) {
+    @Test
+    public void testSendSaveToFileRequestSucceeds() throws Exception {
+        Path dst = Paths.get("foo.txt");
+        HttpRequest request =
+                HttpRequest.newBuilder().uri(URI.create("http://ho.test/foo.txt")).build();
+        HttpResponse<Path> response = buildFakeResponse(200, dst);
+        Mockito.when(mFakeHttpClient.send(Mockito.any(), Mockito.any())).thenReturn(response);
+
+        saveToFile(mFakeHttpClient, request, dst);
+    }
+
+    @Test
+    public void testSendSaveToFileRequestFails() throws Exception {
+        Path dst = Paths.get("foo.txt");
+        HttpRequest request =
+                HttpRequest.newBuilder().uri(URI.create("http://ho.test/foo.txt")).build();
+        HttpResponse<Path> response = buildFakeResponse(500, dst);
+        Mockito.when(mFakeHttpClient.send(Mockito.any(), Mockito.any())).thenReturn(response);
+
+        ErrorResponseException mE = new ErrorResponseException(0, "");
+        try {
+            saveToFile(mFakeHttpClient, request, dst);
+        } catch (ErrorResponseException e) {
+            mE = e;
+        }
+
+        Assert.assertEquals(mE.getStatusCode(), 500);
+        Assert.assertEquals(mE.getBody(), "");
+    }
+
+    private static <T> HttpResponse<T> buildFakeResponse(int statusCode, T body) {
         return new HttpResponse<>() {
             @Override
             public int statusCode() {
@@ -106,12 +155,12 @@ public class HostOrchestratorClientTest {
             }
 
             @Override
-            public String body() {
+            public T body() {
                 return body;
             }
 
             @Override
-            public Optional<HttpResponse<String>> previousResponse() {
+            public Optional<HttpResponse<T>> previousResponse() {
                 return Optional.empty();
             }
 

@@ -68,6 +68,7 @@ import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.DeviceInspectionResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.KeyguardControllerState;
@@ -208,7 +209,8 @@ public class NativeDevice
     /** The time in ms to wait for a 'long' command to complete. */
     private long mLongCmdTimeout = 25 * 60 * 1000L;
 
-
+    /** The time in ms to pause after a trade-in mode reboot. */
+    private long mTradeInModePause = 6000;
 
     /**
      * The delimiter that separates the actual shell output and the exit status.
@@ -645,17 +647,13 @@ public class NativeDevice
                     recoverDevice();
                 } else {
                     if (mStateMonitor.waitForDeviceOnline() == null) {
-                        CLog.w(
-                                "Waited for device %s to be online but it is in state '%s', cannot "
-                                        + "get property %s.",
-                                getSerialNumber(), getDeviceState(), name);
-                        CLog.w(
-                                new RuntimeException(
-                                        "This is not an actual exception but to help"
-                                                + " debugging. If this happens deterministically, "
-                                                + " it means the caller has wrong assumption of "
-                                                + " device state and is wasting time in waiting."));
-                        return null;
+                        String message =
+                                String.format(
+                                        "Waited for device %s to be online but it is in state '%s',"
+                                                + " cannot get property %s.",
+                                        getSerialNumber(), getDeviceState(), name);
+                        CLog.w(message);
+                        throw new DeviceNotAvailableException(message, getSerialNumber());
                     }
                 }
             }
@@ -2801,6 +2799,16 @@ public class NativeDevice
             try {
                 mRecovery.recoverDevice(mStateMonitor, mRecoveryMode.equals(RecoveryMode.ONLINE));
             } catch (DeviceUnresponsiveException due) {
+                // Default error identifier to DEVICE_UNAVAILABLE
+                DeviceErrorIdentifier errorIdentifier = DeviceErrorIdentifier.DEVICE_UNAVAILABLE;
+                DeviceInspectionResult inspectionResult = debugDeviceNotAvailable();
+                String extraErrorMessage = "";
+                if (inspectionResult != null
+                        && inspectionResult.getDeviceErrorIdentifier() != null) {
+                    errorIdentifier = inspectionResult.getDeviceErrorIdentifier();
+                    extraErrorMessage =
+                            String.format(" Extra details: %s", inspectionResult.getDetails());
+                }
                 RecoveryMode previousRecoveryMode = mRecoveryMode;
                 mRecoveryMode = RecoveryMode.NONE;
                 try {
@@ -2820,14 +2828,22 @@ public class NativeDevice
                                 || adbException.wasErrorDuringDeviceSelection()) {
                             // Upgrade exception to DNAE to reflect gravity
                             throw new DeviceNotAvailableException(
-                                    cause.getMessage(),
+                                    String.format("%s%s", cause.getMessage(), extraErrorMessage),
                                     adbException,
                                     getSerialNumber(),
-                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                                    errorIdentifier);
                         }
                     }
                 }
                 mRecoveryMode = previousRecoveryMode;
+                if (inspectionResult != null
+                        && inspectionResult.getDeviceErrorIdentifier() != null) {
+                    throw new DeviceNotAvailableException(
+                            String.format("%s%s", due.getMessage(), extraErrorMessage),
+                            due,
+                            getSerialNumber(),
+                            errorIdentifier);
+                }
                 throw due;
             }
             if (mRecoveryMode.equals(RecoveryMode.AVAILABLE)) {
@@ -3815,6 +3831,8 @@ public class NativeDevice
             throws DeviceNotAvailableException {
         long rebootStart = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("rebootUntilOnline")) {
+            // Force wait to commit the image before the reboot
+            waitForSnapuserd(SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
             // Invalidate cache before reboots
             mPropertiesCache.invalidateAll();
             doReboot(RebootMode.REBOOT_FULL, reason);
@@ -6242,6 +6260,77 @@ public class NativeDevice
     }
 
     /**
+     * Enable testing trade-in mode. The device will be wiped and will reboot.
+     *
+     * @throws DeviceNotAvailableException
+     */
+    @Override
+    public boolean startTradeInModeTesting(final int timeoutMs) throws DeviceNotAvailableException {
+        if (!enableAdbRoot()) {
+            CLog.w("Trade in mode requires root.");
+            return false;
+        }
+
+        final CommandResult result =
+                executeShellV2Command(
+                        "tradeinmode wait-until-ready testing start",
+                        timeoutMs,
+                        TimeUnit.MILLISECONDS);
+        if (!checkTradeInModeStartResult(result)) {
+            CLog.w("tradeinmode start didn't succeed");
+            return false;
+        }
+        // Wait a few seconds before issuing more commands.
+        getRunUtil().sleep(mTradeInModePause);
+        RecoveryMode mode = getRecoveryMode();
+        try {
+            setRecoveryMode(RecoveryMode.NONE);
+            // TIM does not support normal ADB commands so we must not accidentally go into the
+            // recovery flow.
+            IDevice online = mStateMonitor.waitForDeviceOnline(timeoutMs);
+            if (online != null) {
+                return true;
+            }
+            CLog.w("Device did not come online after tradeinmode start request");
+            return false;
+        } finally {
+            setRecoveryMode(mode);
+        }
+    }
+
+    private boolean checkTradeInModeStartResult(CommandResult result) {
+        if (CommandStatus.SUCCESS.equals(result.getStatus())) {
+            return true;
+        }
+        if (CommandStatus.FAILED.equals(result.getStatus())) {
+            // If adb manages to disconnect fast enough, we'll get 255 as an exit code.
+            final int exitCode = result.getExitCode().intValue();
+            return exitCode == 0 || exitCode == 255;
+        }
+        return false;
+    }
+
+    /** Stop trade-in mode testing. */
+    @Override
+    public void stopTradeInModeTesting() throws DeviceNotAvailableException {
+        // Either: we're still in trade-in mode, or we just factory reset and we're still in
+        // SUW.
+        CommandResult evaluateResult =
+                executeShellV2Command("tradeinmode wait-until-ready evaluate");
+        if (!CommandStatus.SUCCESS.equals(evaluateResult.getStatus())) {
+            CLog.w("tradeinmode evaluate didn't succeed");
+        }
+        getRunUtil().sleep(mTradeInModePause);
+        CommandResult stopResult =
+                executeShellV2Command("tradeinmode wait-until-ready testing stop");
+        if (!CommandStatus.SUCCESS.equals(stopResult.getStatus())) {
+            CLog.w("tradeinmode stop didn't succeed");
+        }
+        getRunUtil().sleep(mTradeInModePause);
+        waitForDeviceAvailable();
+    }
+
+    /**
      * Notifies all {@link IDeviceActionReceiver} about reboot start event.
      *
      * @throws DeviceNotAvailableException
@@ -6334,5 +6423,10 @@ public class NativeDevice
 
     public void invalidatePropertyCache() {
         mPropertiesCache.invalidateAll();
+    }
+
+    @Override
+    public DeviceInspectionResult debugDeviceNotAvailable() {
+        return null;
     }
 }

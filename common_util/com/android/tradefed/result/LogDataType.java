@@ -101,6 +101,7 @@ public enum LogDataType {
     CUTTLEFISH_LOG("txt", "text/plain", true, true), // Log from cuttlefish instance
     TOMBSTONEZ("zip", "application/zip", true, false),
     BT_SNOOP_LOG("log", "application/octet-stream", false, false), // Bluetooth HCI snoop logs
+    WINSCOPE("winscope.zip", "application/zip", true, false),
     /* Unknown file type */
     UNKNOWN("dat", "text/plain", false, false);
 

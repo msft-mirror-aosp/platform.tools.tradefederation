@@ -16,6 +16,7 @@
 package com.android.tradefed.device;
 
 import com.android.ddmlib.IDevice;
+import com.android.tradefed.util.DeviceInspectionResult;
 
 /**
  * A ITestDevice whose lifecycle is managed.
@@ -132,4 +133,7 @@ public interface IManagedTestDevice extends ITestDevice {
 
     /** Return the SIM card operator or null if not available or if device is not available. */
     public String getSimOperator();
+
+    /** Inspect a device and return detailed info when a device becomes unavailable. */
+    public DeviceInspectionResult debugDeviceNotAvailable();
 }

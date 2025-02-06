@@ -96,6 +96,9 @@ public interface IHostOptions {
     /** Known preconfigured virtual device pool. */
     List<String> getKnownPreconfigureVirtualDevicePool();
 
+    /** Known preconfigured native device ip pool. */
+    List<String> getKnownPreconfigureNativeDevicePool();
+
     /** Check if it should use the zip64 format in partial download or not. */
     boolean getUseZip64InPartialDownload();
 

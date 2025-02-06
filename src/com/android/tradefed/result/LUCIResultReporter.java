@@ -83,6 +83,9 @@ public class LUCIResultReporter extends CollectingTestListener
     )
     private boolean mReportGranularResults = true;
 
+    @Option(name = "log-output-dir", description = "Path to save the JSON result file and other log files.")
+    private File mLogOutputDir = null;
+
     private boolean mHasInvocationFailures = false;
     private LinkedHashMap<String, LogFile> mLoggedFiles = new LinkedHashMap<>();
     private File mRootDir = null;
@@ -157,6 +160,17 @@ public class LUCIResultReporter extends CollectingTestListener
             String dataName = entry.getKey();
             LogFile logFile = entry.getValue();
             printLog(dataName, logFile);
+            if (mLogOutputDir != null) {
+              // If the output path is specified, copy all log artifacts there.
+              try {
+                  File logFullPathFile = new File(logFile.getPath());
+                  FileUtil.copyFile(logFullPathFile,
+                      new File(mLogOutputDir, logFullPathFile.getName()));
+              } catch (IOException e) {
+                  CLog.e("Failed to copy JSON result file to " + mLogOutputDir.toString());
+                  CLog.e(e);
+              }
+            }
         }
     }
 
@@ -253,14 +267,19 @@ public class LUCIResultReporter extends CollectingTestListener
     public void saveJsonFile(JSONObject jsonResults) {
         ByteArrayInputStream resultStream = new ByteArrayInputStream(
             jsonResults.toString().getBytes());
-        LogFileSaver saver = new LogFileSaver(mRootDir);
+        LogFileSaver saver;
+        if (mLogOutputDir != null) {
+            saver = new LogFileSaver(mLogOutputDir);
+        } else {
+            saver = new LogFileSaver(mRootDir);
+        }
         File generatedDir = saver.getFileDir();
         try {
-          File logFile = saver.saveLogData("LUCIResult", LogDataType.JSON, resultStream);
-          logResultFileLocation(logFile);
+            File logFile = saver.saveLogData("LUCIResult", LogDataType.JSON, resultStream);
+            logResultFileLocation(logFile);
         } catch(IOException e) {
-          CLog.e("Failed to save JSON results to " + generatedDir.toString());
-          CLog.e(e);
+            CLog.e("Failed to save JSON results to " + generatedDir.toString());
+            CLog.e(e);
         }
     }
 
@@ -319,7 +338,7 @@ public class LUCIResultReporter extends CollectingTestListener
 
     /** A helper method to format and print result file's name and location to console. */
     private void printLog(String dataName, LogFile logFile) {
-        String logDesc = logFile.getUrl() == null ? logFile.getPath() : logFile.getUrl();
-        CLog.logAndDisplay(LogLevel.DEBUG, "%s: %s\r\n", dataName, logDesc);
+        CLog.logAndDisplay(LogLevel.DEBUG, "%s: %s (size: %.2f KB)\r\n", dataName,
+                logFile.getPath(), logFile.getSize() / 1024.0);
     }
 }

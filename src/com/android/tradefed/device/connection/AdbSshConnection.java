@@ -48,9 +48,11 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
+import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.DeviceInspectionResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
@@ -409,6 +411,13 @@ public class AdbSshConnection extends AdbTcpConnection {
             }
         }
         if (mGceAvd == null) {
+            // Override error identifier if error signature invocation metrics has more specific
+            // error.
+            InfraErrorIdentifier errorIdentifier = GceAvdInfo.convertErrorSignatureToIdentifier();
+            if (errorIdentifier != null) {
+                exception =
+                        new TargetSetupError(exception.getMessage(), exception, errorIdentifier);
+            }
             throw exception;
         } else {
             CLog.i("GCE AVD has been started: %s", mGceAvd);
@@ -1017,5 +1026,15 @@ public class AdbSshConnection extends AdbTcpConnection {
                                     getDevice().getOptions().getAvdDriverBinary()));
         }
         return mHOUtil;
+    }
+
+    /**
+     * Inspect host VM and retrieve more details in DeviceInspectionResult.
+     *
+     * @return {@link DeviceInspectionResult}
+     */
+    public DeviceInspectionResult debugDeviceNotAvailable() {
+        // TODO(dshi): Implement AVD inspection
+        return null;
     }
 }

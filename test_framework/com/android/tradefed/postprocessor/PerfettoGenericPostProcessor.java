@@ -79,6 +79,8 @@ import perfetto.protos.PerfettoMergedMetrics.TraceMetrics;
 @OptionClass(alias = "perfetto-generic-processor")
 public class PerfettoGenericPostProcessor extends BasePostProcessor {
 
+    private static final TextFormat.Parser ALLOW_UNKNOWN_FIELD =
+            TextFormat.Parser.newBuilder().setAllowUnknownFields(true).build();
     private static final String METRIC_SEP = "-";
     @VisibleForTesting static final String RUNTIME_METRIC_KEY = "perfetto_post_processor_runtime";
 
@@ -252,7 +254,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                 switch (mTraceProcessorOutputFormat) {
                     case text:
                         TraceMetrics.Builder builder = TraceMetrics.newBuilder();
-                        TextFormat.merge(bufferedReader, builder);
+                        ALLOW_UNKNOWN_FIELD.merge(bufferedReader,builder);
                         parsedMetrics.putAll(
                                 handlePrefixForProcessedMetrics(
                                         convertPerfettoProtoMessage(builder.build())));
