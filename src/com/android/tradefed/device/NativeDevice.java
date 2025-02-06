@@ -6257,7 +6257,7 @@ public class NativeDevice
                         "tradeinmode wait-until-ready testing start",
                         timeoutMs,
                         TimeUnit.MILLISECONDS);
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+        if (!checkTradeInModeStartResult(result)) {
             CLog.w("tradeinmode start didn't succeed");
             return false;
         }
@@ -6279,6 +6279,18 @@ public class NativeDevice
         }
     }
 
+    private boolean checkTradeInModeStartResult(CommandResult result) {
+        if (CommandStatus.SUCCESS.equals(result.getStatus())) {
+            return true;
+        }
+        if (CommandStatus.FAILED.equals(result.getStatus())) {
+            // If adb manages to disconnect fast enough, we'll get 255 as an exit code.
+            final int exitCode = result.getExitCode().intValue();
+            return exitCode == 0 || exitCode == 255;
+        }
+        return false;
+    }
+
     /** Stop trade-in mode testing. */
     @Override
     public void stopTradeInModeTesting() throws DeviceNotAvailableException {
@@ -6290,7 +6302,6 @@ public class NativeDevice
             CLog.w("tradeinmode evaluate didn't succeed");
         }
         getRunUtil().sleep(mTradeInModePause);
-        enableAdbRoot();
         CommandResult stopResult =
                 executeShellV2Command("tradeinmode wait-until-ready testing stop");
         if (!CommandStatus.SUCCESS.equals(stopResult.getStatus())) {
