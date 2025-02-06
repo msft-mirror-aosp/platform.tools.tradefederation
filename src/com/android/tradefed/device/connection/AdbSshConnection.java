@@ -52,6 +52,7 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.DeviceInspectionResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
@@ -1025,5 +1026,15 @@ public class AdbSshConnection extends AdbTcpConnection {
                                     getDevice().getOptions().getAvdDriverBinary()));
         }
         return mHOUtil;
+    }
+
+    /**
+     * Inspect host VM and retrieve more details in DeviceInspectionResult.
+     *
+     * @return {@link DeviceInspectionResult}
+     */
+    public DeviceInspectionResult debugDeviceNotAvailable() {
+        // TODO(dshi): Implement AVD inspection
+        return null;
     }
 }
