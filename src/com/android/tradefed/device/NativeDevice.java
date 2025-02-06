@@ -3812,6 +3812,8 @@ public class NativeDevice
             throws DeviceNotAvailableException {
         long rebootStart = System.currentTimeMillis();
         try (CloseableTraceScope ignored = new CloseableTraceScope("rebootUntilOnline")) {
+            // Force wait to commit the image before the reboot
+            waitForSnapuserd(SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
             // Invalidate cache before reboots
             mPropertiesCache.invalidateAll();
             doReboot(RebootMode.REBOOT_FULL, reason);
