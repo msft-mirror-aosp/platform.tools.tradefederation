@@ -845,6 +845,10 @@ public class GceManager {
             if (res || notFromGceAvd) {
                 mBuildInfo.addBuildAttribute(GCE_INSTANCE_CLEANED_KEY, "true");
             }
+            if (!res && !notFromGceAvd) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.ACLOUD_DEVICE_RELEASE_FAILURE_COUNT, 1);
+            }
             return res;
         } finally {
             mGceAvdInfo = null;
