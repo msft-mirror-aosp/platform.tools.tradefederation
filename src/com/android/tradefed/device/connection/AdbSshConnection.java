@@ -48,7 +48,6 @@ import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
@@ -57,6 +56,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
+import com.android.tradefed.util.avd.InspectionUtil;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
@@ -413,7 +413,11 @@ public class AdbSshConnection extends AdbTcpConnection {
         if (mGceAvd == null) {
             // Override error identifier if error signature invocation metrics has more specific
             // error.
-            InfraErrorIdentifier errorIdentifier = GceAvdInfo.convertErrorSignatureToIdentifier();
+            String errorSignatures =
+                    InvocationMetricLogger.getInvocationMetrics()
+                            .get(InvocationMetricKey.DEVICE_ERROR_SIGNATURES.toString());
+            ErrorIdentifier errorIdentifier =
+                    InspectionUtil.convertErrorSignatureToIdentifier(errorSignatures);
             if (errorIdentifier != null) {
                 exception =
                         new TargetSetupError(exception.getMessage(), exception, errorIdentifier);
