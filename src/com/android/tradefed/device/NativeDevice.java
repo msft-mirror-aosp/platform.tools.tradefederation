@@ -68,6 +68,7 @@ import com.android.tradefed.util.ArrayUtil;
 import com.android.tradefed.util.Bugreport;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
+import com.android.tradefed.util.DeviceInspectionResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.KeyguardControllerState;
@@ -2798,6 +2799,16 @@ public class NativeDevice
             try {
                 mRecovery.recoverDevice(mStateMonitor, mRecoveryMode.equals(RecoveryMode.ONLINE));
             } catch (DeviceUnresponsiveException due) {
+                // Default error identifier to DEVICE_UNAVAILABLE
+                DeviceErrorIdentifier errorIdentifier = DeviceErrorIdentifier.DEVICE_UNAVAILABLE;
+                DeviceInspectionResult inspectionResult = debugDeviceNotAvailable();
+                String extraErrorMessage = "";
+                if (inspectionResult != null
+                        && inspectionResult.getDeviceErrorIdentifier() != null) {
+                    errorIdentifier = inspectionResult.getDeviceErrorIdentifier();
+                    extraErrorMessage =
+                            String.format(" Extra details: %s", inspectionResult.getDetails());
+                }
                 RecoveryMode previousRecoveryMode = mRecoveryMode;
                 mRecoveryMode = RecoveryMode.NONE;
                 try {
@@ -2817,14 +2828,22 @@ public class NativeDevice
                                 || adbException.wasErrorDuringDeviceSelection()) {
                             // Upgrade exception to DNAE to reflect gravity
                             throw new DeviceNotAvailableException(
-                                    cause.getMessage(),
+                                    String.format("%s%s", cause.getMessage(), extraErrorMessage),
                                     adbException,
                                     getSerialNumber(),
-                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE);
+                                    errorIdentifier);
                         }
                     }
                 }
                 mRecoveryMode = previousRecoveryMode;
+                if (inspectionResult != null
+                        && inspectionResult.getDeviceErrorIdentifier() != null) {
+                    throw new DeviceNotAvailableException(
+                            String.format("%s%s", due.getMessage(), extraErrorMessage),
+                            due,
+                            getSerialNumber(),
+                            errorIdentifier);
+                }
                 throw due;
             }
             if (mRecoveryMode.equals(RecoveryMode.AVAILABLE)) {
@@ -6257,7 +6276,7 @@ public class NativeDevice
                         "tradeinmode wait-until-ready testing start",
                         timeoutMs,
                         TimeUnit.MILLISECONDS);
-        if (!CommandStatus.SUCCESS.equals(result.getStatus())) {
+        if (!checkTradeInModeStartResult(result)) {
             CLog.w("tradeinmode start didn't succeed");
             return false;
         }
@@ -6279,6 +6298,18 @@ public class NativeDevice
         }
     }
 
+    private boolean checkTradeInModeStartResult(CommandResult result) {
+        if (CommandStatus.SUCCESS.equals(result.getStatus())) {
+            return true;
+        }
+        if (CommandStatus.FAILED.equals(result.getStatus())) {
+            // If adb manages to disconnect fast enough, we'll get 255 as an exit code.
+            final int exitCode = result.getExitCode().intValue();
+            return exitCode == 0 || exitCode == 255;
+        }
+        return false;
+    }
+
     /** Stop trade-in mode testing. */
     @Override
     public void stopTradeInModeTesting() throws DeviceNotAvailableException {
@@ -6290,7 +6321,6 @@ public class NativeDevice
             CLog.w("tradeinmode evaluate didn't succeed");
         }
         getRunUtil().sleep(mTradeInModePause);
-        enableAdbRoot();
         CommandResult stopResult =
                 executeShellV2Command("tradeinmode wait-until-ready testing stop");
         if (!CommandStatus.SUCCESS.equals(stopResult.getStatus())) {
@@ -6393,5 +6423,10 @@ public class NativeDevice
 
     public void invalidatePropertyCache() {
         mPropertiesCache.invalidateAll();
+    }
+
+    @Override
+    public DeviceInspectionResult debugDeviceNotAvailable() {
+        return null;
     }
 }

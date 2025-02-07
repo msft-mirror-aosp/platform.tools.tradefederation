@@ -209,6 +209,7 @@ public class InvocationMetricLogger {
         OXYGEN_DEVICE_DIRECT_RELEASE_COUNT("oxygen_device_direct_release_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_COUNT("oxygen_device_release_failure_count", true),
         OXYGEN_DEVICE_RELEASE_FAILURE_MESSAGE("oxygen_device_release_failure_message", true),
+        ACLOUD_DEVICE_RELEASE_FAILURE_COUNT("acloud_device_release_failure_count", true),
 
         DYNAMIC_FILE_RESOLVER_PAIR("tf_dynamic_resolver_pair_timestamp", true),
         ARTIFACTS_DOWNLOAD_SIZE("tf_artifacts_download_size_bytes", true),
