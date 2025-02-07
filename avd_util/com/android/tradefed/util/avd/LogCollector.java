@@ -69,7 +69,7 @@ public class LogCollector {
                                                     "failed to initialize fetch system images",
                                                     "fetch_cvd_failure")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*vdl_stdout.*"),
+                                            Pattern.compile(".*(vdl_stdout|fetch).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "Could not resolve host: ",
                                                     "fetch_cvd_failure_resolve_host")),
