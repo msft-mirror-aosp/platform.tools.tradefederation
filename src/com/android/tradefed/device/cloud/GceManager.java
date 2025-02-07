@@ -31,6 +31,7 @@ import com.android.tradefed.result.ByteArrayInputStreamSource;
 import com.android.tradefed.result.FileInputStreamSource;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
@@ -42,6 +43,7 @@ import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.avd.AcloudUtil;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
+import com.android.tradefed.util.avd.InspectionUtil;
 import com.android.tradefed.util.avd.LogCollector;
 import com.android.tradefed.util.avd.OxygenClient;
 
@@ -460,8 +462,12 @@ public class GceManager {
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
                         }
                     }
-                    InfraErrorIdentifier errorIdentifier =
-                            GceAvdInfo.convertErrorSignatureToIdentifier();
+
+                    String errorSignatures =
+                            InvocationMetricLogger.getInvocationMetrics()
+                                    .get(InvocationMetricKey.DEVICE_ERROR_SIGNATURES.toString());
+                    ErrorIdentifier errorIdentifier =
+                            InspectionUtil.convertErrorSignatureToIdentifier(errorSignatures);
                     if (errorIdentifier == null) {
                         errorIdentifier = InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT;
                     }
