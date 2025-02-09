@@ -199,6 +199,11 @@ public class IsolatedHostTest
                             + " test problems to silently fail.")
     private boolean mDoNotSwallowRunnerErrors = false;
 
+    @Option(
+            name = "ravenwood-locale",
+            description = "Set the locale for Ravenwood tests. Default is \"en_US.UTF-8\"")
+    private String mRavenwoodLocale = "en_US.UTF-8";
+
     private static final String QUALIFIED_PATH = "/com/android/tradefed/isolation";
     private static final String ISOLATED_JAVA_LOG = "isolated-java-logs";
     private IBuildInfo mBuildInfo;
@@ -268,6 +273,11 @@ public class IsolatedHostTest
                           String.format("%s:/usr/bin", SystemUtil.getRunningJavaBinaryPath()
                                           .getParentFile()
                                           .getAbsolutePath()));
+            }
+
+            if (mRavenwoodResources) {
+                runner.setEnvVariable("LANG", mRavenwoodLocale);
+                runner.setEnvVariable("LC_ALL", mRavenwoodLocale);
             }
 
             runner.setWorkingDir(mWorkDir);

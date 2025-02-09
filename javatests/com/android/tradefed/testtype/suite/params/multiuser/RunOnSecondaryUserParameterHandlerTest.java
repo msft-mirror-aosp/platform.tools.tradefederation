@@ -39,6 +39,8 @@ import java.util.Set;
 public class RunOnSecondaryUserParameterHandlerTest {
 
     private static final String REQUIRE_RUN_ON_SECONDARY_USER_NAME =
+            "com.android.bedstead.multiuser.annotations.RequireRunOnSecondaryUser";
+    private static final String REQUIRE_RUN_ON_SECONDARY_USER_LEGACY_NAME =
             "com.android.bedstead.harrier.annotations.RequireRunOnSecondaryUser";
     private static final String EXISTING_ANNOTATION_FILTER = "existing.annotation.filter";
 
@@ -63,16 +65,21 @@ public class RunOnSecondaryUserParameterHandlerTest {
 
         mHandler.applySetup(mModuleConfig);
 
-        assertEquals(1, test.getIncludeAnnotations().size());
-        assertEquals(
-                REQUIRE_RUN_ON_SECONDARY_USER_NAME, test.getIncludeAnnotations().iterator().next());
+        assertEquals(2, test.getIncludeAnnotations().size());
+        assertTrue(test.getIncludeAnnotations().contains(REQUIRE_RUN_ON_SECONDARY_USER_NAME));
+        assertTrue(
+                test.getIncludeAnnotations().contains(REQUIRE_RUN_ON_SECONDARY_USER_LEGACY_NAME)
+        );
     }
 
     @Test
     public void applySetup_removesRequireRunOnSecondaryUserFromExcludeFilters() {
         TestFilterable test = new TestFilterable();
-        test.addAllExcludeAnnotation(
-                Set.of(EXISTING_ANNOTATION_FILTER, REQUIRE_RUN_ON_SECONDARY_USER_NAME));
+        test.addAllExcludeAnnotation(Set.of(
+                EXISTING_ANNOTATION_FILTER,
+                REQUIRE_RUN_ON_SECONDARY_USER_NAME,
+                REQUIRE_RUN_ON_SECONDARY_USER_LEGACY_NAME
+        ));
         mModuleConfig.setTest(test);
 
         mHandler.applySetup(mModuleConfig);

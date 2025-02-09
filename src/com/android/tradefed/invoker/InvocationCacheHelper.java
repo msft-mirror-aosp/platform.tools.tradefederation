@@ -23,6 +23,8 @@ import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.proxy.TradefedDelegator;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.proto.ModuleProtoResultReporter;
@@ -134,11 +136,15 @@ public class InvocationCacheHelper {
                             computeEnvironment(mainConfig),
                             60000L);
             CLog.d("Looking up cache for %s", action);
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.INVOCATION_RESULTS_CHECKING_CACHE, 1);
             ExecutableActionResult cachedResults = cacheClient.lookupCache(action);
             if (cachedResults == null) {
                 CLog.d("No cached results for the invocation.");
                 return null;
             } else {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.INVOCATION_CACHE_HIT, 1);
                 String details = "Cached results.";
                 Map<String, String> metadata =
                         ModuleProtoResultReporter.parseResultsMetadata(cachedResults.stdOut());

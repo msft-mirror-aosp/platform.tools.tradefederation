@@ -16,19 +16,11 @@
 package com.android.tradefed.device.cloud;
 
 import com.android.ddmlib.IDevice;
-import com.android.tradefed.build.BuildRetrievalError;
 import com.android.tradefed.build.IBuildInfo;
-import com.android.tradefed.config.Configuration;
-import com.android.tradefed.config.ConfigurationException;
-import com.android.tradefed.config.DynamicRemoteFileResolver;
-import com.android.tradefed.config.IConfiguration;
-import com.android.tradefed.config.OptionCopier;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IDeviceMonitor;
 import com.android.tradefed.device.IDeviceStateMonitor;
 import com.android.tradefed.device.TestDevice;
-import com.android.tradefed.device.TestDeviceOptions;
-import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.MultiMap;
@@ -39,9 +31,6 @@ import com.android.tradefed.util.MultiMap;
  * the VM.
  */
 public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiver {
-
-    private TestDeviceOptions mCopiedOptions;
-    private IConfiguration mValidationConfig;
 
     /**
      * Creates a {@link ManagedRemoteDevice}.
@@ -58,42 +47,13 @@ public class ManagedRemoteDevice extends TestDevice implements ITestLoggerReceiv
     @Override
     public void preInvocationSetup(IBuildInfo info, MultiMap<String, String> attributes)
             throws TargetSetupError, DeviceNotAvailableException {
-        mCopiedOptions = null;
         super.preInvocationSetup(info, attributes);
     }
 
     /** {@inheritDoc} */
     @Override
     public void postInvocationTearDown(Throwable exception) {
-        // Reset the internal variable
-        mCopiedOptions = null;
-        if (mValidationConfig != null) {
-            mValidationConfig.cleanConfigurationData();
-            mValidationConfig = null;
-        }
         // Ensure parent postInvocationTearDown is always called.
         super.postInvocationTearDown(exception);
-    }
-
-    /**
-     * Override the base getter to be able to resolve dynamic options before attempting to do the
-     * remote setup.
-     */
-    @Override
-    public TestDeviceOptions getOptions() {
-        if (mCopiedOptions == null) {
-            CLog.d("Copying TestDeviceOptions for dynamic configs.");
-            mCopiedOptions = new TestDeviceOptions();
-            TestDeviceOptions options = super.getOptions();
-            OptionCopier.copyOptionsNoThrow(options, mCopiedOptions);
-            mValidationConfig = new Configuration("validation", "validation");
-            mValidationConfig.setDeviceOptions(mCopiedOptions);
-            try {
-                mValidationConfig.resolveDynamicOptions(new DynamicRemoteFileResolver());
-            } catch (BuildRetrievalError | ConfigurationException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return mCopiedOptions;
     }
 }

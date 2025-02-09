@@ -21,16 +21,19 @@ import com.android.tradefed.testtype.suite.module.Sdk34ModuleController;
 import com.android.tradefed.testtype.suite.params.IModuleParameterHandler;
 
 import java.util.Arrays;
+import java.util.List;
 
 public class RunOnCloneProfileParameterHandler extends ProfileParameterHandler
         implements IModuleParameterHandler {
 
-    private static final String REQUIRE_RUN_ON_CLONE_PROFILE_NAME =
-            "com.android.bedstead.harrier.annotations.RequireRunOnCloneProfile";
+    private static final List<String> REQUIRE_RUN_ON_CLONE_PROFILE_NAMES = List.of(
+            "com.android.bedstead.multiuser.annotations.RequireRunOnCloneProfile",
+            "com.android.bedstead.harrier.annotations.RequireRunOnCloneProfile"
+    );
 
     public RunOnCloneProfileParameterHandler() {
         super(
-                REQUIRE_RUN_ON_CLONE_PROFILE_NAME,
+                REQUIRE_RUN_ON_CLONE_PROFILE_NAMES,
                 new RunOnCloneProfileTargetPreparer(),
                 Arrays.asList(new Sdk34ModuleController()));
     }
