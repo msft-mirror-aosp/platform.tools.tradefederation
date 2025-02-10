@@ -128,10 +128,17 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             description = "Throw exception if the specified file is not found.")
     private boolean mThrowIfNoFile = true;
 
-    @Option(name = AbiFormatter.FORCE_ABI_STRING,
+    @Option(
+            name = "pin-abi",
+            description = "Pin ABI of the installed app",
+            importance = Importance.IF_UNSET)
+    private String mPinApi = null;
+
+    @Option(
+            name = AbiFormatter.FORCE_ABI_STRING,
             description = AbiFormatter.FORCE_ABI_DESCRIPTION,
             importance = Importance.IF_UNSET)
-    private String mForceAbi = null;
+    private String mForceAbiBitness = null;
 
     @Option(name = "install-arg",
             description = "Additional arguments to be passed to install command, "
@@ -359,7 +366,7 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             return;
         }
         // resolve abi flags
-        if (mAbi != null && mForceAbi != null) {
+        if (mAbi != null && mForceAbiBitness != null) {
             throw new IllegalStateException("cannot specify both abi flags: --abi and --force-abi");
         }
 
@@ -368,10 +375,15 @@ public class TestAppInstallSetup extends BaseTargetPreparer
             ((NativeDevice) getDevice()).batchPrefetchStartupBuildProps();
         }
         String abiName = null;
-        if (mAbi != null) {
+        if (mPinApi != null) {
+            CLog.d("Using abi %s from pin-abi option.", mPinApi);
+            abiName = mPinApi;
+        } else if (mAbi != null) {
+            CLog.d("Using abi %s from abi option.", mAbi.getName());
             abiName = mAbi.getName();
-        } else if (mForceAbi != null) {
-            abiName = AbiFormatter.getDefaultAbi(getDevice(), mForceAbi);
+        } else if (mForceAbiBitness != null) {
+            CLog.d("Using abi %s from force-abi option.", AbiFormatter.getDefaultAbi(getDevice(), mForceAbiBitness));
+            abiName = AbiFormatter.getDefaultAbi(getDevice(), mForceAbiBitness);
         }
         // Set all the extra install args outside the loop to avoid adding them several times.
         if (abiName != null && testInfo.getDevice().getApiLevel() > 20) {
