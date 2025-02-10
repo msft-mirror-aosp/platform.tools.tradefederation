@@ -30,7 +30,8 @@ public class AbiFormatter {
     private static final String PRODUCT_CPU_ABILIST_KEY = "ro.product.cpu.abilist";
     private static final String PRODUCT_CPU_ABI_KEY = "ro.product.cpu.abi";
     public static final String FORCE_ABI_STRING = "force-abi";
-    public static final String FORCE_ABI_DESCRIPTION = "The abi to use, can be either 32 or 64.";
+    public static final String FORCE_ABI_DESCRIPTION =
+            "The abi bitness to use, can be either 32 or 64.";
 
     /**
      * Special marker to be used as a placeholder in strings, that can be then
