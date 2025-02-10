@@ -97,10 +97,10 @@ CHUNKED_DIR_ARTIFACT_NAME_PREFIX = "_chunked_dir_"
 # If configs share files, chunking enabled artifacts should come first.
 ARTIFACTS = [
     # test_suite targets
-    ArtifactConfig('android-catbox.zip', True),
-    ArtifactConfig('android-csuite.zip', True),
+    ArtifactConfig('android-catbox.zip', True, exclude_filters=['android-catbox/jdk/.*']),
+    ArtifactConfig('android-csuite.zip', True, exclude_filters=['android-csuite/jdk/.*']),
     ArtifactConfig('android-cts.zip', True, exclude_filters=['android-cts/jdk/.*']),
-    ArtifactConfig('android-gcatbox.zip', True),
+    ArtifactConfig('android-gcatbox.zip', True, exclude_filters=['android-gcatbox/jdk/.*']),
     ArtifactConfig('android-gts.zip', True, exclude_filters=['android-gts/jdk/.*']),
     ArtifactConfig('android-mcts.zip', True),
     ArtifactConfig('android-mts.zip', True, exclude_filters=['android-mts/jdk/.*']),
@@ -139,6 +139,10 @@ ARTIFACTS = [
     ArtifactConfig('device-pixel-tests.zip', True),
     ArtifactConfig('device-pixel-tests_configs.zip', True),
     ArtifactConfig('device-pixel-tests_host-shared-libs.zip', True),
+    ArtifactConfig('automotive-tests.zip', True),
+    ArtifactConfig('automotive-general-tests.zip', True),
+    ArtifactConfig('automotive-sdv-tests.zip', True),
+    ArtifactConfig('automotive-sdv-tests_configs.zip', True),
     ArtifactConfig('*-tests-*zip', True),
     ArtifactConfig('*-continuous_instrumentation_tests-*zip', True),
     ArtifactConfig('*-continuous_instrumentation_metric_tests-*zip', True),
