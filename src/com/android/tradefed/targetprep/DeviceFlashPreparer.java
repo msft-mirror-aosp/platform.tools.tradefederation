@@ -184,12 +184,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     @Option(
             name = "wipe-after-apply-snapshot",
             description = "Whether to issue a wipe after applying snapshots.")
-    private boolean mWipeAfterApplySnapshot = false;
+    private boolean mWipeAfterApplySnapshot = true;
 
     @Option(
             name = "use-new-incremental-update-flow",
             description = "A new update flow possible with latest incremental features.")
-    private boolean mNewIncrementalFlow = false;
+    private boolean mNewIncrementalFlow = true;
 
     @Option(
             name = "update-bootloader-in-userspace",
