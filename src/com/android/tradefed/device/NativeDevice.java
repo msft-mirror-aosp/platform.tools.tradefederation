@@ -5090,6 +5090,8 @@ public class NativeDevice
      */
     @Override
     public void remountSystemWritable() throws DeviceNotAvailableException {
+        // Need to ensure snapuserd is finished before remounting
+        waitForSnapuserd(SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
         String verity = getProperty("partition.system.verified");
         // have the property set (regardless state) implies verity is enabled, so we send adb
         // command to disable verity
@@ -5106,6 +5108,8 @@ public class NativeDevice
     /** {@inheritDoc} */
     @Override
     public void remountVendorWritable() throws DeviceNotAvailableException {
+        // Need to ensure snapuserd is finished before remounting
+        waitForSnapuserd(SnapuserdWaitPhase.BLOCK_BEFORE_RELEASING);
         String verity = getProperty("partition.vendor.verified");
         // have the property set (regardless state) implies verity is enabled, so we send adb
         // command to disable verity
