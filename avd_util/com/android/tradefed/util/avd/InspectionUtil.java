@@ -49,7 +49,10 @@ public class InspectionUtil {
                                     InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH),
                             new AbstractMap.SimpleEntry<>(
                                     "cf_webrtc_crash",
-                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_WEBRTC_CRASH))
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_WEBRTC_CRASH),
+                            new AbstractMap.SimpleEntry<>(
+                                    "fetch_cvd_failure_artifact_not_found",
+                                    InfraErrorIdentifier.ARTIFACT_NOT_FOUND))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
     /**
