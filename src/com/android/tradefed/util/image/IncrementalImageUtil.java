@@ -400,6 +400,7 @@ public class IncrementalImageUtil {
         if (mUpdateBootloaderFromUserspace) {
             updateBootloaderFromUserspace(currentBootloader);
         }
+        CLog.d("Updating with new incremental flow.");
         updateDevice(currentBootloader, currentRadio);
     }
 
