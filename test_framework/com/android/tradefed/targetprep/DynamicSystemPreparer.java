@@ -108,6 +108,11 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
             description = "Whether to compress the images pushed to the device.")
     private boolean mCompressImages = false;
 
+    @Option(
+            name = "flash-pvmfw",
+            description = "Fastboot flash pvmfw.img in the file system-image-zip-name.")
+    private boolean mFlashPvmfw = false;
+
     private boolean isDSURunning(ITestDevice device) throws DeviceNotAvailableException {
         CollectingOutputReceiver receiver = new CollectingOutputReceiver();
         device.executeShellCommand("gsi_tool status", receiver);
@@ -195,6 +200,46 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
         }
     }
 
+    private void flashPvmfw(ITestDevice device, File systemImageZipFile)
+            throws DeviceNotAvailableException, TargetSetupError {
+        File pvmfwImg = null;
+        try {
+            // Unzip pvmfw.img and save to temp file
+            CLog.i("Unzip pvmfw.img from %s", systemImageZipFile.getAbsolutePath());
+            try (ZipFile zipFile = new ZipFile(systemImageZipFile)) {
+                ZipEntry pvmfwEntry = zipFile.getEntry("pvmfw.img");
+                if (pvmfwEntry == null) {
+                    throw new TargetSetupError(
+                            String.format("Cannot find pvmfw.img in %s", systemImageZipFile),
+                            device.getDeviceDescriptor(),
+                            InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+                }
+                pvmfwImg = FileUtil.createTempFile("pvmfw", ".img");
+                try (InputStream in = zipFile.getInputStream(pvmfwEntry);
+                        OutputStream out = new FileOutputStream(pvmfwImg)) {
+                    StreamUtil.copyStreams(in, out);
+                }
+            } catch (IOException e) {
+                throw new TargetSetupError(
+                        String.format("Fail unzip pvmfw.img from %s", systemImageZipFile),
+                        device.getDeviceDescriptor(),
+                        InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
+            }
+
+            device.waitForDeviceOnline();
+
+            // Flash pvmfw.img and reboot back
+            CLog.i("Reboot into booloader and flash pvmfw.img");
+            device.rebootIntoBootloader();
+            device.executeFastbootCommand(
+                    String.format("flash pvmfw %s", pvmfwImg.getAbsolutePath()));
+            device.reboot();
+            device.waitForDeviceAvailable();
+        } finally {
+            FileUtil.deleteFile(pvmfwImg);
+        }
+    }
+
     @Override
     public void setUp(TestInformation testInfo)
             throws TargetSetupError, BuildError, DeviceNotAvailableException {
@@ -207,6 +252,10 @@ public class DynamicSystemPreparer extends BaseTargetPreparer implements ILabPre
                     "Cannot find " + mSystemImageZipName + " in build info.",
                     device.getDeviceDescriptor(),
                     InfraErrorIdentifier.CONFIGURED_ARTIFACT_NOT_FOUND);
+        }
+
+        if (mFlashPvmfw) {
+            flashPvmfw(device, systemImageZipFile);
         }
 
         List<File> tempFiles = new ArrayList<File>();
