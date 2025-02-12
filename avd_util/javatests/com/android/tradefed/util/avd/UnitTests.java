@@ -27,7 +27,12 @@ import org.junit.runners.Suite.SuiteClasses;
  * dependencies.
  */
 @RunWith(Suite.class)
-@SuiteClasses({AcloudUtilTest.class, HostOrchestratorUtilTest.class, OxygenClientTest.class})
+@SuiteClasses({
+    AcloudUtilTest.class,
+    HostOrchestratorUtilTest.class,
+    OxygenClientTest.class,
+    InspectionUtilTest.class
+})
 public class UnitTests {
     // empty of purpose
 }

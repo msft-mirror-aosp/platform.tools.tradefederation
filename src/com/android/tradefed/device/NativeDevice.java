@@ -61,6 +61,7 @@ import com.android.tradefed.result.StubTestRunListener;
 import com.android.tradefed.result.ddmlib.RemoteAndroidTestRunner;
 import com.android.tradefed.result.ddmlib.TestRunToTestInvocationForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain;
@@ -2800,12 +2801,11 @@ public class NativeDevice
                 mRecovery.recoverDevice(mStateMonitor, mRecoveryMode.equals(RecoveryMode.ONLINE));
             } catch (DeviceUnresponsiveException due) {
                 // Default error identifier to DEVICE_UNAVAILABLE
-                DeviceErrorIdentifier errorIdentifier = DeviceErrorIdentifier.DEVICE_UNAVAILABLE;
+                ErrorIdentifier errorIdentifier = DeviceErrorIdentifier.DEVICE_UNAVAILABLE;
                 DeviceInspectionResult inspectionResult = debugDeviceNotAvailable();
                 String extraErrorMessage = "";
-                if (inspectionResult != null
-                        && inspectionResult.getDeviceErrorIdentifier() != null) {
-                    errorIdentifier = inspectionResult.getDeviceErrorIdentifier();
+                if (inspectionResult != null && inspectionResult.getErrorIdentifier() != null) {
+                    errorIdentifier = inspectionResult.getErrorIdentifier();
                     extraErrorMessage =
                             String.format(" Extra details: %s", inspectionResult.getDetails());
                 }
@@ -2836,8 +2836,7 @@ public class NativeDevice
                     }
                 }
                 mRecoveryMode = previousRecoveryMode;
-                if (inspectionResult != null
-                        && inspectionResult.getDeviceErrorIdentifier() != null) {
+                if (inspectionResult != null && inspectionResult.getErrorIdentifier() != null) {
                     throw new DeviceNotAvailableException(
                             String.format("%s%s", due.getMessage(), extraErrorMessage),
                             due,
