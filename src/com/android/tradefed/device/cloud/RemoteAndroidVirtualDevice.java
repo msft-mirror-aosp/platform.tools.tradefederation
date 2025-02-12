@@ -27,6 +27,7 @@ import com.android.tradefed.device.connection.DefaultConnection;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.targetprep.TargetSetupError;
 import com.android.tradefed.util.CommandResult;
+import com.android.tradefed.util.DeviceInspectionResult;
 
 import java.io.File;
 import java.util.List;
@@ -126,5 +127,17 @@ public class RemoteAndroidVirtualDevice extends RemoteAndroidDevice {
         throw new UnsupportedOperationException(
                 "RemoteAndroidVirtualDevice#powerwash should never be called. Only connection"
                         + " one should be invoked.");
+    }
+
+    @Override
+    public DeviceInspectionResult debugDeviceNotAvailable() {
+        InstanceType type = getOptions().getInstanceType();
+        if (InstanceType.CUTTLEFISH.equals(type) || InstanceType.REMOTE_NESTED_AVD.equals(type)) {
+            if (getConnection() instanceof AdbSshConnection) {
+                return ((AdbSshConnection) getConnection()).debugDeviceNotAvailable();
+            }
+        }
+        CLog.d("Inspection for RemoteAndroidVirtualDevice of type %s is not implemented.", type);
+        return null;
     }
 }
