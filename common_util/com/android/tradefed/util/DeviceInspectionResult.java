@@ -16,24 +16,24 @@
 
 package com.android.tradefed.util;
 
-import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.error.ErrorIdentifier;
 
 /** A class contains the device inspection result when a device becomes unavailable. */
 public class DeviceInspectionResult {
 
     // Explicit device error based on inspection.
-    private DeviceErrorIdentifier mDeviceErrorIdentifier = null;
+    private ErrorIdentifier mErrorIdentifier = null;
 
     // Details about the inspection result.
     private String mDetails = null;
 
-    public DeviceInspectionResult(DeviceErrorIdentifier identifier, String details) {
-        mDeviceErrorIdentifier = identifier;
+    public DeviceInspectionResult(ErrorIdentifier identifier, String details) {
+        mErrorIdentifier = identifier;
         mDetails = details;
     }
 
-    public DeviceErrorIdentifier getDeviceErrorIdentifier() {
-        return mDeviceErrorIdentifier;
+    public ErrorIdentifier getErrorIdentifier() {
+        return mErrorIdentifier;
     }
 
     public String getDetails() {
