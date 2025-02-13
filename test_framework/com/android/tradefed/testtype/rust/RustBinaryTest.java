@@ -16,11 +16,10 @@
 
 package com.android.tradefed.testtype.rust;
 
-import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.GCOV;
+import static com.android.tradefed.testtype.coverage.CoverageOptions.Toolchain.CLANG;
 
 import com.android.ddmlib.FileListingService;
 import com.android.ddmlib.IShellOutputReceiver;
-import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
@@ -54,15 +53,7 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
     @Option(name = "module-name", description = "The name of the test module to run.")
     private String mTestModule = null;
 
-    private IConfiguration mConfiguration = null;
-
     private ITestDevice mDevice = null;
-
-    /** {@inheritDoc} */
-    @Override
-    public void setConfiguration(IConfiguration configuration) {
-        mConfiguration = configuration;
-    }
 
     /** {@inheritDoc} */
     @Override
@@ -202,9 +193,7 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
      * @param fullPath absolute file system path to rust binary on device
      * @throws DeviceNotAvailableException
      */
-    private void runTest(
-            final ITestInvocationListener listener,
-            final String fullPath)
+    private void runTest(final ITestInvocationListener listener, final String fullPath)
             throws DeviceNotAvailableException {
         CLog.d("RustBinaryTest runTest: " + fullPath);
         File file = new File(fullPath);
@@ -229,9 +218,11 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
         String name = new File(fullPath).getName();
         listener.testRunStarted(name, testCount, 0, startTimeMs);
         for (Invocation invocation : invocations) {
-            if (mConfiguration != null
-                    && mConfiguration.getCoverageOptions().getCoverageToolchains().contains(GCOV)) {
-                invocation.env.add(new EnvPair("GCOV_PREFIX", "/data/misc/trace"));
+            if (isClangCoverageEnabled()) {
+                invocation.env.add(
+                        new EnvPair(
+                                "LLVM_PROFILE_FILE",
+                                "/data/local/tmp/clang-%m.profraw "));
             }
 
             IShellOutputReceiver resultParser = createParser(listener, name);
@@ -275,5 +266,10 @@ public class RustBinaryTest extends RustTestBase implements IDeviceTest, IConfig
         if (!doRunAllTestsInSubdirectory(testPath, listener)) {
             wrongTestPath("No test found under ", testPath, listener);
         }
+    }
+
+    private boolean isClangCoverageEnabled() {
+        return getConfiguration().getCoverageOptions().isCoverageEnabled()
+                && getConfiguration().getCoverageOptions().getCoverageToolchains().contains(CLANG);
     }
 }

@@ -79,6 +79,17 @@ public class LogCollector {
                                                     "Could not connect to server",
                                                     "fetch_cvd_failure_connect_server")),
                                     new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    // TODO(b/395472945): remove by 4/1/2025
+                                                    "Unable to download",
+                                                    "fetch_cvd_failure_artifact_not_found")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Failed to download file: File Not Found",
+                                                    "fetch_cvd_failure_artifact_not_found")),
+                                    new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "failed to read from socket, retry",
