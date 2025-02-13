@@ -22,8 +22,12 @@ import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.google.common.base.Strings;
 
 import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -53,7 +57,9 @@ public class InspectionUtil {
                                     " nginx", InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_NGINX))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-    private static final Map<String, ErrorIdentifier> ERROR_SIGNATURE_TO_IDENTIFIER_MAP =
+    // Map between error signature to ErrorIdentifier. Note that the signatures are sorted. More
+    // specific error signature should be ranked first.
+    private static final LinkedHashMap<String, ErrorIdentifier> ERROR_SIGNATURE_TO_IDENTIFIER_MAP =
             Stream.of(
                             new AbstractMap.SimpleEntry<>(
                                     "bluetooth_failed",
@@ -79,7 +85,12 @@ public class InspectionUtil {
                             new AbstractMap.SimpleEntry<>(
                                     "fetch_cvd_failure_artifact_not_found",
                                     InfraErrorIdentifier.ARTIFACT_NOT_FOUND))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    .collect(
+                            Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    Map.Entry::getValue,
+                                    (x, y) -> y,
+                                    LinkedHashMap::new));
 
     /**
      * Convert error signature to ErrorIdentifier if possible
@@ -91,8 +102,9 @@ public class InspectionUtil {
         if (errorSignatures == null) {
             return null;
         }
-        for (String signature : errorSignatures.split(",")) {
-            if (ERROR_SIGNATURE_TO_IDENTIFIER_MAP.containsKey(signature)) {
+        Set<String> signatures = new HashSet<>(Arrays.asList(errorSignatures.split(",")));
+        for (String signature : ERROR_SIGNATURE_TO_IDENTIFIER_MAP.keySet()) {
+            if (signatures.contains(signature)) {
                 return ERROR_SIGNATURE_TO_IDENTIFIER_MAP.get(signature);
             }
         }
