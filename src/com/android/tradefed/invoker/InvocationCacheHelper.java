@@ -194,6 +194,7 @@ public class InvocationCacheHelper {
             commandArray =
                     TradefedDelegator.clearCommandlineFromOneArg(commandArray, "invocation-data");
             commandArray = TradefedDelegator.clearCommandlineFromOneArg(commandArray, "build-id");
+            commandArray = TradefedDelegator.clearCommandlineFromOneArg(commandArray, "serial");
         } catch (ConfigurationException e) {
             throw new RuntimeException(e);
         }
