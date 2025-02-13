@@ -144,9 +144,12 @@ public class OtaUpdateDeviceFlasher implements IDeviceFlasher {
         device.enableAdbRoot();
         // TODO(guangzhu): Remove this once wipe via OTA script is properly supported
         if (UserDataFlashOption.WIPE.equals(mUserDataFlashOptions)) {
-            device.executeShellCommand("stop");
-            device.executeShellCommand("rm -rf /data/*");
-            device.reboot();
+            // starts the framework in case it was stopped (or no-op)
+            // this is still not the ideal solution as it needs a functioning framework
+            device.executeShellCommand("start");
+            device.waitForDeviceAvailable();
+            device.executeShellCommand("cmd recovery wipe");
+            // device will reboot from the above command
             device.waitForDeviceAvailable();
             device.enableAdbRoot();
             // ensure that the device won't enter suspend mode
