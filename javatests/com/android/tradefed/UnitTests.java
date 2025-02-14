@@ -507,8 +507,6 @@ import com.android.tradefed.util.testmapping.TestMappingTest;
 import com.android.tradefed.util.zip.CentralDirectoryInfoTest;
 import com.android.tradefed.util.zip.MergedZipEntryCollectionTest;
 
-import com.google.android.tradefed.testtype.CtsTestLauncherTest;
-
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.junit.runners.Suite.SuiteClasses;
@@ -941,7 +939,6 @@ import org.junit.runners.Suite.SuiteClasses;
     ArtGTestTest.class,
     ArtRunTestTest.class,
     CoverageMeasurementForwarderTest.class,
-    CtsTestLauncherTest.class,
     DeviceBatteryLevelCheckerTest.class,
     DeviceJUnit4ClassRunnerTest.class,
     DeviceSuiteTest.class,
