@@ -165,7 +165,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     @Option(
             name = "allow-incremental-cross-release",
             description = "Allow doing incremental update across release build configs.")
-    private boolean mAllowIncrementalCrossRelease = false;
+    private boolean mAllowIncrementalCrossRelease = true;
 
     @Option(
             name = "ignore-incremental-host-options",
@@ -205,7 +205,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     @Option(
             name = "allow-unzip-baseline",
             description = "Whether to allow tracking the baseline as unzipped or not.")
-    private boolean mAllowUnzippedBaseline = false;
+    private boolean mAllowUnzippedBaseline = true;
 
     @Option(
             name = "enforce-snapshot-completed",
@@ -215,7 +215,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     @Option(
             name = "use-merkle-tree-comparison",
             description = "Generate snapshot using the merkle tree on device instead of baseline.")
-    private boolean mUseMerkleTreeComparison = false;
+    private boolean mUseMerkleTreeComparison = true;
 
     private IncrementalImageUtil mIncrementalImageUtil;
     private IConfiguration mConfig;
