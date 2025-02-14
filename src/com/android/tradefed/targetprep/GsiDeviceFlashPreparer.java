@@ -54,6 +54,7 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private static final int DYNAMIC_PARTITION_API_LEVEL = 29;
     // Wait time for device state to stablize in millisecond
     private static final int STATE_STABLIZATION_WAIT_TIME_MLLISECS = 60000;
+    private static final String PVMFW_IMG_FILE_NAME = "pvmfw.img";
 
     @Option(
             name = "device-boot-time",
@@ -72,6 +73,11 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                     "The system image file name to search for if provided system image "
                             + "is in a zip file or directory.")
     private String mSystemImageFileName = "system.img";
+
+    @Option(
+            name = "flash-pvmfw",
+            description = "Fastboot flash pvmfw.img in the file system-image-zip-name.")
+    private boolean mFlashPvmfw = false;
 
     @Option(
             name = "vbmeta-image-zip-name",
@@ -109,6 +115,7 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
     private boolean mPostRebootDeviceIntoUserSpace = true;
 
     private File mSystemImg = null;
+    private File mPvmfwImg = null;
     private File mVbmetaImg = null;
     private File mBootImg = null;
 
@@ -228,9 +235,14 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                 executeFastbootCmd(device, "erase", "system" + currSlot);
                 executeFastbootCmd(device, "flash", "system", mSystemImg.getAbsolutePath());
             }
-            if (mBootImg != null) {
+            if (mBootImg != null || mPvmfwImg != null) {
                 device.rebootIntoBootloader();
+            }
+            if (mBootImg != null) {
                 executeFastbootCmd(device, "flash", "boot", mBootImg.getAbsolutePath());
+            }
+            if (mPvmfwImg != null) {
+                executeFastbootCmd(device, "flash", "pvmfw", mPvmfwImg.getAbsolutePath());
             }
         } finally {
             getHostOptions().returnPermit(PermitLimitType.CONCURRENT_FLASHER);
@@ -263,6 +275,14 @@ public class GsiDeviceFlashPreparer extends BaseTargetPreparer implements ILabPr
                         mSystemImageFileName,
                         buildInfo.getFile(mSystemImageZipName),
                         tmpDir);
+        if (mFlashPvmfw) {
+            mPvmfwImg =
+                    getRequestedFile(
+                            device,
+                            PVMFW_IMG_FILE_NAME,
+                            buildInfo.getFile(mSystemImageZipName),
+                            tmpDir);
+        }
         if (buildInfo.getFile(mVbmetaImageZipName) != null) {
             mVbmetaImg =
                     getRequestedFile(
