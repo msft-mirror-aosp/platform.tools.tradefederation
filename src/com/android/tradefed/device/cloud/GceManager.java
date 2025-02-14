@@ -317,7 +317,8 @@ public class GceManager {
                             getTestDeviceOptions().getOxygenLeaseLength(),
                             getTestDeviceOptions().getExtraOxygenArgs(),
                             attributes,
-                            getTestDeviceOptions().getGceCmdTimeout());
+                            getTestDeviceOptions().getGceCmdTimeout(),
+                            getTestDeviceOptions().useOxygenationDevice());
             gceAvdInfos = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions);
             mGceAvdInfo = gceAvdInfos.get(0);
             return gceAvdInfos;
