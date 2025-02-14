@@ -20,6 +20,7 @@ java_library_host {
     name: "tradefed-isolation",
     visibility: [
         "//tools/tradefederation/core/test_framework",
+        "//vendor:__subpackages__",
     ],
     defaults: ["tradefed_defaults"],
     srcs: [
