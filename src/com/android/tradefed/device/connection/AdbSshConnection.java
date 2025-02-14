@@ -438,7 +438,11 @@ public class AdbSshConnection extends AdbTcpConnection {
             if (GceAvdInfo.GceStatus.BOOT_FAIL.equals(mGceAvd.getStatus())
                     || GceAvdInfo.GceStatus.FAIL.equals(mGceAvd.getStatus())) {
                 inspectionResult = debugDeviceNotAvailable();
-                if (inspectionResult != null && inspectionResult.getErrorIdentifier() != null) {
+                // Only override error identifier if it's not a generic one.
+                if ((errorIdentifier == InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT
+                                || errorIdentifier != DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE)
+                        && inspectionResult != null
+                        && inspectionResult.getErrorIdentifier() != null) {
                     errorMsg = inspectionResult.getDetails();
                     errorIdentifier = inspectionResult.getErrorIdentifier();
                 }
@@ -1163,6 +1167,16 @@ public class AdbSshConnection extends AdbTcpConnection {
                     return new DeviceInspectionResult(
                             DeviceErrorIdentifier.DEVICE_UNAVAILABLE,
                             "No adb devices found on the host.");
+                }
+            } else {
+                // Collect bugreport as the device is available with adb
+                try {
+                    File bugreport =
+                            GceManager.getNestedDeviceSshBugreportz(
+                                    mGceAvd, getDevice().getOptions(), getRunUtil());
+                    GceManager.logAndDeleteFile(bugreport, "bugreport-ssh.zip", getLogger());
+                } catch (IOException e) {
+                    CLog.e(e);
                 }
             }
         }
