@@ -17,6 +17,7 @@ package com.android.tradefed.util.image;
 
 import static org.junit.Assert.assertTrue;
 
+import com.android.ddmlib.Log.LogLevel;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.device.DeviceDisconnectedException;
@@ -609,6 +610,7 @@ public class IncrementalImageUtil {
             CLog.d("stdout: %s, stderr: %s", listSnapshots.getStdout(), listSnapshots.getStderr());
 
             if (mApplySnapshot) {
+                mDevice.logOnDevice("Tradefed", LogLevel.DEBUG, "Running snapshotctl apply-update");
                 String applyCommand = "snapshotctl apply-update /data/ndb/";
                 if (mWipeAfterApplySnapshot) {
                     applyCommand += " -w";
