@@ -602,36 +602,10 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("GET"),
                         Mockito.eq("http://127.0.0.1:1111/cvds"));
-        CommandResult powerwashRes = new CommandResult(CommandStatus.SUCCESS);
-        powerwashRes.setStdout(OPERATION_RES);
-        Mockito.doReturn(powerwashRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("POST"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1/:powerwash"));
         Mockito.when(mMockHttpClient.send(Mockito.any()))
-                .thenReturn(mockHttpResponse(200, OPERATION_DONE_RES));
-        CommandResult successRes = new CommandResult(CommandStatus.SUCCESS);
-        successRes.setStdout("operation_id");
-        Mockito.doReturn(successRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/operations/some_id/result"));
+                .thenReturn(
+                        mockHttpResponse(200, OPERATION_RES),
+                        mockHttpResponse(200, OPERATION_DONE_RES));
         Assert.assertNotNull(mHOUtil.powerwashGce());
         Mockito.verify(mMockRunUtil, times(1))
                 .runTimedCmd(
@@ -644,17 +618,6 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-X"),
                         Mockito.eq("GET"),
                         Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("POST"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1/:powerwash"));
     }
 
     @Test
