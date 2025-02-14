@@ -1144,6 +1144,21 @@ public class AdbSshConnection extends AdbTcpConnection {
                     }
                 }
             }
+
+            for (String p : InspectionUtil.UNEXPECTED_PROCESSES.keySet()) {
+                if (!InspectionUtil.searchProcess(processes, p)) {
+                    CLog.e(
+                            "Found unexpected process %s. Review `host_vm_processes` log for the"
+                                    + " complete list of running processes.",
+                            p);
+                    if (inspectionResult == null) {
+                        inspectionResult =
+                                new DeviceInspectionResult(
+                                        InspectionUtil.UNEXPECTED_PROCESSES.get(p),
+                                        String.format("Unexpected process %s found", p));
+                    }
+                }
+            }
         }
 
         // Check if device is available through adb
