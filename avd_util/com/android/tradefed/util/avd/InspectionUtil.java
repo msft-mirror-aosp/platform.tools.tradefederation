@@ -57,6 +57,15 @@ public class InspectionUtil {
                                     " nginx", InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_NGINX))
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
+    // A map of expected process names and the corresponding error identifier if they are found.
+    // The name string should be a substring of a process list.
+    public static final Map<String, ErrorIdentifier> UNEXPECTED_PROCESSES =
+            Stream.of(
+                            new AbstractMap.SimpleEntry<>(
+                                    "cvd fetch",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH_HANG))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
     // Map between error signature to ErrorIdentifier. Note that the signatures are sorted. More
     // specific error signature should be ranked first.
     private static final LinkedHashMap<String, ErrorIdentifier> ERROR_SIGNATURE_TO_IDENTIFIER_MAP =
