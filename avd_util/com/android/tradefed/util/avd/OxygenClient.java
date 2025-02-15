@@ -265,6 +265,7 @@ public class OxygenClient {
      * @param extraOxygenArgs {@link Map<String, String>} of extra Oxygen lease args
      * @param attributes attributes associated with current invocation
      * @param gceCmdTimeout number of ms for the command line timeout
+     * @param useOxygenation whether the device is leased from OmniLab Infra or not.
      * @return {@link CommandResult} that Oxygen binary returned.
      */
     public CommandResult leaseMultipleDevices(
@@ -276,7 +277,8 @@ public class OxygenClient {
             long leaseLength,
             Map<String, String> extraOxygenArgs,
             MultiMap<String, String> attributes,
-            long gceCmdTimeout) {
+            long gceCmdTimeout,
+            boolean useOxygenation) {
         List<String> oxygenClientArgs = Lists.newArrayList(mCmdArgs);
         oxygenClientArgs.add("-lease");
 
@@ -310,6 +312,10 @@ public class OxygenClient {
         }
 
         addInvocationAttributes(oxygenClientArgs, attributes);
+
+        if (useOxygenation) {
+            oxygenClientArgs.add("-use_omnilab");
+        }
 
         CLog.i("Leasing multiple devices from oxygen client with %s", oxygenClientArgs.toString());
         return runOxygenTimedCmd(

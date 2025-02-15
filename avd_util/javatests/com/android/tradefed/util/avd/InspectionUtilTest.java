@@ -20,6 +20,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.android.tradefed.result.error.InfraErrorIdentifier;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -70,5 +72,14 @@ public class InspectionUtilTest {
             assertTrue(InspectionUtil.searchProcess(PROCESSES, p));
         }
         assertFalse(InspectionUtil.searchProcess(PROCESSES, "non-existing"));
+    }
+
+    /** Test convertErrorSignatureToIdentifier. */
+    @Test
+    public void testConvertErrorSignatureToIdentifier() throws Exception {
+        final String s1 = "fetch_cvd_failure_general,fetch_cvd_failure_resolve_host";
+        assertEquals(
+                InspectionUtil.convertErrorSignatureToIdentifier(s1),
+                InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CVD_RESOLVE_HOST);
     }
 }

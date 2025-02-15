@@ -408,6 +408,7 @@ sh_binary_host {
 sh_binary_host {
     name: "tradefed_win",
     src: "tradefed_win.bat",
+    filename_from_src: true,
 }
 
 sh_binary_host {
