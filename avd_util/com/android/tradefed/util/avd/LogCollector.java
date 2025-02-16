@@ -69,7 +69,7 @@ public class LogCollector {
                                                     "failed to initialize fetch system images",
                                                     "fetch_cvd_failure")),
                                     new AbstractMap.SimpleEntry<>(
-                                            Pattern.compile(".*vdl_stdout.*"),
+                                            Pattern.compile(".*(vdl_stdout|fetch).*"),
                                             new AbstractMap.SimpleEntry<>(
                                                     "Could not resolve host: ",
                                                     "fetch_cvd_failure_resolve_host")),
@@ -78,6 +78,17 @@ public class LogCollector {
                                             new AbstractMap.SimpleEntry<>(
                                                     "Could not connect to server",
                                                     "fetch_cvd_failure_connect_server")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    // TODO(b/395472945): remove by 4/1/2025
+                                                    "Unable to download",
+                                                    "fetch_cvd_failure_artifact_not_found")),
+                                    new AbstractMap.SimpleEntry<>(
+                                            Pattern.compile(".*vdl_stdout.*"),
+                                            new AbstractMap.SimpleEntry<>(
+                                                    "Failed to download file: File Not Found",
+                                                    "fetch_cvd_failure_artifact_not_found")),
                                     new AbstractMap.SimpleEntry<>(
                                             Pattern.compile(".*launcher.*"),
                                             new AbstractMap.SimpleEntry<>(

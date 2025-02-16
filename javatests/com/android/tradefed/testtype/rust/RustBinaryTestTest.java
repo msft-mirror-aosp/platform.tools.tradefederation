@@ -333,7 +333,7 @@ public class RustBinaryTestTest {
     @Test
     public void testGcovCoverage_GcovPrefixSet() throws Exception {
         mCoverageOptionsSetter.setOptionValue("coverage", "true");
-        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "GCOV");
+        mCoverageOptionsSetter.setOptionValue("coverage-toolchain", "CLANG");
 
         final String testPath = RustBinaryTest.DEFAULT_TEST_PATH;
         final String test1 = "test1";
@@ -350,7 +350,7 @@ public class RustBinaryTestTest {
 
         mockCountTests(testPath1, runListOutput(3));
         mockTestRunStarted("test1", 3);
-        mockShellCommand("GCOV_PREFIX=/data/misc/trace");
+        mockShellCommand("LLVM_PROFILE_FILE=/data/local/tmp/clang-%m.profraw ");
         mockTestRunEnded();
         callReplayRunVerify();
     }

@@ -400,6 +400,7 @@ public class IncrementalImageUtil {
         if (mUpdateBootloaderFromUserspace) {
             updateBootloaderFromUserspace(currentBootloader);
         }
+        CLog.d("Updating with new incremental flow.");
         updateDevice(currentBootloader, currentRadio);
     }
 
@@ -1067,14 +1068,18 @@ public class IncrementalImageUtil {
                 Future<Boolean> futureSrcDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    try (CloseableTraceScope unzipBaseline =
-                                            new CloseableTraceScope("unzip_baseline")) {
-                                        if (mSetupSrcImage.isDirectory()) {
+                                    if (mSetupSrcImage.isDirectory()) {
+                                        try (CloseableTraceScope hardlink =
+                                                new CloseableTraceScope("hardlink_baseline")) {
                                             FileUtil.recursiveHardlink(
                                                     mSetupSrcImage, mSrcDirectory);
                                             return true;
+                                        } catch (IOException ioe) {
+                                            throw new RuntimeException(ioe);
                                         }
-
+                                    }
+                                    try (CloseableTraceScope unzipBaseline =
+                                            new CloseableTraceScope("unzip_baseline")) {
                                         ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
                                         return true;
                                     } catch (IOException ioe) {
@@ -1086,13 +1091,18 @@ public class IncrementalImageUtil {
                 Future<Boolean> futureTargetDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
-                                    try (CloseableTraceScope unzipTarget =
-                                            new CloseableTraceScope("unzip_target")) {
-                                        if (mSetupTargetImage.isDirectory()) {
+                                    if (mSetupTargetImage.isDirectory()) {
+                                        try (CloseableTraceScope unzipTarget =
+                                                new CloseableTraceScope("hardlink_target")) {
                                             FileUtil.recursiveHardlink(
                                                     mSetupTargetImage, mTargetDirectory);
                                             return true;
+                                        } catch (IOException ioe) {
+                                            throw new RuntimeException(ioe);
                                         }
+                                    }
+                                    try (CloseableTraceScope unzipTarget =
+                                            new CloseableTraceScope("unzip_target")) {
                                         ZipUtil2.extractZip(mSetupTargetImage, mTargetDirectory);
                                         return true;
                                     } catch (IOException ioe) {
