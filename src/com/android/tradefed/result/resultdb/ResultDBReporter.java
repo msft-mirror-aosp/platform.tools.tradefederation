@@ -21,6 +21,7 @@ import com.android.resultdb.proto.StringPair;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.TestStatus;
 import com.android.resultdb.proto.Variant;
+import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.invoker.IInvocationContext;
@@ -38,8 +39,11 @@ import com.android.tradefed.result.TestSummary;
 import com.android.tradefed.result.proto.TestRecordProto.FailureStatus;
 import com.android.tradefed.result.retry.ISupportGranularResults;
 import com.android.tradefed.result.skipped.SkipReason;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
+import com.android.tradefed.util.MultiMap;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableSet;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 
@@ -48,6 +52,7 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -59,6 +64,10 @@ public class ResultDBReporter
                 ILogSaverListener,
                 ISupportGranularResults,
                 IConfigurationReceiver {
+
+    // Set containing the allowed variant module parameter keys
+    private static final Set<String> ALLOWED_MODULE_PARAMETERS =
+            ImmutableSet.of(ModuleDefinition.MODULE_ABI, ModuleDefinition.MODULE_PARAMETERIZATION);
     // Tag name for the test mapping source
     private static final String TEST_MAPPING_TAG = "test_mapping_source";
 
@@ -69,6 +78,8 @@ public class ResultDBReporter
     private boolean mEnable = false;
     // Common variant values for all test in this TF invocation.
     private Variant mBaseVariant;
+    // Module level variant for test in the same test module.
+    private Variant mModuleVariant;
     private String mCurrentModule;
     private TestResult mCurrentTestResult;
     // Counter for generate test result ID.
@@ -136,8 +147,23 @@ public class ResultDBReporter
             CLog.e("Failed to generate random result ID base.");
             return;
         }
-        // TODO: Obtain more test variants from build info.
-        mBaseVariant = Variant.newBuilder().putDef("name", context.getTestTag()).build();
+        // Variant contains properties in go/consistent-test-identifiers, excluding
+        // properties in ResultDB test identifier.
+        // TODO: Add Test definition properties eg. cluster_id.
+        Variant.Builder mBaseVariantBuilder =
+                Variant.newBuilder()
+                        .putDef("scheduler", "ATP") // ATP is the only scheduler supported for now.
+                        .putDef("name", context.getTestTag());
+
+        if (!context.getBuildInfos().isEmpty()) {
+            IBuildInfo primaryBuild = context.getBuildInfos().get(0);
+            mBaseVariantBuilder =
+                    mBaseVariantBuilder
+                            .putDef("build_provider", "androidbuild")
+                            .putDef("branch", primaryBuild.getBuildBranch())
+                            .putDef("target", primaryBuild.getBuildFlavor());
+        }
+        mBaseVariant = mBaseVariantBuilder.build();
     }
 
     @Override
@@ -171,11 +197,26 @@ public class ResultDBReporter
         }
         // Extract module informations.
         mCurrentModule = moduleContext.getConfigurationDescriptor().getModuleName();
+        mModuleVariant = getModuleVariant(moduleContext.getAttributes());
+    }
+
+    /*
+     * Only module-abi and module-param are used in the variant, so filter other values.
+     */
+    private Variant getModuleVariant(MultiMap<String, String> properties) {
+        Variant.Builder variantBuilder = Variant.newBuilder();
+        for (Map.Entry<String, String> property : properties.entries()) {
+            if (ALLOWED_MODULE_PARAMETERS.contains(property.getKey())) {
+                variantBuilder.putDef(property.getKey(), property.getValue());
+            }
+        }
+        return variantBuilder.build();
     }
 
     @Override
     public void testModuleEnded() {
-        // TODO: implement this method.
+        // Clear module variant.
+        mModuleVariant = null;
     }
 
     @Override
@@ -234,8 +275,13 @@ public class ResultDBReporter
         if (!mEnable) {
             return;
         }
-        Variant.Builder variantBuilder = Variant.newBuilder().mergeFrom(mBaseVariant);
-        // TODO: Add more test variants from test module parameters.
+        Variant.Builder variantBuilder = Variant.newBuilder();
+        if (mModuleVariant != null) {
+            variantBuilder = variantBuilder.mergeFrom(mModuleVariant);
+    }
+        if (mBaseVariant != null) {
+                variantBuilder = variantBuilder.mergeFrom(mBaseVariant);
+        }
         mCurrentTestResult =
                 TestResult.newBuilder()
                         // TODO: Use test id format designed in go/resultdb-test-hierarchy-proposal
