@@ -60,11 +60,6 @@ public class ResultDBReporterTest {
         String randomUUIDString() {
             return "result_id";
         }
-
-        @Override
-        String randomHexString() {
-            return "1234abcd";
-        }
     }
 
     private TestResult.Builder newTestResult(String method) {
@@ -73,7 +68,7 @@ public class ResultDBReporterTest {
                         String.format(
                                 "ants://%s/%s/%s",
                                 "example-module", "com.google.ExampleClass", method))
-                .setResultId("1234abcd-00001")
+                .setResultId("result_id")
                 .setStartTime(Timestamps.fromSeconds(1536333825L))
                 .setDuration(Durations.fromMillis(100))
                 .setStatus(TestStatus.PASS)
@@ -125,12 +120,10 @@ public class ResultDBReporterTest {
         assertThat(mReporter.mRecorder.getTestResults())
                 .containsExactly(
                         newTestResult("testMethodPassed")
-                                .setResultId("1234abcd-00001")
                                 .setStatus(TestStatus.PASS)
                                 .setExpected(true)
                                 .build(),
                         newTestResult("testMethodFailed")
-                                .setResultId("1234abcd-00002")
                                 .setStatus(TestStatus.FAIL)
                                 .setStartTime(Timestamps.fromMillis(1536333825200L))
                                 .setExpected(false)
@@ -139,13 +132,11 @@ public class ResultDBReporterTest {
                                                 .setPrimaryErrorMessage("Fail Trace"))
                                 .build(),
                         newTestResult("testMethodAssumption")
-                                .setResultId("1234abcd-00003")
                                 .setStatus(TestStatus.SKIP)
                                 .setStartTime(Timestamps.fromMillis(1536333825400L))
                                 .setExpected(true)
                                 .build(),
                         newTestResult("testMethodIgnored")
-                                .setResultId("1234abcd-00004")
                                 .setStatus(TestStatus.SKIP)
                                 .setStartTime(Timestamps.fromMillis(1536333825600L))
                                 .setExpected(true)

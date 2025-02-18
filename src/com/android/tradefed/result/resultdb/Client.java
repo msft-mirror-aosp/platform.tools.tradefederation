@@ -15,41 +15,18 @@
  */
 package com.android.tradefed.result.resultdb;
 
-import com.android.resultdb.proto.BatchCreateTestResultsRequest;
 import com.android.resultdb.proto.CreateInvocationRequest;
-import com.android.resultdb.proto.CreateTestResultRequest;
 import com.android.resultdb.proto.Invocation;
-import com.android.resultdb.proto.RecorderGrpc;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.UpdateInvocationRequest;
 import com.android.tradefed.log.LogUtil.CLog;
 
-import com.google.auth.Credentials;
-import com.google.auth.oauth2.GoogleCredentials;
-
-import io.grpc.CallOptions;
-import io.grpc.Channel;
-import io.grpc.ClientCall;
-import io.grpc.ClientInterceptor;
-import io.grpc.ForwardingClientCall;
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
-import io.grpc.auth.MoreCallCredentials;
-
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.Executors;
 
 /** ResultDB recorder client that uploads test results to ResultDB. */
 public class Client implements IRecorderClient {
 
-    // The key for the update token used to create/update resources undera ResultDB invocation.
-    private static final Metadata.Key<String> UPDATE_TOKEN_METADATA_KEY =
-            Metadata.Key.of("update-token", Metadata.ASCII_STRING_MARSHALLER);
     private final Uploader mUploader;
     private final Thread mUploadThread;
     // The id of the ResultDB invocation to upload results to.
@@ -57,32 +34,9 @@ public class Client implements IRecorderClient {
     private final String mInvocationId;
     private final String mUpdateToken;
 
-    private final RecorderGrpc.RecorderBlockingStub mStub;
-    private final Credentials mCredentials;
-
-    // TODO: Put this in config so that we can switch upload to prod or staging.
-    public static final String SERVER_ADDRESS = "staging.results.api.cr.dev";
-    public static final int SERVER_PORT = 443;
-
     private Client(String invocationId, String updateToken) {
-        try {
-            mCredentials = GoogleCredentials.getApplicationDefault();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to get application default credentials", e);
-        }
-        ManagedChannel channel =
-                ManagedChannelBuilder.forAddress(SERVER_ADDRESS, SERVER_PORT)
-                        .executor(Executors.newCachedThreadPool())
-                        .maxInboundMessageSize(32 * 1024)
-                        .build();
-        RecorderGrpc.RecorderBlockingStub stub =
-                RecorderGrpc.newBlockingStub(channel)
-                        .withCallCredentials(MoreCallCredentials.from(mCredentials))
-                        .withInterceptors(recorderInterceptor());
-        mStub = stub;
-
-        mUpdateToken = updateToken;
         mInvocationId = invocationId;
+        mUpdateToken = updateToken;
         mUploader = new Uploader();
         mUploadThread = new Thread(mUploader, "Recorder upload thread");
         mUploadThread.setDaemon(true);
@@ -93,31 +47,9 @@ public class Client implements IRecorderClient {
         return new Client(invocationId, updateToken);
     }
 
-    // Interceptor that adds the update token to requests.
-    private ClientInterceptor recorderInterceptor() {
-        ClientInterceptor clientInterceptor =
-                new ClientInterceptor() {
-                    @Override
-                    public <ReqT, RespT> ClientCall<ReqT, RespT> interceptCall(
-                            MethodDescriptor<ReqT, RespT> method,
-                            CallOptions callOptions,
-                            Channel next) {
-                        ClientCall<ReqT, RespT> delegate = next.newCall(method, callOptions);
-                        return new ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
-                                delegate) {
-                            @Override
-                            public void start(Listener<RespT> responseListener, Metadata headers) {
-                                headers.put(UPDATE_TOKEN_METADATA_KEY, mUpdateToken);
-                                delegate().start(responseListener, headers);
-                            }
-                        };
-                    }
-                };
-        return clientInterceptor;
-    }
-
     @Override
     public Invocation createInvocation(CreateInvocationRequest request) {
+        // TODO: Call recorder grpc client to create invocation.
         CLog.i("Creating invocation: %s", request.toString());
         return request.getInvocation();
     }
@@ -231,16 +163,11 @@ public class Client implements IRecorderClient {
         }
 
         private void upload(List<TestResult> allResults) {
-            BatchCreateTestResultsRequest.Builder request =
-                    BatchCreateTestResultsRequest.newBuilder()
-                            .setInvocation(String.format("invocations/%s", mInvocationId))
-                            .setRequestId(UUID.randomUUID().toString());
-            for (TestResult result : allResults) {
-                request.addRequests(
-                        CreateTestResultRequest.newBuilder().setTestResult(result).build());
-            }
-            mStub.batchCreateTestResults(request.build());
-            CLog.i("Uploaded %d results to invocation %s", allResults.size(), mInvocationId);
+            // TODO: Call recorder grpc client to upload test results.
+            CLog.i(
+                    "Uploading %d results to invocation %s with update token %s",
+                    allResults.size(), mInvocationId, mUpdateToken);
+            CLog.i("Uploading results request %s", allResults.toString());
         }
     }
 }
