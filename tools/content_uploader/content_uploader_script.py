@@ -120,6 +120,7 @@ ARTIFACTS = [
     ArtifactConfig('android-mts.zip', True, exclude_filters=['android-mts/jdk/.*']),
     ArtifactConfig('android-pts.zip', True, exclude_filters=['android-pts/jdk/.*']),
     ArtifactConfig('android-sts.zip', True),
+    ArtifactConfig('android-tvts.zip', True, exclude_filters=['android-tvts/jdk/.*']),
     ArtifactConfig('android-vts.zip', True),
     ArtifactConfig('android-wts.zip', True, exclude_filters=['android-wts/jdk/.*']),
     ArtifactConfig('art-host-tests.zip', True),
