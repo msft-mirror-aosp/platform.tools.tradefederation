@@ -392,7 +392,23 @@ public class CommonLogRemoteFileUtil {
      * @param logger The {@link ITestLogger} where to log the file.
      */
     public static void pullCommonCvdLogs(
-            GceAvdInfo gceAvdInfo, HostOrchestratorUtil hOUtil, ITestLogger logger) {
+            GceAvdInfo gceAvdInfo, HostOrchestratorUtil hoUtil, ITestLogger logger) {
+        pullCommonCvdLogs(gceAvdInfo, hoUtil, logger, null);
+    }
+
+    /**
+     * Pull CF logs via Host Orchestrator.
+     *
+     * @param gceAvdInfo The descriptor of the remote instance.
+     * @param hOUtil The {@link HostOrchestratorUtil} used to pull CF logs.
+     * @param logger The {@link ITestLogger} where to log the file.
+     * @param options The {@link TestDeviceOptions} describing the device options
+     */
+    public static void pullCommonCvdLogs(
+            GceAvdInfo gceAvdInfo,
+            HostOrchestratorUtil hOUtil,
+            ITestLogger logger,
+            TestDeviceOptions options) {
         if (hOUtil == null || gceAvdInfo == null || gceAvdInfo.hostAndPort() == null) {
             CLog.e(
                     "HostOrchestratorUtil, GceAvdInfo or its host setting was null, cannot collect"
@@ -406,17 +422,22 @@ public class CommonLogRemoteFileUtil {
         } else {
             CLog.i("CVD Logs is null, no logs collected from host orchestrator.");
         }
+
         File tempFile =
-                hOUtil.downloadLogFile("host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
-        GceManager.logAndDeleteFile(tempFile, "host_kernel", logger);
-        tempFile = hOUtil.downloadLogFile("host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
+                hOUtil.downloadLogFile("host_orchestrator", HostOrchestratorUtil.URL_HO_LOG);
         GceManager.logAndDeleteFile(tempFile, "host_orchestrator", logger);
-        tempFile = hOUtil.getTunnelLog();
-        GceManager.logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
-        tempFile =
-                hOUtil.downloadLogFile(
-                        "oxygen_container_log", HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
-        GceManager.logAndDeleteFile(tempFile, "oxygen_container_log", logger);
+        // The following logs endpoints are only available using the Cuttlefish Host Image.
+        if (options != null && options.useOxygenationDevice()) {
+            tempFile =
+                    hOUtil.downloadLogFile("host_kernel", HostOrchestratorUtil.URL_HOST_KERNEL_LOG);
+            GceManager.logAndDeleteFile(tempFile, "host_kernel", logger);
+            tempFile = hOUtil.getTunnelLog();
+            GceManager.logAndDeleteFile(tempFile, "host_orchestrator_tunnel_log", logger);
+            tempFile =
+                    hOUtil.downloadLogFile(
+                            "oxygen_container_log", HostOrchestratorUtil.URL_OXYGEN_CONTAINER_LOG);
+            GceManager.logAndDeleteFile(tempFile, "oxygen_container_log", logger);
+        }
     }
 
     /**
