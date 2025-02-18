@@ -42,14 +42,11 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /** Result reporter that uploads test results to ResultDB. */
 public class ResultDBReporter
@@ -66,10 +63,6 @@ public class ResultDBReporter
     private Variant mBaseVariant;
     private String mCurrentModule;
     private TestResult mCurrentTestResult;
-    // Counter for generate test result ID.
-    private AtomicInteger mResultCounter = new AtomicInteger(0);
-    // Base for generate test result ID.
-    private String mResultIdBase;
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -102,20 +95,12 @@ public class ResultDBReporter
         return Client.create(invocationId, updateToken);
     }
 
-    // Generate a random hexadecimal string of length 8.
-    @VisibleForTesting
-    String randomHexString() throws NoSuchAlgorithmException {
-        SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
-        byte[] bytes = new byte[4];
-        random.nextBytes(bytes);
-        return ResultDBUtil.bytesToHex(bytes);
-    }
-
     @Override
     public void invocationStarted(IInvocationContext context) {
         // Obtain invocation ID from context.
         String invocationId = context.getAttribute("resultdb_invocation_id");
         String updateToken = context.getAttribute("resultdb_invocation_update_token");
+        // TODO: Deal with local test run when no invocation created by upstream.
         if (!invocationId.isEmpty() && !updateToken.isEmpty()) {
             mEnable = true;
         }
@@ -125,12 +110,6 @@ public class ResultDBReporter
         }
         mInvocationId = invocationId;
         mRecorder = createRecorderClient(invocationId, updateToken);
-        try {
-            mResultIdBase = this.randomHexString();
-        } catch (NoSuchAlgorithmException e) {
-            CLog.e("Failed to generate random result ID base.");
-            return;
-        }
         // TODO: Obtain more test variants from build info.
         mBaseVariant = Variant.newBuilder().putDef("name", context.getTestTag()).build();
     }
@@ -238,9 +217,7 @@ public class ResultDBReporter
                                 String.format(
                                         "ants://%s/%s/%s",
                                         mCurrentModule, test.getClassName(), test.getTestName()))
-                        .setResultId(
-                                String.format(
-                                        "%s-%05d", mResultIdBase, mResultCounter.incrementAndGet()))
+                        .setResultId(randomUUIDString())
                         .setStartTime(Timestamps.fromMillis(startTime))
                         .setStatus(TestStatus.PASS)
                         .setExpected(true)
