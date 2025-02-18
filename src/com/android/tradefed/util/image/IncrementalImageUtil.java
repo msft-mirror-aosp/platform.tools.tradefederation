@@ -190,20 +190,22 @@ public class IncrementalImageUtil {
         File deviceImage = null;
         File bootloader = null;
         File baseband = null;
-        try {
-            deviceImage = copyImage(tracker.zippedDeviceImage);
-            bootloader = copyImage(tracker.zippedBootloaderImage);
-            if (tracker.zippedBasebandImage != null) {
-                baseband = copyImage(tracker.zippedBasebandImage);
+        if (!useMerkleTree) {
+            try {
+                deviceImage = copyImage(tracker.zippedDeviceImage);
+                bootloader = copyImage(tracker.zippedBootloaderImage);
+                if (tracker.zippedBasebandImage != null) {
+                    baseband = copyImage(tracker.zippedBasebandImage);
+                }
+            } catch (IOException e) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
+                CLog.e(e);
+                FileUtil.recursiveDelete(deviceImage);
+                FileUtil.deleteFile(bootloader);
+                FileUtil.deleteFile(baseband);
+                return null;
             }
-        } catch (IOException e) {
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
-            CLog.e(e);
-            FileUtil.recursiveDelete(deviceImage);
-            FileUtil.deleteFile(bootloader);
-            FileUtil.deleteFile(baseband);
-            return null;
         }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
@@ -1065,31 +1067,36 @@ public class IncrementalImageUtil {
                         }
                     };
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
-                mSrcDirectory = FileUtil.createTempDir("incremental_src");
-                mTargetDirectory = FileUtil.createTempDir("incremental_target");
-                Future<Boolean> futureSrcDir =
-                        CompletableFuture.supplyAsync(
-                                () -> {
-                                    if (mSetupSrcImage.isDirectory()) {
-                                        try (CloseableTraceScope hardlink =
-                                                new CloseableTraceScope("hardlink_baseline")) {
-                                            FileUtil.recursiveHardlink(
-                                                    mSetupSrcImage, mSrcDirectory);
+                Future<Boolean> futureSrcDir = null;
+                if (mDeviceOriginMerkleTree != null) {
+                    mSrcDirectory = mDeviceOriginMerkleTree;
+                } else {
+                    mSrcDirectory = FileUtil.createTempDir("incremental_src");
+                    futureSrcDir =
+                            CompletableFuture.supplyAsync(
+                                    () -> {
+                                        if (mSetupSrcImage.isDirectory()) {
+                                            try (CloseableTraceScope hardlink =
+                                                    new CloseableTraceScope("hardlink_baseline")) {
+                                                FileUtil.recursiveHardlink(
+                                                        mSetupSrcImage, mSrcDirectory);
+                                                return true;
+                                            } catch (IOException ioe) {
+                                                throw new RuntimeException(ioe);
+                                            }
+                                        }
+                                        try (CloseableTraceScope unzipBaseline =
+                                                new CloseableTraceScope("unzip_baseline")) {
+                                            ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
                                             return true;
                                         } catch (IOException ioe) {
                                             throw new RuntimeException(ioe);
                                         }
-                                    }
-                                    try (CloseableTraceScope unzipBaseline =
-                                            new CloseableTraceScope("unzip_baseline")) {
-                                        ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
-                                        return true;
-                                    } catch (IOException ioe) {
-                                        throw new RuntimeException(ioe);
-                                    }
-                                },
-                                TracePropagatingExecutorService.create(
-                                        Executors.newFixedThreadPool(1, factory)));
+                                    },
+                                    TracePropagatingExecutorService.create(
+                                            Executors.newFixedThreadPool(1, factory)));
+                }
+                mTargetDirectory = FileUtil.createTempDir("incremental_target");
                 Future<Boolean> futureTargetDir =
                         CompletableFuture.supplyAsync(
                                 () -> {
@@ -1114,7 +1121,9 @@ public class IncrementalImageUtil {
                                 TracePropagatingExecutorService.create(
                                         Executors.newFixedThreadPool(1, factory)));
                 // Join the unzipping
-                futureSrcDir.get();
+                if (futureSrcDir != null) {
+                    futureSrcDir.get();
+                }
                 futureTargetDir.get();
             } catch (InterruptedException | IOException | ExecutionException e) {
                 FileUtil.recursiveDelete(mSrcDirectory);
@@ -1144,11 +1153,14 @@ public class IncrementalImageUtil {
             List<Callable<Boolean>> callableTasks = new ArrayList<>();
             for (String partition : mSrcDirectory.list()) {
                 String merklePartition = partition.replaceAll(".img", ".pb");
+                partition = partition.replaceAll(".pb", ".img");
+
                 File possibleSrc = new File(mSrcDirectory, partition);
                 File sourceMerkleTree = new File(mDeviceOriginMerkleTree, merklePartition);
                 File possibleTarget = new File(mTargetDirectory, partition);
                 File workDirectory = mWorkDir;
-                if (possibleSrc.exists() && possibleTarget.exists()) {
+                if ((possibleSrc.exists() || sourceMerkleTree.exists())
+                        && possibleTarget.exists()) {
                     if (DYNAMIC_PARTITIONS_TO_DIFF.contains(partition)) {
                         callableTasks.add(
                                 () -> {
