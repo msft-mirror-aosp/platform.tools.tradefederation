@@ -289,7 +289,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                     CLog.d("Device log collection is skipped per SkipDeviceLogCollection setting.");
                 } else if (getDevice().getOptions().useCvdCF()) {
                     mHOUtil = createHostOrchestratorUtil(mGceAvd);
-                    CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvd, mHOUtil, getLogger());
+                    CommonLogRemoteFileUtil.pullCommonCvdLogs(
+                            mGceAvd, mHOUtil, getLogger(), getDevice().getOptions());
                 } else if (mGceAvd.hostAndPort() != null) {
                     // Host and port can be null in case of acloud timeout
                     // attempt to get a bugreport if Gce Avd is a failure
