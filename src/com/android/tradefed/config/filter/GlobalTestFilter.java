@@ -143,14 +143,7 @@ public final class GlobalTestFilter {
             CLog.d("Strict include filters specified: %s", mStrictIncludeFilters);
             for (IRemoteTest test : config.getTests()) {
                 if (test instanceof BaseTestSuite) {
-                    ((BaseTestSuite) test).clearExcludeFilter();
-                    ((BaseTestSuite) test).clearIncludeFilter();
-                    ((BaseTestSuite) test).setIncludeFilter(mStrictIncludeFilters);
-                    if (test instanceof TestMappingSuiteRunner) {
-                        ((TestMappingSuiteRunner) test).clearTestGroup();
-                        ((TestMappingSuiteRunner) test).clearKeywords();
-                        ((TestMappingSuiteRunner) test).clearTestMappingPaths();
-                    }
+                    applyGlobalStrictFilters((BaseTestSuite) test, mStrictIncludeFilters);
                 } else if (test instanceof ITestFilterReceiver) {
                     ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
                     applyFiltersToTest(filterableTest);
@@ -158,6 +151,17 @@ public final class GlobalTestFilter {
             }
         }
         mSetupDone = true;
+    }
+
+    public static void applyGlobalStrictFilters(BaseTestSuite test, Set<String> strictFilters) {
+        ((BaseTestSuite) test).clearExcludeFilter();
+        ((BaseTestSuite) test).clearIncludeFilter();
+        ((BaseTestSuite) test).setIncludeFilter(strictFilters);
+        if (test instanceof TestMappingSuiteRunner) {
+            ((TestMappingSuiteRunner) test).clearTestGroup();
+            ((TestMappingSuiteRunner) test).clearKeywords();
+            ((TestMappingSuiteRunner) test).clearTestMappingPaths();
+        }
     }
 
     /** Apply the global filters to the test. */
