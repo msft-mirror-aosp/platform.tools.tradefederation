@@ -19,15 +19,56 @@ package com.android.tradefed.util.avd;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 
+import com.google.common.base.Strings;
+
 import java.util.AbstractMap;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /** A utility for inspecting AVD and host VM */
 public class InspectionUtil {
+    public static final Integer DISK_USAGE_MAX = 95;
 
-    private static final Map<String, ErrorIdentifier> ERROR_SIGNATURE_TO_IDENTIFIER_MAP =
+    // A map of expected process names and the corresponding error identifier if they are missing.
+    // The name string should be a substring of a process list.
+    public static final Map<String, ErrorIdentifier> EXPECTED_PROCESSES =
+            Stream.of(
+                            new AbstractMap.SimpleEntry<>(
+                                    " netsimd",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_BLUETOOTH),
+                            new AbstractMap.SimpleEntry<>(
+                                    " openwrt_control_server",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_OPENWRT),
+                            new AbstractMap.SimpleEntry<>(
+                                    " webRTC",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_WEBRTC_CRASH),
+                            new AbstractMap.SimpleEntry<>(
+                                    " crosvm",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CROSVM),
+                            new AbstractMap.SimpleEntry<>(
+                                    " nginx", InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_NGINX))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+    // A map of expected process names and the corresponding error identifier if they are found.
+    // The name string should be a substring of a process list.
+    public static final Map<String, ErrorIdentifier> UNEXPECTED_PROCESSES =
+            Stream.of(
+                            new AbstractMap.SimpleEntry<>(
+                                    "cvd fetch",
+                                    InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CVD_FETCH_HANG))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+    // Map between error signature to ErrorIdentifier. Note that the signatures are sorted. More
+    // specific error signature should be ranked first.
+    private static final LinkedHashMap<String, ErrorIdentifier> ERROR_SIGNATURE_TO_IDENTIFIER_MAP =
             Stream.of(
                             new AbstractMap.SimpleEntry<>(
                                     "bluetooth_failed",
@@ -53,7 +94,12 @@ public class InspectionUtil {
                             new AbstractMap.SimpleEntry<>(
                                     "fetch_cvd_failure_artifact_not_found",
                                     InfraErrorIdentifier.ARTIFACT_NOT_FOUND))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    .collect(
+                            Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    Map.Entry::getValue,
+                                    (x, y) -> y,
+                                    LinkedHashMap::new));
 
     /**
      * Convert error signature to ErrorIdentifier if possible
@@ -65,11 +111,49 @@ public class InspectionUtil {
         if (errorSignatures == null) {
             return null;
         }
-        for (String signature : errorSignatures.split(",")) {
-            if (ERROR_SIGNATURE_TO_IDENTIFIER_MAP.containsKey(signature)) {
+        Set<String> signatures = new HashSet<>(Arrays.asList(errorSignatures.split(",")));
+        for (String signature : ERROR_SIGNATURE_TO_IDENTIFIER_MAP.keySet()) {
+            if (signatures.contains(signature)) {
                 return ERROR_SIGNATURE_TO_IDENTIFIER_MAP.get(signature);
             }
         }
         return null;
+    }
+
+    /**
+     * Parse the df command output to return the disk usage percentage
+     *
+     * @param diskspaceInfo output of command `df -P \`
+     * @return An Optional<Integer> containing the percentage of used disk space if found, or an
+     *     empty Optional if not found or an error occurred.
+     */
+    public static Optional<Integer> getDiskspaceUsage(String diskspaceInfo) {
+        Pattern pattern = Pattern.compile("\\s(\\d+)%\\s", Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(diskspaceInfo);
+
+        if (matcher.find()) {
+            String percentageString = matcher.group(1);
+            return Optional.of(Integer.parseInt(percentageString));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Search for a process matching with the substring
+     *
+     * @param allProcesses string of a list of processes generated from top or ps command
+     * @param process substring of the process to search for
+     * @return true if the process is found, false otherwise
+     */
+    public static boolean searchProcess(String allProcesses, String process) {
+        if (Strings.isNullOrEmpty(allProcesses)) {
+            return false;
+        }
+        for (String line : allProcesses.split("\\n")) {
+            if (line.indexOf(process) != -1) {
+                return true;
+            }
+        }
+        return false;
     }
 }

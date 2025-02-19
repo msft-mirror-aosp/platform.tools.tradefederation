@@ -77,7 +77,12 @@ public class InvocationCacheHelper {
             return;
         }
         boolean emptyTestsDir = false;
-        File invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        File invocationTestsDir = null;
+        if (testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY) != null) {
+            invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY);
+        } else {
+            testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        }
         try (CloseableTraceScope ignored = new CloseableTraceScope("upload_invocation_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
@@ -117,7 +122,12 @@ public class InvocationCacheHelper {
             return new CacheInvocationResultDescriptor(false, null);
         }
         boolean emptyTestsDir = false;
-        File invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        File invocationTestsDir = null;
+        if (testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY) != null) {
+            invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY);
+        } else {
+            testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        }
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_invocation_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
@@ -194,6 +204,7 @@ public class InvocationCacheHelper {
             commandArray =
                     TradefedDelegator.clearCommandlineFromOneArg(commandArray, "invocation-data");
             commandArray = TradefedDelegator.clearCommandlineFromOneArg(commandArray, "build-id");
+            commandArray = TradefedDelegator.clearCommandlineFromOneArg(commandArray, "serial");
         } catch (ConfigurationException e) {
             throw new RuntimeException(e);
         }

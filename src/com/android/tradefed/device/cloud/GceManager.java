@@ -317,7 +317,8 @@ public class GceManager {
                             getTestDeviceOptions().getOxygenLeaseLength(),
                             getTestDeviceOptions().getExtraOxygenArgs(),
                             attributes,
-                            getTestDeviceOptions().getGceCmdTimeout());
+                            getTestDeviceOptions().getGceCmdTimeout(),
+                            getTestDeviceOptions().useOxygenationDevice());
             gceAvdInfos = GceAvdInfo.parseGceInfoFromOxygenClientOutput(res, mDeviceOptions);
             mGceAvdInfo = gceAvdInfos.get(0);
             return gceAvdInfos;
@@ -456,7 +457,8 @@ public class GceManager {
                 if (!bootSuccess) {
                     if (logger != null) {
                         if (getTestDeviceOptions().useCvdCF()) {
-                            CommonLogRemoteFileUtil.pullCommonCvdLogs(mGceAvdInfo, mHOUtil, logger);
+                            CommonLogRemoteFileUtil.pullCommonCvdLogs(
+                                    mGceAvdInfo, mHOUtil, logger, getTestDeviceOptions());
                         } else {
                             CommonLogRemoteFileUtil.fetchCommonFiles(
                                     logger, mGceAvdInfo, getTestDeviceOptions(), getRunUtil());
@@ -1183,10 +1185,11 @@ public class GceManager {
         for (File f : remoteDirectory.listFiles()) {
             if (f.isFile()) {
                 LogDataType typeFromName = OxygenUtil.getDefaultLogType(f.getName());
-                if (!typeFromName.equals(LogDataType.UNKNOWN)) {
-                    type = typeFromName;
+                if (typeFromName.equals(LogDataType.UNKNOWN)) {
+                    // Use default LogDataType
+                    typeFromName = type;
                 }
-                logFile(f, baseName, logger, type);
+                logFile(f, baseName, logger, typeFromName);
             } else if (f.isDirectory()) {
                 logDirectory(f, baseName, logger, type);
             }
