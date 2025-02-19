@@ -20,6 +20,7 @@ import com.android.ddmlib.DdmPreferences;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.filter.GlobalTestFilter;
 import com.android.tradefed.invoker.tracing.ActiveTrace;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.invoker.tracing.TracingLogger;
@@ -162,6 +163,15 @@ public class TestDiscoveryExecutor {
                                 + " from command line args.",
                         null,
                         DiscoveryExitCode.ERROR);
+            }
+            if (!config.getGlobalFilters().getStrictIncludeFilters().isEmpty()) {
+                for (IRemoteTest test : tests) {
+                    if (test instanceof BaseTestSuite) {
+                        GlobalTestFilter.applyGlobalStrictFilters(
+                                (BaseTestSuite) test,
+                                config.getGlobalFilters().getStrictIncludeFilters());
+                    }
+                }
             }
 
             List<String> testModules = new ArrayList<>(discoverTestModulesFromTests(tests));

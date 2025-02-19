@@ -18,9 +18,12 @@ package com.android.tradefed.observatory;
 
 import com.android.tradefed.config.Option;
 import com.android.tradefed.config.OptionClass;
+import com.android.tradefed.config.filter.GlobalTestFilter;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A simple class to accept settings for the ConfigurationCtsParserSettings
@@ -34,6 +37,16 @@ public class ConfigurationCtsParserSettings {
             name = "cts-params",
             description = "This option is for the purpose of filtering in all of its values.")
     public List<String> mCtsParams = new ArrayList<>();
+
+    @Option(
+            name = GlobalTestFilter.STRICT_INCLUDE_FILTER_OPTION,
+            description =
+                    "Filters applied to the invocation. Format: [abi] [module-name]"
+                            + " [test-class][#method-name]. All other filters "
+                            + "will be ignored to strictly run this set."
+                            + "This is still best-effort as not all runners "
+                            + "support filtering equally.")
+    public Set<String> mStrictIncludeFilters = new LinkedHashSet<>();
 
     @Option(
             name = "config-name",

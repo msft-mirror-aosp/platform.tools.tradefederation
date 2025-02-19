@@ -55,7 +55,8 @@ public class TestDiscoveryUtil {
                     Set.of(
                             Configuration.BUILD_PROVIDER_TYPE_NAME,
                             Configuration.TEST_TYPE_NAME,
-                            Configuration.TARGET_PREPARER_TYPE_NAME),
+                            Configuration.TARGET_PREPARER_TYPE_NAME,
+                            Configuration.GLOBAL_FILTERS_TYPE_NAME),
                     null);
         }
     }
