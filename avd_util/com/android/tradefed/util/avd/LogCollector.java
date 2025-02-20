@@ -206,14 +206,20 @@ public class LogCollector {
     /**
      * Collect error signatures from logs.
      *
-     * @param logDir directory of logs pulled from remote host.
+     * @param logPath directory of logs pulled from remote host, or a single file to search for
+     *     error signatures.
      * @return a list of error signatures.
      */
-    public static List<String> collectErrorSignatures(File logDir) {
-        CLog.d("Collect error signature from logs under: %s.", logDir);
+    public static List<String> collectErrorSignatures(File logPath) {
+        CLog.d("Collect error signature from logs under: %s.", logPath);
         List<String> signatures = new ArrayList<>();
         try {
-            Set<String> files = FileUtil.findFiles(logDir, ".*");
+            Set<String> files;
+            if (logPath.isDirectory()) {
+                files = FileUtil.findFiles(logPath, ".*");
+            } else {
+                files = Set.of(logPath.getAbsolutePath());
+            }
             for (String f : files) {
                 File file = new File(f);
                 if (file.isDirectory()) {
