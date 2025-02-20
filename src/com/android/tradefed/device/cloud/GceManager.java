@@ -1128,16 +1128,13 @@ public class GceManager {
                 return false;
             }
             // Search log files for known failures for devices hosted by Oxygen and ARM server
-            if ((options.useOxygen() || InstanceType.GCE.equals(options.getInstanceType()))
+            if ((options.useOxygen()
+                            || InstanceType.GCE.equals(options.getInstanceType())
+                            || InstanceType.CUTTLEFISH.equals(options.getInstanceType()))
                     && remoteFile != null) {
                 try (CloseableTraceScope ignore =
                         new CloseableTraceScope("avd:collectErrorSignature")) {
-                    List<String> signatures = LogCollector.collectErrorSignatures(remoteFile);
-                    if (signatures.size() > 0) {
-                        InvocationMetricLogger.addInvocationMetrics(
-                                InvocationMetricKey.DEVICE_ERROR_SIGNATURES,
-                                String.join(",", signatures));
-                    }
+                    collectErrorSignatures(remoteFile);
                 }
             }
             if (options.useOxygen() && remoteFile != null) {
@@ -1173,11 +1170,25 @@ public class GceManager {
                     RemoteFileUtil.fetchRemoteFile(
                             gceAvd, options, runUtil, REMOTE_FILE_OP_TIMEOUT, remoteFilePath);
             if (remoteFile != null) {
+                if (InstanceType.GCE.equals(options.getInstanceType())
+                        || InstanceType.CUTTLEFISH.equals(options.getInstanceType())) {
+                    collectErrorSignatures(remoteFile);
+                }
                 logFile(remoteFile, baseName, logger, type);
                 return true;
             }
         }
         return false;
+    }
+
+    private static void collectErrorSignatures(File remoteFile) {
+        try (CloseableTraceScope ignore = new CloseableTraceScope("avd:collectErrorSignature")) {
+            List<String> signatures = LogCollector.collectErrorSignatures(remoteFile);
+            if (signatures.size() > 0) {
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_ERROR_SIGNATURES, String.join(",", signatures));
+            }
+        }
     }
 
     public static void logDirectory(
