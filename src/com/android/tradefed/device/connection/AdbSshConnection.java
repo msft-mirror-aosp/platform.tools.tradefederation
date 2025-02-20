@@ -902,7 +902,7 @@ public class AdbSshConnection extends AdbTcpConnection {
         long startTime = System.currentTimeMillis();
         CommandResult stopRes = null;
         if (getDevice().getOptions().useCvdCF()) {
-            stopRes = mHOUtil.stopGce();
+            stopRes = mHOUtil.removeInstance();
         } else {
             // Get the user from options instance-user if user is null.
             if (user == null) {

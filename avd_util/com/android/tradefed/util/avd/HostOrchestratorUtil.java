@@ -23,6 +23,7 @@ import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBu
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildPowerwashRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildRemoveInstanceRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
@@ -289,12 +290,12 @@ public class HostOrchestratorUtil {
         return curlRes;
     }
 
-    /** Attempt to stop a Cuttlefish instance via Host Orchestrator. */
-    public CommandResult stopGce() {
-        // Basically, the rough processes to powerwash a GCE instance are
+    /** Remove Cuttlefish instance via Host Orchestrator. */
+    public CommandResult removeInstance() {
+        // Basically, the rough processes to remove an instance are
         // 1. Portforward CURL tunnel
-        // 2. Obtain the necessary information to powerwash a GCE instance via Host Orchestrator.
-        // 3. Attempt to stop a GCE instance via Host Orchestrator.
+        // 2. Obtain the group and instance name.
+        // 3. Attempt to remove the Instance via Host Orchestrator.
         CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
         try {
             if (mUseOxygenation) {
@@ -317,18 +318,12 @@ public class HostOrchestratorUtil {
                 curlRes.setStatus(CommandStatus.FAILED);
                 return curlRes;
             }
-            curlRes =
-                    cvdOperationExecution(
-                            mHttpClient,
-                            mHOPortNumber,
-                            "DELETE",
-                            String.format(URL_HO_STOP, cvdGroup, cvdName),
-                            WAIT_FOR_OPERATION_TIMEOUT_MS);
-            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
-                CLog.e("Failed stopping gce via Host Orchestrator: %s", curlRes.getStdout());
-            }
-        } catch (IOException | InterruptedException | ErrorResponseException e) {
-            CLog.e("Failed stopping gce via Host Orchestrator: %s", e);
+            String baseUrl = getHOBaseUrl(mHOPortNumber);
+            HttpRequest httpRequest = buildRemoveInstanceRequest(baseUrl, cvdGroup, cvdName);
+            Operation operation = sendRequest(mHttpClient, httpRequest, Operation.class);
+            waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
+        } catch (IOException | InterruptedException | ErrorResponseException | TimeoutException e) {
+            CLog.e("Failed removing instance via Host Orchestrator: %s", e);
         }
         return curlRes;
     }

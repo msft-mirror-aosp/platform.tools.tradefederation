@@ -23,6 +23,7 @@ import glob
 import json
 import logging
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -34,6 +35,7 @@ import cas_metrics_pb2  # type: ignore
 import concurrent.futures
 from google.protobuf import json_format
 
+VERSION = '1.0'
 
 @dataclasses.dataclass
 class ArtifactConfig:
@@ -104,7 +106,9 @@ METRICS_PATH = 'logs/artifact_metrics.json'
 CONTENT_DETAILS_PATH = 'logs/cas_content_details.json'
 CHUNKED_ARTIFACT_NAME_PREFIX = "_chunked_"
 CHUNKED_DIR_ARTIFACT_NAME_PREFIX = "_chunked_dir_"
-MAX_WORKERS = 4
+MAX_WORKERS_LOWER_BOUND = 2
+MAX_WORKERS_UPPER_BOUND = 6
+MAX_WORKERS = random.randint(MAX_WORKERS_LOWER_BOUND, MAX_WORKERS_UPPER_BOUND)
 
 # Configurations of artifacts will be uploaded to CAS.
 # TODO(b/298890453) Add artifacts after this script is attached to build process.
@@ -413,9 +417,6 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
             if path in skip_files:
                 continue
             skip_files.append(path)
-            if artifact.chunk and (not artifact.chunk_fallback or artifact.unzip):
-                # Skip the regular version even it matches other configs.
-                skip_files.append(rel_path)
 
             task_artifact = copy.copy(artifact)
             task_artifact.source_path = f
@@ -472,16 +473,12 @@ def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMet
 def _add_fallback_artifacts(artifacts: list[ArtifactConfig]):
     """Add a fallback artifact if chunking is enabled for an artifact.
 
-    For unzip artifacts, the fallback is the zipped chunked version.
-    For the rest, the fallback is the standard version (not chunked).
+    Upload a regular version of the artifact if chunking is enabled for an artifact.
     """
     for artifact in artifacts:
         if artifact.chunk and artifact.chunk_fallback:
             fallback_artifact = copy.copy(artifact)
-            if artifact.unzip:
-                fallback_artifact.unzip = False
-            else:
-                fallback_artifact.chunk = False
+            fallback_artifact.chunk = False
             artifacts.append(fallback_artifact)
 
 
@@ -521,6 +518,7 @@ def main():
         format='%(asctime)s %(levelname)s %(message)s',
         filename=log_file,
     )
+    logging.info('Content uploader version: %s', VERSION)
     logging.info('Environment variables of running server: %s', os.environ)
 
     additional_artifacts = _parse_additional_artifacts(args)
@@ -537,6 +535,8 @@ def main():
                      elapsed)
         cas_metrics.time_ms = int(elapsed * 1000)
         cas_metrics.client_version = '.'.join([str(num) for num in cas_info.client_version])
+        cas_metrics.uploader_version = VERSION
+        cas_metrics.max_workers = MAX_WORKERS
         serialized_metrics = cas_metrics.SerializeToString()
         if serialized_metrics:
             cas_metrics_file = os.path.join(dist_dir, CAS_METRICS_PATH)
