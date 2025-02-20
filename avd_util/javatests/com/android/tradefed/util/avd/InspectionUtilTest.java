@@ -38,6 +38,7 @@ public class InspectionUtilTest {
                 + "Swap:        0M total,        0M used,        0M free,    14051M cached\n"
                 + "400%cpu 288%user   0%nice   8%sys  96%idle   8%iow   0%irq   0%sirq   0%host\n"
                 + "PID USER         PR  NI VIRT  RES  SHR S[%CPU] %MEM     TIME+ ARGS\n"
+                + "915 root         20   0 6.1G 2.8G 2.8G S  280  18.3  25:06.81 run_cvd \n"
                 + "925 root         20   0 6.1G 2.8G 2.8G S  280  18.3  25:06.81 crosvm"
                 + " --extended-status run\n"
                 + "510 root         20   0 1.1G  50M  29M S  4.0   0.3   0:30.08 webRTC -group_id="
