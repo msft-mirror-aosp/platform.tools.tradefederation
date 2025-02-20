@@ -167,6 +167,11 @@ public class IncrementalImageUtil {
                 return null;
             }
         }
+        // Remove the map-snapshot mode soon
+        if (!applySnapshot) {
+            useMerkleTree = false;
+            CLog.d("Cannot use merkle comparison for map-snapshot");
+        }
 
         if (!isSnapshotSupported(device, applySnapshot, useMerkleTree)) {
             CLog.d("Incremental flashing not supported.");

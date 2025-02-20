@@ -1185,10 +1185,11 @@ public class GceManager {
         for (File f : remoteDirectory.listFiles()) {
             if (f.isFile()) {
                 LogDataType typeFromName = OxygenUtil.getDefaultLogType(f.getName());
-                if (!typeFromName.equals(LogDataType.UNKNOWN)) {
-                    type = typeFromName;
+                if (typeFromName.equals(LogDataType.UNKNOWN)) {
+                    // Use default LogDataType
+                    typeFromName = type;
                 }
-                logFile(f, baseName, logger, type);
+                logFile(f, baseName, logger, typeFromName);
             } else if (f.isDirectory()) {
                 logDirectory(f, baseName, logger, type);
             }

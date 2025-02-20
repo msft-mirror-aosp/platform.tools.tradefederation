@@ -22,6 +22,7 @@ import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBu
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildPowerwashRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildRemoveInstanceRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
@@ -87,6 +88,13 @@ public class HostOrchestratorClientTest {
         HttpRequest r = buildPowerwashRequest("https://ho.test", "foo", "1");
 
         Assert.assertEquals("https://ho.test/cvds/foo/1/:powerwash", r.uri().toString());
+    }
+
+    @Test
+    public void testBuildRemoveInstanceRequest() throws Exception {
+        HttpRequest r = buildRemoveInstanceRequest("https://ho.test", "foo", "1");
+
+        Assert.assertEquals("https://ho.test/cvds/foo/1", r.uri().toString());
     }
 
     @Test
