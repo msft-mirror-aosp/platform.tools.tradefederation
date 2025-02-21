@@ -35,7 +35,7 @@ import cas_metrics_pb2  # type: ignore
 import concurrent.futures
 from google.protobuf import json_format
 
-VERSION = '1.0'
+VERSION = '1.1'
 
 @dataclasses.dataclass
 class ArtifactConfig:
@@ -417,6 +417,9 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
             if path in skip_files:
                 continue
             skip_files.append(path)
+            if artifact.chunk and (not artifact.chunk_fallback or artifact.unzip):
+                # Skip the regular version even it matches other configs.
+                skip_files.append(rel_path)
 
             task_artifact = copy.copy(artifact)
             task_artifact.source_path = f
@@ -473,12 +476,16 @@ def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMet
 def _add_fallback_artifacts(artifacts: list[ArtifactConfig]):
     """Add a fallback artifact if chunking is enabled for an artifact.
 
-    Upload a regular version of the artifact if chunking is enabled for an artifact.
+    For unzip artifacts, the fallback is the zipped chunked version.
+    For the rest, the fallback is the standard version (not chunked).
     """
     for artifact in artifacts:
         if artifact.chunk and artifact.chunk_fallback:
             fallback_artifact = copy.copy(artifact)
-            fallback_artifact.chunk = False
+            if artifact.unzip:
+                fallback_artifact.unzip = False
+            else:
+                fallback_artifact.chunk = False
             artifacts.append(fallback_artifact)
 
 
