@@ -15,6 +15,7 @@
 #  limitations under the License.
 
 """The script to upload generated artifacts from build server to CAS."""
+
 import argparse
 import copy
 import dataclasses
@@ -22,14 +23,19 @@ import glob
 import json
 import logging
 import os
+import random
 import re
 import shutil
 import subprocess
 import tempfile
 import time
+from typing import Tuple
+
 import cas_metrics_pb2  # type: ignore
+import concurrent.futures
 from google.protobuf import json_format
 
+VERSION = '1.0'
 
 @dataclasses.dataclass
 class ArtifactConfig:
@@ -77,6 +83,15 @@ class UploadResult:
     content_details: list[dict[str,any]]
 
 
+@dataclasses.dataclass
+class UploadTask:
+    """Task of uploading a single artifact with CAS client."""
+    artifact: ArtifactConfig
+    path: str
+    working_dir: str
+    metrics_file: str
+
+
 CAS_UPLOADER_PREBUILT_PATH = 'tools/tradefederation/prebuilts/'
 CAS_UPLOADER_PATH = 'tools/content_addressed_storage/prebuilts/'
 CAS_UPLOADER_BIN = 'casuploader'
@@ -91,6 +106,9 @@ METRICS_PATH = 'logs/artifact_metrics.json'
 CONTENT_DETAILS_PATH = 'logs/cas_content_details.json'
 CHUNKED_ARTIFACT_NAME_PREFIX = "_chunked_"
 CHUNKED_DIR_ARTIFACT_NAME_PREFIX = "_chunked_dir_"
+MAX_WORKERS_LOWER_BOUND = 2
+MAX_WORKERS_UPPER_BOUND = 6
+MAX_WORKERS = random.randint(MAX_WORKERS_LOWER_BOUND, MAX_WORKERS_UPPER_BOUND)
 
 # Configurations of artifacts will be uploaded to CAS.
 # TODO(b/298890453) Add artifacts after this script is attached to build process.
@@ -106,6 +124,7 @@ ARTIFACTS = [
     ArtifactConfig('android-mts.zip', True, exclude_filters=['android-mts/jdk/.*']),
     ArtifactConfig('android-pts.zip', True, exclude_filters=['android-pts/jdk/.*']),
     ArtifactConfig('android-sts.zip', True),
+    ArtifactConfig('android-tvts.zip', True, exclude_filters=['android-tvts/jdk/.*']),
     ArtifactConfig('android-vts.zip', True),
     ArtifactConfig('android-wts.zip', True, exclude_filters=['android-wts/jdk/.*']),
     ArtifactConfig('art-host-tests.zip', True),
@@ -237,7 +256,7 @@ def _upload(
         working_dir: str,
         log_file: str,
         metrics_file: str,
-) -> str:
+) -> UploadResult:
     """Upload the artifact to CAS by casuploader binary.
 
     Args:
@@ -368,49 +387,67 @@ def _output_results(
     logging.info('Output uploaded content details to %s', output_path)
 
 
+def _upload_wrapper(
+    cas_info: CasInfo, log_file: str, task: UploadTask
+) -> Tuple[UploadResult, UploadTask]:
+    return _upload(
+        cas_info,
+        task.artifact,
+        task.working_dir,
+        log_file,
+        task.metrics_file,
+    ), task
+
+
 def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
-    dist_dir: str, working_dir: str, log_file:str, cas_metrics: cas_metrics_pb2.CasMetrics):
+    dist_dir: str, working_dir: str, log_file:str, cas_metrics: str):
     file_digests = {}
     content_details = []
     skip_files = []
     _add_fallback_artifacts(all_artifacts)
+
+    # Populate upload tasks
+    tasks = []
     for artifact in all_artifacts:
         for f in glob.glob(dist_dir + '/**/' + artifact.source_path, recursive=True):
-            start = time.time()
             rel_path = _get_relative_path(dist_dir, f)
             path = _artifact_path(rel_path, artifact.chunk, artifact.unzip)
 
             # Avoid redundant upload if multiple ArtifactConfigs share files.
-            if path in file_digests or path in skip_files:
+            if path in skip_files:
                 continue
+            skip_files.append(path)
 
-            artifact.source_path = f
-            metrics_file = os.path.join(dist_dir, METRICS_PATH)
-            result = _upload(cas_info, artifact, working_dir, log_file, metrics_file)
+            task_artifact = copy.copy(artifact)
+            task_artifact.source_path = f
+            _, task_metrics_file = tempfile.mkstemp(dir=working_dir)
+            task = UploadTask(task_artifact, path, working_dir, task_metrics_file)
+            tasks.append(task)
 
+    # Upload artifacts in parallel
+    logging.info('Uploading %d files, max workers = %d', len(tasks), MAX_WORKERS)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(_upload_wrapper, cas_info, log_file, task) for task in tasks]
+
+        for future in concurrent.futures.as_completed(futures):
+            result, task = future.result()
             if result and result.digest:
-                file_digests[path] = result.digest
-                if artifact.chunk and (not artifact.chunk_fallback or artifact.unzip):
-                    # Skip the regular version even it matches other configs.
-                    skip_files.append(rel_path)
+                file_digests[task.path] = result.digest
             else:
                 logging.warning(
-                    'Skip to save the digest of file %s, the uploading may fail', path
+                    'Skip to save the digest of file %s, the uploading may fail',
+                    task.path,
                 )
             if result and result.content_details:
-                content_details.append({"artifact": path, "details": result.content_details})
+                content_details.append({"artifact": task.path, "details": result.content_details})
             else:
-                logging.warning('Skip to save the content details of file %s', path)
+                logging.warning('Skip to save the content details of file %s', task.path)
 
-            if os.path.exists(metrics_file):
-                _add_artifact_metrics(metrics_file, cas_metrics)
-                os.remove(metrics_file)
+            # Add artifact metrics to cas_metrics
+            if os.path.exists(task.metrics_file):
+                _add_artifact_metrics(task.metrics_file, cas_metrics)
+                os.remove(task.metrics_file)
 
-            logging.info(
-                'Elapsed time of uploading %s: %d seconds\n\n',
-                artifact.source_path,
-                time.time() - start,
-            )
     _output_results(
         cas_info,
         dist_dir,
@@ -436,16 +473,12 @@ def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMet
 def _add_fallback_artifacts(artifacts: list[ArtifactConfig]):
     """Add a fallback artifact if chunking is enabled for an artifact.
 
-    For unzip artifacts, the fallback is the zipped chunked version.
-    For the rest, the fallback is the standard version (not chunked).
+    Upload a regular version of the artifact if chunking is enabled for an artifact.
     """
     for artifact in artifacts:
         if artifact.chunk and artifact.chunk_fallback:
             fallback_artifact = copy.copy(artifact)
-            if artifact.unzip:
-                fallback_artifact.unzip = False
-            else:
-                fallback_artifact.chunk = False
+            fallback_artifact.chunk = False
             artifacts.append(fallback_artifact)
 
 
@@ -485,6 +518,7 @@ def main():
         format='%(asctime)s %(levelname)s %(message)s',
         filename=log_file,
     )
+    logging.info('Content uploader version: %s', VERSION)
     logging.info('Environment variables of running server: %s', os.environ)
 
     additional_artifacts = _parse_additional_artifacts(args)
@@ -501,6 +535,8 @@ def main():
                      elapsed)
         cas_metrics.time_ms = int(elapsed * 1000)
         cas_metrics.client_version = '.'.join([str(num) for num in cas_info.client_version])
+        cas_metrics.uploader_version = VERSION
+        cas_metrics.max_workers = MAX_WORKERS
         serialized_metrics = cas_metrics.SerializeToString()
         if serialized_metrics:
             cas_metrics_file = os.path.join(dist_dir, CAS_METRICS_PATH)

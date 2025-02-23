@@ -21,6 +21,8 @@ import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBugreportRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildPowerwashRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildRemoveInstanceRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.sendRequest;
 
@@ -79,6 +81,20 @@ public class HostOrchestratorClientTest {
         HttpRequest r = buildCreateBugreportRequest("https://ho.test", "foo");
 
         Assert.assertEquals("https://ho.test/cvds/foo/:bugreport", r.uri().toString());
+    }
+
+    @Test
+    public void testBuildPowerwashRequest() throws Exception {
+        HttpRequest r = buildPowerwashRequest("https://ho.test", "foo", "1");
+
+        Assert.assertEquals("https://ho.test/cvds/foo/1/:powerwash", r.uri().toString());
+    }
+
+    @Test
+    public void testBuildRemoveInstanceRequest() throws Exception {
+        HttpRequest r = buildRemoveInstanceRequest("https://ho.test", "foo", "1");
+
+        Assert.assertEquals("https://ho.test/cvds/foo/1", r.uri().toString());
     }
 
     @Test

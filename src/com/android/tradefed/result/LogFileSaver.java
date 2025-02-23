@@ -34,7 +34,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
 
-
 /**
  * A helper for {@link ITestInvocationListener}'s that will save log data to a file
  */
@@ -229,8 +228,9 @@ public class LogFileSaver {
         // Hardlink fallback to copy if needed
         FileUtil.hardlinkFile(fileToLog, logFile);
         CLog.i(
-                "Saved log file %s. [size=%s, elapsed=%sms]",
+                "Saved log file %s (type:%s). [size=%s, elapsed=%sms]",
                 logFile.getAbsolutePath(),
+                dataType,
                 logFile.length(),
                 System.currentTimeMillis() - startTime);
         return logFile;

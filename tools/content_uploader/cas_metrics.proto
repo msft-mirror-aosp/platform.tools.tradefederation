@@ -33,4 +33,6 @@ message CasMetrics {
   int64 time_ms = 1;            // End to end time for the upload session.
   repeated ArtifactMetrics artifacts = 2;
   string client_version = 3;    // CAS uploader client version.
+  string uploader_version = 4;  // Content uploader (this script) version.
+  int32 max_workers = 5;        // Max workers used for uploading.
 }

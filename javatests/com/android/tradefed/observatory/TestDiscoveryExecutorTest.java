@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationFactory;
 import com.android.tradefed.config.IConfigurationFactory;
+import com.android.tradefed.config.filter.GlobalTestFilter;
 import com.android.tradefed.targetprep.BaseTargetPreparer;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.suite.BaseTestSuite;
@@ -101,6 +102,7 @@ public class TestDiscoveryExecutorTest {
                                     ;
                                 }),
                         Mockito.isNull());
+        when(mMockedConfiguration.getGlobalFilters()).thenReturn(new GlobalTestFilter());
     }
 
     public static class DiscoverablePreparer extends BaseTargetPreparer

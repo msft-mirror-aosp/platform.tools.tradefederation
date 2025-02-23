@@ -20,6 +20,7 @@ import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.ArgsOptionParser;
 import com.android.tradefed.config.ConfigurationException;
 import com.android.tradefed.config.IConfiguration;
+import com.android.tradefed.config.filter.GlobalTestFilter;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
@@ -40,8 +41,8 @@ import com.android.tradefed.util.testmapping.TestMapping;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-
 import com.google.common.base.Strings;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -471,6 +472,10 @@ public class TestDiscoveryInvoker {
         ctsOptionParser.parseBestEffort(fullCommandLineArgs, true);
 
         List<String> ctsParams = ctsParserSettings.mCtsParams;
+        for (String globalFilter : ctsParserSettings.mStrictIncludeFilters) {
+            ctsParams.add("--" + GlobalTestFilter.STRICT_INCLUDE_FILTER_OPTION);
+            ctsParams.add(globalFilter);
+        }
         String configName = ctsParserSettings.mConfigName;
 
         if (configName == null) {

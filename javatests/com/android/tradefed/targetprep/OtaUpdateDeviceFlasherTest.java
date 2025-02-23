@@ -176,9 +176,9 @@ public class OtaUpdateDeviceFlasherTest {
         mFlasher.flash(mMockDevice, dbi);
         // verify
         mInOrder.verify(mMockDevice).enableAdbRoot();
-        mInOrder.verify(mMockDevice).executeShellCommand("stop");
-        mInOrder.verify(mMockDevice).executeShellCommand("rm -rf /data/*");
-        mInOrder.verify(mMockDevice).reboot();
+        mInOrder.verify(mMockDevice).executeShellCommand("start");
+        mInOrder.verify(mMockDevice).waitForDeviceAvailable();
+        mInOrder.verify(mMockDevice).executeShellCommand("cmd recovery wipe");
         mInOrder.verify(mMockDevice).waitForDeviceAvailable();
         mInOrder.verify(mMockDevice).enableAdbRoot();
         mInOrder.verify(mMockDevice).executeShellCommand("svc power stayon true");
@@ -208,9 +208,9 @@ public class OtaUpdateDeviceFlasherTest {
         mFlasher.flash(mMockDevice, dbi);
         // verify
         mInOrder.verify(mMockDevice).enableAdbRoot();
-        mInOrder.verify(mMockDevice).executeShellCommand("stop");
-        mInOrder.verify(mMockDevice).executeShellCommand("rm -rf /data/*");
-        mInOrder.verify(mMockDevice).reboot();
+        mInOrder.verify(mMockDevice).executeShellCommand("start");
+        mInOrder.verify(mMockDevice).waitForDeviceAvailable();
+        mInOrder.verify(mMockDevice).executeShellCommand("cmd recovery wipe");
         mInOrder.verify(mMockDevice).waitForDeviceAvailable();
         mInOrder.verify(mMockDevice).enableAdbRoot();
         mInOrder.verify(mMockDevice).executeShellCommand("svc power stayon true");
@@ -240,9 +240,9 @@ public class OtaUpdateDeviceFlasherTest {
         mFlasher.flash(mMockDevice, dbi);
         // verify
         mInOrder.verify(mMockDevice).enableAdbRoot();
-        mInOrder.verify(mMockDevice).executeShellCommand("stop");
-        mInOrder.verify(mMockDevice).executeShellCommand("rm -rf /data/*");
-        mInOrder.verify(mMockDevice).reboot();
+        mInOrder.verify(mMockDevice).executeShellCommand("start");
+        mInOrder.verify(mMockDevice).waitForDeviceAvailable();
+        mInOrder.verify(mMockDevice).executeShellCommand("cmd recovery wipe");
         mInOrder.verify(mMockDevice).waitForDeviceAvailable();
         mInOrder.verify(mMockDevice).enableAdbRoot();
         mInOrder.verify(mMockDevice).executeShellCommand("svc power stayon true");
