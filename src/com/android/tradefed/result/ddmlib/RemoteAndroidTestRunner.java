@@ -24,8 +24,6 @@ import com.android.ddmlib.TimeoutException;
 import com.android.ddmlib.testrunner.IInstrumentationResultParser;
 import com.android.ddmlib.testrunner.IRemoteAndroidTestRunner;
 import com.android.ddmlib.testrunner.ITestRunListener;
-import com.android.ddmlib.testrunner.InstrumentationProtoResultParser;
-import com.android.ddmlib.testrunner.InstrumentationResultParser;
 import com.android.tradefed.log.Log;
 import com.android.tradefed.log.LogUtil.CLog;
 
