@@ -1269,7 +1269,7 @@ public abstract class ITestSuite
             IRetryDecision decision = mMainConfiguration.getRetryDecision();
             // Pass whether we should merge the attempts of not
             if (mMergeAttempts
-                    && decision.getMaxRetryCount() > 1
+                    && decision.getMaxRetryCount(module) > 1
                     && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
                 CLog.d("Overriding '--merge-attempts' to false for auto-retry.");
                 mMergeAttempts = false;
@@ -1290,7 +1290,7 @@ public abstract class ITestSuite
                 moduleInfo,
                 listener,
                 moduleListeners,
-                getConfiguration().getRetryDecision().getMaxRetryCount());
+                getConfiguration().getRetryDecision().getMaxRetryCount(module));
 
         if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
             try (CloseableTraceScope ignored = new CloseableTraceScope("module_post_check")) {
