@@ -558,7 +558,8 @@ public class TestAppInstallSetup extends BaseTargetPreparer
 
         for (Map.Entry<String, List<File>> e : Multimaps.asMap(packageToFiles).entrySet()) {
             if (mApkChangeDetector != null
-                && mApkChangeDetector.handleTestAppsPreinstall(e.getKey(), e.getValue(), getDevice())) {
+                && mApkChangeDetector.handleTestAppsPreinstall(
+                    e.getKey(), e.getValue(), getDevice(), mUserId, mInstallForAllUsers)) {
                 continue;
             }
 

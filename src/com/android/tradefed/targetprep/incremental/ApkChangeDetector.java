@@ -69,17 +69,32 @@ public class ApkChangeDetector {
      * @param packageName The name of the package.
      * @param testApps Indicate all APK files in the package with the name {@link packageName}.
      * @param device Indicates the device on which the test is running.
+     * @param userId The current user ID.
+     * @param forAllUsers Indicates whether the cleanup should be done for all users.
      * @return Whether the APKs in {@link packageName} are fully handled under local incremental
      *     setup. Default to false, which does not oblige to re-install the package APKs.
      */
     public boolean handleTestAppsPreinstall(
-        String packageName, List<File> testApps, ITestDevice device)
+        String packageName, List<File> testApps, ITestDevice device, Integer userId,
+        boolean forAllUsers)
         throws DeviceNotAvailableException {
+        if (!forAllUsers && userId != null && userId != 0) {
+            CLog.d(
+                "Not skipping the installation of %s because user %s is not the owner.",
+                packageName, userId);
+            return false;
+        }
         if (!ensureIncrementalSetupSupported(device)) {
+            CLog.d(
+                "Not skipping the installation of %s because incremental setup is not supported",
+                packageName);
             return false;
         }
         loadPackagesHandledInPreviousTestRuns(device);
         if (!cleanupAppsIfNecessary(device, testApps)) {
+            CLog.d(
+                "Not skipping the installation of %s because app cleanup is not successful",
+                packageName);
             return false;
         }
         updateInstalledPackageCache(device, packageName);
@@ -121,6 +136,9 @@ public class ApkChangeDetector {
             // uninstall the obsolete package.
             // TODO(ihcinihsdk): Ideally, only uninstall the package if the user specifies APKs
             // need cleanup.
+            CLog.d(
+                "Not skipping the installation of %s because the APKs are likely to have changed.",
+                packageName);
             device.uninstallPackage(packageName);
         }
         return couldSkipAppInstallation;
