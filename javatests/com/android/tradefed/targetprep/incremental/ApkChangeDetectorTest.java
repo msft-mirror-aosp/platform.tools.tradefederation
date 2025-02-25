@@ -179,7 +179,8 @@ public final class ApkChangeDetectorTest {
 
         boolean shouldSkipInstallation =
             apkChangeDetector.handleTestAppsPreinstall(
-                "a.b.c.package", mMockTestApps, mMockDevice);
+                "a.b.c.package", mMockTestApps, mMockDevice, /* userId= */ null,
+                /* forAllUsers= */ true);
 
         assertThat(shouldSkipInstallation).isFalse();
     }
@@ -195,7 +196,8 @@ public final class ApkChangeDetectorTest {
 
         boolean shouldSkipInstallation =
             mApkChangeDetector.handleTestAppsPreinstall(
-                "a.b.c.package", testApps, mMockDevice);
+                "a.b.c.package", testApps, mMockDevice, /* userId= */ null,
+                /* forAllUsers= */ true);
 
         assertThat(shouldSkipInstallation).isFalse();
     }
@@ -211,7 +213,23 @@ public final class ApkChangeDetectorTest {
 
         boolean shouldSkipInstallation =
             mApkChangeDetector.handleTestAppsPreinstall(
-                "a.b.c.package", testApps, mMockDevice);
+                "a.b.c.package", testApps, mMockDevice, /* userId= */ null,
+                /* forAllUsers= */ true);
+
+        assertThat(shouldSkipInstallation).isFalse();
+    }
+
+    @Test
+    public void handleTestAppsPreinstall_doInstallation_userNotOwner()
+        throws Exception {
+        doReturn("sha256sum1").when(mApkChangeDetector).calculateSHA256OnHost(mMockFile1);
+        doReturn("sha256sum2").when(mApkChangeDetector).calculateSHA256OnHost(mMockFile2);
+        doReturn("sha256sum3").when(mApkChangeDetector).calculateSHA256OnHost(mMockFile3);
+
+        boolean shouldSkipInstallation =
+            mApkChangeDetector.handleTestAppsPreinstall(
+                "a.b.c.package", mMockTestApps, mMockDevice, /* userId= */ 12345,
+                /* forAllUsers= */ false);
 
         assertThat(shouldSkipInstallation).isFalse();
     }
@@ -225,7 +243,8 @@ public final class ApkChangeDetectorTest {
 
         boolean shouldSkipInstallation =
             mApkChangeDetector.handleTestAppsPreinstall(
-                "a.b.c.package", mMockTestApps, mMockDevice);
+                "a.b.c.package", mMockTestApps, mMockDevice, /* userId= */ null,
+                /* forAllUsers= */ true);
 
         assertThat(shouldSkipInstallation).isTrue();
     }
@@ -292,7 +311,8 @@ public final class ApkChangeDetectorTest {
         // less than the threshold 10,000,000 bytes.
         boolean shouldSkipAppUninstallation =
             mApkChangeDetectorLessDiskSpace.handleTestAppsPreinstall(
-                "a.b.c.package", testApps, mMockDevice);
+                "a.b.c.package", testApps, mMockDevice, /* userId= */ null,
+                /* forAllUsers= */ true);
 
         assertThat(shouldSkipAppUninstallation).isFalse();
         verify(mMockDevice, times(0)).uninstallPackage("prev.handled1");
@@ -322,7 +342,8 @@ public final class ApkChangeDetectorTest {
         // less than the threshold 10,000,000 bytes.
         boolean shouldSkipAppUninstallation =
             mApkChangeDetectorFileUninstallFailed.handleTestAppsPreinstall(
-                "a.b.c.package", testApps, mMockDeviceFileUninstallFailed);
+                "a.b.c.package", testApps, mMockDeviceFileUninstallFailed, /* userId= */ null,
+                /* forAllUsers= */ true);
 
         assertThat(shouldSkipAppUninstallation).isFalse();
         verify(mMockDeviceFileUninstallFailed, times(0)).uninstallPackage("prev.handled1");
@@ -342,7 +363,8 @@ public final class ApkChangeDetectorTest {
 
         boolean incrementalSetupSupported =
             mApkChangeDetectorFileNotAccessible.handleTestAppsPreinstall(
-                "a.b.c.package", testApps, mMockDevice);
+                "a.b.c.package", testApps, mMockDevice, /* userId= */ null,
+                /* forAllUsers= */ true);
 
         assertThat(incrementalSetupSupported).isFalse();
     }
@@ -360,7 +382,8 @@ public final class ApkChangeDetectorTest {
 
         boolean incrementalSetupSupported =
             mApkChangeDetectorDiskSpaceNotObtained.handleTestAppsPreinstall(
-                "a.b.c.package", testApps, mMockDevice);
+                "a.b.c.package", testApps, mMockDevice, /* userId= */ null,
+                /* forAllUsers= */ true);
 
         assertThat(incrementalSetupSupported).isFalse();
         verify(mMockDevice, times(0)).uninstallPackage("prev.handled1");
