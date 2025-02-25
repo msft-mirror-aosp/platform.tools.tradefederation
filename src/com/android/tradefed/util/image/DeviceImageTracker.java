@@ -43,22 +43,16 @@ public class DeviceImageTracker {
     /** Track information of the device image cached and its metadata */
     public class FileCacheTracker {
         public File zippedDeviceImage;
-        public File zippedBootloaderImage;
-        public File zippedBasebandImage;
         public String buildId;
         public String branch;
         public String flavor;
 
         FileCacheTracker(
                 File zippedDeviceImage,
-                File zippedBootloaderImage,
-                File zippedBasebandImage,
                 String buildId,
                 String branch,
                 String flavor) {
             this.zippedDeviceImage = zippedDeviceImage;
-            this.zippedBootloaderImage = zippedBootloaderImage;
-            this.zippedBasebandImage = zippedBasebandImage;
             this.buildId = buildId;
             this.branch = branch;
             this.flavor = flavor;
@@ -85,8 +79,6 @@ public class DeviceImageTracker {
                     public void onRemoval(RemovalNotification<String, FileCacheTracker> n) {
                         if (n.wasEvicted()) {
                             FileUtil.recursiveDelete(n.getValue().zippedDeviceImage);
-                            FileUtil.deleteFile(n.getValue().zippedBootloaderImage);
-                            FileUtil.deleteFile(n.getValue().zippedBasebandImage);
                         }
                     }
                 };
@@ -126,28 +118,15 @@ public class DeviceImageTracker {
     public void trackUpdatedDeviceImage(
             String serial,
             File deviceImage,
-            File bootloader,
-            File baseband,
             String buildId,
             String branch,
             String flavor) {
-        if (bootloader == null) {
-            CLog.d("Skip tracking image, bootloader is null.");
-            return;
-        }
         if (deviceImage == null) {
             CLog.d("Skip tracking image, device image is null.");
             return;
         }
         File copyInCacheDeviceImage = new File(mCacheDir, serial + "_device_image");
         FileUtil.recursiveDelete(copyInCacheDeviceImage);
-        File copyInCacheBootloader = new File(mCacheDir, serial + "_bootloader");
-        FileUtil.deleteFile(copyInCacheBootloader);
-        File copyInCacheBaseband = null;
-        if (baseband != null) { // Baseband is optional on some devices
-            copyInCacheBaseband = new File(mCacheDir, serial + "_baseband");
-            FileUtil.deleteFile(copyInCacheBaseband);
-        }
         try {
             if (deviceImage.isDirectory()) {
                 CLog.d("Tracking device image as directory: %s", copyInCacheDeviceImage);
@@ -156,16 +135,10 @@ public class DeviceImageTracker {
                 CLog.d("Tracking device image: %s", copyInCacheDeviceImage);
                 FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
             }
-            FileUtil.hardlinkFile(bootloader, copyInCacheBootloader);
-            if (copyInCacheBaseband != null) {
-                FileUtil.hardlinkFile(baseband, copyInCacheBaseband);
-            }
             mImageCache.put(
                     serial,
                     new FileCacheTracker(
                             copyInCacheDeviceImage,
-                            copyInCacheBootloader,
-                            copyInCacheBaseband,
                             buildId,
                             branch,
                             flavor));
