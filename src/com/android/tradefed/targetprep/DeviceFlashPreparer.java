@@ -364,7 +364,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 isIsolated,
                                 mAllowIncrementalCrossRelease,
                                 mAllowedTransition,
-                                mApplySnapshot,
                                 mWipeAfterApplySnapshot,
                                 mNewIncrementalFlow,
                                 mUpdateBootloaderFromUserspace,
@@ -573,8 +572,6 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                         .trackUpdatedDeviceImage(
                                 serial,
                                 deviceImage,
-                                deviceBuild.getBootloaderImageFile(),
-                                deviceBuild.getBasebandImageFile(),
                                 deviceBuild.getBuildId(),
                                 deviceBuild.getBuildBranch(),
                                 deviceBuild.getBuildFlavor());
