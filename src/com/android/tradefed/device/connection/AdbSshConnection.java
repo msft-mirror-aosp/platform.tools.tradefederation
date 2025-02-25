@@ -441,7 +441,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 inspectionResult = debugDeviceNotAvailable();
                 // Only override error identifier if it's not a generic one.
                 if ((errorIdentifier == InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT
-                                || errorIdentifier != DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE)
+                                || errorIdentifier == DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE)
                         && inspectionResult != null
                         && inspectionResult.getErrorIdentifier() != null) {
                     errorMsg = inspectionResult.getDetails();
