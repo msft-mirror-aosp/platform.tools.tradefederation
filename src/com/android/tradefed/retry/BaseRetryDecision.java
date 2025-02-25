@@ -142,6 +142,11 @@ public class BaseRetryDecision
             description = "Feature flag to use snapshot/restore instead of powerwash.")
     private boolean mUseSnapshotForReset = false;
 
+    @Option(
+            name = "module-run-count",
+            description = "Override retry count for specific modules. Format is <module id>:<run count>")
+    private Set<String> mModuleRunCount = new LinkedHashSet<>();
+
     private IInvocationContext mContext;
     private IConfiguration mConfiguration;
     private TestInformation mTestInformation;
@@ -171,6 +176,27 @@ public class BaseRetryDecision
     @Override
     public int getMaxRetryCount() {
         return mMaxRetryAttempts;
+    }
+
+    @Override
+    public int getMaxRetryCount(ModuleDefinition module) {
+        if (module == null) {
+            return getMaxRetryCount();
+        }
+
+        for (String entry : mModuleRunCount) {
+            try {
+                String[] parts = entry.split(":", 2); // Split into at most 2 parts
+                if (parts.length == 2 && parts[0].equals(module.getId())) {
+                    return Integer.parseInt(parts[1]);
+                }
+            } catch (Exception e) {
+                CLog.e("Failed to parse module run count entry: %s", entry);
+            }
+        }
+
+        // If no override is found, return the default max retry count.
+        return getMaxRetryCount();
     }
 
     @Override
@@ -693,7 +719,7 @@ public class BaseRetryDecision
             }
         } else if (IsolationGrade.FULLY_ISOLATED.equals(mRetryIsolationGrade)) {
             resetIsolation(module, devices);
-        } else if (lastAttempt == (mMaxRetryAttempts - 2)) {
+        } else if (lastAttempt == (getMaxRetryCount(module) - 2)) {
             // Reset only works for suite right now
             if (mRebootAtLastRetry) {
                 for (ITestDevice device : devices) {
