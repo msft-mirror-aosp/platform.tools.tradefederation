@@ -47,7 +47,6 @@ import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
@@ -558,30 +557,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             moveBaseLine = true;
         }
         if (moveBaseLine) {
-            File deviceImage = deviceBuild.getDeviceImageFile();
-            File tmpReference = null;
-            try {
-                if (mAllowUnzippedBaseline
-                        && mIncrementalImageUtil != null
-                        && mIncrementalImageUtil.getExtractedTargetDirectory() != null
-                        && mIncrementalImageUtil.getExtractedTargetDirectory().isDirectory()) {
-                    CLog.d(
-                            "Using unzipped baseline: %s",
-                            mIncrementalImageUtil.getExtractedTargetDirectory());
-                    tmpReference = mIncrementalImageUtil.getExtractedTargetDirectory();
-                    deviceImage = tmpReference;
-                }
-
-                DeviceImageTracker.getDefaultCache()
-                        .trackUpdatedDeviceImage(
-                                serial,
-                                deviceImage,
-                                deviceBuild.getBuildId(),
-                                deviceBuild.getBuildBranch(),
-                                deviceBuild.getBuildFlavor());
-            } finally {
-                FileUtil.recursiveDelete(tmpReference);
-            }
+            DeviceImageTracker.getDefaultCache()
+                    .trackUpdatedDeviceImage(
+                            serial,
+                            deviceBuild.getBuildId(),
+                            deviceBuild.getBuildBranch(),
+                            deviceBuild.getBuildFlavor());
         }
     }
 
