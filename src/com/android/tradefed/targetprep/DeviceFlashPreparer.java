@@ -38,7 +38,9 @@ import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.retry.BaseRetryDecision;
@@ -60,7 +62,7 @@ import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
 public abstract class DeviceFlashPreparer extends BaseTargetPreparer
-        implements IConfigurationReceiver {
+        implements IConfigurationReceiver, ITestLoggerReceiver {
 
     private static final int BOOT_POLL_TIME_MS = 5 * 1000;
     private static final long SNAPSHOT_CANCEL_TIMEOUT = 20000L;
@@ -221,6 +223,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private IConfiguration mConfig;
     private Set<String> mAllowedTransition = new HashSet<>();
     private IDeviceFlasher mFlasher;
+    private ITestLogger mTestLogger;
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -413,6 +416,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                         ((FastbootDeviceFlasher) flasher)
                                 .setIncrementalFlashing(mIncrementalImageUtil);
                     }
+                    ((FastbootDeviceFlasher) flasher).setTestLogger(mTestLogger);
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
@@ -665,6 +669,15 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                         "We expected incremental-flashing to be used but wasn't.");
             }
         }
+    }
+
+    @Override
+    public void setTestLogger(ITestLogger testLogger) {
+        mTestLogger = testLogger;
+    }
+
+    public ITestLogger getTestLogger() {
+        return mTestLogger;
     }
 
     /**
