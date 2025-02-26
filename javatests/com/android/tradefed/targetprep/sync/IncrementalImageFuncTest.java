@@ -105,11 +105,8 @@ public class IncrementalImageFuncTest extends BaseHostJUnit4Test {
                 new IncrementalImageUtil(
                         getDevice(),
                         getBuild().getFile("src-image"),
-                        null,
-                        null,
                         getBuild().getFile("target-image"),
                         getBuild().getFile("create_snapshot.zip"),
-                        mApplySnapshot,
                         false,
                         false,
                         false,

@@ -1132,10 +1132,7 @@ public class GceManager {
                             || InstanceType.GCE.equals(options.getInstanceType())
                             || InstanceType.CUTTLEFISH.equals(options.getInstanceType()))
                     && remoteFile != null) {
-                try (CloseableTraceScope ignore =
-                        new CloseableTraceScope("avd:collectErrorSignature")) {
-                    collectErrorSignatures(remoteFile);
-                }
+                collectErrorSignatures(remoteFile);
             }
             if (options.useOxygen() && remoteFile != null) {
                 try (CloseableTraceScope ignore =
