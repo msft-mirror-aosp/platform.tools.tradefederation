@@ -21,8 +21,10 @@ import com.android.resultdb.proto.FailureReason;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.TestStatus;
 import com.android.resultdb.proto.Variant;
+import com.android.tradefed.build.BuildInfo;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.proto.TestRecordProto;
+import com.android.tradefed.testtype.suite.ModuleDefinition;
 
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
@@ -78,7 +80,11 @@ public class ResultDBReporterTest {
                 .setDuration(Durations.fromMillis(100))
                 .setStatus(TestStatus.PASS)
                 .setExpected(true)
-                .setVariant(Variant.newBuilder().putDef("name", "test tag").build());
+                .setVariant(
+                        Variant.newBuilder()
+                                .putDef("name", "test tag")
+                                .putDef("scheduler", "ATP")
+                                .build());
     }
 
     @Before
@@ -97,6 +103,36 @@ public class ResultDBReporterTest {
 
         assertThat(mReporter.mRecorder.getTestResults())
                 .containsExactly(newTestResult("testExampleMethod").build());
+    }
+
+    @Test
+    public void uploadResultWithVariant() {
+        BuildInfo info = new BuildInfo("1", "target_1");
+        info.setBuildBranch("test-branch");
+        info.setBuildFlavor("test-flavor");
+        mSimulator
+                .withInvocationAttribute("resultdb_invocation_id", "invocation_001")
+                .withInvocationAttribute("resultdb_invocation_update_token", "update_token")
+                .withTest("com.google.ExampleClass", "testExampleMethod")
+                .withModuleAttribute("should-ignore", "ignore")
+                .withModuleAttribute(ModuleDefinition.MODULE_ABI, "test-abi")
+                .withModuleAttribute(
+                        ModuleDefinition.MODULE_PARAMETERIZATION, "test-parameterization")
+                .withBuildInfo(info)
+                .simulateInvocation(mReporter);
+
+        Variant variant =
+                Variant.newBuilder()
+                        .putDef("branch", "test-branch")
+                        .putDef("build_provider", "androidbuild")
+                        .putDef("module-abi", "test-abi")
+                        .putDef("module-param", "test-parameterization")
+                        .putDef("name", "test tag")
+                        .putDef("scheduler", "ATP")
+                        .putDef("target", "test-flavor")
+                        .build();
+        assertThat(mReporter.mRecorder.getTestResults())
+                .containsExactly(newTestResult("testExampleMethod").setVariant(variant).build());
     }
 
     @Test
