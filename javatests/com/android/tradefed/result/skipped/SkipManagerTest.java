@@ -50,9 +50,9 @@ public class SkipManagerTest {
 
     @Test
     public void testSkipInvocation() {
-        Truth.assertThat(mManager.shouldSkipInvocation(mTestInformation)).isFalse();
+        Truth.assertThat(mManager.shouldSkipInvocation(mTestInformation, null)).isFalse();
         mManager.reportDiscoveryWithNoTests();
-        Truth.assertThat(mManager.shouldSkipInvocation(mTestInformation)).isTrue();
+        Truth.assertThat(mManager.shouldSkipInvocation(mTestInformation, null)).isTrue();
     }
 
     @Test

@@ -17,7 +17,7 @@
 """The script to upload generated artifacts from build server to CAS."""
 
 import argparse
-import copy
+import concurrent.futures
 import dataclasses
 import glob
 import json
@@ -32,10 +32,10 @@ import time
 from typing import Tuple
 
 import cas_metrics_pb2  # type: ignore
-import concurrent.futures
 from google.protobuf import json_format
 
-VERSION = '1.2'
+
+VERSION = '1.3'
 
 @dataclasses.dataclass
 class ArtifactConfig:
@@ -44,14 +44,15 @@ class ArtifactConfig:
     Attributes:
         source_path: path to the artifact that relative to the root of source code.
         unzip: true if the artifact should be unzipped and uploaded as a directory.
-        chunk: true if the artifact should be uploaded with chunking.
-        chunk_fallback: true if a regular version (no chunking) of the artifact should be uploaded.
+        chunk: true if the artifact should be uploaded with chunking as a single file.
+        chunk_dir: true if the artifact should be uploaded with chunking as a directory.
         exclude_filters: a list of regular expressions for files that are excluded from uploading.
     """
     source_path: str
     unzip: bool
+    standard: bool = True
     chunk: bool = False
-    chunk_fallback: bool = False
+    chunk_dir: bool = False
     exclude_filters: list[str] = dataclasses.field(default_factory=list)
 
 
@@ -96,7 +97,7 @@ CAS_UPLOADER_PREBUILT_PATH = 'tools/tradefederation/prebuilts/'
 CAS_UPLOADER_PATH = 'tools/content_addressed_storage/prebuilts/'
 CAS_UPLOADER_BIN = 'casuploader'
 
-UPLOADER_TIMEOUT_SECS = 600 # 10 minutes
+UPLOADER_TIMEOUT_SECS = 600  # 10 minutes
 AVG_CHUNK_SIZE_IN_KB = 128
 
 DIGESTS_PATH = 'cas_digests.json'
@@ -116,7 +117,7 @@ MAX_WORKERS = random.randint(MAX_WORKERS_LOWER_BOUND, MAX_WORKERS_UPPER_BOUND)
 # 1. To upload img files with path relative to DIST_DIR (no '/**/'), override source_path with:
 #   --artifacts 'img=./*-img-*zip'
 # 2. To upload img files as chunked version only:
-#   --artifacts 'img=*-img-*zip' chunk_fallback=False
+#   --artifacts 'img=*-img-*zip' standard=False chunk=True
 # 3. To also upload json files in logs folder:
 #   --artifacts 'new=./log/*.json'
 # 4. To not update img files:
@@ -178,8 +179,8 @@ ARTIFACTS = {
     'cvd-host_package': ArtifactConfig('cvd-host_package.tar.gz', False),
     'bootloader': ArtifactConfig('bootloader.img', False),
     'radio': ArtifactConfig('radio.img', False),
-    'target_files': ArtifactConfig('*-target_files-*', True),
-    'img': ArtifactConfig('*-img-*zip', True, True, True)
+    'target_files': ArtifactConfig('*-target_files-*zip', True),
+    'img': ArtifactConfig('*-img-*zip', False, chunk=True, chunk_dir=True)
 }
 
 # Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
@@ -249,7 +250,7 @@ def _get_artifact_property(values: list[str], property:str, default:bool) -> boo
     for value in values:
         # Example:
         #   --artifacts 'img=*-img-*zip chunk=True'
-        #   --artifacts 'img=*-img-*zip chunk chunk_fallback=False'
+        #   --artifacts 'img=*-img-*zip standard=False chunk'
         if value.startswith(property):
             tokens=value.split('=', maxsplit=1)
             if tokens[0] != property:
@@ -287,8 +288,9 @@ def _override_artifacts(args):
             artifact = ArtifactConfig(source_path, False)
         if len(values) > 1:
             artifact.unzip = _get_artifact_property(values[1:], "unzip", artifact.unzip)
+            artifact.standard = _get_artifact_property(values[1:], "standard", artifact.standard)
             artifact.chunk = _get_artifact_property(values[1:], "chunk", artifact.chunk)
-            artifact.chunk_fallback = _get_artifact_property(values[1:], "chunk_fallback", artifact.chunk_fallback)
+            artifact.chunk_dir = _get_artifact_property(values[1:], "chunk_dir", artifact.chunk_dir)
         logging.info("Artifact: %s", artifact)
         ARTIFACTS[name] = artifact
 
@@ -410,10 +412,12 @@ def _upload(
 
 
 def _path_for_artifact(artifact: ArtifactConfig, working_dir: str) -> [str]:
-    if artifact.unzip:
-        return ['-zip-path', artifact.source_path]
+    if artifact.standard:
+        return ['-zip-path' if artifact.unzip else '-file-path', artifact.source_path]
     if artifact.chunk:
         return ['-file-path', artifact.source_path]
+    if artifact.chunk_dir:
+        return ['-zip-path', artifact.source_path]
     # TODO(b/250643926) This is a workaround to handle non-directory files.
     tmp_dir = tempfile.mkdtemp(dir=working_dir)
     target_path = os.path.join(tmp_dir, os.path.basename(artifact.source_path))
@@ -466,7 +470,6 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: list[ArtifactConfig]
     file_digests = {}
     content_details = []
     skip_files = []
-    _add_fallback_artifacts(all_artifacts)
 
     # Populate upload tasks
     tasks = []
@@ -476,27 +479,24 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: list[ArtifactConfig]
                 logging.warning('Ignore artifact match (dir): %s', f)
                 continue
             rel_path = _get_relative_path(dist_dir, f)
-            path = _artifact_path(rel_path, artifact.chunk, artifact.unzip)
+            for task_artifact in _artifact_variations(rel_path, artifact):
+                path = _artifact_path(rel_path, task_artifact)
 
-            # Avoid redundant upload if multiple ArtifactConfigs share files.
-            if path in skip_files:
-                continue
-            skip_files.append(path)
-            if artifact.chunk and (not artifact.chunk_fallback or artifact.unzip):
-                # Skip the regular version even it matches other configs.
-                skip_files.append(rel_path)
-
-            task_artifact = copy.copy(artifact)
-            task_artifact.source_path = f
-            _, task_metrics_file = tempfile.mkstemp(dir=working_dir)
-            task = UploadTask(task_artifact, path, working_dir, task_metrics_file)
-            tasks.append(task)
+                # Avoid redundant upload if multiple ArtifactConfigs share files.
+                if path in skip_files:
+                    continue
+                skip_files.append(path)
+                task_artifact.source_path = f
+                _, task_metrics_file = tempfile.mkstemp(dir=working_dir)
+                task = UploadTask(task_artifact, path, working_dir, task_metrics_file)
+                tasks.append(task)
 
     # Upload artifacts in parallel
     logging.info('Uploading %d files, max workers = %d', len(tasks), MAX_WORKERS)
     if dryrun:
         for task in tasks:
-            print("%-40s=%s" % (task.path, task.artifact.source_path))
+            unzip = '+' if task.artifact.unzip else '-'
+            print("%-40s %s %s" % (task.path, unzip, task.artifact.source_path))
         print("Total: %d files." % len(tasks))
         return
 
@@ -533,32 +533,21 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: list[ArtifactConfig]
 def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMetrics):
     try:
         with open(metrics_file, "r", encoding='utf8') as file:
-            json_metrics = json.load(file)
-            cas_metrics.artifacts.append(
-                json_format.ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics())
-            )
+            json_str = file.read()  # Read the file contents here
+            if json_str:
+                json_metrics = json.loads(json_str)
+                cas_metrics.artifacts.append(
+                    json_format.ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics())
+                )
+            else:
+                logging.exception("Empty file: %s", metrics_file)
+
     except FileNotFoundError:
         logging.exception("File not found: %s", metrics_file)
     except json.JSONDecodeError as e:
-        logging.exception("Jason decode error: %s for json contents:\n%s", e, file.read())
+        logging.exception("Jason decode error: %s for json contents:\n%s", e, json_str)
     except json_format.ParseError as e:  # Catch any other unexpected errors
         logging.exception("Error converting Json to protobuf: %s", e)
-
-
-def _add_fallback_artifacts(artifacts: list[ArtifactConfig]):
-    """Add a fallback artifact if chunking is enabled for an artifact.
-
-    For unzip artifacts, the fallback is the zipped chunked version.
-    For the rest, the fallback is the standard version (not chunked).
-    """
-    for artifact in artifacts:
-        if artifact.chunk and artifact.chunk_fallback:
-            fallback_artifact = copy.copy(artifact)
-            if artifact.unzip:
-                fallback_artifact.unzip = False
-            else:
-                fallback_artifact.chunk = False
-            artifacts.append(fallback_artifact)
 
 
 def _get_relative_path(dir: str, file: str) -> str:
@@ -569,12 +558,23 @@ def _get_relative_path(dir: str, file: str) -> str:
         return os.path.basename(file)
 
 
-def _artifact_path(path: str, chunk: bool, unzip: bool) -> str:
-    if not chunk:
-        return path
-    if unzip:
+def _artifact_path(path: str, artifact: ArtifactConfig) -> str:
+    if artifact.chunk:
+        return CHUNKED_ARTIFACT_NAME_PREFIX + path
+    if artifact.chunk_dir:
         return CHUNKED_DIR_ARTIFACT_NAME_PREFIX + path
-    return CHUNKED_ARTIFACT_NAME_PREFIX + path
+    return path
+
+
+def _artifact_variations(path: str, artifact: ArtifactConfig) -> list[ArtifactConfig]:
+    variations = []
+    if artifact.standard:
+        variations.append(ArtifactConfig(path, artifact.unzip, True, False, False, exclude_filters=artifact.exclude_filters))
+    if artifact.chunk:
+        variations.append(ArtifactConfig(path, False, False, True, False, exclude_filters=artifact.exclude_filters))
+    if artifact.chunk_dir:
+        variations.append(ArtifactConfig(path, True, False, False, True, exclude_filters=artifact.exclude_filters))
+    return variations
 
 
 def main():
@@ -604,7 +604,6 @@ def main():
         action='store_true',
         help='List files to upload and exit',
     )
-    args = parser.parse_args()
 
     dist_dir = _get_env_var('DIST_DIR', check=True)
     log_file = os.path.join(dist_dir, LOG_PATH)
@@ -618,6 +617,8 @@ def main():
     logging.info('Environment variables of running server: %s', os.environ)
 
     try:
+        args = parser.parse_args()
+
         _override_artifacts(args)
         additional_artifacts = _parse_additional_artifacts(args)
         if args.list:

@@ -17,6 +17,7 @@ package com.android.tradefed.result.resultdb;
 
 import com.android.resultdb.proto.FailureReason;
 import com.android.resultdb.proto.Invocation;
+import com.android.resultdb.proto.StringPair;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.TestStatus;
 import com.android.resultdb.proto.Variant;
@@ -47,6 +48,7 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +59,9 @@ public class ResultDBReporter
                 ILogSaverListener,
                 ISupportGranularResults,
                 IConfigurationReceiver {
+    // Tag name for the test mapping source
+    private static final String TEST_MAPPING_TAG = "test_mapping_source";
+
     private Invocation mInvocation;
     private String mInvocationId;
     private IRecorderClient mRecorder;
@@ -365,14 +370,33 @@ public class ResultDBReporter
         if (!mEnable) {
             return;
         }
-        mCurrentTestResult =
+        long startTimeMillis = Timestamps.toMillis(mCurrentTestResult.getStartTime());
+        TestResult.Builder testResultBuilder =
                 mCurrentTestResult.toBuilder()
-                        .setDuration(
-                                Durations.fromMillis(
-                                        endTime
-                                                - Timestamps.toMillis(
-                                                        mCurrentTestResult.getStartTime())))
-                        .build();
+                        .setDuration(Durations.fromMillis(endTime - startTimeMillis));
+
+        // Add test mapping sources to test result as tags.
+        if (testMetrics.get(TEST_MAPPING_TAG) != null) {
+            // Get Test Mapping sources from string formatting with list such as "[path1, path2]".
+            // Note: Some test mapping sources may not be recorded. This is because a test module
+            // can be defined across multiple TEST_MAPPING files, and TF doesn't run it again if
+            // it's passed in the previous run.
+            String testMappingMeasurement =
+                    testMetrics
+                            .get(TEST_MAPPING_TAG)
+                            .getMeasurements()
+                            .getSingleString()
+                            .replaceAll("^\\[| |\\]$", "");
+            List<String> testMappingSources = Arrays.asList(testMappingMeasurement.split(","));
+
+            for (String testMappingSource : testMappingSources) {
+                testResultBuilder.addTags(
+                        StringPair.newBuilder()
+                                .setKey(TEST_MAPPING_TAG)
+                                .setValue(testMappingSource));
+            }
+        }
+        mCurrentTestResult = testResultBuilder.build();
         mRecorder.uploadTestResult(mCurrentTestResult);
         mCurrentTestResult = null;
     }
