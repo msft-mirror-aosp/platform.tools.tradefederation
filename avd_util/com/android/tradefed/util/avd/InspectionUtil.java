@@ -65,7 +65,7 @@ public class InspectionUtil {
                                     (x, y) -> y,
                                     LinkedHashMap::new));
 
-    // A map of expected process names and the corresponding error identifier if they are found.
+    // A map of unexpected process names and the corresponding error identifier if they are found.
     // The name string should be a substring of a process list.
     public static final Map<String, ErrorIdentifier> UNEXPECTED_PROCESSES =
             Stream.of(
