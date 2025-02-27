@@ -68,8 +68,6 @@ public class HostOrchestratorUtil {
     private static final long WAIT_FOR_OPERATION_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
     private static final String CVD_HOST_LOGZ = "cvd_hostlog_zip";
     private static final String URL_CVD_BUGREPORTS = "cvdbugreports/%s";
-    private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
-    private static final String URL_HO_STOP = "cvds/%s/%s";
     private static final String UNSUPPORTED_API_RESPONSE = "404 page not found";
 
     private File mTunnelLog;
