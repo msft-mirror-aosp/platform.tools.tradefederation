@@ -1134,7 +1134,7 @@ public class AdbSshConnection extends AdbTcpConnection {
             // Check unexpected processes first. If any unexpected process presents, the process
             // is likely hang or takes too long to finish, which indicate some infra issue.
             for (String p : InspectionUtil.UNEXPECTED_PROCESSES.keySet()) {
-                if (!InspectionUtil.searchProcess(processes, p)) {
+                if (InspectionUtil.searchProcess(processes, p)) {
                     CLog.e(
                             "Found unexpected process %s. Review `host_vm_processes` log for the"
                                     + " complete list of running processes.",
