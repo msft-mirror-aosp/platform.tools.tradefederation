@@ -377,6 +377,7 @@ public class InvocationMetricLogger {
         SKIP_NO_CHANGES("skip_no_changes", true),
         NO_CHANGES_POSTSUBMIT("no_changes_postsubmit", true),
         SILENT_INVOCATION_SKIP_COUNT("silent_invocation_skip_count", true),
+        ERROR_INVOCATION_SKIP("error_invocation_skip", true),
         DEMOTION_FILTERS_RECEIVED_COUNT("demotion_filters_received_count", true),
         DEMOTION_ERROR_RESPONSE("demotion_error_response", true),
         SEARCH_ARTIFACT_FAILURE_COUNT("search_artifact_failure_count", true),
