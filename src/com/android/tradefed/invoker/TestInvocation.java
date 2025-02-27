@@ -1273,7 +1273,7 @@ public class TestInvocation implements ITestInvocation {
                             .getInvocationData()
                             .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)
                     && !RunMode.DELEGATED_INVOCATION.equals(mode)) {
-                boolean skipInvocation = config.getSkipManager().shouldSkipInvocation(info);
+                boolean skipInvocation = config.getSkipManager().shouldSkipInvocation(info, config);
                 String skipReason = config.getSkipManager().getInvocationSkipReason();
                 if (!skipInvocation) {
                     if (config.getCommandOptions().getRemoteCacheInstanceName() != null

@@ -166,7 +166,7 @@ public class SkipManager implements IDisableable {
     }
 
     /** Reports whether we should skip the current invocation. */
-    public boolean shouldSkipInvocation(TestInformation information) {
+    public boolean shouldSkipInvocation(TestInformation information, IConfiguration configuration) {
         if (InvocationContext.isOnDemand(information.getContext())) {
             // Avoid skipping invocation for on-demand testing
             return false;
@@ -211,6 +211,7 @@ public class SkipManager implements IDisableable {
             ArtifactsAnalyzer analyzer =
                     new ArtifactsAnalyzer(
                             information,
+                            configuration,
                             mImageAnalysis,
                             mTestArtifactsAnalysisContent,
                             mModulesDiscovered,
