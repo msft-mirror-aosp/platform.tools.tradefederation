@@ -27,7 +27,7 @@ import java.util.Set;
 /** Compute a module list from the context. */
 public class ContentModuleLister {
 
-    /** Builds the list of existing modules from the context */
+    /** Builds the list of existing modules from the context or null in case of error */
     public static Set<String> buildModuleList(ContentAnalysisContext context) {
         try {
             ArtifactDetails currentContent =
@@ -54,7 +54,7 @@ public class ContentModuleLister {
             return moduleNames;
         } catch (IOException | RuntimeException e) {
             CLog.e(e);
-            return new HashSet<>();
+            return null;
         }
     }
 }
