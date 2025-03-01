@@ -198,16 +198,17 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
     @Option(
             name = "perfetto-v2-metrics-ids",
             description =
-                    "Computes all v2 trace-based metrics with the given, comma separated list of"
-                        + " metric ids. The spec for every metric must exist in one of the files"
-                        + " passed to --summary-spec.")
+                    "Specifies that the given v2 metrics (as defined by a comma separated set of"
+                        + " ids) should be computed and returned as part of the trace summary. The"
+                        + " spec for every metric must exist in one of the files passed to"
+                        + " --summary-spec.")
     private String mComputeMetricsV2Ids = "memory_per_process";
 
     @Option(
             name = "summary-spec-files",
             description =
                     "Parses the spec at the specified path and makes it available to other"
-                        + " summarization operators (--compute-metrics-v2). Spec files must be"
+                        + " summarization operators (--summary-metrics-v2). Spec files must be"
                         + " instances of the perfetto.protos.TraceSummarySpec proto. If the file"
                         + " extension is `.textproto` then the spec file will be parsed as a"
                         + " textproto. If the file extension is `.pb` then it will be parsed as a"
@@ -402,10 +403,12 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
 
         if (metricVersion.contains(METRIC_VERSION_V2)) {
             metricOutputFilePrefix = "metric_v2_";
+            // Turn on the summary metrics v2 flag.
+            commandArgsList.add("--summary");
 
             // Comma separated list of metrics ids to extract.
             if (!mComputeMetricsV2Ids.isEmpty()) {
-                commandArgsList.add("--compute-metrics-v2");
+                commandArgsList.add("--summary-metrics-v2");
                 commandArgsList.add(mComputeMetricsV2Ids);
             }
 
