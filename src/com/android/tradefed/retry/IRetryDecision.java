@@ -41,6 +41,9 @@ public interface IRetryDecision {
     /** The maximum number of attempts during auto-retry. */
     public int getMaxRetryCount();
 
+    /** The maximum number of attempts during auto-retry for a given module. */
+    public int getMaxRetryCount(ModuleDefinition module);
+
     /** Returns true if we should use the updated reporting. */
     public boolean useUpdatedReporting();
 

@@ -18,7 +18,6 @@ package com.android.tradefed.result.ddmlib;
 import com.android.ddmlib.IShellEnabledDevice;
 import com.android.ddmlib.testrunner.IInstrumentationResultParser;
 import com.android.ddmlib.testrunner.ITestRunListener;
-import com.android.ddmlib.testrunner.InstrumentationResultParser;
 
 import java.util.Collection;
 

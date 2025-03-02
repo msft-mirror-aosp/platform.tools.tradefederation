@@ -441,7 +441,7 @@ public class AdbSshConnection extends AdbTcpConnection {
                 inspectionResult = debugDeviceNotAvailable();
                 // Only override error identifier if it's not a generic one.
                 if ((errorIdentifier == InfraErrorIdentifier.OXYGEN_DEVICE_LAUNCHER_TIMEOUT
-                                || errorIdentifier != DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE)
+                                || errorIdentifier == DeviceErrorIdentifier.FAILED_TO_LAUNCH_GCE)
                         && inspectionResult != null
                         && inspectionResult.getErrorIdentifier() != null) {
                     errorMsg = inspectionResult.getDetails();
@@ -1131,21 +1131,8 @@ public class AdbSshConnection extends AdbTcpConnection {
                 getLogger().testLog("host_vm_processes", LogDataType.TEXT, source);
             }
 
-            for (String p : InspectionUtil.EXPECTED_PROCESSES.keySet()) {
-                if (!InspectionUtil.searchProcess(processes, p)) {
-                    CLog.e(
-                            "Failed to locate process %s. Review `host_vm_processes` log for the"
-                                    + " complete list of running processes.",
-                            p);
-                    if (inspectionResult == null) {
-                        inspectionResult =
-                                new DeviceInspectionResult(
-                                        InspectionUtil.EXPECTED_PROCESSES.get(p),
-                                        String.format("Expected process %s not found", p));
-                    }
-                }
-            }
-
+            // Check unexpected processes first. If any unexpected process presents, the process
+            // is likely hang or takes too long to finish, which indicate some infra issue.
             for (String p : InspectionUtil.UNEXPECTED_PROCESSES.keySet()) {
                 if (!InspectionUtil.searchProcess(processes, p)) {
                     CLog.e(
@@ -1157,6 +1144,21 @@ public class AdbSshConnection extends AdbTcpConnection {
                                 new DeviceInspectionResult(
                                         InspectionUtil.UNEXPECTED_PROCESSES.get(p),
                                         String.format("Unexpected process %s found", p));
+                    }
+                }
+            }
+
+            for (String p : InspectionUtil.EXPECTED_PROCESSES.keySet()) {
+                if (!InspectionUtil.searchProcess(processes, p)) {
+                    CLog.e(
+                            "Failed to locate process %s. Review `host_vm_processes` log for the"
+                                    + " complete list of running processes.",
+                            p);
+                    if (inspectionResult == null) {
+                        inspectionResult =
+                                new DeviceInspectionResult(
+                                        InspectionUtil.EXPECTED_PROCESSES.get(p),
+                                        String.format("Expected process %s not found", p));
                     }
                 }
             }

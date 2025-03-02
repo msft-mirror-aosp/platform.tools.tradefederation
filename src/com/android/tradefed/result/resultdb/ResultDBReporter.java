@@ -17,6 +17,7 @@ package com.android.tradefed.result.resultdb;
 
 import com.android.resultdb.proto.FailureReason;
 import com.android.resultdb.proto.Invocation;
+import com.android.resultdb.proto.StringPair;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.TestStatus;
 import com.android.resultdb.proto.Variant;
@@ -42,11 +43,15 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /** Result reporter that uploads test results to ResultDB. */
 public class ResultDBReporter
@@ -54,6 +59,9 @@ public class ResultDBReporter
                 ILogSaverListener,
                 ISupportGranularResults,
                 IConfigurationReceiver {
+    // Tag name for the test mapping source
+    private static final String TEST_MAPPING_TAG = "test_mapping_source";
+
     private Invocation mInvocation;
     private String mInvocationId;
     private IRecorderClient mRecorder;
@@ -63,6 +71,10 @@ public class ResultDBReporter
     private Variant mBaseVariant;
     private String mCurrentModule;
     private TestResult mCurrentTestResult;
+    // Counter for generate test result ID.
+    private AtomicInteger mResultCounter = new AtomicInteger(0);
+    // Base for generate test result ID.
+    private String mResultIdBase;
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -95,12 +107,20 @@ public class ResultDBReporter
         return Client.create(invocationId, updateToken);
     }
 
+    // Generate a random hexadecimal string of length 8.
+    @VisibleForTesting
+    String randomHexString() throws NoSuchAlgorithmException {
+        SecureRandom random = SecureRandom.getInstance("SHA1PRNG");
+        byte[] bytes = new byte[4];
+        random.nextBytes(bytes);
+        return ResultDBUtil.bytesToHex(bytes);
+    }
+
     @Override
     public void invocationStarted(IInvocationContext context) {
         // Obtain invocation ID from context.
         String invocationId = context.getAttribute("resultdb_invocation_id");
         String updateToken = context.getAttribute("resultdb_invocation_update_token");
-        // TODO: Deal with local test run when no invocation created by upstream.
         if (!invocationId.isEmpty() && !updateToken.isEmpty()) {
             mEnable = true;
         }
@@ -110,6 +130,12 @@ public class ResultDBReporter
         }
         mInvocationId = invocationId;
         mRecorder = createRecorderClient(invocationId, updateToken);
+        try {
+            mResultIdBase = this.randomHexString();
+        } catch (NoSuchAlgorithmException e) {
+            CLog.e("Failed to generate random result ID base.");
+            return;
+        }
         // TODO: Obtain more test variants from build info.
         mBaseVariant = Variant.newBuilder().putDef("name", context.getTestTag()).build();
     }
@@ -217,7 +243,9 @@ public class ResultDBReporter
                                 String.format(
                                         "ants://%s/%s/%s",
                                         mCurrentModule, test.getClassName(), test.getTestName()))
-                        .setResultId(randomUUIDString())
+                        .setResultId(
+                                String.format(
+                                        "%s-%05d", mResultIdBase, mResultCounter.incrementAndGet()))
                         .setStartTime(Timestamps.fromMillis(startTime))
                         .setStatus(TestStatus.PASS)
                         .setExpected(true)
@@ -342,14 +370,33 @@ public class ResultDBReporter
         if (!mEnable) {
             return;
         }
-        mCurrentTestResult =
+        long startTimeMillis = Timestamps.toMillis(mCurrentTestResult.getStartTime());
+        TestResult.Builder testResultBuilder =
                 mCurrentTestResult.toBuilder()
-                        .setDuration(
-                                Durations.fromMillis(
-                                        endTime
-                                                - Timestamps.toMillis(
-                                                        mCurrentTestResult.getStartTime())))
-                        .build();
+                        .setDuration(Durations.fromMillis(endTime - startTimeMillis));
+
+        // Add test mapping sources to test result as tags.
+        if (testMetrics.get(TEST_MAPPING_TAG) != null) {
+            // Get Test Mapping sources from string formatting with list such as "[path1, path2]".
+            // Note: Some test mapping sources may not be recorded. This is because a test module
+            // can be defined across multiple TEST_MAPPING files, and TF doesn't run it again if
+            // it's passed in the previous run.
+            String testMappingMeasurement =
+                    testMetrics
+                            .get(TEST_MAPPING_TAG)
+                            .getMeasurements()
+                            .getSingleString()
+                            .replaceAll("^\\[| |\\]$", "");
+            List<String> testMappingSources = Arrays.asList(testMappingMeasurement.split(","));
+
+            for (String testMappingSource : testMappingSources) {
+                testResultBuilder.addTags(
+                        StringPair.newBuilder()
+                                .setKey(TEST_MAPPING_TAG)
+                                .setValue(testMappingSource));
+            }
+        }
+        mCurrentTestResult = testResultBuilder.build();
         mRecorder.uploadTestResult(mCurrentTestResult);
         mCurrentTestResult = null;
     }

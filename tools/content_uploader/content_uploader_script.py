@@ -17,7 +17,7 @@
 """The script to upload generated artifacts from build server to CAS."""
 
 import argparse
-import copy
+import concurrent.futures
 import dataclasses
 import glob
 import json
@@ -32,10 +32,10 @@ import time
 from typing import Tuple
 
 import cas_metrics_pb2  # type: ignore
-import concurrent.futures
 from google.protobuf import json_format
 
-VERSION = '1.0'
+
+VERSION = '1.3'
 
 @dataclasses.dataclass
 class ArtifactConfig:
@@ -44,14 +44,15 @@ class ArtifactConfig:
     Attributes:
         source_path: path to the artifact that relative to the root of source code.
         unzip: true if the artifact should be unzipped and uploaded as a directory.
-        chunk: true if the artifact should be uploaded with chunking.
-        chunk_fallback: true if a regular version (no chunking) of the artifact should be uploaded.
+        chunk: true if the artifact should be uploaded with chunking as a single file.
+        chunk_dir: true if the artifact should be uploaded with chunking as a directory.
         exclude_filters: a list of regular expressions for files that are excluded from uploading.
     """
     source_path: str
     unzip: bool
+    standard: bool = True
     chunk: bool = False
-    chunk_fallback: bool = False
+    chunk_dir: bool = False
     exclude_filters: list[str] = dataclasses.field(default_factory=list)
 
 
@@ -96,7 +97,7 @@ CAS_UPLOADER_PREBUILT_PATH = 'tools/tradefederation/prebuilts/'
 CAS_UPLOADER_PATH = 'tools/content_addressed_storage/prebuilts/'
 CAS_UPLOADER_BIN = 'casuploader'
 
-UPLOADER_TIMEOUT_SECS = 600 # 10 minutes
+UPLOADER_TIMEOUT_SECS = 600  # 10 minutes
 AVG_CHUNK_SIZE_IN_KB = 128
 
 DIGESTS_PATH = 'cas_digests.json'
@@ -110,68 +111,77 @@ MAX_WORKERS_LOWER_BOUND = 2
 MAX_WORKERS_UPPER_BOUND = 6
 MAX_WORKERS = random.randint(MAX_WORKERS_LOWER_BOUND, MAX_WORKERS_UPPER_BOUND)
 
-# Configurations of artifacts will be uploaded to CAS.
-# TODO(b/298890453) Add artifacts after this script is attached to build process.
-# If configs share files, chunking enabled artifacts should come first.
-ARTIFACTS = [
+# Configurations of artifacts to upload to CAS.
+#
+# Override the preset artifacts with the "--artifacts" flag. Examples:
+# 1. To upload img files with path relative to DIST_DIR (no '/**/'), override source_path with:
+#   --artifacts 'img=./*-img-*zip'
+# 2. To upload img files as chunked version only:
+#   --artifacts 'img=*-img-*zip' standard=False chunk=True
+# 3. To also upload json files in logs folder:
+#   --artifacts 'new=./log/*.json'
+# 4. To not update img files:
+#   --artifacts 'img='
+#
+ARTIFACTS = {
     # test_suite targets
-    ArtifactConfig('android-catbox.zip', True, exclude_filters=['android-catbox/jdk/.*']),
-    ArtifactConfig('android-csuite.zip', True, exclude_filters=['android-csuite/jdk/.*']),
-    ArtifactConfig('android-cts.zip', True, exclude_filters=['android-cts/jdk/.*']),
-    ArtifactConfig('android-gcatbox.zip', True, exclude_filters=['android-gcatbox/jdk/.*']),
-    ArtifactConfig('android-gts.zip', True, exclude_filters=['android-gts/jdk/.*']),
-    ArtifactConfig('android-mcts.zip', True),
-    ArtifactConfig('android-mts.zip', True, exclude_filters=['android-mts/jdk/.*']),
-    ArtifactConfig('android-pts.zip', True, exclude_filters=['android-pts/jdk/.*']),
-    ArtifactConfig('android-sts.zip', True),
-    ArtifactConfig('android-tvts.zip', True, exclude_filters=['android-tvts/jdk/.*']),
-    ArtifactConfig('android-vts.zip', True),
-    ArtifactConfig('android-wts.zip', True, exclude_filters=['android-wts/jdk/.*']),
-    ArtifactConfig('art-host-tests.zip', True),
-    ArtifactConfig('bazel-test-suite.zip', True),
-    ArtifactConfig('host-unit-tests.zip', True),
-    ArtifactConfig('general-tests.zip', True),
-    ArtifactConfig('general-tests_configs.zip', True),
-    ArtifactConfig('general-tests_host-shared-libs.zip', True),
-    ArtifactConfig('tradefed.zip', True),
-    ArtifactConfig('google-tradefed.zip', True),
-    ArtifactConfig('robolectric-tests.zip', True),
-    ArtifactConfig('ravenwood-tests.zip', True),
-    ArtifactConfig('test_mappings.zip', True),
+    'android-catbox': ArtifactConfig('android-catbox.zip', True, exclude_filters=['android-catbox/jdk/.*']),
+    'android-csuite': ArtifactConfig('android-csuite.zip', True, exclude_filters=['android-csuite/jdk/.*']),
+    'android-cts': ArtifactConfig('android-cts.zip', True, exclude_filters=['android-cts/jdk/.*']),
+    'android-gcatbox': ArtifactConfig('android-gcatbox.zip', True, exclude_filters=['android-gcatbox/jdk/.*']),
+    'android-gts': ArtifactConfig('android-gts.zip', True, exclude_filters=['android-gts/jdk/.*']),
+    'android-mcts': ArtifactConfig('android-mcts.zip', True),
+    'android-mts': ArtifactConfig('android-mts.zip', True, exclude_filters=['android-mts/jdk/.*']),
+    'android-pts': ArtifactConfig('android-pts.zip', True, exclude_filters=['android-pts/jdk/.*']),
+    'android-sts': ArtifactConfig('android-sts.zip', True),
+    'android-tvts': ArtifactConfig('android-tvts.zip', True, exclude_filters=['android-tvts/jdk/.*']),
+    'android-vts': ArtifactConfig('android-vts.zip', True),
+    'android-wts': ArtifactConfig('android-wts.zip', True, exclude_filters=['android-wts/jdk/.*']),
+    'art-host-tests': ArtifactConfig('art-host-tests.zip', True),
+    'bazel-test-suite': ArtifactConfig('bazel-test-suite.zip', True),
+    'host-unit-tests': ArtifactConfig('host-unit-tests.zip', True),
+    'general-tests': ArtifactConfig('general-tests.zip', True),
+    'general-tests_configs': ArtifactConfig('general-tests_configs.zip', True),
+    'general-tests_host-shared-libs': ArtifactConfig('general-tests_host-shared-libs.zip', True),
+    'tradefed': ArtifactConfig('tradefed.zip', True),
+    'google-tradefed': ArtifactConfig('google-tradefed.zip', True),
+    'robolectric-tests': ArtifactConfig('robolectric-tests.zip', True),
+    'ravenwood-tests': ArtifactConfig('ravenwood-tests.zip', True),
+    'test_mappings': ArtifactConfig('test_mappings.zip', True),
 
     # Mainline artifacts
-    ArtifactConfig('*.apex', False),
-    ArtifactConfig('*.apk', False),
+    'apex': ArtifactConfig('*.apex', False),
+    'apk': ArtifactConfig('*.apk', False),
 
     # Device target artifacts
-    ArtifactConfig('androidTest.zip', True),
-    ArtifactConfig('device-tests.zip', True),
-    ArtifactConfig('device-tests_configs.zip', True),
-    ArtifactConfig('device-tests_host-shared-libs.zip', True),
-    ArtifactConfig('performance-tests.zip', True),
-    ArtifactConfig('device-platinum-tests.zip', True),
-    ArtifactConfig('device-platinum-tests_configs.zip', True),
-    ArtifactConfig('device-platinum-tests_host-shared-libs.zip', True),
-    ArtifactConfig('camera-hal-tests.zip', True),
-    ArtifactConfig('camera-hal-tests_configs.zip', True),
-    ArtifactConfig('camera-hal-tests_host-shared-libs.zip', True),
-    ArtifactConfig('device-pixel-tests.zip', True),
-    ArtifactConfig('device-pixel-tests_configs.zip', True),
-    ArtifactConfig('device-pixel-tests_host-shared-libs.zip', True),
-    ArtifactConfig('automotive-tests.zip', True),
-    ArtifactConfig('automotive-general-tests.zip', True),
-    ArtifactConfig('automotive-sdv-tests.zip', True),
-    ArtifactConfig('automotive-sdv-tests_configs.zip', True),
-    ArtifactConfig('*-tests-*zip', True),
-    ArtifactConfig('*-continuous_instrumentation_tests-*zip', True),
-    ArtifactConfig('*-continuous_instrumentation_metric_tests-*zip', True),
-    ArtifactConfig('*-continuous_native_tests-*zip', True),
-    ArtifactConfig('cvd-host_package.tar.gz', False),
-    ArtifactConfig('bootloader.img', False),
-    ArtifactConfig('radio.img', False),
-    ArtifactConfig('*-target_files-*.zip', True),
-    ArtifactConfig('*-img-*zip', True, True, True)
-]
+    'androidTest': ArtifactConfig('androidTest.zip', True),
+    'device-tests': ArtifactConfig('device-tests.zip', True),
+    'device-tests_configs': ArtifactConfig('device-tests_configs.zip', True),
+    'device-tests_host-shared-libs': ArtifactConfig('device-tests_host-shared-libs.zip', True),
+    'performance-tests': ArtifactConfig('performance-tests.zip', True),
+    'device-platinum-tests': ArtifactConfig('device-platinum-tests.zip', True),
+    'device-platinum-tests_configs': ArtifactConfig('device-platinum-tests_configs.zip', True),
+    'device-platinum-tests_host-shared-libs': ArtifactConfig('device-platinum-tests_host-shared-libs.zip', True),
+    'camera-hal-tests': ArtifactConfig('camera-hal-tests.zip', True),
+    'camera-hal-tests_configs': ArtifactConfig('camera-hal-tests_configs.zip', True),
+    'camera-hal-tests_host-shared-libs': ArtifactConfig('camera-hal-tests_host-shared-libs.zip', True),
+    'device-pixel-tests': ArtifactConfig('device-pixel-tests.zip', True),
+    'device-pixel-tests_configs': ArtifactConfig('device-pixel-tests_configs.zip', True),
+    'device-pixel-tests_host-shared-libs': ArtifactConfig('device-pixel-tests_host-shared-libs.zip', True),
+    'automotive-tests': ArtifactConfig('automotive-tests.zip', True),
+    'automotive-general-tests': ArtifactConfig('automotive-general-tests', True),
+    'automotive-sdv-tests': ArtifactConfig('automotive-sdv-tests', True),
+    'automotive-sdv-tests_configs': ArtifactConfig('automotive-sdv-tests_configs', True),
+    'tests': ArtifactConfig('*-tests-*zip', True),
+    'continuous_instrumentation_tests': ArtifactConfig('*-continuous_instrumentation_tests-*zip', True),
+    'continuous_instrumentation_metric_tests': ArtifactConfig('*-continuous_instrumentation_metric_tests-*zip', True),
+    'continuous_native_tests': ArtifactConfig('*-continuous_native_tests-', True),
+    'cvd-host_package': ArtifactConfig('cvd-host_package.tar.gz', False),
+    'bootloader': ArtifactConfig('bootloader.img', False),
+    'radio': ArtifactConfig('radio.img', False),
+    'target_files': ArtifactConfig('*-target_files-*zip', True),
+    'img': ArtifactConfig('*-img-*zip', False, chunk=True, chunk_dir=True)
+}
 
 # Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
 # These configs are usually used to upload artifacts in partial branches/targets for experiment
@@ -234,6 +244,55 @@ def _get_env_var(key: str, default=None, check=False):
     if check and not value:
         raise ValueError(f'Error: the environment variable {key} is not set')
     return value
+
+
+def _get_artifact_property(values: list[str], property:str, default:bool) -> bool:
+    for value in values:
+        # Example:
+        #   --artifacts 'img=*-img-*zip chunk=True'
+        #   --artifacts 'img=*-img-*zip standard=False chunk'
+        if value.startswith(property):
+            tokens=value.split('=', maxsplit=1)
+            if tokens[0] != property:
+                continue
+            if len(tokens) == 1 or tokens[1] in {'T', 't', 'True', 'true'}:
+                return True
+            return False
+    return default
+
+
+def _override_artifacts(args):
+    for override in args.artifacts:
+        # Example:
+        #   --artifacts 'img=./*-img-*zip unzip chunk=False'
+        tokens=override.split('=', maxsplit=1)
+        if len(tokens) == 1:
+            logging.warning("Artifact override - ignored (invalid): %s", override)
+            continue
+        name = tokens[0]
+        artifact = ARTIFACTS[name] if name in ARTIFACTS else None
+        if not tokens[1]:  # Delete an artifact ('name=')
+            if artifact:
+                logging.info("Artifact delete: %s", override)
+                del ARTIFACTS[name]
+            else:
+                logging.warning("Artifact delete - ignored (name not found): %s", override)
+            return
+        values = tokens[1].split()
+        source_path = values[0]
+        if artifact:
+            logging.info("Artifact override: %s", override)
+            artifact.source_path = source_path
+        else:
+            logging.info("Artifact add new: %s", override)
+            artifact = ArtifactConfig(source_path, False)
+        if len(values) > 1:
+            artifact.unzip = _get_artifact_property(values[1:], "unzip", artifact.unzip)
+            artifact.standard = _get_artifact_property(values[1:], "standard", artifact.standard)
+            artifact.chunk = _get_artifact_property(values[1:], "chunk", artifact.chunk)
+            artifact.chunk_dir = _get_artifact_property(values[1:], "chunk_dir", artifact.chunk_dir)
+        logging.info("Artifact: %s", artifact)
+        ARTIFACTS[name] = artifact
 
 
 def _parse_additional_artifacts(args) -> list[ArtifactConfig]:
@@ -353,10 +412,12 @@ def _upload(
 
 
 def _path_for_artifact(artifact: ArtifactConfig, working_dir: str) -> [str]:
-    if artifact.unzip:
-        return ['-zip-path', artifact.source_path]
+    if artifact.standard:
+        return ['-zip-path' if artifact.unzip else '-file-path', artifact.source_path]
     if artifact.chunk:
         return ['-file-path', artifact.source_path]
+    if artifact.chunk_dir:
+        return ['-zip-path', artifact.source_path]
     # TODO(b/250643926) This is a workaround to handle non-directory files.
     tmp_dir = tempfile.mkdtemp(dir=working_dir)
     target_path = os.path.join(tmp_dir, os.path.basename(artifact.source_path))
@@ -398,34 +459,47 @@ def _upload_wrapper(
         task.metrics_file,
     ), task
 
+def _glob(dist_dir: str, path: str) -> list[str]:
+    if path.startswith("./"):
+        return glob.glob(dist_dir + path[1:])
+    return glob.glob(dist_dir + '/**/' + path, recursive=True)
 
-def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
-    dist_dir: str, working_dir: str, log_file:str, cas_metrics: str):
+
+def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: list[ArtifactConfig],
+    dist_dir: str, working_dir: str, log_file:str, cas_metrics: str, dryrun: bool):
     file_digests = {}
     content_details = []
     skip_files = []
-    _add_fallback_artifacts(all_artifacts)
 
     # Populate upload tasks
     tasks = []
     for artifact in all_artifacts:
-        for f in glob.glob(dist_dir + '/**/' + artifact.source_path, recursive=True):
-            rel_path = _get_relative_path(dist_dir, f)
-            path = _artifact_path(rel_path, artifact.chunk, artifact.unzip)
-
-            # Avoid redundant upload if multiple ArtifactConfigs share files.
-            if path in skip_files:
+        for f in _glob(dist_dir, artifact.source_path):
+            if os.path.isdir(f):
+                logging.warning('Ignore artifact match (dir): %s', f)
                 continue
-            skip_files.append(path)
+            rel_path = _get_relative_path(dist_dir, f)
+            for task_artifact in _artifact_variations(rel_path, artifact):
+                path = _artifact_path(rel_path, task_artifact)
 
-            task_artifact = copy.copy(artifact)
-            task_artifact.source_path = f
-            _, task_metrics_file = tempfile.mkstemp(dir=working_dir)
-            task = UploadTask(task_artifact, path, working_dir, task_metrics_file)
-            tasks.append(task)
+                # Avoid redundant upload if multiple ArtifactConfigs share files.
+                if path in skip_files:
+                    continue
+                skip_files.append(path)
+                task_artifact.source_path = f
+                _, task_metrics_file = tempfile.mkstemp(dir=working_dir)
+                task = UploadTask(task_artifact, path, working_dir, task_metrics_file)
+                tasks.append(task)
 
     # Upload artifacts in parallel
     logging.info('Uploading %d files, max workers = %d', len(tasks), MAX_WORKERS)
+    if dryrun:
+        for task in tasks:
+            unzip = '+' if task.artifact.unzip else '-'
+            print("%-40s %s %s" % (task.path, unzip, task.artifact.source_path))
+        print("Total: %d files." % len(tasks))
+        return
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(_upload_wrapper, cas_info, log_file, task) for task in tasks]
 
@@ -459,43 +533,48 @@ def _upload_all_artifacts(cas_info: CasInfo, all_artifacts: ArtifactConfig,
 def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMetrics):
     try:
         with open(metrics_file, "r", encoding='utf8') as file:
-            json_metrics = json.load(file)
-            cas_metrics.artifacts.append(
-                json_format.ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics())
-            )
+            json_str = file.read()  # Read the file contents here
+            if json_str:
+                json_metrics = json.loads(json_str)
+                cas_metrics.artifacts.append(
+                    json_format.ParseDict(json_metrics, cas_metrics_pb2.ArtifactMetrics())
+                )
+            else:
+                logging.exception("Empty file: %s", metrics_file)
 
     except FileNotFoundError:
         logging.exception("File not found: %s", metrics_file)
+    except json.JSONDecodeError as e:
+        logging.exception("Jason decode error: %s for json contents:\n%s", e, json_str)
     except json_format.ParseError as e:  # Catch any other unexpected errors
         logging.exception("Error converting Json to protobuf: %s", e)
-
-
-def _add_fallback_artifacts(artifacts: list[ArtifactConfig]):
-    """Add a fallback artifact if chunking is enabled for an artifact.
-
-    Upload a regular version of the artifact if chunking is enabled for an artifact.
-    """
-    for artifact in artifacts:
-        if artifact.chunk and artifact.chunk_fallback:
-            fallback_artifact = copy.copy(artifact)
-            fallback_artifact.chunk = False
-            artifacts.append(fallback_artifact)
 
 
 def _get_relative_path(dir: str, file: str) -> str:
     try:
         return os.path.relpath(file, dir)
     except ValueError as e:
-        print(f"Error calculating relative path: {e}")  # should never happen
+        logging.exception("Error calculating relative path: %s", e)
         return os.path.basename(file)
 
 
-def _artifact_path(path: str, chunk: bool, unzip: bool) -> str:
-    if not chunk:
-        return path
-    if unzip:
+def _artifact_path(path: str, artifact: ArtifactConfig) -> str:
+    if artifact.chunk:
+        return CHUNKED_ARTIFACT_NAME_PREFIX + path
+    if artifact.chunk_dir:
         return CHUNKED_DIR_ARTIFACT_NAME_PREFIX + path
-    return CHUNKED_ARTIFACT_NAME_PREFIX + path
+    return path
+
+
+def _artifact_variations(path: str, artifact: ArtifactConfig) -> list[ArtifactConfig]:
+    variations = []
+    if artifact.standard:
+        variations.append(ArtifactConfig(path, artifact.unzip, True, False, False, exclude_filters=artifact.exclude_filters))
+    if artifact.chunk:
+        variations.append(ArtifactConfig(path, False, False, True, False, exclude_filters=artifact.exclude_filters))
+    if artifact.chunk_dir:
+        variations.append(ArtifactConfig(path, True, False, False, True, exclude_filters=artifact.exclude_filters))
+    return variations
 
 
 def main():
@@ -508,7 +587,23 @@ def main():
         default=[],
         help='Name of configuration which artifact to upload',
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        '--artifacts',
+        required=False,
+        action='append',
+        default=[],
+        help='Override preset artifacts, e.g. "--artifacts \'img=./*-img-*zip unzip chunk=False\'"',
+    )
+    parser.add_argument(
+        '--list',
+        action='store_true',
+        help='List preset artifacts and exit',
+    )
+    parser.add_argument(
+        '--dryrun',
+        action='store_true',
+        help='List files to upload and exit',
+    )
 
     dist_dir = _get_env_var('DIST_DIR', check=True)
     log_file = os.path.join(dist_dir, LOG_PATH)
@@ -521,28 +616,40 @@ def main():
     logging.info('Content uploader version: %s', VERSION)
     logging.info('Environment variables of running server: %s', os.environ)
 
-    additional_artifacts = _parse_additional_artifacts(args)
-    cas_info = _init_cas_info()
+    try:
+        args = parser.parse_args()
 
-    with tempfile.TemporaryDirectory() as working_dir:
-        logging.info('The working dir is %s', working_dir)
-        start = time.time()
-        cas_metrics = cas_metrics_pb2.CasMetrics()
-        _upload_all_artifacts(cas_info, ARTIFACTS + additional_artifacts,
-            dist_dir, working_dir, log_file, cas_metrics)
-        elapsed = time.time() - start
-        logging.info('Total time of uploading build artifacts to CAS: %d seconds',
-                     elapsed)
-        cas_metrics.time_ms = int(elapsed * 1000)
-        cas_metrics.client_version = '.'.join([str(num) for num in cas_info.client_version])
-        cas_metrics.uploader_version = VERSION
-        cas_metrics.max_workers = MAX_WORKERS
-        serialized_metrics = cas_metrics.SerializeToString()
-        if serialized_metrics:
-            cas_metrics_file = os.path.join(dist_dir, CAS_METRICS_PATH)
-            with open(cas_metrics_file, "wb") as file:
-                file.write(serialized_metrics)
-            logging.info('Output cas metrics to: %s', cas_metrics_file)
+        _override_artifacts(args)
+        additional_artifacts = _parse_additional_artifacts(args)
+        if args.list:
+            for name, artifact in ARTIFACTS.items():
+                print("%-30s=%s" % (name, artifact))
+            return 0
+
+        cas_info = _init_cas_info()
+
+        with tempfile.TemporaryDirectory() as working_dir:
+            logging.info('The working dir is %s', working_dir)
+            start = time.time()
+            cas_metrics = cas_metrics_pb2.CasMetrics()
+            _upload_all_artifacts(cas_info, list(ARTIFACTS.values()) + additional_artifacts,
+                dist_dir, working_dir, log_file, cas_metrics, args.dryrun)
+            elapsed = time.time() - start
+            logging.info('Total time of uploading build artifacts to CAS: %d seconds',
+                        elapsed)
+            cas_metrics.time_ms = int(elapsed * 1000)
+            cas_metrics.client_version = '.'.join([str(num) for num in cas_info.client_version])
+            cas_metrics.uploader_version = VERSION
+            cas_metrics.max_workers = MAX_WORKERS
+            serialized_metrics = cas_metrics.SerializeToString()
+            if serialized_metrics:
+                cas_metrics_file = os.path.join(dist_dir, CAS_METRICS_PATH)
+                with open(cas_metrics_file, "wb") as file:
+                    file.write(serialized_metrics)
+                logging.info('Output cas metrics to: %s', cas_metrics_file)
+    except ValueError as e:
+        logging.exception("Unexpected error: %s", e)
+        return 1
 
 
 if __name__ == '__main__':

@@ -21,6 +21,7 @@ import com.android.tradefed.build.content.ContentAnalysisContext.AnalysisMethod;
 import com.android.tradefed.build.content.ContentAnalysisResults;
 import com.android.tradefed.build.content.ImageContentAnalyzer;
 import com.android.tradefed.build.content.TestContentAnalyzer;
+import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.NullDevice;
 import com.android.tradefed.invoker.InvocationContext;
@@ -46,6 +47,7 @@ public class ArtifactsAnalyzer {
     // A build attribute describing that the device image didn't change from base build
     public static final String DEVICE_IMAGE_NOT_CHANGED = "DEVICE_IMAGE_NOT_CHANGED";
     private final TestInformation information;
+    private final IConfiguration configuration;
     private final MultiMap<ITestDevice, ContentAnalysisContext> mImageAnalysis;
     private final List<ContentAnalysisContext> mTestArtifactsAnalysisContent;
     private final List<String> mModulesDiscovered;
@@ -54,12 +56,14 @@ public class ArtifactsAnalyzer {
 
     public ArtifactsAnalyzer(
             TestInformation information,
+            IConfiguration configuration,
             MultiMap<ITestDevice, ContentAnalysisContext> imageAnalysis,
             List<ContentAnalysisContext> testAnalysisContexts,
             List<String> moduleDiscovered,
             List<String> dependencyFiles,
             AnalysisHeuristic analysisLevel) {
         this.information = information;
+        this.configuration = configuration;
         this.mImageAnalysis = imageAnalysis;
         this.mTestArtifactsAnalysisContent = testAnalysisContexts;
         this.mModulesDiscovered = moduleDiscovered;
@@ -72,11 +76,16 @@ public class ArtifactsAnalyzer {
             return null;
         }
         List<BuildAnalysis> reports = new ArrayList<>();
+        int i = 0;
         for (Entry<ITestDevice, IBuildInfo> deviceBuild :
                 information.getContext().getDeviceBuildMap().entrySet()) {
             BuildAnalysis report =
-                    analyzeArtifact(deviceBuild, mImageAnalysis.get(deviceBuild.getKey()));
+                    analyzeArtifact(
+                            deviceBuild,
+                            mImageAnalysis.get(deviceBuild.getKey()),
+                            configuration.getDeviceConfig().get(i).isFake());
             reports.add(report);
+            i++;
         }
         if (reports.size() > 1) {
             InvocationMetricLogger.addInvocationMetrics(
@@ -123,12 +132,15 @@ public class ArtifactsAnalyzer {
     }
 
     private BuildAnalysis analyzeArtifact(
-            Entry<ITestDevice, IBuildInfo> deviceBuild, List<ContentAnalysisContext> context) {
+            Entry<ITestDevice, IBuildInfo> deviceBuild,
+            List<ContentAnalysisContext> context,
+            boolean isFake) {
         ITestDevice device = deviceBuild.getKey();
         IBuildInfo build = deviceBuild.getValue();
         Map<String, Digest> imageToDigest = new LinkedHashMap<>();
         boolean deviceImageChanged = true; // anchor toward changing
-        if (device.getIDevice() != null
+        if (!isFake
+                && device.getIDevice() != null
                 && device.getIDevice().getClass().isAssignableFrom(NullDevice.class)) {
             deviceImageChanged = false; // No device image
             InvocationMetricLogger.addInvocationMetrics(
