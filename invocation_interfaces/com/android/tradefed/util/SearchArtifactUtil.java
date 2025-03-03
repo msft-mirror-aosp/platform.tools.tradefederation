@@ -118,6 +118,7 @@ public class SearchArtifactUtil {
      * @param altDirs Alternative search paths, in addition to the default search paths.
      * @param altDirBehavior how alternative search paths should be used against default paths: as
      *     fallback, or as override; if unspecified, fallback will be used
+     * @param testInfo The {@link TestInformation} of the current test when available.
      * @return The found artifact file or null if none.
      */
     public static File searchFile(
@@ -127,13 +128,41 @@ public class SearchArtifactUtil {
             List<File> altDirs,
             AltDirBehavior altDirBehavior,
             TestInformation testInfo) {
+        return searchFile(fileName, targetFirst, abi, altDirs, altDirBehavior, testInfo, false);
+    }
+
+    /**
+     * Searches for a test artifact/dependency file from the test directory.
+     *
+     * @param fileName The name of the file to look for.
+     * @param targetFirst Whether we are favoring target-side files vs. host-side files for the
+     *     search.
+     * @param abi The {@link IAbi} to match the file.
+     * @param altDirs Alternative search paths, in addition to the default search paths.
+     * @param altDirBehavior how alternative search paths should be used against default paths: as
+     *     fallback, or as override; if unspecified, fallback will be used
+     * @param testInfo The {@link TestInformation} of the current test when available.
+     * @param includeDirectory whether to include directories in the search result.
+     * @return The found artifact file or null if none.
+     */
+    public static File searchFile(
+            String fileName,
+            boolean targetFirst,
+            IAbi abi,
+            List<File> altDirs,
+            AltDirBehavior altDirBehavior,
+            TestInformation testInfo,
+            boolean includeDirectory) {
         List<File> searchDirectories =
                 singleton.getSearchDirectories(targetFirst, altDirs, altDirBehavior, testInfo);
-
+        CLog.d("Searching for file %s. Search directories: %s", fileName, searchDirectories);
         // Search in the test directories
         for (File dir : searchDirectories) {
-            File file = findFile(fileName, abi, dir);
+            File file = findFile(fileName, abi, dir, includeDirectory);
             if (fileExists(file)) {
+                CLog.d(
+                        "Found file %s in search directory %s.",
+                        file.getAbsolutePath(), dir.getAbsolutePath());
                 return file;
             }
         }
@@ -142,6 +171,7 @@ public class SearchArtifactUtil {
         if (executionFiles != null) {
             File file = executionFiles.get(fileName);
             if (fileExists(file)) {
+                CLog.d("Found file %s in execution files object.", file.getAbsolutePath());
                 return file;
             }
         }
@@ -151,6 +181,7 @@ public class SearchArtifactUtil {
         if (buildInfo != null) {
             File file = buildInfo.getFile(fileName);
             if (fileExists(file)) {
+                CLog.d("Found file %s in build info.", file.getAbsolutePath());
                 return file;
             } else {
                 // fallback to staging from remote zip files.
@@ -162,10 +193,11 @@ public class SearchArtifactUtil {
                     buildInfo.stageRemoteFile(fileName, stagingDir);
                     // multiple matching files can be staged. So do a search with module name and
                     // abi in consideration.
-                    file = findFile(fileName, abi, stagingDir);
+                    file = findFile(fileName, abi, stagingDir, includeDirectory);
                     if (fileExists(file)) {
                         InvocationMetricLogger.addInvocationMetrics(
                                 InvocationMetricKey.STAGE_UNDEFINED_DEPENDENCY, fileName);
+                        CLog.d("Found file %s after staging remote file.", file.getAbsolutePath());
                         return file;
                     }
                 }
@@ -260,7 +292,8 @@ public class SearchArtifactUtil {
     }
 
     /** Searches for the file in the given search directory and possibly matching the abi. */
-    private static File findFile(String filename, IAbi abi, File searchDirectory) {
+    private static File findFile(
+            String filename, IAbi abi, File searchDirectory, boolean includeDirectory) {
         if (filename == null || searchDirectory == null || !searchDirectory.exists()) {
             return null;
         }
@@ -275,16 +308,39 @@ public class SearchArtifactUtil {
             try {
                 File moduleDir = FileUtil.findDirectory(moduleName, searchDirectory);
                 if (moduleDir != null) {
-                    CLog.d("Searching the module dir: %s", moduleDir);
-                    // search with abi filtering on first
-                    retFile = FileUtil.findFile(filename, abi, moduleDir);
-                    if (fileExists(retFile)) {
-                        return retFile;
+                    // return the entire module directory if it matches the search file name
+                    if (includeDirectory && moduleName.equals(filename)) {
+                        return moduleDir;
                     }
-                    // search without the abi filter
-                    retFile = FileUtil.findFile(filename, null, moduleDir);
-                    if (fileExists(retFile)) {
-                        return retFile;
+                    CLog.d("Searching the module dir: %s", moduleDir);
+                    Set<File> allMatch =
+                            FileUtil.findFiles(filename, abi, includeDirectory, moduleDir);
+                    if (!allMatch.isEmpty()) {
+                        if (allMatch.size() != 1) {
+                            // when directories are included in the search, return any top
+                            // level directory if present, otherwise return any file.
+                            if (includeDirectory) {
+                                List<File> directoriesMatched = new LinkedList<>();
+                                for (File f : allMatch) {
+                                    if (f.isDirectory()) {
+                                        directoriesMatched.add(f);
+                                    }
+                                }
+                                if (!directoriesMatched.isEmpty()) {
+                                    for (File directory : directoriesMatched) {
+                                        if (isTopLevelDirectory(directory, allMatch)) {
+                                            return directory;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // when only one file is found, OR
+                        // when only files were searched (no dir) and multiple files matched, OR
+                        // when directory and files both were searched, but no directory is present
+                        // or no directory is top level
+                        // return any file/directory since we do not know which to return.
+                        return allMatch.iterator().next();
                     }
                 } else {
                     CLog.w(
@@ -301,7 +357,8 @@ public class SearchArtifactUtil {
 
         // if module subdirectory not present or file not found, search under the entire directory
         try {
-            Set<File> allMatch = FileUtil.findFilesObject(searchDirectory, filename, false);
+            Set<File> allMatch =
+                    FileUtil.findFilesObject(searchDirectory, filename, includeDirectory);
             if (allMatch.size() == 1) {
                 // if only one file found, return this one since we can not filter anymore.
                 return allMatch.iterator().next();
@@ -312,18 +369,28 @@ public class SearchArtifactUtil {
                         return f;
                     }
                 }
-                // if top level not found, prioritize the one with the correct abi
-                if (abi != null) {
-                    for (File f : allMatch) {
-                        if (f.getParentFile()
-                                .getName()
-                                .equals(AbiUtils.getArchForAbi(abi.getName()))) {
-                            return f;
-                        }
-                    }
+            }
+            // Fall-back to searching everything
+            if (!includeDirectory) {
+                allMatch = FileUtil.findFiles(filename, abi, false, searchDirectory);
+                if (!allMatch.isEmpty()) {
+                    return allMatch.iterator().next();
                 }
-                // if abi not matches, return any of them
-                return allMatch.iterator().next();
+            } else {
+                retFile = FileUtil.findFile(filename, null, searchDirectory);
+                if (retFile != null) {
+                    // Search again with filtering on ABI
+                    File fileWithAbi = FileUtil.findFile(filename, abi, searchDirectory);
+                    if (fileWithAbi != null
+                            && !fileWithAbi
+                                    .getAbsolutePath()
+                                    .startsWith(retFile.getAbsolutePath())) {
+                        // When multiple matches are found, return the one with matching
+                        // ABI unless src is its parent directory.
+                        return fileWithAbi;
+                    }
+                    return retFile;
+                }
             }
         } catch (IOException e) {
             CLog.w(
@@ -443,5 +510,18 @@ public class SearchArtifactUtil {
 
     private static boolean fileExists(File file) {
         return file != null && file.exists();
+    }
+
+    /**
+     * Checks whether a directory can be considered a top level directory. A top level directory
+     * will contain all the files that are given in the list.
+     */
+    private static boolean isTopLevelDirectory(File directoryToCheck, Set<File> files) {
+        for (File f : files) {
+            if (!f.getAbsolutePath().startsWith(directoryToCheck.getAbsolutePath())) {
+                return false;
+            }
+        }
+        return true;
     }
 }
