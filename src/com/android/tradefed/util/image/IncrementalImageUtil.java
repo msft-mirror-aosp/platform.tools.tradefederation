@@ -110,9 +110,8 @@ public class IncrementalImageUtil {
             IDeviceBuildInfo build,
             File createSnapshot,
             boolean isIsolatedSetup,
-            boolean allowCrossRelease,
+            boolean allowTrackerlessUpdate,
             Set<String> allowedTransition,
-            boolean wipeAfterApply,
             boolean newFlow,
             boolean updateBootloaderFromUserspace,
             SnapuserdWaitPhase waitPhase,
@@ -121,68 +120,58 @@ public class IncrementalImageUtil {
         String serialNumber = device.getSerialNumber();
         FileCacheTracker tracker =
                 DeviceImageTracker.getDefaultCache().getBaselineDeviceImage(serialNumber);
+        boolean crossRelease = false;
         if (tracker == null) {
             CLog.d("Not tracking current baseline image for %s", serialNumber);
-            return null;
-        }
-        String deviceBuildId = device.getBuildId();
-        if (!tracker.buildId.equals(deviceBuildId)) {
-            CLog.d(
-                    "On-device build (id = %s) isn't matching the cache (id = %s).",
-                    deviceBuildId, tracker.buildId);
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
-            return null;
-        }
-        if (tracker.branch.contains("release")) {
-            CLog.d("Skipping incremental flashing for release builds origin.");
-            return null;
-        }
-        if (!tracker.branch.equals(build.getBuildBranch())) {
-            if (wipeAfterApply
-                    && allowedTransition.contains(tracker.branch)
-                    && allowedTransition.contains(build.getBuildBranch())) {
-                CLog.d("Allowing transition from %s => %s", tracker.branch, build.getBuildBranch());
-            } else {
-                CLog.d("Newer build is not on the same branch.");
+        } else {
+            String deviceBuildId = device.getBuildId();
+            if (!tracker.buildId.equals(deviceBuildId)) {
+                CLog.d(
+                        "On-device build (id = %s) isn't matching the cache (id = %s).",
+                        deviceBuildId, tracker.buildId);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
                 return null;
             }
-        }
-        boolean crossRelease = false;
-        if (!tracker.flavor.equals(build.getBuildFlavor())) {
-            if (allowCrossRelease) {
+            if (tracker.branch.contains("release")) {
+                CLog.d("Skipping incremental flashing for release builds origin.");
+                return null;
+            }
+            if (!tracker.branch.equals(build.getBuildBranch())) {
+                if (allowedTransition.contains(tracker.branch)
+                        && allowedTransition.contains(build.getBuildBranch())) {
+                    CLog.d(
+                            "Allowing transition from %s => %s",
+                            tracker.branch, build.getBuildBranch());
+                } else {
+                    CLog.d("Newer build is not on the same branch.");
+                    return null;
+                }
+            }
+            if (!tracker.flavor.equals(build.getBuildFlavor())) {
                 CLog.d(
                         "Allowing cross-flavor update from '%s' to '%s'",
                         tracker.flavor, build.getBuildFlavor());
                 crossRelease = true;
-            } else {
-                CLog.d("Newer build is not on the build flavor.");
-                return null;
             }
         }
-
         if (!isSnapshotSupported(device, useMerkleTree)) {
             CLog.d("Incremental flashing not supported.");
             return null;
-        }
-
-        String splTarget = getSplVersion(build);
-        String splBaseline = device.getProperty("ro.build.version.security_patch");
-        // When we wipe, do not consider security_patch
-        if (!wipeAfterApply) {
-            if (splTarget != null && !splBaseline.equals(splTarget)) {
-                CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
-                return null;
-            }
         }
         if (crossRelease) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.INCREMENTAL_ACROSS_RELEASE_COUNT, 1);
         }
 
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
-                String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
+        if (tracker != null) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
+                    String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN, "no baseline");
+        }
         File merkleTreeDir = null;
         if (useMerkleTree) {
             device.executeShellV2Command("mkdir -p /data/verity-hash/");
@@ -210,7 +199,6 @@ public class IncrementalImageUtil {
                 device,
                 build.getDeviceImageFile(),
                 createSnapshot,
-                wipeAfterApply,
                 newFlow,
                 updateBootloaderFromUserspace,
                 waitPhase,
@@ -221,14 +209,13 @@ public class IncrementalImageUtil {
             ITestDevice device,
             File targetImage,
             File createSnapshot,
-            boolean wipeAfterApply,
             boolean newFlow,
             boolean updateBootloaderFromUserspace,
             SnapuserdWaitPhase waitPhase,
             File deviceMerkleTree) {
         mDevice = device;
         mApplySnapshot = true;
-        mWipeAfterApplySnapshot = wipeAfterApply;
+        mWipeAfterApplySnapshot = true;
         mNewFlow = newFlow;
         mUpdateBootloaderFromUserspace = updateBootloaderFromUserspace;
         mWaitPhase = waitPhase;
