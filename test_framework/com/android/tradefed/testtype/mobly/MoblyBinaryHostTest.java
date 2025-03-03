@@ -375,6 +375,8 @@ public class MoblyBinaryHostTest
             getRunUtil().setEnvVariable(ANDROID_SERIAL_VAR, getDevice().getSerialNumber());
         }
         AdbUtils.updateAdb(mTestInfo, getRunUtil(), getAdbPath());
+        // Set cwd to the binary directory
+        getRunUtil().setWorkingDir(new File(parFilePath).getParentFile());
         String configPath = null;
         if (mConfigFileName != null || mWildcardConfig) {
             try {
