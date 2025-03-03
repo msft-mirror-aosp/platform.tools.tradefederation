@@ -134,6 +134,10 @@ public class IncrementalImageUtil {
                     InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
             return null;
         }
+        if (tracker.branch.contains("release")) {
+            CLog.d("Skipping incremental flashing for release builds origin.");
+            return null;
+        }
         if (!tracker.branch.equals(build.getBuildBranch())) {
             if (wipeAfterApply
                     && allowedTransition.contains(tracker.branch)
