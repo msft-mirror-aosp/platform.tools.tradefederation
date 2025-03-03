@@ -169,6 +169,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mAllowIncrementalCrossRelease = true;
 
     @Option(
+            name = "allow-trackerless-update",
+            description = "Allow doing incremental update without a baseline known on the host.")
+    private boolean mAllowTrackerlessUpdate = true;
+
+    @Option(
             name = "ignore-incremental-host-options",
             description =
                     "Ignore the HostOptions to disable incremental flashing. This can be useful for"
@@ -364,9 +369,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 deviceBuild,
                                 mCreateSnapshotBinary,
                                 isIsolated,
-                                mAllowIncrementalCrossRelease,
+                                mAllowTrackerlessUpdate,
                                 mAllowedTransition,
-                                mWipeAfterApplySnapshot,
                                 mNewIncrementalFlow,
                                 mUpdateBootloaderFromUserspace,
                                 mWaitPhase,
