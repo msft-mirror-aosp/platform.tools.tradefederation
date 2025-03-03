@@ -85,7 +85,6 @@ public class IncrementalImageUtil {
                     "vendor.img",
                     "vendor_dlkm.img");
 
-    private final File mSrcImage;
     private final File mTargetImage;
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
@@ -177,18 +176,6 @@ public class IncrementalImageUtil {
                     InvocationMetricKey.INCREMENTAL_ACROSS_RELEASE_COUNT, 1);
         }
 
-        File deviceImage = null;
-        if (!useMerkleTree) {
-            try {
-                deviceImage = copyImage(tracker.zippedDeviceImage);
-            } catch (IOException e) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
-                CLog.e(e);
-                FileUtil.recursiveDelete(deviceImage);
-                return null;
-            }
-        }
         InvocationMetricLogger.addInvocationMetrics(
                 InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
                 String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
@@ -217,7 +204,6 @@ public class IncrementalImageUtil {
         }
         return new IncrementalImageUtil(
                 device,
-                deviceImage,
                 build.getDeviceImageFile(),
                 createSnapshot,
                 wipeAfterApply,
@@ -229,7 +215,6 @@ public class IncrementalImageUtil {
 
     public IncrementalImageUtil(
             ITestDevice device,
-            File deviceImage,
             File targetImage,
             File createSnapshot,
             boolean wipeAfterApply,
@@ -238,7 +223,6 @@ public class IncrementalImageUtil {
             SnapuserdWaitPhase waitPhase,
             File deviceMerkleTree) {
         mDevice = device;
-        mSrcImage = deviceImage;
         mApplySnapshot = true;
         mWipeAfterApplySnapshot = wipeAfterApply;
         mNewFlow = newFlow;
@@ -268,7 +252,6 @@ public class IncrementalImageUtil {
         mParallelSetup =
                 new ParallelPreparation(
                         Thread.currentThread().getThreadGroup(),
-                        mSrcImage,
                         mTargetImage,
                         deviceMerkleTree);
         mParallelSetup.start();
@@ -665,7 +648,6 @@ public class IncrementalImageUtil {
         // Delete the copy we made to use the incremental update
         FileUtil.recursiveDelete(mSourceDirectory);
         FileUtil.recursiveDelete(mTargetDirectory);
-        FileUtil.recursiveDelete(mSrcImage);
         // In case of same build flashing, we should clean the setup operation
         if (mParallelSetup != null) {
             try {
@@ -684,7 +666,6 @@ public class IncrementalImageUtil {
         // Delete the copy we made to use the incremental update
         FileUtil.recursiveDelete(mSourceDirectory);
         FileUtil.recursiveDelete(mTargetDirectory);
-        FileUtil.recursiveDelete(mSrcImage);
         // In case of same build flashing, we should clean the setup operation
         if (mParallelSetup != null) {
             try {
@@ -917,7 +898,6 @@ public class IncrementalImageUtil {
 
     private class ParallelPreparation extends Thread {
 
-        private final File mSetupSrcImage;
         private final File mDeviceOriginMerkleTree;
         private final File mSetupTargetImage;
 
@@ -927,10 +907,9 @@ public class IncrementalImageUtil {
         private TargetSetupError mError;
 
         public ParallelPreparation(
-                ThreadGroup currentGroup, File srcImage, File targetImage, File deviceMerkleTree) {
+                ThreadGroup currentGroup, File targetImage, File deviceMerkleTree) {
             super(currentGroup, "incremental-flashing-preparation");
             setDaemon(true);
-            this.mSetupSrcImage = srcImage;
             this.mDeviceOriginMerkleTree = deviceMerkleTree;
             this.mSetupTargetImage = targetImage;
         }
@@ -952,35 +931,7 @@ public class IncrementalImageUtil {
                         }
                     };
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
-                Future<Boolean> futureSrcDir = null;
-                if (mDeviceOriginMerkleTree != null) {
-                    mSrcDirectory = mDeviceOriginMerkleTree;
-                } else {
-                    mSrcDirectory = FileUtil.createTempDir("incremental_src");
-                    futureSrcDir =
-                            CompletableFuture.supplyAsync(
-                                    () -> {
-                                        if (mSetupSrcImage.isDirectory()) {
-                                            try (CloseableTraceScope hardlink =
-                                                    new CloseableTraceScope("hardlink_baseline")) {
-                                                FileUtil.recursiveHardlink(
-                                                        mSetupSrcImage, mSrcDirectory);
-                                                return true;
-                                            } catch (IOException ioe) {
-                                                throw new RuntimeException(ioe);
-                                            }
-                                        }
-                                        try (CloseableTraceScope unzipBaseline =
-                                                new CloseableTraceScope("unzip_baseline")) {
-                                            ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
-                                            return true;
-                                        } catch (IOException ioe) {
-                                            throw new RuntimeException(ioe);
-                                        }
-                                    },
-                                    TracePropagatingExecutorService.create(
-                                            Executors.newFixedThreadPool(1, factory)));
-                }
+                mSrcDirectory = mDeviceOriginMerkleTree;
                 mTargetDirectory = FileUtil.createTempDir("incremental_target");
                 Future<Boolean> futureTargetDir =
                         CompletableFuture.supplyAsync(
@@ -1006,9 +957,6 @@ public class IncrementalImageUtil {
                                 TracePropagatingExecutorService.create(
                                         Executors.newFixedThreadPool(1, factory)));
                 // Join the unzipping
-                if (futureSrcDir != null) {
-                    futureSrcDir.get();
-                }
                 futureTargetDir.get();
             } catch (InterruptedException | IOException | ExecutionException e) {
                 FileUtil.recursiveDelete(mSrcDirectory);

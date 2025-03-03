@@ -19,7 +19,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
 
 import org.junit.After;
@@ -27,8 +26,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.File;
 
 /** Unit tests for {@link DeviceImageTracker}. */
 @RunWith(JUnit4.class)
@@ -51,18 +48,9 @@ public class DeviceImageTrackerTest {
         assertNull(mTestableCache.getBaselineDeviceImage("not_cached"));
         // No lingering state after a query
         assertNull(mTestableCache.getBaselineDeviceImage("not_cached"));
-
-        File deviceImage = FileUtil.createTempFile("cache-image", ".zip");
-        FileUtil.writeToFile("content", deviceImage);
-        try {
-            mTestableCache.trackUpdatedDeviceImage(
-                    "serial", deviceImage, "8888", "branch", "flavor");
-            FileCacheTracker tracker = mTestableCache.getBaselineDeviceImage("serial");
-            assertNotNull(tracker);
-            assertEquals("8888", tracker.buildId);
-            assertEquals("content", FileUtil.readStringFromFile(tracker.zippedDeviceImage));
-        } finally {
-            FileUtil.deleteFile(deviceImage);
-        }
+        mTestableCache.trackUpdatedDeviceImage("serial", "8888", "branch", "flavor");
+        FileCacheTracker tracker = mTestableCache.getBaselineDeviceImage("serial");
+        assertNotNull(tracker);
+        assertEquals("8888", tracker.buildId);
     }
 }

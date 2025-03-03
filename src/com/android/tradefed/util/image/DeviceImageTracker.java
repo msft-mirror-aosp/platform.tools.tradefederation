@@ -16,16 +16,11 @@
 package com.android.tradefed.util.image;
 
 import com.android.annotations.VisibleForTesting;
-import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.util.FileUtil;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.cache.RemovalListener;
-import com.google.common.cache.RemovalNotification;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
@@ -38,21 +33,17 @@ public class DeviceImageTracker {
     private static DeviceImageTracker sDefaultInstance;
 
     private final LoadingCache<String, FileCacheTracker> mImageCache;
-    private final File mCacheDir;
 
     /** Track information of the device image cached and its metadata */
     public class FileCacheTracker {
-        public File zippedDeviceImage;
         public String buildId;
         public String branch;
         public String flavor;
 
         FileCacheTracker(
-                File zippedDeviceImage,
                 String buildId,
                 String branch,
                 String flavor) {
-            this.zippedDeviceImage = zippedDeviceImage;
             this.buildId = buildId;
             this.branch = branch;
             this.flavor = flavor;
@@ -68,25 +59,10 @@ public class DeviceImageTracker {
 
     @VisibleForTesting
     protected DeviceImageTracker() {
-        try {
-            mCacheDir = FileUtil.createTempDir("image_file_cache_dir");
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        RemovalListener<String, FileCacheTracker> listener =
-                new RemovalListener<String, FileCacheTracker>() {
-                    @Override
-                    public void onRemoval(RemovalNotification<String, FileCacheTracker> n) {
-                        if (n.wasEvicted()) {
-                            FileUtil.recursiveDelete(n.getValue().zippedDeviceImage);
-                        }
-                    }
-                };
         mImageCache =
                 CacheBuilder.newBuilder()
                         .maximumSize(20)
                         .expireAfterAccess(1, TimeUnit.DAYS)
-                        .removalListener(listener)
                         .build(
                                 new CacheLoader<String, FileCacheTracker>() {
                                     @Override
@@ -110,42 +86,21 @@ public class DeviceImageTracker {
      * Tracks a given device image to the device serial that was flashed with it
      *
      * @param serial The device that was flashed with the image.
-     * @param deviceImage The image flashed onto the device.
      * @param buildId The build id associated with the device image.
      * @param branch The branch associated with the device image.
      * @param flavor The build flavor associated with the device image.
      */
     public void trackUpdatedDeviceImage(
             String serial,
-            File deviceImage,
             String buildId,
             String branch,
             String flavor) {
-        if (deviceImage == null) {
-            CLog.d("Skip tracking image, device image is null.");
-            return;
-        }
-        File copyInCacheDeviceImage = new File(mCacheDir, serial + "_device_image");
-        FileUtil.recursiveDelete(copyInCacheDeviceImage);
-        try {
-            if (deviceImage.isDirectory()) {
-                CLog.d("Tracking device image as directory: %s", copyInCacheDeviceImage);
-                FileUtil.recursiveHardlink(deviceImage, copyInCacheDeviceImage);
-            } else {
-                CLog.d("Tracking device image: %s", copyInCacheDeviceImage);
-                FileUtil.hardlinkFile(deviceImage, copyInCacheDeviceImage);
-            }
-            mImageCache.put(
-                    serial,
-                    new FileCacheTracker(
-                            copyInCacheDeviceImage,
-                            buildId,
-                            branch,
-                            flavor));
-        } catch (IOException e) {
-            invalidateTracking(serial);
-            CLog.e(e);
-        }
+        mImageCache.put(
+                serial,
+                new FileCacheTracker(
+                        buildId,
+                        branch,
+                        flavor));
     }
 
     public void invalidateTracking(String serial) {
@@ -155,7 +110,6 @@ public class DeviceImageTracker {
     @VisibleForTesting
     protected void cleanUp() {
         mImageCache.invalidateAll();
-        FileUtil.recursiveDelete(mCacheDir);
     }
 
     /** Returns the device image that was tracked for the device. Null if none was tracked. */
