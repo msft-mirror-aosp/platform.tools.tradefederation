@@ -28,6 +28,7 @@ tradefed_java_library_host {
     static_libs: [
         "diffutils-prebuilt-jar",
         "perfetto_metrics-full",
+        "trace_summary-full",
         "test-composers",
         "truth",
         "grpc-java-api",
