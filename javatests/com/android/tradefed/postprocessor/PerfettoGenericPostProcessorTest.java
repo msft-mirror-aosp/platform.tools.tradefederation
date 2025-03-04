@@ -75,6 +75,7 @@ public class PerfettoGenericPostProcessorTest {
             "perfetto-alternative-parse-format";
 
     File perfettoMetricProtoFile = null;
+    File perfettoV2MetricProtoFile = null;
 
     private static final Boolean DEBUG = false;
 
@@ -584,6 +585,52 @@ public class PerfettoGenericPostProcessorTest {
         assertTrue(mProcessor.getMetricType().equals(DataType.RAW));
     }
 
+    /** Test v2 metrics are filtered correctly */
+    @Test
+    public void testParsingRunV2Metrics() throws ConfigurationException, IOException {
+        setupPerfettoV2MetricFile(METRIC_FILE_FORMAT.text, true);
+
+        mOptionSetter.setOptionValue(PREFIX_OPTION, PREFIX_OPTION_VALUE);
+        mOptionSetter.setOptionValue(ALL_METRICS_OPTION, "true");
+        Map<String, LogFile> testLogs = new HashMap<>();
+        testLogs.put(
+                PREFIX_OPTION_VALUE,
+                new LogFile(
+                        perfettoV2MetricProtoFile.getAbsolutePath(),
+                        "some.url",
+                        LogDataType.TEXTPB));
+        Map<String, Metric.Builder> parsedV2Metrics =
+                mProcessor.processRunMetricsAndLogs(new HashMap<>(), testLogs);
+
+        assertMetricsContain(
+                parsedV2Metrics,
+                "memory_per_process-avg_rss_and_swap-.ShannonImsService",
+                String.format("%f", 121380864.000000));
+        assertMetricsContain(
+                parsedV2Metrics,
+                "memory_per_process-avg_rss_and_swap-.adservices",
+                String.format("%f", 123408384.000000));
+        assertMetricsContain(
+                parsedV2Metrics,
+                "memory_per_process-avg_rss_and_swap-/apex/com.android.adbd/bin/adbd",
+                String.format("%f", 10464441.000000));
+
+        assertMetricsContain(
+                parsedV2Metrics,
+                "total_runtime_per_thread_for_systemui_process-(Paused)KernelPreparation-Signal"
+                        + " Catcher-com.android.systemui",
+                String.format("%f", 260051.000000));
+        assertMetricsContain(
+                parsedV2Metrics,
+                "total_runtime_per_thread_for_systemui_process-(Paused)KernelPreparation-binder:12907_9-com.android.systemui",
+                String.format("%f", 158854.000000));
+        assertMetricsContain(
+                parsedV2Metrics,
+                "total_runtime_per_thread_for_systemui_process-(Paused)MarkingPause-Signal"
+                        + " Catcher-com.android.systemui",
+                String.format("%f", 548624.000000));
+    }
+
     /**
      * Creates sample perfetto metric proto file used for testing.
      *
@@ -882,6 +929,157 @@ public class PerfettoGenericPostProcessorTest {
         return perfettoMetricProtoFile;
     }
 
+    /**
+     * Creates sample perfetto metric proto file used for testing.
+     *
+     * @param hasProto TODO
+     */
+    private File setupPerfettoV2MetricFile(METRIC_FILE_FORMAT format, boolean isCompressed)
+            throws IOException {
+        String perfettoTextContent =
+                "metric {\n"
+                        + "  spec {\n"
+                        + "    id: \"memory_per_process-avg_rss_and_swap\"\n"
+                        + "    dimensions: \"process_name\"\n"
+                        + "    value: \"avg_rss_and_swap\"\n"
+                        + "    query {\n"
+                        + "      table {\n"
+                        + "        table_name: \"memory_rss_and_swap_per_process\"\n"
+                        + "        module_name: \"linux.memory.process\"\n"
+                        + "      }\n"
+                        + "      filters {\n"
+                        + "        column_name: \"process_name\"\n"
+                        + "        op: GLOB\n"
+                        + "        string_rhs: \"*\"\n"
+                        + "      }\n"
+                        + "      group_by {\n"
+                        + "        column_names: \"process_name\"\n"
+                        + "        aggregates {\n"
+                        + "          column_name: \"rss_and_swap\"\n"
+                        + "          op: DURATION_WEIGHTED_MEAN\n"
+                        + "          result_column_name: \"avg_rss_and_swap\"\n"
+                        + "        }\n"
+                        + "      }\n"
+                        + "    }\n"
+                        + "  }\n"
+                        + "  row {\n"
+                        + "    dimension {\n"
+                        + "      string_value: \".ShannonImsService\"\n"
+                        + "    }\n"
+                        + "    value: 121380864.000000\n"
+                        + "  }\n"
+                        + "  row {\n"
+                        + "    dimension {\n"
+                        + "      string_value: \".adservices\"\n"
+                        + "    }\n"
+                        + "    value: 123408384.000000\n"
+                        + "  }\n"
+                        + "  row {\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"/apex/com.android.adbd/bin/adbd\"\n"
+                        + "    }\n"
+                        + "    value: 10464441.000000\n"
+                        + "  }\n"
+                        + "}\n"
+                        + "metric {\n"
+                        + "  spec {\n"
+                        + "    id: \"total_runtime_per_thread_for_systemui_process\"\n"
+                        + "    dimensions: \"slice_name\"\n"
+                        + "    dimensions: \"thread_name\"\n"
+                        + "    dimensions: \"process_name\"\n"
+                        + "    value: \"total_runtime\"\n"
+                        + "    query {\n"
+                        + "      id: \"group_by_simple_slices_source\"\n"
+                        + "      simple_slices {\n"
+                        + "        process_name_glob: \"com.android.systemui\"\n"
+                        + "      }\n"
+                        + "      group_by {\n"
+                        + "        column_names: \"slice_name\"\n"
+                        + "        column_names: \"thread_name\"\n"
+                        + "        column_names: \"process_name\"\n"
+                        + "        aggregates {\n"
+                        + "          column_name: \"dur\"\n"
+                        + "          op: SUM\n"
+                        + "          result_column_name: \"total_time\"\n"
+                        + "        }\n"
+                        + "      }\n"
+                        + "    }\n"
+                        + "  }\n"
+                        + "  row {\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"(Paused)KernelPreparation\"\n"
+                        + "    }\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"Signal Catcher\"\n"
+                        + "    }\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"com.android.systemui\"\n"
+                        + "    }\n"
+                        + "    value: 260051.000000\n"
+                        + "  }\n"
+                        + "  row {\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"(Paused)KernelPreparation\"\n"
+                        + "    }\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"binder:12907_9\"\n"
+                        + "    }\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"com.android.systemui\"\n"
+                        + "    }\n"
+                        + "    value: 158854.000000\n"
+                        + "  }\n"
+                        + "  row {\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"(Paused)MarkingPause\"\n"
+                        + "    }\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"Signal Catcher\"\n"
+                        + "    }\n"
+                        + "    dimension {\n"
+                        + "      string_value: \"com.android.systemui\"\n"
+                        + "    }\n"
+                        + "    value: 548624.000000\n"
+                        + "  }\n"
+                        + "}\n";
+
+        FileWriter fileWriter = null;
+        try {
+            perfettoV2MetricProtoFile = FileUtil.createTempFile("metric_v2_perfetto", "");
+            fileWriter = new FileWriter(perfettoV2MetricProtoFile);
+            fileWriter.write(perfettoTextContent);
+        } finally {
+            if (fileWriter != null) {
+                fileWriter.close();
+            }
+        }
+
+        if (format.equals(METRIC_FILE_FORMAT.binary)) {
+            File perfettoBinaryFile = FileUtil.createTempFile("metric_v2_perfetto_binary", ".pb");
+            try (BufferedReader bufferedReader =
+                    new BufferedReader(new FileReader(perfettoV2MetricProtoFile))) {
+                TraceMetrics.Builder builder = TraceMetrics.newBuilder();
+                TextFormat.merge(bufferedReader, builder);
+                builder.build().writeTo(new FileOutputStream(perfettoBinaryFile));
+            } catch (ParseException e) {
+                CLog.e("Failed to merge the perfetto v2 metric file." + e.getMessage());
+            } catch (IOException ioe) {
+                CLog.e(
+                        "IOException happened when reading the perfetto v2 metric file."
+                                + ioe.getMessage());
+            } finally {
+                perfettoV2MetricProtoFile.delete();
+                perfettoV2MetricProtoFile = perfettoBinaryFile;
+            }
+            return perfettoV2MetricProtoFile;
+        }
+
+        if (isCompressed) {
+            perfettoV2MetricProtoFile = compressFile(perfettoV2MetricProtoFile);
+        }
+        return perfettoV2MetricProtoFile;
+    }
+
     /** Create a zip file with perfetto metric proto file */
     private File compressFile(File decompressedFile) throws IOException {
         File compressedFile = FileUtil.createTempFile("compressed_temp", ".zip");
@@ -899,6 +1097,9 @@ public class PerfettoGenericPostProcessorTest {
     public void teardown() {
         if (perfettoMetricProtoFile != null) {
             perfettoMetricProtoFile.delete();
+        }
+        if (perfettoV2MetricProtoFile != null) {
+            perfettoV2MetricProtoFile.delete();
         }
     }
 

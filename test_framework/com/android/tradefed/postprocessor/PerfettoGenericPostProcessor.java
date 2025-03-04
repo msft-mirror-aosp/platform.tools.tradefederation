@@ -59,6 +59,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import perfetto.protos.PerfettoMergedMetrics.TraceMetrics;
+import perfetto.protos.File.TraceSummary;
+import perfetto.protos.V2Metric.TraceMetricV2;
+import perfetto.protos.V2Metric.TraceMetricV2.MetricRow;
+import perfetto.protos.V2Metric.TraceMetricV2.MetricRow.Dimension;
 
 /**
  * A post processor that processes text/binary metric perfetto proto file into key-value pairs by
@@ -70,6 +74,7 @@ import perfetto.protos.PerfettoMergedMetrics.TraceMetrics;
  * keys. For example
  *
  * <p>"perfetto-indexed-list-field" - perfetto.protos.AndroidStartupMetric.Startup
+ *
  * <p>"perfetto-prefix-key-field" - perfetto.protos.ProcessRenderInfo.process_name
  *
  * <p>android_startup-startup#1-package_name-com.calculator-to_first_frame-dur_ns: 300620342
@@ -107,14 +112,16 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
 
     @Option(
             name = "perfetto-prefix-key-field",
-            description = "String value field need to be prefixed with the all the other"
-                    + "numeric value field keys in the proto message.")
+            description =
+                    "String value field need to be prefixed with the all the other"
+                            + "numeric value field keys in the proto message.")
     private Set<String> mPerfettoPrefixKeyFields = new HashSet<>();
 
     @Option(
             name = "perfetto-prefix-inner-message-key-field",
-            description = "String value field need to be prefixed with the all the other"
-                    + "numeric value field keys outside of the current proto message.")
+            description =
+                    "String value field need to be prefixed with the all the other"
+                            + "numeric value field keys outside of the current proto message.")
     private Set<String> mPerfettoPrefixInnerMessagePrefixFields = new HashSet<>();
 
     @Option(
@@ -151,15 +158,19 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                             + " false if the metric can be handled by another post-processor.")
     private boolean mProcessedMetric = true;
 
-    @Option(name = "perfetto-metric-replace-prefix", description = "Replace the prefix in metrics"
-            + "from the metric proto file. Key is the prefix to look for in the metric"
-            + "keys parsed and value is be the replacement string.")
+    @Option(
+            name = "perfetto-metric-replace-prefix",
+            description =
+                    "Replace the prefix in metricsfrom the metric proto file. Key is the prefix to"
+                        + " look for in the metrickeys parsed and value is be the replacement"
+                        + " string.")
     private Map<String, String> mReplacePrefixMap = new LinkedHashMap<String, String>();
 
     @Option(
             name = "perfetto-all-metric-prefix",
-            description = "Prefix to be used with the metrics collected from perfetto."
-                    + "This will be applied before any other prefixes to metrics.")
+            description =
+                    "Prefix to be used with the metrics collected from perfetto."
+                            + "This will be applied before any other prefixes to metrics.")
     private String mAllMetricPrefix = "perfetto";
 
     @Option(
@@ -206,14 +217,14 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
         List<File> perfettoMetricFiles = new ArrayList<>();
         for (String key : logs.keySet()) {
             Optional<String> reportPrefix =
-                    mPerfettoProtoMetricFilePrefix
-                            .stream()
+                    mPerfettoProtoMetricFilePrefix.stream()
                             .filter(prefix -> key.startsWith(prefix))
                             .findAny();
 
             if (!reportPrefix.isPresent()) {
                 continue;
             }
+            CLog.i("Adding perfetto metric file: " + logs.get(key).getPath());
             perfettoMetricFiles.add(new File(logs.get(key).getPath()));
         }
         return perfettoMetricFiles;
@@ -233,8 +244,8 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
             // Text files by default are compressed before uploading. Decompress the text proto
             // file before post processing.
             try {
-                if (!(mTraceProcessorOutputFormat == METRIC_FILE_FORMAT.binary) &&
-                        ZipUtil.isZipFileValid(perfettoMetricFile, true)) {
+                if (!(mTraceProcessorOutputFormat == METRIC_FILE_FORMAT.binary)
+                        && ZipUtil.isZipFileValid(perfettoMetricFile, true)) {
                     ZipFile perfettoZippedFile = new ZipFile(perfettoMetricFile);
                     uncompressedDir = FileUtil.createTempDir("uncompressed_perfetto_metric");
                     ZipUtil2.extractZip(perfettoZippedFile, uncompressedDir);
@@ -253,19 +264,31 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                     new BufferedReader(new FileReader(perfettoMetricFile))) {
                 switch (mTraceProcessorOutputFormat) {
                     case text:
-                        TraceMetrics.Builder builder = TraceMetrics.newBuilder();
-                        ALLOW_UNKNOWN_FIELD.merge(bufferedReader,builder);
-                        parsedMetrics.putAll(
-                                handlePrefixForProcessedMetrics(
-                                        convertPerfettoProtoMessage(builder.build())));
+                        if (perfettoMetricFile.getName().contains("v2")) {
+                            TraceSummary.Builder builderV2 = TraceSummary.newBuilder();
+                            ALLOW_UNKNOWN_FIELD.merge(bufferedReader, builderV2);
+                            parsedMetrics.putAll(convertPerfettoProtoMessageV2(builderV2.build()));
+                        } else {
+                            TraceMetrics.Builder builder = TraceMetrics.newBuilder();
+                            ALLOW_UNKNOWN_FIELD.merge(bufferedReader, builder);
+                            parsedMetrics.putAll(
+                                    handlePrefixForProcessedMetrics(
+                                            convertPerfettoProtoMessage(builder.build())));
+                        }
                         break;
                     case binary:
-                        TraceMetrics metricProto = null;
-                        metricProto =
-                                TraceMetrics.parseFrom(new FileInputStream(perfettoMetricFile));
-                        parsedMetrics.putAll(
-                                handlePrefixForProcessedMetrics(
-                                        convertPerfettoProtoMessage(metricProto)));
+                        if (perfettoMetricFile.getName().contains("v2")) {
+                            TraceSummary traceSummary =
+                                    TraceSummary.parseFrom(new FileInputStream(perfettoMetricFile));
+                            parsedMetrics.putAll(convertPerfettoProtoMessageV2(traceSummary));
+                        } else {
+                            TraceMetrics metricProto = null;
+                            metricProto =
+                                    TraceMetrics.parseFrom(new FileInputStream(perfettoMetricFile));
+                            parsedMetrics.putAll(
+                                    handlePrefixForProcessedMetrics(
+                                            convertPerfettoProtoMessage(metricProto)));
+                        }
                         break;
                     case json:
                         CLog.w("JSON perfetto metric file processing not supported.");
@@ -385,8 +408,9 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
             boolean isReplaced = false;
             for (Map.Entry<String, String> replaceEntry : mReplacePrefixMap.entrySet()) {
                 if (metric.getKey().startsWith(replaceEntry.getKey())) {
-                    String newKey = metric.getKey().replaceFirst(replaceEntry.getKey(),
-                            replaceEntry.getValue());
+                    String newKey =
+                            metric.getKey()
+                                    .replaceFirst(replaceEntry.getKey(), replaceEntry.getValue());
                     finalMetrics.put(newKey, metric.getValue());
                     isReplaced = true;
                     break;
@@ -440,7 +464,6 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
      *
      * <p>"perfetto-prefix-key-field" - perfetto.protos.ProcessRenderInfo.process_name
      * android_hwui_metric-process_info-process_name-system_server-cache_miss_avg
-     *
      */
     private Map<String, Metric.Builder> convertPerfettoProtoMessage(Message reportMessage) {
         Map<FieldDescriptor, Object> fields = reportMessage.getAllFields();
@@ -463,8 +486,12 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                         if (!keyPrefixOtherFields.isEmpty()) {
                             keyPrefixOtherFields = keyPrefixOtherFields.concat("-");
                         }
-                        keyPrefixOtherFields = keyPrefixOtherFields.concat(String.format("%s-%s",
-                                entry.getKey().getName().toString(), entry.getValue().toString()));
+                        keyPrefixOtherFields =
+                                keyPrefixOtherFields.concat(
+                                        String.format(
+                                                "%s-%s",
+                                                entry.getKey().getName().toString(),
+                                                entry.getValue().toString()));
                         continue;
                     }
 
@@ -473,9 +500,12 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                         if (!mPrefixFromInnerMessage.isEmpty()) {
                             mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat("-");
                         }
-                        mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat(String.format(
-                                "%s-%s", entry.getKey().getName().toString(),
-                                entry.getValue().toString()));
+                        mPrefixFromInnerMessage =
+                                mPrefixFromInnerMessage.concat(
+                                        String.format(
+                                                "%s-%s",
+                                                entry.getKey().getName().toString(),
+                                                entry.getValue().toString()));
                         prefixSetInCurrentMessage = true;
                         continue;
                     }
@@ -507,8 +537,12 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                         if (!keyPrefixOtherFields.isEmpty()) {
                             keyPrefixOtherFields = keyPrefixOtherFields.concat("-");
                         }
-                        keyPrefixOtherFields =  keyPrefixOtherFields.concat(String.format("%s-%s",
-                                entry.getKey().getName().toString(), entry.getValue().toString()));
+                        keyPrefixOtherFields =
+                                keyPrefixOtherFields.concat(
+                                        String.format(
+                                                "%s-%s",
+                                                entry.getKey().getName().toString(),
+                                                entry.getValue().toString()));
                     }
 
                     if (mPerfettoPrefixInnerMessagePrefixFields.contains(
@@ -516,9 +550,12 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                         if (!mPrefixFromInnerMessage.isEmpty()) {
                             mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat("-");
                         }
-                        mPrefixFromInnerMessage = mPrefixFromInnerMessage.concat(String.format(
-                                "%s-%s", entry.getKey().getName().toString(),
-                                entry.getValue().toString()));
+                        mPrefixFromInnerMessage =
+                                mPrefixFromInnerMessage.concat(
+                                        String.format(
+                                                "%s-%s",
+                                                entry.getKey().getName().toString(),
+                                                entry.getValue().toString()));
                         prefixSetInCurrentMessage = true;
                         continue;
                     }
@@ -535,7 +572,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                 Map<String, Metric.Builder> messageMetrics =
                         convertPerfettoProtoMessage((Message) entry.getValue());
                 if (!mPrefixFromInnerMessage.isEmpty()) {
-                  innerMessagePrefix = mPrefixFromInnerMessage;
+                    innerMessagePrefix = mPrefixFromInnerMessage;
                 }
                 for (Entry<String, Metric.Builder> metricEntry : messageMetrics.entrySet()) {
                     // Add prefix to the metrics parsed from this message.
@@ -609,28 +646,66 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
                 new HashMap<String, Metric.Builder>();
         if (!keyPrefixOtherFields.isEmpty()) {
             for (Map.Entry<String, Metric.Builder> currentMetric : convertedMetrics.entrySet()) {
-                additionalConvertedMetrics.put(String.format("%s-%s", keyPrefixOtherFields,
-                        currentMetric.getKey()), currentMetric.getValue());
+                additionalConvertedMetrics.put(
+                        String.format("%s-%s", keyPrefixOtherFields, currentMetric.getKey()),
+                        currentMetric.getValue());
             }
         }
 
         if (!mPrefixFromInnerMessage.isEmpty() || !innerMessagePrefix.isEmpty()) {
-          String prefixToUse = !mPrefixFromInnerMessage.isEmpty()
-                  ? mPrefixFromInnerMessage : innerMessagePrefix;
-          for (Map.Entry<String, Metric.Builder> currentMetric : convertedMetrics.entrySet()) {
-            additionalConvertedMetrics.put(
-                String.format("%s-%s", prefixToUse, currentMetric.getKey()),
-                currentMetric.getValue());
-          }
+            String prefixToUse =
+                    !mPrefixFromInnerMessage.isEmpty()
+                            ? mPrefixFromInnerMessage
+                            : innerMessagePrefix;
+            for (Map.Entry<String, Metric.Builder> currentMetric : convertedMetrics.entrySet()) {
+                additionalConvertedMetrics.put(
+                        String.format("%s-%s", prefixToUse, currentMetric.getKey()),
+                        currentMetric.getValue());
+            }
         }
 
         if (!prefixSetInCurrentMessage) {
-          mPrefixFromInnerMessage = "";
+            mPrefixFromInnerMessage = "";
         }
 
         // Not cleaning up the other metrics without prefix fields.
         convertedMetrics.putAll(additionalConvertedMetrics);
 
+        return convertedMetrics;
+    }
+
+    /**
+     * Expands the metric v2 proto file as tree structure and converts it into key, value pairs by
+     * recursively constructing the key using the id and dimensions string values, proto fields with
+     * string values until the numeric proto field is encountered.
+     *
+     * <p>memory_per_process-avg_rss_and_swap-.ShannonImsService: 121380864.000000
+     * memory_per_process-avg_rss_and_swap-/apex/com.android.adbd/bin/adbd: 10464441.000000
+     */
+    private Map<String, Metric.Builder> convertPerfettoProtoMessageV2(TraceSummary reportMessage) {
+        CLog.d("convertPerfettoProtoMessageV2 reportMessage : " + reportMessage);
+        Map<String, Metric.Builder> convertedMetrics = new HashMap<String, Metric.Builder>();
+        for (TraceMetricV2 metric : reportMessage.getMetricList()) {
+            for (MetricRow row : metric.getRowList()) {
+                String rowKey = metric.getSpec().getId();
+                double rowValue = row.getValue();
+                for (Dimension dimension : row.getDimensionList()) {
+                    Map<FieldDescriptor, Object> fields = dimension.getAllFields();
+                    for (Entry<FieldDescriptor, Object> entry : fields.entrySet()) {
+                        if (!(entry.getValue() instanceof Message)) {
+                            rowKey = rowKey.concat("-").concat(entry.getValue().toString());
+                        }
+                    }
+                }
+                convertedMetrics.put(
+                        rowKey,
+                        TfMetricProtoUtil.stringToMetric(String.format("%f", rowValue))
+                                .toBuilder());
+                CLog.d(
+                        "Perfetto trace v2 metric: key: %s value: %s",
+                        rowKey, Double.toString(rowValue));
+            }
+        }
         return convertedMetrics;
     }
 
@@ -676,9 +751,7 @@ public class PerfettoGenericPostProcessor extends BasePostProcessor {
         return filteredMetrics;
     }
 
-    /**
-     * Set the metric type to RAW metric.
-     */
+    /** Set the metric type to RAW metric. */
     @Override
     protected DataType getMetricType() {
         return DataType.RAW;
