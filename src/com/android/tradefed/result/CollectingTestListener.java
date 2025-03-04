@@ -614,6 +614,14 @@ public class CollectingTestListener
         mTestRunResultMap.remove(testRunName);
     }
 
+    /** Allows to clear all test run results so we avoid carrying them for too long. */
+    protected final synchronized void clearTestRunResults() {
+        setCountDirty();
+        mTestRunResultMap.clear();
+        mMergedTestRunResults.clear();
+        mCurrentTestRunResult = new TestRunResult();
+    }
+
     /** Allows cleaning the module file so we avoid carrying them for too long. */
     protected final synchronized void clearModuleLogFiles() {
         mModuleLogFiles = new MultiMap<>();
