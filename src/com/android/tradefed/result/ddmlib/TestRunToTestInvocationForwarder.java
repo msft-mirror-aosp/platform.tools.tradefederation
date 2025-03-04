@@ -54,6 +54,7 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
     // so catch it, and avoid it at the root.
     private TestIdentifier mInvalidMethod = null;
     private boolean mNullMethodIsIgnored = false;
+    private String mNullMethodIsAssumptionFailure = null;
     private String mNullStack = null;
 
     public TestRunToTestInvocationForwarder(Collection<ITestLifeCycleReceiver> listeners) {
@@ -72,6 +73,7 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
             return;
         }
         mNullMethodIsIgnored = false;
+        mNullMethodIsAssumptionFailure = null;
         mInvalidMethod = null;
         for (ITestLifeCycleReceiver listener : mListeners) {
             try {
@@ -88,6 +90,7 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
     @Override
     public void testAssumptionFailure(TestIdentifier testId, String trace) {
         if (mInvalidMethod != null && mInvalidMethod.equals(testId)) {
+            mNullMethodIsAssumptionFailure = trace;
             return;
         }
         for (ITestLifeCycleReceiver listener : mListeners) {
@@ -151,6 +154,17 @@ public class TestRunToTestInvocationForwarder implements ITestRunListener {
                     listener.testIgnored(TestDescription.createFromTestIdentifier(testId));
                     // testEnded is reported below
                 }
+            } else if (mNullMethodIsAssumptionFailure != null) {
+                CLog.d(
+                        "assumptionFailure null method reported, most likely an Assume failure in"
+                                + " setup class");
+                for (ITestLifeCycleReceiver listener : mListeners) {
+                    listener.testAssumptionFailure(
+                            TestDescription.createFromTestIdentifier(testId),
+                            mNullMethodIsAssumptionFailure);
+                }
+                // Return directly after communicating the assumption failure
+                return;
             } else {
                 String message =
                         String.format(

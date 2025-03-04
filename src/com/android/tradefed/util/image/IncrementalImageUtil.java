@@ -85,7 +85,6 @@ public class IncrementalImageUtil {
                     "vendor.img",
                     "vendor_dlkm.img");
 
-    private final File mSrcImage;
     private final File mTargetImage;
     private final ITestDevice mDevice;
     private final File mCreateSnapshotBinary;
@@ -111,9 +110,8 @@ public class IncrementalImageUtil {
             IDeviceBuildInfo build,
             File createSnapshot,
             boolean isIsolatedSetup,
-            boolean allowCrossRelease,
+            boolean allowTrackerlessUpdate,
             Set<String> allowedTransition,
-            boolean wipeAfterApply,
             boolean newFlow,
             boolean updateBootloaderFromUserspace,
             SnapuserdWaitPhase waitPhase,
@@ -122,76 +120,58 @@ public class IncrementalImageUtil {
         String serialNumber = device.getSerialNumber();
         FileCacheTracker tracker =
                 DeviceImageTracker.getDefaultCache().getBaselineDeviceImage(serialNumber);
+        boolean crossRelease = false;
         if (tracker == null) {
             CLog.d("Not tracking current baseline image for %s", serialNumber);
-            return null;
-        }
-        String deviceBuildId = device.getBuildId();
-        if (!tracker.buildId.equals(deviceBuildId)) {
-            CLog.d(
-                    "On-device build (id = %s) isn't matching the cache (id = %s).",
-                    deviceBuildId, tracker.buildId);
-            InvocationMetricLogger.addInvocationMetrics(
-                    InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
-            return null;
-        }
-        if (!tracker.branch.equals(build.getBuildBranch())) {
-            if (wipeAfterApply
-                    && allowedTransition.contains(tracker.branch)
-                    && allowedTransition.contains(build.getBuildBranch())) {
-                CLog.d("Allowing transition from %s => %s", tracker.branch, build.getBuildBranch());
-            } else {
-                CLog.d("Newer build is not on the same branch.");
+        } else {
+            String deviceBuildId = device.getBuildId();
+            if (!tracker.buildId.equals(deviceBuildId)) {
+                CLog.d(
+                        "On-device build (id = %s) isn't matching the cache (id = %s).",
+                        deviceBuildId, tracker.buildId);
+                InvocationMetricLogger.addInvocationMetrics(
+                        InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
                 return null;
             }
-        }
-        boolean crossRelease = false;
-        if (!tracker.flavor.equals(build.getBuildFlavor())) {
-            if (allowCrossRelease) {
+            if (tracker.branch.contains("release")) {
+                CLog.d("Skipping incremental flashing for release builds origin.");
+                return null;
+            }
+            if (!tracker.branch.equals(build.getBuildBranch())) {
+                if (allowedTransition.contains(tracker.branch)
+                        && allowedTransition.contains(build.getBuildBranch())) {
+                    CLog.d(
+                            "Allowing transition from %s => %s",
+                            tracker.branch, build.getBuildBranch());
+                } else {
+                    CLog.d("Newer build is not on the same branch.");
+                    return null;
+                }
+            }
+            if (!tracker.flavor.equals(build.getBuildFlavor())) {
                 CLog.d(
                         "Allowing cross-flavor update from '%s' to '%s'",
                         tracker.flavor, build.getBuildFlavor());
                 crossRelease = true;
-            } else {
-                CLog.d("Newer build is not on the build flavor.");
-                return null;
             }
         }
-
         if (!isSnapshotSupported(device, useMerkleTree)) {
             CLog.d("Incremental flashing not supported.");
             return null;
-        }
-
-        String splTarget = getSplVersion(build);
-        String splBaseline = device.getProperty("ro.build.version.security_patch");
-        // When we wipe, do not consider security_patch
-        if (!wipeAfterApply) {
-            if (splTarget != null && !splBaseline.equals(splTarget)) {
-                CLog.d("Target SPL is '%s', while baseline is '%s", splTarget, splBaseline);
-                return null;
-            }
         }
         if (crossRelease) {
             InvocationMetricLogger.addInvocationMetrics(
                     InvocationMetricKey.INCREMENTAL_ACROSS_RELEASE_COUNT, 1);
         }
 
-        File deviceImage = null;
-        if (!useMerkleTree) {
-            try {
-                deviceImage = copyImage(tracker.zippedDeviceImage);
-            } catch (IOException e) {
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.DEVICE_IMAGE_CACHE_MISMATCH, 1);
-                CLog.e(e);
-                FileUtil.recursiveDelete(deviceImage);
-                return null;
-            }
+        if (tracker != null) {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
+                    String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
+        } else {
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN, "no baseline");
         }
-        InvocationMetricLogger.addInvocationMetrics(
-                InvocationMetricKey.DEVICE_IMAGE_CACHE_ORIGIN,
-                String.format("%s:%s:%s", tracker.branch, tracker.buildId, tracker.flavor));
         File merkleTreeDir = null;
         if (useMerkleTree) {
             device.executeShellV2Command("mkdir -p /data/verity-hash/");
@@ -217,10 +197,8 @@ public class IncrementalImageUtil {
         }
         return new IncrementalImageUtil(
                 device,
-                deviceImage,
                 build.getDeviceImageFile(),
                 createSnapshot,
-                wipeAfterApply,
                 newFlow,
                 updateBootloaderFromUserspace,
                 waitPhase,
@@ -229,18 +207,15 @@ public class IncrementalImageUtil {
 
     public IncrementalImageUtil(
             ITestDevice device,
-            File deviceImage,
             File targetImage,
             File createSnapshot,
-            boolean wipeAfterApply,
             boolean newFlow,
             boolean updateBootloaderFromUserspace,
             SnapuserdWaitPhase waitPhase,
             File deviceMerkleTree) {
         mDevice = device;
-        mSrcImage = deviceImage;
         mApplySnapshot = true;
-        mWipeAfterApplySnapshot = wipeAfterApply;
+        mWipeAfterApplySnapshot = true;
         mNewFlow = newFlow;
         mUpdateBootloaderFromUserspace = updateBootloaderFromUserspace;
         mWaitPhase = waitPhase;
@@ -268,7 +243,6 @@ public class IncrementalImageUtil {
         mParallelSetup =
                 new ParallelPreparation(
                         Thread.currentThread().getThreadGroup(),
-                        mSrcImage,
                         mTargetImage,
                         deviceMerkleTree);
         mParallelSetup.start();
@@ -665,7 +639,6 @@ public class IncrementalImageUtil {
         // Delete the copy we made to use the incremental update
         FileUtil.recursiveDelete(mSourceDirectory);
         FileUtil.recursiveDelete(mTargetDirectory);
-        FileUtil.recursiveDelete(mSrcImage);
         // In case of same build flashing, we should clean the setup operation
         if (mParallelSetup != null) {
             try {
@@ -684,7 +657,6 @@ public class IncrementalImageUtil {
         // Delete the copy we made to use the incremental update
         FileUtil.recursiveDelete(mSourceDirectory);
         FileUtil.recursiveDelete(mTargetDirectory);
-        FileUtil.recursiveDelete(mSrcImage);
         // In case of same build flashing, we should clean the setup operation
         if (mParallelSetup != null) {
             try {
@@ -917,7 +889,6 @@ public class IncrementalImageUtil {
 
     private class ParallelPreparation extends Thread {
 
-        private final File mSetupSrcImage;
         private final File mDeviceOriginMerkleTree;
         private final File mSetupTargetImage;
 
@@ -927,10 +898,9 @@ public class IncrementalImageUtil {
         private TargetSetupError mError;
 
         public ParallelPreparation(
-                ThreadGroup currentGroup, File srcImage, File targetImage, File deviceMerkleTree) {
+                ThreadGroup currentGroup, File targetImage, File deviceMerkleTree) {
             super(currentGroup, "incremental-flashing-preparation");
             setDaemon(true);
-            this.mSetupSrcImage = srcImage;
             this.mDeviceOriginMerkleTree = deviceMerkleTree;
             this.mSetupTargetImage = targetImage;
         }
@@ -952,35 +922,7 @@ public class IncrementalImageUtil {
                         }
                     };
             try (CloseableTraceScope ignored = new CloseableTraceScope("unzip_device_images")) {
-                Future<Boolean> futureSrcDir = null;
-                if (mDeviceOriginMerkleTree != null) {
-                    mSrcDirectory = mDeviceOriginMerkleTree;
-                } else {
-                    mSrcDirectory = FileUtil.createTempDir("incremental_src");
-                    futureSrcDir =
-                            CompletableFuture.supplyAsync(
-                                    () -> {
-                                        if (mSetupSrcImage.isDirectory()) {
-                                            try (CloseableTraceScope hardlink =
-                                                    new CloseableTraceScope("hardlink_baseline")) {
-                                                FileUtil.recursiveHardlink(
-                                                        mSetupSrcImage, mSrcDirectory);
-                                                return true;
-                                            } catch (IOException ioe) {
-                                                throw new RuntimeException(ioe);
-                                            }
-                                        }
-                                        try (CloseableTraceScope unzipBaseline =
-                                                new CloseableTraceScope("unzip_baseline")) {
-                                            ZipUtil2.extractZip(mSetupSrcImage, mSrcDirectory);
-                                            return true;
-                                        } catch (IOException ioe) {
-                                            throw new RuntimeException(ioe);
-                                        }
-                                    },
-                                    TracePropagatingExecutorService.create(
-                                            Executors.newFixedThreadPool(1, factory)));
-                }
+                mSrcDirectory = mDeviceOriginMerkleTree;
                 mTargetDirectory = FileUtil.createTempDir("incremental_target");
                 Future<Boolean> futureTargetDir =
                         CompletableFuture.supplyAsync(
@@ -1006,9 +948,6 @@ public class IncrementalImageUtil {
                                 TracePropagatingExecutorService.create(
                                         Executors.newFixedThreadPool(1, factory)));
                 // Join the unzipping
-                if (futureSrcDir != null) {
-                    futureSrcDir.get();
-                }
                 futureTargetDir.get();
             } catch (InterruptedException | IOException | ExecutionException e) {
                 FileUtil.recursiveDelete(mSrcDirectory);
