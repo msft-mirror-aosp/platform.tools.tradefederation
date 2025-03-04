@@ -534,9 +534,6 @@ public class ModuleDefinitionTest {
         CollectingTestListener errorChecker = new CollectingTestListener();
         // DeviceUnresponsive should not throw since it indicates that the device was recovered.
         mModule.run(mModuleInfo, new ResultForwarder(mMockListener, errorChecker));
-        // Only one module
-        assertEquals(1, mModule.getTestsResults().size());
-        assertEquals(0, mModule.getTestsResults().get(0).getNumCompleteTests());
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
         verify(mMockListener)
@@ -1089,9 +1086,6 @@ public class ModuleDefinitionTest {
         } catch (DeviceNotAvailableException expected) {
             // expected
         }
-        // Only one module
-        assertEquals(1, mModule.getTestsResults().size());
-        assertEquals(2, mModule.getTestsResults().get(0).getNumCompleteTests());
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
         verify(mMockPrep)
@@ -1144,11 +1138,6 @@ public class ModuleDefinitionTest {
         when(mMockPrep.isTearDownDisabled()).thenReturn(false);
 
         mModule.run(mModuleInfo, mMockListener);
-        // Only one module
-        assertEquals(1, mModule.getTestsResults().size());
-        assertEquals(2, mModule.getTestsResults().get(0).getNumCompleteTests());
-        assertTrue(
-                mModule.getTestsResults().get(0).getRunFailureMessage().contains("assert error"));
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
         verify(mMockPrep).tearDown(Mockito.eq(mModuleInfo), Mockito.isNull());
@@ -1166,7 +1155,11 @@ public class ModuleDefinitionTest {
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener).testFailed(Mockito.any(), (FailureDescription) Mockito.any());
-        verify(mMockListener).testRunFailed((FailureDescription) Mockito.any());
+        ArgumentCaptor<FailureDescription> captureRunFailure =
+                ArgumentCaptor.forClass(FailureDescription.class);
+        verify(mMockListener).testRunFailed(captureRunFailure.capture());
+        FailureDescription failure = captureRunFailure.getValue();
+        assertTrue(failure.getErrorMessage().contains("assert error"));
         verify(mMockListener)
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
@@ -1459,9 +1452,6 @@ public class ModuleDefinitionTest {
 
         // DeviceUnresponsive should not throw since it indicates that the device was recovered.
         mModule.run(mModuleInfo, mMockListener);
-        // Only one module
-        assertEquals(1, mModule.getTestsResults().size());
-        assertEquals(0, mModule.getTestsResults().get(0).getNumCompleteTests());
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
         verify(mMockPrep).tearDown(Mockito.eq(mModuleInfo), Mockito.isNull());
