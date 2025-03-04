@@ -35,7 +35,7 @@ import cas_metrics_pb2  # type: ignore
 from google.protobuf import json_format
 
 
-VERSION = '1.3'
+VERSION = '1.4'
 
 @dataclasses.dataclass
 class ArtifactConfig:
@@ -357,7 +357,7 @@ def _upload(
 
         cmd = cmd + _path_for_artifact(artifact, working_dir)
 
-        if artifact.chunk:
+        if artifact.chunk or artifact.chunk_dir:
             cmd = cmd + ['-chunk', '-avg-chunk-size', str(AVG_CHUNK_SIZE_IN_KB)]
 
         for exclude_filter in artifact.exclude_filters:
