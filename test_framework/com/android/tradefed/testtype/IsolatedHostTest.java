@@ -29,6 +29,8 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.TestInformation;
 import com.android.tradefed.invoker.logger.CurrentInvocation;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger;
+import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.isolation.FilterSpec;
 import com.android.tradefed.isolation.JUnitEvent;
@@ -50,6 +52,7 @@ import com.android.tradefed.util.CacheClientFactory;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.ResourceUtil;
 import com.android.tradefed.util.RunUtil;
+import com.android.tradefed.util.SearchArtifactUtil;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.SystemUtil;
 
@@ -917,9 +920,23 @@ public class IsolatedHostTest
      * find our jar.
      */
     private File getJarFile(String jarName, IBuildInfo buildInfo) throws FileNotFoundException {
+        File jarFile = null;
+        try {
+            jarFile = SearchArtifactUtil.searchFile(jarName, false);
+        } catch (Exception e) {
+            // TODO: handle error when migration is complete.
+            CLog.e(e);
+        }
+        if (jarFile != null && jarFile.exists()) {
+            return jarFile;
+        } else {
+            // Silently report not found and fall back to old logic.
+            InvocationMetricLogger.addInvocationMetrics(
+                    InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, 1);
+        }
         // Check tests dir
         File testDir = buildInfo.getFile(BuildInfoFileKey.TESTDIR_IMAGE);
-        File jarFile = searchJarFile(testDir, jarName);
+        jarFile = searchJarFile(testDir, jarName);
         if (jarFile != null) {
             return jarFile;
         }
@@ -932,6 +949,9 @@ public class IsolatedHostTest
         if (jarFile != null) {
             return jarFile;
         }
+        // if old logic fails too, do not report search artifact failure
+        InvocationMetricLogger.addInvocationMetrics(
+                InvocationMetricKey.SEARCH_ARTIFACT_FAILURE_COUNT, -1);
         throw new FileNotFoundException(String.format("Could not find jar: %s", jarName));
     }
 
