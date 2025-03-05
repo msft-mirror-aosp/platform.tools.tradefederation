@@ -38,14 +38,15 @@ import com.android.tradefed.invoker.logger.CurrentInvocation.IsolationGrade;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.targetprep.IDeviceFlasher.UserDataFlashOption;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.CommandStatus;
-import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.RunUtil;
 import com.android.tradefed.util.image.DeviceImageTracker;
@@ -60,7 +61,7 @@ import java.util.concurrent.TimeUnit;
 
 /** A {@link ITargetPreparer} that flashes an image on physical Android hardware. */
 public abstract class DeviceFlashPreparer extends BaseTargetPreparer
-        implements IConfigurationReceiver {
+        implements IConfigurationReceiver, ITestLoggerReceiver {
 
     private static final int BOOT_POLL_TIME_MS = 5 * 1000;
     private static final long SNAPSHOT_CANCEL_TIMEOUT = 20000L;
@@ -168,6 +169,11 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private boolean mAllowIncrementalCrossRelease = true;
 
     @Option(
+            name = "allow-trackerless-update",
+            description = "Allow doing incremental update without a baseline known on the host.")
+    private boolean mAllowTrackerlessUpdate = true;
+
+    @Option(
             name = "ignore-incremental-host-options",
             description =
                     "Ignore the HostOptions to disable incremental flashing. This can be useful for"
@@ -221,6 +227,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
     private IConfiguration mConfig;
     private Set<String> mAllowedTransition = new HashSet<>();
     private IDeviceFlasher mFlasher;
+    private ITestLogger mTestLogger;
 
     @Override
     public void setConfiguration(IConfiguration configuration) {
@@ -362,9 +369,8 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                                 deviceBuild,
                                 mCreateSnapshotBinary,
                                 isIsolated,
-                                mAllowIncrementalCrossRelease,
+                                mAllowTrackerlessUpdate,
                                 mAllowedTransition,
-                                mWipeAfterApplySnapshot,
                                 mNewIncrementalFlow,
                                 mUpdateBootloaderFromUserspace,
                                 mWaitPhase,
@@ -413,6 +419,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                         ((FastbootDeviceFlasher) flasher)
                                 .setIncrementalFlashing(mIncrementalImageUtil);
                     }
+                    ((FastbootDeviceFlasher) flasher).setTestLogger(mTestLogger);
                 }
                 start = System.currentTimeMillis();
                 flasher.preFlashOperations(device, deviceBuild);
@@ -554,30 +561,12 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
             moveBaseLine = true;
         }
         if (moveBaseLine) {
-            File deviceImage = deviceBuild.getDeviceImageFile();
-            File tmpReference = null;
-            try {
-                if (mAllowUnzippedBaseline
-                        && mIncrementalImageUtil != null
-                        && mIncrementalImageUtil.getExtractedTargetDirectory() != null
-                        && mIncrementalImageUtil.getExtractedTargetDirectory().isDirectory()) {
-                    CLog.d(
-                            "Using unzipped baseline: %s",
-                            mIncrementalImageUtil.getExtractedTargetDirectory());
-                    tmpReference = mIncrementalImageUtil.getExtractedTargetDirectory();
-                    deviceImage = tmpReference;
-                }
-
-                DeviceImageTracker.getDefaultCache()
-                        .trackUpdatedDeviceImage(
-                                serial,
-                                deviceImage,
-                                deviceBuild.getBuildId(),
-                                deviceBuild.getBuildBranch(),
-                                deviceBuild.getBuildFlavor());
-            } finally {
-                FileUtil.recursiveDelete(tmpReference);
-            }
+            DeviceImageTracker.getDefaultCache()
+                    .trackUpdatedDeviceImage(
+                            serial,
+                            deviceBuild.getBuildId(),
+                            deviceBuild.getBuildBranch(),
+                            deviceBuild.getBuildFlavor());
         }
     }
 
@@ -665,6 +654,15 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                         "We expected incremental-flashing to be used but wasn't.");
             }
         }
+    }
+
+    @Override
+    public void setTestLogger(ITestLogger testLogger) {
+        mTestLogger = testLogger;
+    }
+
+    public ITestLogger getTestLogger() {
+        return mTestLogger;
     }
 
     /**

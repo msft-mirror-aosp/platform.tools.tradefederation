@@ -198,22 +198,26 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
     @Option(
             name = "perfetto-v2-metrics-ids",
             description =
-                    "Computes all v2 trace-based metrics with the given, comma separated list of"
-                        + " metric ids. The spec for every metric must exist in one of the files"
-                        + " passed to --summary-spec.")
-    private String mComputeMetricsV2Ids = "memory_per_process";
+                    "Specifies that the given v2 metrics (as defined by a comma separated set of"
+                        + " ids) should be computed and returned as part of the trace summary. The"
+                        + " spec for every metric must exist in one of the files passed to"
+                        + " --summary-spec.")
+    private String mComputeMetricsV2Ids = "memory_per_process-avg_rss_and_swap";
+
+    @Option(name = "summary-spec-files", description = "Summary spec files abusolutle paths.")
+    private List<File> mSummarySpecFiles = new ArrayList<File>();
 
     @Option(
-            name = "summary-spec-files",
+            name = "summary-spec-file-name",
             description =
                     "Parses the spec at the specified path and makes it available to other"
-                        + " summarization operators (--compute-metrics-v2). Spec files must be"
+                        + " summarization operators (--summary-metrics-v2). Spec files must be"
                         + " instances of the perfetto.protos.TraceSummarySpec proto. If the file"
                         + " extension is `.textproto` then the spec file will be parsed as a"
                         + " textproto. If the file extension is `.pb` then it will be parsed as a"
                         + " binary protobuf. Otherwise, heureustics will be used to determine the"
                         + " format.")
-    private String mSummarySpecFiles = "memory_per_process-avg_rss_and_swap.textproto";
+    private String mSummarySpecFileName = "memory_per_process-avg_rss_and_swap.textproto";
 
     /**
      * Process the perfetto trace file for the additional metrics and add it to final metrics.
@@ -402,28 +406,31 @@ public class PerfettoPullerMetricCollector extends FilePullerDeviceMetricCollect
 
         if (metricVersion.contains(METRIC_VERSION_V2)) {
             metricOutputFilePrefix = "metric_v2_";
+            // Turn on the summary metrics v2 flag.
+            commandArgsList.add("--summary");
 
             // Comma separated list of metrics ids to extract.
             if (!mComputeMetricsV2Ids.isEmpty()) {
-                commandArgsList.add("--compute-metrics-v2");
+                commandArgsList.add("--summary-metrics-v2");
                 commandArgsList.add(mComputeMetricsV2Ids);
             }
 
             // resolve the summary spec names from the test or module artifacts.
-            if (!mSummarySpecFiles.isEmpty()) {
-                String[] summarySpecs = mSummarySpecFiles.split(",");
-                for (String summarySpec : summarySpecs) {
-                    File summarySpecFile = getFileFromTestArtifacts(summarySpec);
-                    if (summarySpecFile != null) {
-                        commandArgsList.add("--summary-spec");
-                        commandArgsList.add(summarySpecFile.getAbsolutePath());
-                    } else {
-                        CLog.e(
-                                String.format(
-                                        "Failed to locate the summary spec file: %s", summarySpec));
-                        return new TraceProcessorResult(metricOutputFile, runtime, STATUS_FAILURE);
-                    }
+            if (mSummarySpecFiles.isEmpty() && !mSummarySpecFileName.isEmpty()) {
+                String[] FileNames = mSummarySpecFileName.split(",");
+                for (String name : FileNames) {
+                    mSummarySpecFiles.add(getFileFromTestArtifacts(name));
                 }
+            }
+
+            if (mSummarySpecFiles.isEmpty()) {
+                CLog.e("Failed to locate the summary spec file.");
+                return new TraceProcessorResult(metricOutputFile, runtime, STATUS_FAILURE);
+            }
+
+            for (File summarySpecFile : mSummarySpecFiles) {
+                commandArgsList.add("--summary-spec");
+                commandArgsList.add(summarySpecFile.getAbsolutePath());
             }
         }
 

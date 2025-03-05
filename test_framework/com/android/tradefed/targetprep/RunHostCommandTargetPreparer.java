@@ -35,9 +35,9 @@ import com.android.tradefed.result.error.TestErrorIdentifier;
 import com.android.tradefed.util.CommandResult;
 import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
+import com.android.tradefed.util.PythonVirtualenvHelper;
 import com.android.tradefed.util.QuotationAwareTokenizer;
 import com.android.tradefed.util.RunUtil;
-import com.android.tradefed.util.PythonVirtualenvHelper;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -330,7 +330,8 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
 
     /**
      * For each command in the list, replace placeholder (if any) with the file name indicated in
-     * the build information
+     * the build information. If the file has multiple path possible, split them around `:` and
+     * return the first file found
      *
      * @param commands list of host commands
      * @param buildInfo build artifact information
@@ -342,12 +343,14 @@ public class RunHostCommandTargetPreparer extends BaseTargetPreparer
             StringBuffer command = new StringBuffer();
 
             while (matcher.find()) {
-                String fileName = matcher.group(1);
-                File file = buildInfo.getFile(fileName);
-                if (file == null || !file.exists()) {
-                    continue;
+                for (String fileName : matcher.group(1).split(":")) {
+                    File file = buildInfo.getFile(fileName);
+                    if (file == null || !file.exists()) {
+                        continue;
+                    }
+                    matcher.appendReplacement(command, file.getPath());
+                    break;
                 }
-                matcher.appendReplacement(command, file.getPath());
             }
             matcher.appendTail(command);
 

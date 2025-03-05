@@ -26,6 +26,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Java implementation of Cuttlefish Host Orchestator API.
@@ -41,6 +42,20 @@ public class HostOrchestratorClient {
     public static final class Operation {
         public String name;
         public boolean done;
+    }
+
+    public static final class Cvd {
+        public String group;
+        public String name;
+        public String status;
+    }
+
+    public static final class ListCvdsResponse {
+        public List<Cvd> cvds;
+    }
+
+    public static HttpRequest buildListCvdsRequest(String baseURL) {
+        return HttpRequest.newBuilder().uri(URI.create(String.format("%s/cvds", baseURL))).build();
     }
 
     // https://github.com/google/android-cuttlefish/blob/fff7e3487c924435e6f6120345edf1dddb49d50b/frontend/src/host_orchestrator/orchestrator/controller.go#L78
@@ -94,7 +109,7 @@ public class HostOrchestratorClient {
         private final HttpClient mClient;
 
         public HoHttpClient() {
-            mClient = HttpClient.newBuilder().build();
+            mClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
         }
 
         @Override

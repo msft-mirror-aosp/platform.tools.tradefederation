@@ -323,7 +323,8 @@ public class PerfettoPullerMetricCollectorTest {
         Assert.assertTrue(args.contains(path));
         Assert.assertTrue(args.contains("--run-metrics"));
         Assert.assertTrue(args.contains("--metrics-output=text"));
-        Assert.assertFalse(args.contains("--compute-metrics-v2"));
+        Assert.assertFalse(args.contains("--summary"));
+        Assert.assertFalse(args.contains("--summary-metrics-v2"));
         Assert.assertFalse(args.contains("--summary-spec"));
     }
 
@@ -429,8 +430,9 @@ public class PerfettoPullerMetricCollectorTest {
         List<String> args = Arrays.asList(captor.getValue());
 
         Assert.assertTrue(args.contains(path));
-        Assert.assertTrue(args.contains("--compute-metrics-v2"));
-        Assert.assertTrue(args.contains("memory_per_process"));
+        Assert.assertTrue(args.contains("--summary"));
+        Assert.assertTrue(args.contains("--summary-metrics-v2"));
+        Assert.assertTrue(args.contains("memory_per_process-avg_rss_and_swap"));
         Assert.assertTrue(args.contains("--summary-spec"));
         Assert.assertTrue(args.contains(summarySpecPath));
         Assert.assertFalse(args.contains("--run-metrics"));
@@ -497,10 +499,11 @@ public class PerfettoPullerMetricCollectorTest {
 
         // Verify metric v2 args.
         Assert.assertEquals(args.get(1)[0], path);
-        Assert.assertEquals(args.get(1)[1], "--compute-metrics-v2");
-        Assert.assertEquals(args.get(1)[2], "memory_per_process");
-        Assert.assertEquals(args.get(1)[3], "--summary-spec");
-        Assert.assertEquals(args.get(1)[4], summarySpecPath);
+        Assert.assertEquals(args.get(1)[1], "--summary");
+        Assert.assertEquals(args.get(1)[2], "--summary-metrics-v2");
+        Assert.assertEquals(args.get(1)[3], "memory_per_process-avg_rss_and_swap");
+        Assert.assertEquals(args.get(1)[4], "--summary-spec");
+        Assert.assertEquals(args.get(1)[5], summarySpecPath);
     }
 
     /** Test that the trace processor shell outputs run time and status. */
