@@ -466,7 +466,7 @@ public class HostOrchestratorUtilTest {
                         mockHttpResponse(200, LIST_CVD_RES),
                         mockHttpResponse(200, OPERATION_RES),
                         mockHttpResponse(200, OPERATION_DONE_RES));
-        Assert.assertNotNull(mHOUtil.powerwashGce());
+        Assert.assertEquals(CommandStatus.SUCCESS, mHOUtil.powerwashGce().getStatus());
     }
 
     @Test
@@ -615,7 +615,7 @@ public class HostOrchestratorUtilTest {
                         mockHttpResponse(200, LIST_CVD_RES),
                         mockHttpResponse(200, OPERATION_RES),
                         mockHttpResponse(200, OPERATION_DONE_RES));
-        Assert.assertNotNull(mHOUtil.removeInstance());
+        Assert.assertEquals(CommandStatus.SUCCESS, mHOUtil.removeInstance().getStatus());
     }
 
     @Test
