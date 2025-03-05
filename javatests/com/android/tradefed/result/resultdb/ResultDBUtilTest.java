@@ -36,4 +36,16 @@ public final class ResultDBUtilTest {
                                 }))
                 .isEqualTo("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
     }
+
+    @Test
+    public void truncateString() {
+        // Test cases for BMP characters.
+        assertThat(ResultDBUtil.truncateString("abc", 3)).isEqualTo("abc");
+        assertThat(ResultDBUtil.truncateString("abc", 2)).isEqualTo("ab");
+        assertThat(ResultDBUtil.truncateString("abc", 1)).isEqualTo("a");
+        // Test cases for surrogate pairs. 🌍 is a 4-byte in UTF-8.
+        assertThat(ResultDBUtil.truncateString("Hello 🌍!", 8)).isEqualTo("Hello ");
+        assertThat(ResultDBUtil.truncateString("Hello 🌍!", 10)).isEqualTo("Hello 🌍");
+        assertThat(ResultDBUtil.truncateString("Hello 🌍!", 11)).isEqualTo("Hello 🌍!");
+    }
 }
