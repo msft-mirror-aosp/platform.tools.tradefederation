@@ -273,10 +273,10 @@ public class HostOrchestratorUtil {
         // 2. Obtain the necessary information to powerwash a GCE instance via Host Orchestrator.
         // 3. Attempt to powerwash a GCE instance via Host Orchestrator.
         // TODO(easoncylee): Flesh out this section when it's ready.
-        CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
         try {
             if (mUseOxygenation) {
                 if (mHOTunnel == null || !mHOTunnel.isAlive()) {
+                    CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
                     String msg = "Failed portforwarding Host Orchestrator tunnel.";
                     CLog.e(msg);
                     curlRes.setStderr(msg);
@@ -295,8 +295,9 @@ public class HostOrchestratorUtil {
             waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
         } catch (IOException | InterruptedException | ErrorResponseException | TimeoutException e) {
             CLog.e("Failed powerwashing gce via Host Orchestrator: %s", e);
+            return new CommandResult(CommandStatus.EXCEPTION);
         }
-        return curlRes;
+        return new CommandResult(CommandStatus.SUCCESS);
     }
 
     /** Remove Cuttlefish instance via Host Orchestrator. */
@@ -305,10 +306,10 @@ public class HostOrchestratorUtil {
         // 1. Portforward CURL tunnel
         // 2. Obtain the group and instance name.
         // 3. Attempt to remove the Instance via Host Orchestrator.
-        CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
         try {
             if (mUseOxygenation) {
                 if (mHOTunnel == null || !mHOTunnel.isAlive()) {
+                    CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
                     String msg = "Failed portforwarding Host Orchestrator tunnel.";
                     CLog.e(msg);
                     curlRes.setStderr(msg);
@@ -327,8 +328,9 @@ public class HostOrchestratorUtil {
             waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
         } catch (IOException | InterruptedException | ErrorResponseException | TimeoutException e) {
             CLog.e("Failed removing instance via Host Orchestrator: %s", e);
+            return new CommandResult(CommandStatus.EXCEPTION);
         }
-        return curlRes;
+        return new CommandResult(CommandStatus.SUCCESS);
     }
 
     /** Attempt to snapshot a Cuttlefish instance via Host Orchestrator. */
