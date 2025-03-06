@@ -17,11 +17,14 @@ package com.android.tradefed.result.resultdb;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.android.resultdb.proto.CreateInvocationRequest;
 import com.android.resultdb.proto.FailureReason;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.TestStatus;
 import com.android.resultdb.proto.Variant;
 import com.android.tradefed.build.BuildInfo;
+import com.android.tradefed.config.ConfigurationException;
+import com.android.tradefed.config.OptionSetter;
 import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.proto.TestRecordProto;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
@@ -39,6 +42,7 @@ public class ResultDBReporterTest {
 
     private InvocationSimulator mSimulator;
     private ResultDBReporterTester mReporter;
+    private OptionSetter mOption;
 
     private class ResultDBReporterTester extends ResultDBReporter {
 
@@ -50,6 +54,11 @@ public class ResultDBReporterTest {
 
         @Override
         IRecorderClient createRecorderClient(String invocationId, String updateToken) {
+            return mRecorder;
+        }
+
+        @Override
+        IRecorderClient createRecorderClient(CreateInvocationRequest request) {
             return mRecorder;
         }
 
@@ -88,9 +97,10 @@ public class ResultDBReporterTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws ConfigurationException {
         mReporter = new ResultDBReporterTester();
         mSimulator = InvocationSimulator.create().withModule("example-module");
+        mOption = new OptionSetter(mReporter);
     }
 
     @Test
@@ -101,6 +111,17 @@ public class ResultDBReporterTest {
                 .simulateInvocation(mReporter);
 
         assertThat(mReporter.mRecorder.getTestResults()).isEmpty();
+    }
+
+    @Test
+    public void createLocalInvocation_invocationCreated() throws Exception {
+        mOption.setOptionValue("create-local-invocation", "true");
+        mSimulator
+                .withTest("com.google.ExampleClass", "testExampleMethod")
+                .simulateInvocation(mReporter);
+
+        assertThat(mReporter.mRecorder.getTestResults())
+                .containsExactly(newTestResult("testExampleMethod").build());
     }
 
     @Test

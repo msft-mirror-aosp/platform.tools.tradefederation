@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result.resultdb;
 
-import com.android.resultdb.proto.CreateInvocationRequest;
 import com.android.resultdb.proto.Invocation;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.UpdateInvocationRequest;
@@ -33,16 +32,6 @@ class StubClient implements IRecorderClient {
     }
 
     private StubClient() {}
-
-    @Override
-    public Invocation createInvocation(CreateInvocationRequest request) {
-        // TODO: implement this method.
-        mInvocation =
-                request.getInvocation().toBuilder()
-                        .setName(String.format("invocations/%s", request.getInvocationId()))
-                        .build();
-        return mInvocation;
-    }
 
     @Override
     public Invocation finalizeInvocation(String invocationId) {

@@ -26,12 +26,14 @@ import com.android.tradefed.log.LogUtil.CLog;
 
 import com.google.auth.Credentials;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.common.base.Strings;
 
 import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.ClientCall;
 import io.grpc.ClientInterceptor;
 import io.grpc.ForwardingClientCall;
+import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Metadata;
@@ -54,8 +56,8 @@ public class Client implements IRecorderClient {
     private final Thread mUploadThread;
     // The id of the ResultDB invocation to upload results to.
     // Currently only one ResultDB invocation per TF invocation is supported.
-    private final String mInvocationId;
-    private final String mUpdateToken;
+    private String mInvocationId;
+    private String mUpdateToken;
 
     private final RecorderGrpc.RecorderBlockingStub mStub;
     private final Credentials mCredentials;
@@ -64,7 +66,7 @@ public class Client implements IRecorderClient {
     public static final String SERVER_ADDRESS = "staging.results.api.cr.dev";
     public static final int SERVER_PORT = 443;
 
-    private Client(String invocationId, String updateToken) {
+    private Client() {
         try {
             mCredentials = GoogleCredentials.getApplicationDefault();
         } catch (IOException e) {
@@ -80,9 +82,6 @@ public class Client implements IRecorderClient {
                         .withCallCredentials(MoreCallCredentials.from(mCredentials))
                         .withInterceptors(recorderInterceptor());
         mStub = stub;
-
-        mUpdateToken = updateToken;
-        mInvocationId = invocationId;
         mUploader = new Uploader();
         mUploadThread = new Thread(mUploader, "Recorder upload thread");
         mUploadThread.setDaemon(true);
@@ -90,7 +89,17 @@ public class Client implements IRecorderClient {
     }
 
     public static IRecorderClient create(String invocationId, String updateToken) {
-        return new Client(invocationId, updateToken);
+        Client client = new Client();
+        client.mInvocationId = invocationId;
+        client.mUpdateToken = updateToken;
+        return client;
+    }
+
+    public static IRecorderClient createWithNewInvocation(CreateInvocationRequest request) {
+        Client client = new Client();
+        Invocation invocation = client.createInvocation(request);
+        client.mInvocationId = invocation.getName().replace("invocations/", "");
+        return client;
     }
 
     // Interceptor that adds the update token to requests.
@@ -107,8 +116,32 @@ public class Client implements IRecorderClient {
                                 delegate) {
                             @Override
                             public void start(Listener<RespT> responseListener, Metadata headers) {
-                                headers.put(UPDATE_TOKEN_METADATA_KEY, mUpdateToken);
-                                delegate().start(responseListener, headers);
+                                if (!Strings.isNullOrEmpty(mUpdateToken)) {
+                                    // Add update token to request header.
+                                    headers.put(UPDATE_TOKEN_METADATA_KEY, mUpdateToken);
+                                }
+
+                                super.start(
+                                        new SimpleForwardingClientCallListener<RespT>(
+                                                responseListener) {
+                                            @Override
+                                            public void onHeaders(Metadata headers) {
+                                                String fullMethodName = method.getFullMethodName();
+                                                if (fullMethodName.equals(
+                                                        "luci.resultdb.v1.Recorder/CreateInvocation")) {
+                                                    String updateToken =
+                                                            headers.get(UPDATE_TOKEN_METADATA_KEY);
+
+                                                    if (!Strings.isNullOrEmpty(updateToken)) {
+                                                        // Retrieve the update token from the
+                                                        // response header.
+                                                        mUpdateToken = updateToken;
+                                                    }
+                                                }
+                                                super.onHeaders(headers);
+                                            }
+                                        },
+                                        headers);
                             }
                         };
                     }
@@ -116,10 +149,10 @@ public class Client implements IRecorderClient {
         return clientInterceptor;
     }
 
-    @Override
-    public Invocation createInvocation(CreateInvocationRequest request) {
-        CLog.i("Creating invocation: %s", request.toString());
-        return request.getInvocation();
+    private Invocation createInvocation(CreateInvocationRequest request) {
+        Invocation invocation = mStub.createInvocation(request);
+        CLog.i("Created invocation: %s", invocation.getName());
+        return invocation;
     }
 
     @Override
