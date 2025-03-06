@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileStore;
 import java.nio.file.FileSystemException;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
@@ -483,6 +484,27 @@ public class FileUtil {
                 CLog.d("Hardlink failed: '%s', falling back to copy.", e.getMessage());
                 copyFile(origFile, destFile);
                 return;
+            } else if (e.getMessage().contains(" Too many links")) {
+                String filePath = origFile.getAbsolutePath();
+                Path path = Paths.get(filePath);
+
+                try {
+                    // Get file attributes - link count
+                    long linkCount = (long) Files.getAttribute(path, "unix:nlink");
+                    // Get filesystem stats - total and free inodes
+                    FileStore fileStore = Files.getFileStore(path);
+                    long totalInodes = (long) fileStore.getAttribute("totalInodes");
+                    long freeInodes = (long) fileStore.getAttribute("freeInodes");
+                    CLog.d(
+                            "Too many links for file: %s, Hard link count: %d, Total inodes: %d, "
+                                    + "Free inodes: %d",
+                            origFile.getAbsolutePath(), linkCount, totalInodes, freeInodes);
+                } catch (UnsupportedOperationException uoe) {
+                    CLog.e("Filesystem does not support inode queries.", uoe.getMessage());
+                } catch (IOException ioe) {
+                    CLog.e("Error retrieving file or filesystem stats: " + ioe.getMessage());
+                }
+                throw e;
             }
             throw e;
         }
@@ -1428,3 +1450,4 @@ public class FileUtil {
         return e;
     }
 }
+
