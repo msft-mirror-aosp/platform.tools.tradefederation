@@ -24,6 +24,22 @@ python_binary_host {
     ],
     libs: [
         "cas_metrics_proto",
+        "content_uploader_lib",
+    ],
+    version: {
+        py3: {
+            embedded_launcher: true,
+        },
+    },
+}
+
+python_library_host {
+    name: "content_uploader_lib",
+    srcs: [
+        "uploader.py",
+    ],
+    libs: [
+        "cas_metrics_proto",
     ],
 }
 
@@ -34,5 +50,21 @@ python_library_host {
     ],
     proto: {
         canonical_path_from_root: false,
+    },
+}
+
+python_test_host {
+    name: "content_uploader_unittests",
+    main: "test.py",
+    srcs: [
+        "test.py",
+        "test_uploader.py",
+    ],
+    libs: [
+        "cas_metrics_proto",
+        "content_uploader_lib",
+    ],
+    test_options: {
+        unit_test: true,
     },
 }
