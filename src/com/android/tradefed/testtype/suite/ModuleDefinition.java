@@ -104,6 +104,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
@@ -255,6 +256,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         ConfigurationDescriptor configDescriptor = moduleConfig.getConfigurationDescription();
         mModuleInvocationContext = new InvocationContext();
         mModuleInvocationContext.setConfigurationDescriptor(configDescriptor.clone());
+        // Copy the command options invocation attributes to the invocation context
+        mModuleInvocationContext.addInvocationAttributes(
+                moduleConfig.getCommandOptions().getInvocationData());
 
         // If available in the suite, add the abi name
         if (configDescriptor.getAbi() != null) {
@@ -733,6 +737,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     if (mMergeAttempts) {
                         reportFinalResults(
                                 listener, mExpectedTests, mTestsResults, null, tearDownException);
+                        mTestsResults.clear();
+                        mExpectedTests = 0;
                     } else {
                         boolean reported = false;
                         // Push the attempts one by one
@@ -948,7 +954,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
 
     private void forwardTestResults(
             Map<TestDescription, TestResult> testResults, ITestInvocationListener listener) {
-        for (Map.Entry<TestDescription, TestResult> testEntry : testResults.entrySet()) {
+        Iterator<Map.Entry<TestDescription, TestResult>> iterator =
+                testResults.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<TestDescription, TestResult> testEntry = iterator.next();
             listener.testStarted(testEntry.getKey(), testEntry.getValue().getStartTime());
             switch (testEntry.getValue().getResultStatus()) {
                 case FAILURE:
@@ -986,6 +995,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     testEntry.getKey(),
                     testEntry.getValue().getEndTime(),
                     testEntry.getValue().getProtoMetrics());
+            // Remove the test result from the map to release memory.
+            iterator.remove();
         }
     }
 
@@ -1263,16 +1274,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         mRetryDecision = decision;
         // Carry the retry decision to the module configuration
         mModuleConfiguration.setRetryDecision(decision);
-    }
-
-    /** Returns a list of tests that ran in this module. */
-    List<TestRunResult> getTestsResults() {
-        return mTestsResults;
-    }
-
-    /** Returns the number of tests that was expected to be run */
-    int getNumExpectedTests() {
-        return mExpectedTests;
     }
 
     /** Returns True if a testRunFailure has been called on the module * */

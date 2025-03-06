@@ -51,9 +51,7 @@ public class XmlFormattedGeneratorReporter extends FormattedGeneratorReporter {
             CLog.e(e);
         } finally {
             // Once report and checksum files are created, release memory from base class.
-            for (String runName : getTestRunNames()) {
-                clearResultsForName(runName);
-            }
+            clearTestRunResults();
         }
     }
 

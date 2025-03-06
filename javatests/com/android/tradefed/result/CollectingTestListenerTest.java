@@ -362,6 +362,20 @@ public final class CollectingTestListenerTest {
         assertThat(mCollectingTestListener.getExpectedTests()).isEqualTo(3);
     }
 
+    @Test
+    public void testClearTestRunResults() {
+        final TestDescription test1 = injectTestRun("run1", "testFoo1", METRIC_VALUE, 0);
+        final TestDescription test2 = injectTestRun("run2", "testFoo2", METRIC_VALUE2, 0);
+        assertThat(mCollectingTestListener.getTestRunNames()).containsExactly("run1", "run2");
+        assertThat(mCollectingTestListener.getMergedTestRunResults().size()).isEqualTo(2);
+        assertThat(mCollectingTestListener.getCurrentRunResults().getNumTests()).isEqualTo(1);
+
+        mCollectingTestListener.clearTestRunResults();
+        assertThat(mCollectingTestListener.getTestRunNames()).isEmpty();
+        assertThat(mCollectingTestListener.getMergedTestRunResults()).isEmpty();
+        assertThat(mCollectingTestListener.getCurrentRunResults().getNumTests()).isEqualTo(0);
+    }
+
     /**
      * Injects a single test run with 1 passed test into the {@link CollectingTestListener} under
      * test
