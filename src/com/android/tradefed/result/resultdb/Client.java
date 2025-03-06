@@ -62,8 +62,8 @@ public class Client implements IRecorderClient {
     private final RecorderGrpc.RecorderBlockingStub mStub;
     private final Credentials mCredentials;
 
-    // TODO: Put this in config so that we can switch upload to prod or staging.
-    public static final String SERVER_ADDRESS = "staging.results.api.cr.dev";
+    // Both prod and staging Tradedfed instances should report to ResultDB prod server.
+    public static final String SERVER_ADDRESS = "results.api.cr.dev";
     public static final int SERVER_PORT = 443;
 
     private Client() {
