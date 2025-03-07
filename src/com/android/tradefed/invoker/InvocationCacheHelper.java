@@ -78,22 +78,26 @@ public class InvocationCacheHelper {
         }
         boolean emptyTestsDir = false;
         File invocationTestsDir = null;
-        if (testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY) != null) {
-            invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY);
-        } else {
-            testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        if (testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY) == null
+                || testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
+            emptyTestsDir = true;
+        }
+        if (!emptyTestsDir
+                && (mainConfig.getSkipManager().getTestArtifactsToDigest().isEmpty()
+                        || mainConfig
+                                .getSkipManager()
+                                .getTestArtifactsToDigest()
+                                .containsKey(null))) {
+            CLog.d("Cannot handle testsdir.");
+            return;
         }
         try (CloseableTraceScope ignored = new CloseableTraceScope("upload_invocation_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
                     CacheClientFactory.createCacheClient(
                             CurrentInvocation.getWorkFolder(), cacheInstance);
-            if (invocationTestsDir == null) {
-                emptyTestsDir = true;
-                invocationTestsDir =
-                        FileUtil.createNamedTempDir(
-                                CurrentInvocation.getWorkFolder(), "invoc-cache");
-            }
+            invocationTestsDir =
+                    FileUtil.createNamedTempDir(CurrentInvocation.getWorkFolder(), "invoc-cache");
             ExecutableAction action =
                     ExecutableAction.create(
                             invocationTestsDir,
@@ -106,9 +110,7 @@ public class InvocationCacheHelper {
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
         } finally {
-            if (emptyTestsDir) {
-                FileUtil.recursiveDelete(invocationTestsDir);
-            }
+            FileUtil.recursiveDelete(invocationTestsDir);
         }
     }
 
@@ -123,22 +125,26 @@ public class InvocationCacheHelper {
         }
         boolean emptyTestsDir = false;
         File invocationTestsDir = null;
-        if (testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY) != null) {
-            invocationTestsDir = testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY);
-        } else {
-            testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE);
+        if (testInfo.getBuildInfo().getFile(BuildInfoFileKey.ROOT_DIRECTORY) == null
+                && testInfo.getBuildInfo().getFile(BuildInfoFileKey.TESTDIR_IMAGE) == null) {
+            emptyTestsDir = true;
+        }
+        if (!emptyTestsDir
+                && (mainConfig.getSkipManager().getTestArtifactsToDigest().isEmpty()
+                        || mainConfig
+                                .getSkipManager()
+                                .getTestArtifactsToDigest()
+                                .containsKey(null))) {
+            CLog.d("Cannot handle testsdir.");
+            return new CacheInvocationResultDescriptor(false, null);
         }
         try (CloseableTraceScope ignored = new CloseableTraceScope("lookup_invocation_results")) {
             String cacheInstance = mainConfig.getCommandOptions().getRemoteCacheInstanceName();
             ICacheClient cacheClient =
                     CacheClientFactory.createCacheClient(
                             CurrentInvocation.getWorkFolder(), cacheInstance);
-            if (invocationTestsDir == null) {
-                emptyTestsDir = true;
-                invocationTestsDir =
-                        FileUtil.createNamedTempDir(
-                                CurrentInvocation.getWorkFolder(), "invoc-cache");
-            }
+            invocationTestsDir =
+                    FileUtil.createNamedTempDir(CurrentInvocation.getWorkFolder(), "invoc-cache");
             ExecutableAction action =
                     ExecutableAction.create(
                             invocationTestsDir,
@@ -172,9 +178,7 @@ public class InvocationCacheHelper {
         } catch (IOException | RuntimeException | InterruptedException e) {
             CLog.e(e);
         } finally {
-            if (emptyTestsDir) {
-                FileUtil.recursiveDelete(invocationTestsDir);
-            }
+            FileUtil.recursiveDelete(invocationTestsDir);
         }
         return null;
     }
@@ -183,6 +187,10 @@ public class InvocationCacheHelper {
         Map<String, String> environment = new HashMap<>();
         for (Entry<String, Digest> entry :
                 mainConfig.getSkipManager().getImageToDigest().entrySet()) {
+            environment.put(entry.getKey(), entry.getValue().getHash());
+        }
+        for (Entry<String, Digest> entry :
+                mainConfig.getSkipManager().getTestArtifactsToDigest().entrySet()) {
             environment.put(entry.getKey(), entry.getValue().getHash());
         }
         String atpTestName =
