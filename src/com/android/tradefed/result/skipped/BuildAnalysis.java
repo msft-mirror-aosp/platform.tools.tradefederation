@@ -30,23 +30,29 @@ public class BuildAnalysis {
     private boolean mHasChangesInTests = false;
     private Set<String> mUnchangedModules = new HashSet<>();
     private Map<String, Digest> mImageToDigest = new LinkedHashMap<>();
+    private Map<String, Digest> mTestArtifactsToDigest = new LinkedHashMap<>();
 
     public BuildAnalysis(boolean deviceImageChanged, boolean hasTestsArtifacts) {
         this.mDeviceImageChanged = deviceImageChanged;
         this.mHasTestsArtifacts = hasTestsArtifacts;
     }
+
     public boolean deviceImageChanged() {
         return mDeviceImageChanged;
     }
+
     public boolean hasTestsArtifacts() {
         return mHasTestsArtifacts;
     }
+
     public boolean hasChangesInTestsArtifacts() {
         return mHasChangesInTests;
     }
+
     public void setChangesInTests(boolean hasChanges) {
         mHasChangesInTests = hasChanges;
     }
+
     public void addUnchangedModules(Set<String> unchangedModules) {
         mUnchangedModules.addAll(unchangedModules);
     }
@@ -56,12 +62,21 @@ public class BuildAnalysis {
         return this;
     }
 
+    public BuildAnalysis addTestArtifactsDigestMapping(Map<String, Digest> artifactsToDigest) {
+        mTestArtifactsToDigest.putAll(artifactsToDigest);
+        return this;
+    }
+
     public Set<String> getUnchangedModules() {
         return mUnchangedModules;
     }
 
     public Map<String, Digest> getImageToDigest() {
         return mImageToDigest;
+    }
+
+    public Map<String, Digest> getArtifactsToDigest() {
+        return mTestArtifactsToDigest;
     }
 
     @Override
@@ -74,19 +89,25 @@ public class BuildAnalysis {
                 + mHasChangesInTests
                 + ", imageDigests="
                 + mImageToDigest
+                + ", artifactDigests="
+                + mTestArtifactsToDigest
                 + "]";
     }
+
     public static BuildAnalysis mergeReports(List<BuildAnalysis> reports) {
         boolean deviceImageChanged = false;
         boolean hasTestsArtifacts = false;
         Map<String, Digest> mergedImageToDigest = new LinkedHashMap<>();
+        Map<String, Digest> mergedArtifactToDigest = new LinkedHashMap<>();
         // Anchor toward things changing
         for (BuildAnalysis rep : reports) {
             deviceImageChanged |= rep.deviceImageChanged();
             hasTestsArtifacts |= rep.hasTestsArtifacts();
             mergedImageToDigest.putAll(rep.getImageToDigest());
+            mergedArtifactToDigest.putAll(rep.getArtifactsToDigest());
         }
         return new BuildAnalysis(deviceImageChanged, hasTestsArtifacts)
-                .addImageDigestMapping(mergedImageToDigest);
+                .addImageDigestMapping(mergedImageToDigest)
+                .addTestArtifactsDigestMapping(mergedArtifactToDigest);
     }
 }
