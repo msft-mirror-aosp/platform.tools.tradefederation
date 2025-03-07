@@ -26,12 +26,13 @@ import subprocess
 import time
 
 import cas_metrics_pb2  # type: ignore
+from artifact_manager import ArtifactManager
 from uploader import ArtifactConfig
 from uploader import CasInfo
 from uploader import Uploader
 
 
-VERSION = '1.5'
+VERSION = '1.6'
 
 CAS_UPLOADER_PREBUILT_PATH = 'tools/tradefederation/prebuilts/'
 CAS_UPLOADER_PATH = 'tools/content_addressed_storage/prebuilts/'
@@ -116,14 +117,6 @@ ARTIFACTS = {
     'img': ArtifactConfig('*-img-*zip', False, chunk=True, chunk_dir=True)
 }
 
-# Artifacts will be uploaded if the config name is set in arguments `--experiment_artifacts`.
-# These configs are usually used to upload artifacts in partial branches/targets for experiment
-# purpose.
-# A sample entry:
-#   "device_image_target_files": ArtifactConfig('*-target_files-*.zip', True)
-EXPERIMENT_ARTIFACT_CONFIGS = {
-    "device_image_proguard_dict": ArtifactConfig('*-proguard-dict-*.zip', False, True, True),
-}
 
 def _init_cas_info() -> CasInfo:
     client_path = _get_client()
@@ -179,69 +172,6 @@ def _get_env_var(key: str, default=None, check=False):
     return value
 
 
-def _get_artifact_property(values: list[str], property:str, default:bool) -> bool:
-    for value in values:
-        # Example:
-        #   --artifacts 'img=*-img-*zip chunk=True'
-        #   --artifacts 'img=*-img-*zip standard=False chunk'
-        if value.startswith(property):
-            tokens=value.split('=', maxsplit=1)
-            if tokens[0] != property:
-                continue
-            if len(tokens) == 1 or tokens[1] in {'T', 't', 'True', 'true'}:
-                return True
-            return False
-    return default
-
-
-def _override_artifacts(args):
-    for override in args.artifacts:
-        # Example:
-        #   --artifacts 'img=./*-img-*zip unzip chunk=False'
-        tokens=override.split('=', maxsplit=1)
-        if len(tokens) == 1:
-            logging.warning("Artifact override - ignored (invalid): %s", override)
-            continue
-        name = tokens[0]
-        artifact = ARTIFACTS[name] if name in ARTIFACTS else None
-        if not tokens[1]:  # Delete an artifact ('name=')
-            if artifact:
-                logging.info("Artifact delete: %s", override)
-                del ARTIFACTS[name]
-            else:
-                logging.warning("Artifact delete - ignored (name not found): %s", override)
-            return
-        values = tokens[1].split()
-        source_path = values[0]
-        if artifact:
-            logging.info("Artifact override: %s", override)
-            artifact.source_path = source_path
-        else:
-            logging.info("Artifact add new: %s", override)
-            artifact = ArtifactConfig(source_path, False)
-        if len(values) > 1:
-            artifact.unzip = _get_artifact_property(values[1:], "unzip", artifact.unzip)
-            artifact.standard = _get_artifact_property(values[1:], "standard", artifact.standard)
-            artifact.chunk = _get_artifact_property(values[1:], "chunk", artifact.chunk)
-            artifact.chunk_dir = _get_artifact_property(values[1:], "chunk_dir", artifact.chunk_dir)
-        logging.info("Artifact: %s", artifact)
-        ARTIFACTS[name] = artifact
-
-
-def _parse_additional_artifacts(args) -> list[ArtifactConfig]:
-    additional_artifacts = []
-    for config in args.experiment_artifacts:
-        if config not in EXPERIMENT_ARTIFACT_CONFIGS:
-            logging.warning('Ignore invalid experiment_artifacts: %s', config)
-        else:
-            additional_artifacts.append(EXPERIMENT_ARTIFACT_CONFIGS[config])
-            logging.info(
-                'Added experiment artifact from arguments %s',
-                EXPERIMENT_ARTIFACT_CONFIGS[config].source_path,
-            )
-    return additional_artifacts
-
-
 def main():
     """Uploads the specified artifacts to CAS."""
     parser = argparse.ArgumentParser()
@@ -285,16 +215,14 @@ def main():
         start = time.time()
 
         args = parser.parse_args()
-        _override_artifacts(args)
-        additional_artifacts = _parse_additional_artifacts(args)
+        artifacts = ArtifactManager(ARTIFACTS).override_artifacts(args).artifacts()
         if args.list:
-            for name, artifact in ARTIFACTS.items():
+            for name, artifact in artifacts.items():
                 print(f"{name:<30}={artifact}")
 
         cas_info = _init_cas_info()
         cas_metrics = cas_metrics_pb2.CasMetrics()
-        Uploader(cas_info, log_file).upload(
-                list(ARTIFACTS.values()) + additional_artifacts,
+        Uploader(cas_info, log_file).upload(list(artifacts.values()),
                 dist_dir, cas_metrics, MAX_WORKERS, args.dryrun)
 
         elapsed = time.time() - start
