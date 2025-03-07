@@ -70,6 +70,11 @@ public class ContentAnalysisResults {
         return this;
     }
 
+    public ContentAnalysisResults addArtifactDigestMapping(String artifactFileName, Digest digest) {
+        artifactToDigest.put(artifactFileName, digest);
+        return this;
+    }
+
     public ContentAnalysisResults addChangedBuildKey(long count) {
         buildKeyChanges += count;
         return this;
