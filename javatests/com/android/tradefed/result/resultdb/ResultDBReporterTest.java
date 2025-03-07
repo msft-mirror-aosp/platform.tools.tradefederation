@@ -94,6 +94,16 @@ public class ResultDBReporterTest {
     }
 
     @Test
+    public void noInvocationIdInInvocationContext_reporterDisabled() {
+        mSimulator
+                .withInvocationAttribute("resultdb_invocation_update_token", "update_token")
+                .withTest("com.google.ExampleClass", "testExampleMethod")
+                .simulateInvocation(mReporter);
+
+        assertThat(mReporter.mRecorder.getTestResults()).isEmpty();
+    }
+
+    @Test
     public void uploadFunctionalResults() {
         mSimulator
                 .withInvocationAttribute("resultdb_invocation_id", "invocation_001")

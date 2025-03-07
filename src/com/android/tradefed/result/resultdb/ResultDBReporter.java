@@ -24,6 +24,8 @@ import com.android.resultdb.proto.Variant;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
+import com.android.tradefed.config.Option;
+import com.android.tradefed.config.OptionClass;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement;
@@ -52,12 +54,13 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@OptionClass(alias = "resultdb-reporter")
 /** Result reporter that uploads test results to ResultDB. */
 public class ResultDBReporter
         implements ITestSummaryListener,
@@ -71,11 +74,13 @@ public class ResultDBReporter
     // Tag name for the test mapping source
     private static final String TEST_MAPPING_TAG = "test_mapping_source";
 
+    @Option(name = "disable", description = "Set to true if reporter is disabled")
+    private boolean mDisable = false;
+
     private Invocation mInvocation;
     private String mInvocationId;
     private IRecorderClient mRecorder;
-    // If true result reporter will be enabled.
-    private boolean mEnable = false;
+
     // Common variant values for all test in this TF invocation.
     private Variant mBaseVariant;
     // Module level variant for test in the same test module.
@@ -129,21 +134,27 @@ public class ResultDBReporter
 
     @Override
     public void invocationStarted(IInvocationContext context) {
-        // Obtain invocation ID from context.
-        String invocationId = context.getAttribute("resultdb_invocation_id");
-        String updateToken = context.getAttribute("resultdb_invocation_update_token");
-        if (!invocationId.isEmpty() && !updateToken.isEmpty()) {
-            mEnable = true;
-        }
-        if (!mEnable) {
+        if (mDisable) {
             CLog.i("ResultDBReporter is disabled");
             return;
         }
+        // Obtain invocation ID from context.
+        String invocationId = context.getAttribute("resultdb_invocation_id");
+        String updateToken = context.getAttribute("resultdb_invocation_update_token");
+        if (invocationId.isEmpty() || updateToken.isEmpty()) {
+            mDisable = true;
+            CLog.i(
+                    "ResultDBReporter is disabled as invocation ID or update token is not"
+                            + " provided.");
+            return;
+        }
+
         mInvocationId = invocationId;
         mRecorder = createRecorderClient(invocationId, updateToken);
         try {
             mResultIdBase = this.randomHexString();
         } catch (NoSuchAlgorithmException e) {
+            mDisable = true;
             CLog.e("Failed to generate random result ID base.");
             return;
         }
@@ -183,7 +194,7 @@ public class ResultDBReporter
 
     @Override
     public void invocationEnded(long elapsedTime) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         mRecorder.finalizeTestResults();
@@ -192,7 +203,7 @@ public class ResultDBReporter
 
     @Override
     public void testModuleStarted(IInvocationContext moduleContext) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         // Extract module informations.
@@ -272,15 +283,15 @@ public class ResultDBReporter
 
     @Override
     public void testStarted(TestDescription test, long startTime) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         Variant.Builder variantBuilder = Variant.newBuilder();
         if (mModuleVariant != null) {
             variantBuilder = variantBuilder.mergeFrom(mModuleVariant);
-    }
+        }
         if (mBaseVariant != null) {
-                variantBuilder = variantBuilder.mergeFrom(mBaseVariant);
+            variantBuilder = variantBuilder.mergeFrom(mBaseVariant);
         }
         mCurrentTestResult =
                 TestResult.newBuilder()
@@ -306,7 +317,7 @@ public class ResultDBReporter
 
     @Override
     public void testAssumptionFailure(TestDescription test, FailureDescription failure) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         if (mCurrentTestResult == null) {
@@ -320,7 +331,7 @@ public class ResultDBReporter
 
     @Override
     public void testSkipped(TestDescription test, SkipReason reason) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         if (mCurrentTestResult == null) {
@@ -334,7 +345,7 @@ public class ResultDBReporter
 
     @Override
     public void testFailed(TestDescription test, String trace) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         if (mCurrentTestResult == null) {
@@ -356,7 +367,7 @@ public class ResultDBReporter
 
     @Override
     public void testFailed(TestDescription test, FailureDescription failure) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         if (mCurrentTestResult == null) {
@@ -391,7 +402,7 @@ public class ResultDBReporter
 
     @Override
     public void testIgnored(TestDescription test) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         if (mCurrentTestResult == null) {
@@ -413,7 +424,7 @@ public class ResultDBReporter
             TestDescription test,
             long endTime,
             HashMap<String, MetricMeasurement.Metric> testMetrics) {
-        if (!mEnable) {
+        if (mDisable) {
             return;
         }
         long startTimeMillis = Timestamps.toMillis(mCurrentTestResult.getStartTime());

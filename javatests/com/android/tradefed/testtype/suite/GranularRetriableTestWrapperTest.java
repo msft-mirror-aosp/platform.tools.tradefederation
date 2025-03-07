@@ -26,7 +26,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.ddmlib.IDevice;
-import com.android.ddmlib.testrunner.TestResult.TestStatus;
 import com.android.tradefed.command.CommandOptions;
 import com.android.tradefed.config.Configuration;
 import com.android.tradefed.config.ConfigurationDescriptor;
@@ -51,13 +50,17 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.retry.BaseRetryDecision;
 import com.android.tradefed.retry.IRetryDecision;
 import com.android.tradefed.retry.RetryStatistics;
 import com.android.tradefed.testtype.IDeviceTest;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFilterReceiver;
+
+import com.google.common.truth.Truth;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -91,6 +94,8 @@ public class GranularRetriableTestWrapperTest {
         protected ArrayList<TestDescription> mTestCases;
         protected Map<TestDescription, Integer> mBecomePass = new HashMap<>();
         protected Map<TestDescription, Boolean> mShouldFail;
+        private Map<TestDescription, Set<Integer>> mSkippedAttempts = new HashMap<>();
+        private Map<Integer, String> mRunFailureAttempts = new HashMap<>();
         private String mRunFailure = null;
         private Integer mClearRunFailureAttempt = null;
         protected int mAttempts = 0;
@@ -120,6 +125,15 @@ public class GranularRetriableTestWrapperTest {
             mBecomePass.put(testCase, attempt);
         }
 
+        public void addSkippedTestCase(TestDescription testCase, int attempt) {
+            mSkippedAttempts.putIfAbsent(testCase, new HashSet<>());
+            mSkippedAttempts.get(testCase).add(attempt);
+        }
+
+        public void addRunFailure(String message, int attempt) {
+            mRunFailureAttempts.put(attempt, message);
+        }
+
         public void setRunFailure(String message) {
             mRunFailure = message;
         }
@@ -132,25 +146,31 @@ public class GranularRetriableTestWrapperTest {
             return true;
         }
 
+        protected void runTest(TestDescription td, ITestInvocationListener listener) throws DeviceUnresponsiveException {
+            listener.testStarted(td);
+            int passAttempt = -1;
+            if (mBecomePass.get(td) != null) {
+                passAttempt = mBecomePass.get(td);
+            }
+            Set<Integer> skippedAttempts = mSkippedAttempts.get(td);
+            if (skippedAttempts != null && skippedAttempts.contains(mAttempts)) {
+                listener.testSkipped(td, new SkipReason("reason", "reason"));
+            } else if (mShouldFail.get(td)) {
+                if (passAttempt == -1 || mAttempts < passAttempt) {
+                    listener.testFailed(td, String.format("Fake failure %s", td.toString()));
+                }
+            }
+            listener.testEnded(td, new HashMap<String, Metric>());
+        }
+
         @Override
         public void run(TestInformation testInfo, ITestInvocationListener listener)
                 throws DeviceUnresponsiveException {
             listener.testRunStarted(RUN_NAME, mTestCases.size());
             for (TestDescription td : mTestCases) {
-                if (!shouldRun(td)) {
-                    continue;
+                if (shouldRun(td)) {
+                    runTest(td, listener);
                 }
-                listener.testStarted(td);
-                int passAttempt = -1;
-                if (mBecomePass.get(td) != null) {
-                    passAttempt = mBecomePass.get(td);
-                }
-                if (mShouldFail.get(td)) {
-                    if (passAttempt == -1 || mAttempts < passAttempt) {
-                        listener.testFailed(td, String.format("Fake failure %s", td.toString()));
-                    }
-                }
-                listener.testEnded(td, new HashMap<String, Metric>());
             }
             if (mRunFailure != null) {
                 listener.testRunFailed(mRunFailure);
@@ -158,6 +178,10 @@ public class GranularRetriableTestWrapperTest {
                     mRunFailure = null;
                 }
             }
+            if (mRunFailureAttempts.containsKey(mAttempts)) {
+                listener.testRunFailed(mRunFailureAttempts.get(mAttempts));
+            }
+
             listener.testRunEnded(100000, new HashMap<String, Metric>());
             mAttempts++;
         }
@@ -276,18 +300,7 @@ public class GranularRetriableTestWrapperTest {
                         continue;
                     }
                     listener.testRunStarted(runName, testCases.size());
-                    listener.testStarted(td);
-                    int passAttempt = -1;
-                    if (mBecomePass.get(td) != null) {
-                        passAttempt = mBecomePass.get(td);
-                    }
-                    if (mShouldFail.get(td)) {
-                        if (passAttempt == -1 || mAttempts < passAttempt) {
-                            listener.testFailed(
-                                    td, String.format("Fake failure %s", td.toString()));
-                        }
-                    }
-                    listener.testEnded(td, new HashMap<String, Metric>());
+                    runTest(td, listener);
                     listener.testRunEnded(0, new HashMap<String, Metric>());
                 }
             }
@@ -330,6 +343,14 @@ public class GranularRetriableTestWrapperTest {
         mDecision.setInvocationContext(mModuleInvocationContext);
         granularTestWrapper.setRetryDecision(mDecision);
         return granularTestWrapper;
+    }
+
+    /** Asserts that the test result has the given status. */
+    private void assertTestStatus(
+            Map<TestDescription, TestResult> testResults,
+            TestDescription test,
+            TestStatus status) {
+        Truth.assertThat(testResults.get(test).getResultStatus()).isEqualTo(status);
     }
 
     @Before
@@ -420,9 +441,9 @@ public class GranularRetriableTestWrapperTest {
         assertTrue(testResults.containsKey(fakeTestCase2));
         assertTrue(testResults.containsKey(fakeTestCase3));
         // Verify the final TestRunResult is a merged value of every retried TestRunResults.
-        assertEquals(TestStatus.FAILURE, testResults.get(fakeTestCase).getStatus());
-        assertEquals(TestStatus.FAILURE, testResults.get(fakeTestCase2).getStatus());
-        assertEquals(TestStatus.PASSED, testResults.get(fakeTestCase3).getStatus());
+        assertTestStatus(testResults, fakeTestCase, TestStatus.FAILURE);
+        assertTestStatus(testResults, fakeTestCase2, TestStatus.FAILURE);
+        assertTestStatus(testResults, fakeTestCase3, TestStatus.PASSED);
 
         // Ensure that the PASSED test was only run the first time.
         assertTrue(
@@ -479,9 +500,9 @@ public class GranularRetriableTestWrapperTest {
         assertTrue(testResults.containsKey(fakeTestCase2));
         assertTrue(testResults.containsKey(fakeTestCase3));
         // Verify the final TestRunResult is a merged value of every retried TestRunResults.
-        assertEquals(TestStatus.PASSED, testResults.get(fakeTestCase).getStatus()); // became pass
-        assertEquals(TestStatus.FAILURE, testResults.get(fakeTestCase2).getStatus());
-        assertEquals(TestStatus.PASSED, testResults.get(fakeTestCase3).getStatus());
+        assertTestStatus(testResults, fakeTestCase, TestStatus.PASSED); // became pass
+        assertTestStatus(testResults, fakeTestCase2, TestStatus.FAILURE);
+        assertTestStatus(testResults, fakeTestCase3, TestStatus.PASSED);
 
         // Ensure that the PASSED test was only run the first time.
         assertTrue(
@@ -538,9 +559,9 @@ public class GranularRetriableTestWrapperTest {
         assertTrue(testResults.containsKey(fakeTestCase2));
         assertTrue(testResults.containsKey(fakeTestCase3));
         // Verify the final TestRunResult is a merged value of every retried TestRunResults.
-        assertEquals(TestStatus.PASSED, testResults.get(fakeTestCase).getStatus()); // became pass
-        assertEquals(TestStatus.PASSED, testResults.get(fakeTestCase2).getStatus());
-        assertEquals(TestStatus.PASSED, testResults.get(fakeTestCase3).getStatus());
+        assertTestStatus(testResults, fakeTestCase, TestStatus.PASSED); // became pass
+        assertTestStatus(testResults, fakeTestCase2, TestStatus.PASSED);
+        assertTestStatus(testResults, fakeTestCase3, TestStatus.PASSED);
 
         // Ensure that the PASSED test was only run the first time.
         assertTrue(
@@ -623,10 +644,8 @@ public class GranularRetriableTestWrapperTest {
         // Check that all test cases where rerun
         for (TestRunResult runResult : resultCollector) {
             assertEquals(2, runResult.getNumTests());
-            assertEquals(
-                    TestStatus.FAILURE, runResult.getTestResults().get(fakeTestCase1).getStatus());
-            assertEquals(
-                    TestStatus.PASSED, runResult.getTestResults().get(fakeTestCase2).getStatus());
+            assertTestStatus(runResult.getTestResults(), fakeTestCase1, TestStatus.FAILURE);
+            assertTestStatus(runResult.getTestResults(), fakeTestCase2, TestStatus.PASSED);
         }
     }
 
@@ -670,15 +689,17 @@ public class GranularRetriableTestWrapperTest {
         TestRunResult runResult2 = finalResult.get(1);
 
         // Verify the final result includes two completed test runs. The failed test in the 1st run
-        // passes after one retry, and the second test run retried maxRunCount times and stil has
+        // passes after one retry, and the second test run retried maxRunCount times and still has
         // failed test cases.
         assertEquals(RUN_NAME, runResult1.getName());
         assertEquals(RUN_NAME_2, runResult2.getName());
-        assertEquals(TestStatus.PASSED, runResult1.getTestResults().get(fakeTestCase1).getStatus());
-        assertEquals(TestStatus.PASSED, runResult1.getTestResults().get(fakeTestCase2).getStatus());
-        assertEquals(
-                TestStatus.FAILURE, runResult2.getTestResults().get(fakeTestCase3).getStatus());
-        assertEquals(TestStatus.PASSED, runResult2.getTestResults().get(fakeTestCase4).getStatus());
+        assertTestStatus(runResult1.getTestResults(), fakeTestCase1, TestStatus.PASSED);
+        assertTestStatus(runResult1.getTestResults(), fakeTestCase2, TestStatus.PASSED);
+        assertTestStatus(runResult2.getTestResults(), fakeTestCase3, TestStatus.FAILURE);
+        assertTestStatus(runResult2.getTestResults(), fakeTestCase4, TestStatus.PASSED);
+        RetryStatistics stats = mDecision.getRetryStatistics();
+        Truth.assertThat(stats.mRetryFailure).isEqualTo(1);
+        Truth.assertThat(stats.mRetrySuccess).isEqualTo(1);
     }
 
     /** Test the retry for Run level. */
