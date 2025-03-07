@@ -48,6 +48,7 @@ public class JUnitXmlParserTest {
     private static final String TEST_PARSE_FILE = "JUnitXmlParserTest_testParse.xml";
     private static final String TEST_PARSE_FILE2 = "JUnitXmlParserTest_error.xml";
     private static final String TEST_PARSE_FILE3 = "JUnitXmlParserTest_error2.xml";
+    private static final String TEST_PARSE_FILE4 = "JUnitXmlParserTest_error3.xml";
     private static final String BAZEL_SH_TEST_XML = "JUnitXmlParserTest_bazelShTest.xml";
 
     @Mock ITestInvocationListener mMockListener;
@@ -110,6 +111,32 @@ public class JUnitXmlParserTest {
         verify(mMockListener).testEnded(test1, new HashMap<String, Metric>());
         verify(mMockListener).testStarted(test2);
         verify(mMockListener).testIgnored(test2);
+        verify(mMockListener).testEnded(test2, new HashMap<String, Metric>());
+        verify(mMockListener).testStarted(test3);
+        verify(mMockListener).testFailed(Mockito.eq(test3), Mockito.eq(failure));
+        verify(mMockListener).testEnded(test3, new HashMap<String, Metric>());
+        verify(mMockListener).testRunEnded(918686L, new HashMap<String, Metric>());
+    }
+
+    /** Test parsing the <error> and <skipped> tag with assumption failure in the junit xml. */
+    @Test
+    public void testParseErrorAndSkippedWithAssumptionFailure() throws ParseException {
+        TestDescription test1 = new TestDescription("PassTest", "testPass");
+        TestDescription test2 = new TestDescription("SkippedTest", "testSkip");
+        TestDescription test3 = new TestDescription("ErrorTest", "testFail");
+
+        new JUnitXmlParser(mMockListener).parse(extractTestXml(TEST_PARSE_FILE4));
+        FailureDescription failure =
+                FailureDescription.create(
+                        "java.lang.NullPointerException\n    "
+                                + "at FailTest.testFail:65\n        ",
+                        FailureStatus.TEST_FAILURE);
+
+        verify(mMockListener).testRunStarted("suiteName", 3);
+        verify(mMockListener).testStarted(test1);
+        verify(mMockListener).testEnded(test1, new HashMap<String, Metric>());
+        verify(mMockListener).testStarted(test2);
+        verify(mMockListener).testAssumptionFailure(test2, "org.junit.AssumptionViolatedException");
         verify(mMockListener).testEnded(test2, new HashMap<String, Metric>());
         verify(mMockListener).testStarted(test3);
         verify(mMockListener).testFailed(Mockito.eq(test3), Mockito.eq(failure));
