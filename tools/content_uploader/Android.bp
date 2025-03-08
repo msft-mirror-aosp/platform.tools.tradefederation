@@ -36,8 +36,9 @@ python_binary_host {
 python_library_host {
     name: "content_uploader_lib",
     srcs: [
-        "uploader.py",
         "artifact_manager.py",
+        "artifacts.py",
+        "uploader.py",
     ],
     libs: [
         "cas_metrics_proto",
@@ -60,6 +61,7 @@ python_test_host {
     srcs: [
         "test.py",
         "test_artifact_manager.py",
+        "test_artifacts.py",
         "test_uploader.py",
     ],
     libs: [
