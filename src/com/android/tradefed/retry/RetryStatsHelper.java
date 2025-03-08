@@ -17,18 +17,19 @@ package com.android.tradefed.retry;
 
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
+import com.android.tradefed.result.TestStatus;
 
-import com.google.common.collect.Sets;
-
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
 
 /** Calculate the retry statistics and metrics based on attempts comparison. */
 final class RetryStatsHelper {
 
-    private List<List<TestRunResult>> mResults = new ArrayList<>();
     private RetryStatistics mStats = new RetryStatistics();
+    private Set<TestDescription> mPassedTestCases = new HashSet<>();
+    private Set<TestDescription> mFailedTestCases = new HashSet<>();
 
     /** Add the results from the latest run to be tracked for statistics purpose. */
     public void addResultsFromRun(List<TestRunResult> mLatestResults) {
@@ -36,14 +37,25 @@ final class RetryStatsHelper {
     }
 
     /** Add the results from the latest run to be tracked for statistics purpose. */
-    public void addResultsFromRun(List<TestRunResult> mLatestResults, long timeForIsolation, int attempt) {
-        if (!mResults.isEmpty()) {
-            updateSuccess(mResults.get(mResults.size() - 1), mLatestResults);
-        }
+    public void addResultsFromRun(
+            List<TestRunResult> mLatestResults, long timeForIsolation, int attempt) {
         if (timeForIsolation != 0L) {
             mStats.mAttemptIsolationCost.put(attempt, timeForIsolation);
         }
-        mResults.add(mLatestResults);
+        for (var runResult : mLatestResults) {
+            if (runResult != null) {
+                // Track all tests where we failed to clear the failure (so if the test either
+                // failed or didn't run in subsequent attempts, it's a failed retry.)
+                var failedStatuses = Arrays.asList(TestStatus.FAILURE, TestStatus.SKIPPED);
+                mFailedTestCases.addAll(runResult.getTestsInState(failedStatuses));
+                mFailedTestCases.removeAll(runResult.getPassedTests());
+
+                // Only track retries as retrySuccess.
+                if (attempt > 0) {
+                    mPassedTestCases.addAll(runResult.getPassedTests());
+                }
+            }
+        }
     }
 
     /**
@@ -51,21 +63,9 @@ final class RetryStatsHelper {
      * {@link RetryStatistics} to represent the results.
      */
     public RetryStatistics calculateStatistics() {
-        if (!mResults.isEmpty()) {
-            List<TestRunResult> attemptResults = mResults.get(mResults.size() - 1);
-            Set<TestDescription> attemptFailures =
-                    BaseRetryDecision.getFailedTestCases(attemptResults).keySet();
-            mStats.mRetryFailure = attemptFailures.size();
-        }
+        mStats.mRetryFailure = mFailedTestCases.size();
+        mStats.mRetrySuccess = mPassedTestCases.size();
         return mStats;
     }
 
-    private void updateSuccess(
-            List<TestRunResult> previousResults, List<TestRunResult> latestResults) {
-        Set<TestDescription> diff =
-                Sets.difference(
-                        BaseRetryDecision.getFailedTestCases(previousResults).keySet(),
-                        BaseRetryDecision.getFailedTestCases(latestResults).keySet());
-        mStats.mRetrySuccess += diff.size();
-    }
 }

@@ -409,6 +409,70 @@ public class GranularRetriableTestWrapperTest {
         assertTrue(attempResults.isRunFailure());
     }
 
+    @Test
+    public void testIntraModuleRun_simple_emptyModuleRetry() throws Exception {
+        // Set up the test cases.
+        var testCases = new ArrayList<TestDescription>();
+        TestDescription fakeTestCase = new TestDescription("Class", "Test");
+        TestDescription fakeTestCase2 = new TestDescription("Class", "Test2");
+        testCases.add(fakeTestCase);
+        testCases.add(fakeTestCase2);
+        FakeTest test = new FakeTest(testCases);
+        test.addFailedTestCase(fakeTestCase);
+        test.addFailedTestCase(fakeTestCase2);
+        test.addTestBecomePass(fakeTestCase, 1);
+        test.addTestBecomePass(fakeTestCase2, 1);
+        test.setRunFailure("always crash");
+
+        // Create the test wrapper.
+        var granularTestWrapper = createGranularTestWrapper(test, 4);
+
+        // Run the test.
+        granularTestWrapper.run(mModuleInfo, new CollectingTestListener());
+
+        // Verify the first attempt.
+        var allTestResults = granularTestWrapper.getTestRunResultCollected().get(RUN_NAME);
+        var testResults = allTestResults.get(0).getTestResults();
+        Truth.assertThat(testResults.keySet()).containsExactly(fakeTestCase, fakeTestCase2);
+        assertTestStatus(testResults, fakeTestCase, TestStatus.FAILURE);
+        assertTestStatus(testResults, fakeTestCase2, TestStatus.FAILURE);
+        Truth.assertThat(allTestResults.get(0).isRunFailure()).isTrue();
+
+        // Verify the second attempt.
+        testResults = allTestResults.get(1).getTestResults();
+        Truth.assertThat(testResults.keySet()).containsExactly(fakeTestCase, fakeTestCase2);
+        assertTestStatus(testResults, fakeTestCase, TestStatus.PASSED);
+        assertTestStatus(testResults, fakeTestCase2, TestStatus.PASSED);
+        Truth.assertThat(allTestResults.get(1).isRunFailure()).isTrue();
+
+        // Verify the third attempt.
+        testResults = allTestResults.get(2).getTestResults();
+        Truth.assertThat(testResults.keySet()).isEmpty();
+        Truth.assertThat(allTestResults.get(2).isRunFailure()).isTrue();
+
+        // Verify the fourth attempt.
+        testResults = allTestResults.get(3).getTestResults();
+        Truth.assertThat(testResults.keySet()).isEmpty();
+        Truth.assertThat(allTestResults.get(3).isRunFailure()).isTrue();
+
+        // Verify no more retries.
+        Truth.assertThat(allTestResults).hasSize(4);
+
+        // Verify merging.
+        var finalTestResults = granularTestWrapper.getFinalTestRunResults();
+        Truth.assertThat(finalTestResults).hasSize(1);
+        testResults = finalTestResults.get(0).getTestResults();
+        Truth.assertThat(testResults.keySet()).containsExactly(fakeTestCase, fakeTestCase2);
+        assertTestStatus(testResults, fakeTestCase, TestStatus.PASSED);
+        assertTestStatus(testResults, fakeTestCase2, TestStatus.PASSED);
+        Truth.assertThat(finalTestResults.get(0).isRunFailure()).isTrue();
+
+        // Verify correct retry statistics. Both tests recovered.
+        RetryStatistics stats = mDecision.getRetryStatistics();
+        Truth.assertThat(stats.mRetryFailure).isEqualTo(0);
+        Truth.assertThat(stats.mRetrySuccess).isEqualTo(2);
+    }
+
     /**
      * Test that the "run" method has built-in retry logic and each run has an individual
      * ModuleListener and TestRunResult.

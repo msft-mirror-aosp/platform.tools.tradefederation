@@ -26,6 +26,7 @@ import com.android.tradefed.result.ITestSummaryListener;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestSummary;
+import com.android.tradefed.result.skipped.SkipReason;
 import com.android.tradefed.util.MultiMap;
 
 import java.time.LocalDateTime;
@@ -316,6 +317,11 @@ public class InvocationSimulator {
                     break;
                 case IGNORED:
                     reporter.testIgnored(mTests.get(i));
+                    break;
+                case TEST_SKIPPED:
+                    reporter.testSkipped(
+                            mTests.get(i),
+                            new SkipReason("skip reason message", "skip trigger", "bugId"));
                     break;
                 default:
                     break;

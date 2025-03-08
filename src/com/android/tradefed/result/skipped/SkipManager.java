@@ -107,6 +107,7 @@ public class SkipManager implements IDisableable {
     private String mReasonForSkippingInvocation = "SkipManager decided to skip.";
     private Set<String> mUnchangedModules = new HashSet<>();
     private Map<String, Digest> mImageFileToDigest = new LinkedHashMap<>();
+    private Map<String, Digest> mTestArtifactsToDigest = new LinkedHashMap<>();
 
     /** Setup and initialize the skip manager. */
     public void setup(IConfiguration config, IInvocationContext context) {
@@ -137,6 +138,10 @@ public class SkipManager implements IDisableable {
 
     public Map<String, Digest> getImageToDigest() {
         return mImageFileToDigest;
+    }
+
+    public Map<String, Digest> getTestArtifactsToDigest() {
+        return mTestArtifactsToDigest;
     }
 
     public void setImageAnalysis(ITestDevice device, ContentAnalysisContext analysisContext) {
