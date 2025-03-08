@@ -42,6 +42,8 @@ import java.util.stream.Stream;
 /** The analyzer takes context for the analysis and determine what is interesting. */
 public class TestContentAnalyzer {
 
+    public static final String TESTS_DIR_KEY = "testsdir";
+
     private final TestInformation information;
     private final boolean presubmitMode;
     private final List<ContentAnalysisContext> contexts;

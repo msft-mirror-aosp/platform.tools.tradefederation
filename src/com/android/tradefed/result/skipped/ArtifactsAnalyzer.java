@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package com.android.tradefed.result.skipped;
+
 import com.android.tradefed.build.BuildInfoKey.BuildInfoFileKey;
 import com.android.tradefed.build.IBuildInfo;
 import com.android.tradefed.build.content.ContentAnalysisContext;
@@ -37,6 +38,7 @@ import com.android.tradefed.util.SystemUtil;
 import build.bazel.remote.execution.v2.Digest;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +101,9 @@ public class ArtifactsAnalyzer {
             if (mTestArtifactsAnalysisContent.isEmpty()) {
                 // Couldn't do analysis, assume changes
                 finalReport.setChangesInTests(true);
+                Map<String, Digest> errorMap = new HashMap<String, Digest>();
+                errorMap.put(TestContentAnalyzer.TESTS_DIR_KEY, null);
+                finalReport.addTestArtifactsDigestMapping(errorMap);
             } else {
                 try (CloseableTraceScope ignored =
                         new CloseableTraceScope(
@@ -113,6 +118,9 @@ public class ArtifactsAnalyzer {
                     ContentAnalysisResults analysisResults = analyzer.evaluate();
                     if (analysisResults == null) {
                         finalReport.setChangesInTests(true);
+                        Map<String, Digest> errorMap = new HashMap<String, Digest>();
+                        errorMap.put(TestContentAnalyzer.TESTS_DIR_KEY, null);
+                        finalReport.addTestArtifactsDigestMapping(errorMap);
                     } else {
                         CLog.d("%s", analysisResults.toString());
                         finalReport.setChangesInTests(analysisResults.hasAnyTestsChange());
@@ -120,6 +128,8 @@ public class ArtifactsAnalyzer {
                             finalReport.addUnchangedModules(analysisResults.getUnchangedModules());
                         }
                         finalReport.addImageDigestMapping(analysisResults.getImageToDigest());
+                        finalReport.addTestArtifactsDigestMapping(
+                                analysisResults.getArtifactToDigest());
                     }
                 } catch (RuntimeException e) {
                     CLog.e(e);

@@ -35,6 +35,7 @@ public class ContentAnalysisResults {
     private Set<String> unchangedModules = new HashSet<>();
     private Set<String> modifiedModuleNames = new HashSet<>();
     private Map<String, Digest> imageToDigest = new LinkedHashMap<>();
+    private Map<String, Digest> artifactToDigest = new LinkedHashMap<>();
 
     public ContentAnalysisResults() {}
 
@@ -110,6 +111,10 @@ public class ContentAnalysisResults {
         return imageToDigest;
     }
 
+    public Map<String, Digest> getArtifactToDigest() {
+        return artifactToDigest;
+    }
+
     @Override
     public String toString() {
         return "ContentAnalysisResults [unchangedFiles="
@@ -143,6 +148,7 @@ public class ContentAnalysisResults {
             mergedResults.modifiedModuleNames.addAll(res.modifiedModuleNames);
             mergedResults.deviceImageChanges += res.deviceImageChanges;
             mergedResults.imageToDigest.putAll(res.imageToDigest);
+            mergedResults.artifactToDigest.putAll(res.artifactToDigest);
         }
         // Re-align what didn't change across analysis.
         mergedResults.unchangedModules.removeAll(mergedResults.modifiedModuleNames);

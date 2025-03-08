@@ -87,7 +87,7 @@ public class InvocationCacheHelper {
                         || mainConfig
                                 .getSkipManager()
                                 .getTestArtifactsToDigest()
-                                .containsKey(null))) {
+                                .containsValue(null))) {
             CLog.d("Cannot handle testsdir.");
             return;
         }
@@ -134,7 +134,7 @@ public class InvocationCacheHelper {
                         || mainConfig
                                 .getSkipManager()
                                 .getTestArtifactsToDigest()
-                                .containsKey(null))) {
+                                .containsValue(null))) {
             CLog.d("Cannot handle testsdir.");
             return new CacheInvocationResultDescriptor(false, null);
         }

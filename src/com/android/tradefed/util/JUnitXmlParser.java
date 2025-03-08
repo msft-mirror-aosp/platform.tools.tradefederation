@@ -71,6 +71,7 @@ public class JUnitXmlParser extends AbstractXmlParser {
         private static final String TESTCASE_TAG = "testcase";
         private TestDescription mCurrentTest = null;
         private StringBuffer mFailureContent = null;
+        private StringBuffer mSkippedTagContent = null;
         private String mCurrentMessage = null;
         private long mRunTimeMillis = 0L;
 
@@ -102,9 +103,8 @@ public class JUnitXmlParser extends AbstractXmlParser {
                 mTestListener.testStarted(mCurrentTest);
             }
             if (SKIPPED_TAG.equalsIgnoreCase(name)) {
-                if (mCurrentTest != null) {
-                    mTestListener.testIgnored(mCurrentTest);
-                }
+              // keeps track of the skipped tag content in case of assumption failure
+                mSkippedTagContent = new StringBuffer();
             }
             if (FAILURE_TAG.equalsIgnoreCase(name) || ERROR_TAG.equalsIgnoreCase(name)) {
                 // current testcase has a failure - will be extracted in characters() callback
@@ -122,6 +122,10 @@ public class JUnitXmlParser extends AbstractXmlParser {
             // if currently parsing a failure, add stack data to content
             if (mFailureContent != null) {
                 mFailureContent.append(data, offset, len);
+            }
+            // if currently parsing a skipped tag content, add stack data to content
+            if (mSkippedTagContent != null) {
+                mSkippedTagContent.append(data, offset, len);
             }
         }
 
@@ -146,8 +150,17 @@ public class JUnitXmlParser extends AbstractXmlParser {
                                 mFailureContent.toString(), FailureStatus.TEST_FAILURE);
                 mTestListener.testFailed(mCurrentTest, failure);
             }
+            if (SKIPPED_TAG.equalsIgnoreCase(name) && mCurrentTest != null) {
+              if (mSkippedTagContent == null || mSkippedTagContent.length() == 0) {
+                // if there was no skipped tag content, the test was ignored
+                mTestListener.testIgnored(mCurrentTest);
+              } else {
+                mTestListener.testAssumptionFailure(mCurrentTest, mSkippedTagContent.toString());
+              }
+            }
             mFailureContent = null;
             mCurrentMessage = null;
+            mSkippedTagContent = null;
         }
 
         /**

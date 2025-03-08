@@ -270,6 +270,7 @@ public class SkipManager implements IDisableable {
             return false;
         }
         mImageFileToDigest.putAll(results.getImageToDigest());
+        mTestArtifactsToDigest.putAll(results.getArtifactsToDigest());
         boolean presubmit = InvocationContext.isPresubmit(information.getContext());
         if (results.deviceImageChanged()) {
             return false;
