@@ -68,9 +68,11 @@ class ContentUploaderTest(unittest.TestCase):
             return None
 
 
-    def _create_fake_imagefile(self, dist_dir: str, name: str):
+    def _create_fake_imagefile(self, parent_dir: str, name: str):
         try:
-            path = os.path.join(dist_dir, name)
+            if not os.path.exists(parent_dir):
+                os.makedirs(parent_dir)
+            path = os.path.join(parent_dir, name)
             with open(path, "w", encoding="utf-8") as f:
                 f.write('fake image')
         except Exception as e:
@@ -130,7 +132,7 @@ done
 
 
     def test_standard_version_flags(self):
-        """standard_unzip version has '-file-path', no '-chunk'."""
+        """standard version has '-file-path', no '-chunk'."""
 
         standard_image = ArtifactConfig(
             '*-img-*zip',
@@ -191,6 +193,40 @@ done
             self._create_fake_imagefile(dist_dir, 'oriole-img-123.zip')
             command = self._upload(artifacts, self.test_dir, dist_dir)
             self._verify(command, ['-zip-path', '-chunk'], ['-file-path'])
+
+    def test_glob_pattern_regular(self):
+        """Regular glob patterns find all matches."""
+        standard_image = ArtifactConfig(
+            '*-img-*zip',
+            unzip = False,
+            standard = True,
+            chunk = False,
+            chunk_dir = False,
+        )
+        with tempfile.TemporaryDirectory() as dist_dir:
+            artifacts = [standard_image]
+            self._create_fake_imagefile(dist_dir, 'oriole-img-123.zip')
+            self._create_fake_imagefile(dist_dir + '/sub', 'oriole-img-123.zip')
+            commands = self._upload(artifacts, self.test_dir, dist_dir)
+            self.assertEqual(len(commands.split('\n')) - 1, 2)
+            self.assertIn('/sub/', commands)
+
+    def test_glob_pattern_relative(self):
+        """Relative glob patterns find the exact matches."""
+        standard_image = ArtifactConfig(
+            './*-img-*zip',
+            unzip = False,
+            standard = True,
+            chunk = False,
+            chunk_dir = False,
+        )
+        with tempfile.TemporaryDirectory() as dist_dir:
+            artifacts = [standard_image]
+            self._create_fake_imagefile(dist_dir, 'oriole-img-123.zip')
+            self._create_fake_imagefile(dist_dir + '/sub', 'oriole-img-123.zip')
+            commands = self._upload(artifacts, self.test_dir, dist_dir)
+            self.assertEqual(len(commands.split('\n')) - 1, 1)
+            self.assertNotIn('/sub/', commands)
 
 if __name__ == '__main__':
     unittest.main()
