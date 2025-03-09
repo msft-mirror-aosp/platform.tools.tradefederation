@@ -239,4 +239,25 @@ public final class RunHostCommandTargetPreparerTest {
                         eq(test1.getAbsolutePath()),
                         eq("$EXTRA_FILE(test2)"));
     }
+
+    @Test
+    public void testSetUp_multiExtraFile() throws Exception {
+        BuildInfo stubBuild = new BuildInfo("stub", "stub");
+        File test1 = tmpDir.newFile("test1");
+        stubBuild.setFile("test1", test1, "0");
+        when(mTestInfo.getBuildInfo()).thenReturn(stubBuild);
+
+        OptionSetter optionSetter = new OptionSetter(mPreparer);
+        optionSetter.setOptionValue(
+                "host-setup-command", "command $EXTRA_FILE(foo:test1:bar) $EXTRA_FILE(foo:test2)");
+
+        // Absolute paths are used for existing files and $EXTRA_FILE for missing files.
+        mPreparer.setUp(mTestInfo);
+        verify(mRunUtil)
+                .runTimedCmd(
+                        anyLong(),
+                        eq("command"),
+                        eq(test1.getAbsolutePath()),
+                        eq("$EXTRA_FILE(foo:test2)"));
+    }
 }

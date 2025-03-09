@@ -16,6 +16,7 @@
 
 package com.android.tradefed.targetprep;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.build.IDeviceBuildInfo;
 import com.android.tradefed.command.remote.DeviceDescriptor;
 import com.android.tradefed.config.GlobalConfiguration;
@@ -29,7 +30,10 @@ import com.android.tradefed.host.IHostOptions.PermitLimitType;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
+import com.android.tradefed.log.ITestLogger;
 import com.android.tradefed.log.LogUtil.CLog;
+import com.android.tradefed.result.InputStreamSource;
+import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.ErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -44,7 +48,6 @@ import com.android.tradefed.util.image.DeviceImageTracker;
 import com.android.tradefed.util.image.DeviceImageTracker.FileCacheTracker;
 import com.android.tradefed.util.image.IncrementalImageUtil;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 
 import org.apache.commons.compress.archivers.zip.ZipFile;
@@ -103,6 +106,7 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
     private String mSystemBuildFlavor = null;
 
     private IncrementalImageUtil mIncrementalFlashing = null;
+    private ITestLogger mTestLogger = null;
 
     @VisibleForTesting
     protected FuseUtil getFuseUtil() {
@@ -119,6 +123,10 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
 
     protected IFlashingResourcesRetriever getFlashingResourcesRetriever() {
         return mResourceRetriever;
+    }
+
+    void setTestLogger(ITestLogger logger) {
+        mTestLogger = logger;
     }
 
     /**
@@ -212,6 +220,12 @@ public class FastbootDeviceFlasher implements IDeviceFlasher {
                 // fallback to full flashing.
                 CLog.e(e);
                 DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
+                if (mTestLogger != null) {
+                    try (InputStreamSource source = device.getLogcatDump()) {
+                        mTestLogger.testLog(
+                                "apply-update-logcat-failure", LogDataType.LOGCAT, source);
+                    }
+                }
                 if (TestDeviceState.ONLINE.equals(device.getDeviceState())) {
                     device.rebootIntoBootloader();
                 }

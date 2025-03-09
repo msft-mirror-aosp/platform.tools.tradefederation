@@ -38,6 +38,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -57,6 +58,7 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
     private static final String DDMLIB_UNEXPECTED_COUNT = "Instrumentation reported numtests=";
 
     private Set<TestDescription> mTests = new HashSet<>();
+    private Map<String, String> mClassAssumptionFailure = new HashMap<>();
     private Set<TestDescription> mDuplicateTests = new HashSet<>();
     private final Collection<TestDescription> mExpectedTests;
     private boolean mDisableDuplicateCheck = false;
@@ -129,6 +131,15 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             failure.setErrorIdentifier(TestErrorIdentifier.TEST_TIMEOUT).setRetriable(false);
         }
         super.testFailed(test, failure);
+    }
+
+    @Override
+    public void testAssumptionFailure(TestDescription test, String trace) {
+        if (test.getTestName().equals("null")) {
+            mClassAssumptionFailure.put(test.getClassName(), trace);
+        } else {
+            super.testAssumptionFailure(test, trace);
+        }
     }
 
     @Override
@@ -213,7 +224,7 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             super.testRunFailed(error);
         } else if (mReportUnexecutedTests
                 && mExpectedTests != null
-                && mExpectedTests.size() > mTests.size()) {
+                && (mExpectedTests.size() > mTests.size() || !mExpectedTests.isEmpty())) {
             Set<TestDescription> missingTests = new LinkedHashSet<>(mExpectedTests);
             missingTests.removeAll(mTests);
 
@@ -230,17 +241,23 @@ final class InstrumentationListener extends LogcatCrashResultForwarder {
             }
             for (TestDescription miss : missingTests) {
                 super.testStarted(miss);
-                SkipReason reason =
-                        new SkipReason(
-                                String.format(
-                                        "Test did not run due to instrumentation issue. %s %s",
-                                        lastExecutedLog, runLevelError),
-                                "INSTRUMENTATION_ERROR");
-                super.testSkipped(miss, reason);
+                if (mClassAssumptionFailure.containsKey(miss.getClassName())) {
+                    super.testAssumptionFailure(
+                            miss, mClassAssumptionFailure.get(miss.getClassName()));
+                } else {
+                    SkipReason reason =
+                            new SkipReason(
+                                    String.format(
+                                            "Test did not run due to instrumentation issue. %s %s",
+                                            lastExecutedLog, runLevelError),
+                                    "INSTRUMENTATION_ERROR");
+                    super.testSkipped(miss, reason);
+                }
                 super.testEnded(miss, new HashMap<String, Metric>());
             }
         }
         runLevelError = null;
+        mClassAssumptionFailure = new HashMap<String, String>();
         super.testRunEnded(elapsedTime, runMetrics);
     }
 }

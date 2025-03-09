@@ -15,13 +15,16 @@
  */
 package com.android.tradefed.util.avd;
 
+import static com.android.tradefed.util.avd.HostOrchestratorClient.Cvd;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.ErrorResponseException;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.HoHttpClient;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.IHoHttpClient;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.ListCvdsResponse;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.Operation;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildCreateBugreportRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildGetOperationResultRequest;
+import static com.android.tradefed.util.avd.HostOrchestratorClient.buildListCvdsRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildPowerwashRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.buildRemoveInstanceRequest;
 import static com.android.tradefed.util.avd.HostOrchestratorClient.saveToFile;
@@ -40,10 +43,8 @@ import com.android.tradefed.util.avd.OxygenClient.LHPTunnelMode;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.json.JSONTokener;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -68,8 +69,6 @@ public class HostOrchestratorUtil {
     private static final long WAIT_FOR_OPERATION_TIMEOUT_MS = 5 * 6 * 1000 * 10; // 5 min
     private static final String CVD_HOST_LOGZ = "cvd_hostlog_zip";
     private static final String URL_CVD_BUGREPORTS = "cvdbugreports/%s";
-    private static final String URL_HO_POWERWASH = "cvds/%s/%s/:powerwash";
-    private static final String URL_HO_STOP = "cvds/%s/%s";
     private static final String UNSUPPORTED_API_RESPONSE = "404 page not found";
 
     private File mTunnelLog;
@@ -187,19 +186,19 @@ public class HostOrchestratorUtil {
                     return null;
                 }
             }
-            CommandResult curlRes = curlCommandExecution(mHOPortNumber, "GET", "cvds", true);
-            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
-                CLog.e("Failed getting cvd status via Host Orchestrator: %s", curlRes.getStdout());
+            ListCvdsResponse listCvdsRes = listCvds();
+            if (listCvdsRes.cvds.size() == 0) {
+                CLog.e("No cvd found.");
                 return null;
             }
-            String cvdGroup = parseListCvdOutput(curlRes.getStdout(), "group");
+            String cvdGroup = listCvdsRes.cvds.get(0).group;
             String baseUrl = getHOBaseUrl(mHOPortNumber);
             HttpRequest httpRequest = buildCreateBugreportRequest(baseUrl, cvdGroup);
             Operation operation = sendRequest(mHttpClient, httpRequest, Operation.class);
             waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
             httpRequest = buildGetOperationResultRequest(baseUrl, operation.name);
             String bugreportId = sendRequest(mHttpClient, httpRequest, String.class);
-            curlRes =
+            CommandResult curlRes =
                     curlCommandExecution(
                             mHOPortNumber,
                             "GET",
@@ -237,14 +236,30 @@ public class HostOrchestratorUtil {
         }
         long maxEndTime = System.currentTimeMillis() + maxWaitTime;
         while (System.currentTimeMillis() < maxEndTime) {
-            CommandResult curlRes = curlCommandExecution(mHOPortNumber, "GET", "cvds", true);
-            if (CommandStatus.SUCCESS.equals(curlRes.getStatus())
-                    && parseListCvdOutput(curlRes.getStdout(), "status").equals("Running")) {
+            ListCvdsResponse listCvdsRes = null;
+            try {
+                listCvdsRes = listCvds();
+            } catch (IOException | InterruptedException | ErrorResponseException e) {
+                CLog.e("Failed listing cvds: %s", e);
+                return false;
+            }
+            if (listCvdsRes.cvds.size() > 0 && listCvdsRes.cvds.get(0).status.equals("Running")) {
                 return true;
             }
             getRunUtil().sleep(WAIT_FOR_OPERATION_MS);
         }
         return false;
+    }
+
+    /**
+     * Performs list cvds request against HO.
+     *
+     * @return A {@link ListCvdsResponse} response of list cvds request.
+     */
+    ListCvdsResponse listCvds() throws InterruptedException, IOException, ErrorResponseException {
+        String baseUrl = getHOBaseUrl(mHOPortNumber);
+        HttpRequest httpRequest = buildListCvdsRequest(baseUrl);
+        return sendRequest(mHttpClient, httpRequest, ListCvdsResponse.class);
     }
 
     /**
@@ -258,36 +273,31 @@ public class HostOrchestratorUtil {
         // 2. Obtain the necessary information to powerwash a GCE instance via Host Orchestrator.
         // 3. Attempt to powerwash a GCE instance via Host Orchestrator.
         // TODO(easoncylee): Flesh out this section when it's ready.
-        CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
         try {
             if (mUseOxygenation) {
                 if (mHOTunnel == null || !mHOTunnel.isAlive()) {
+                    CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
                     String msg = "Failed portforwarding Host Orchestrator tunnel.";
                     CLog.e(msg);
                     curlRes.setStderr(msg);
                     return curlRes;
                 }
             }
-            curlRes = curlCommandExecution(mHOPortNumber, "GET", "cvds", true);
-            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
-                CLog.e("Failed getting cvd status via Host Orchestrator: %s", curlRes.getStdout());
-                return curlRes;
+            ListCvdsResponse listCvdsRes = listCvds();
+            if (listCvdsRes.cvds.size() == 0) {
+                CLog.e("No cvd found.");
+                return null;
             }
-            String cvdGroup = parseListCvdOutput(curlRes.getStdout(), "group");
-            String cvdName = parseListCvdOutput(curlRes.getStdout(), "name");
-            if (cvdGroup == null || cvdGroup.isEmpty() || cvdName == null || cvdName.isEmpty()) {
-                CLog.e("Failed parsing cvd group and cvd name.");
-                curlRes.setStatus(CommandStatus.FAILED);
-                return curlRes;
-            }
+            Cvd cvd = listCvdsRes.cvds.get(0);
             String baseUrl = getHOBaseUrl(mHOPortNumber);
-            HttpRequest httpRequest = buildPowerwashRequest(baseUrl, cvdGroup, cvdName);
+            HttpRequest httpRequest = buildPowerwashRequest(baseUrl, cvd.group, cvd.name);
             Operation operation = sendRequest(mHttpClient, httpRequest, Operation.class);
             waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
         } catch (IOException | InterruptedException | ErrorResponseException | TimeoutException e) {
             CLog.e("Failed powerwashing gce via Host Orchestrator: %s", e);
+            return new CommandResult(CommandStatus.EXCEPTION);
         }
-        return curlRes;
+        return new CommandResult(CommandStatus.SUCCESS);
     }
 
     /** Remove Cuttlefish instance via Host Orchestrator. */
@@ -296,36 +306,31 @@ public class HostOrchestratorUtil {
         // 1. Portforward CURL tunnel
         // 2. Obtain the group and instance name.
         // 3. Attempt to remove the Instance via Host Orchestrator.
-        CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
         try {
             if (mUseOxygenation) {
                 if (mHOTunnel == null || !mHOTunnel.isAlive()) {
+                    CommandResult curlRes = new CommandResult(CommandStatus.EXCEPTION);
                     String msg = "Failed portforwarding Host Orchestrator tunnel.";
                     CLog.e(msg);
                     curlRes.setStderr(msg);
                     return curlRes;
                 }
             }
-            curlRes = curlCommandExecution(mHOPortNumber, "GET", "cvds", true);
-            if (!CommandStatus.SUCCESS.equals(curlRes.getStatus())) {
-                CLog.e("Failed getting cvd status via Host Orchestrator: %s", curlRes.getStdout());
-                return curlRes;
+            ListCvdsResponse listCvdsRes = listCvds();
+            if (listCvdsRes.cvds.size() == 0) {
+                CLog.e("No cvd found.");
+                return null;
             }
-            String cvdGroup = parseListCvdOutput(curlRes.getStdout(), "group");
-            String cvdName = parseListCvdOutput(curlRes.getStdout(), "name");
-            if (cvdGroup == null || cvdGroup.isEmpty() || cvdName == null || cvdName.isEmpty()) {
-                CLog.e("Failed parsing cvd group and cvd name.");
-                curlRes.setStatus(CommandStatus.FAILED);
-                return curlRes;
-            }
+            Cvd cvd = listCvdsRes.cvds.get(0);
             String baseUrl = getHOBaseUrl(mHOPortNumber);
-            HttpRequest httpRequest = buildRemoveInstanceRequest(baseUrl, cvdGroup, cvdName);
+            HttpRequest httpRequest = buildRemoveInstanceRequest(baseUrl, cvd.group, cvd.name);
             Operation operation = sendRequest(mHttpClient, httpRequest, Operation.class);
             waitForOperation(mHttpClient, baseUrl, operation.name, WAIT_FOR_OPERATION_TIMEOUT_MS);
         } catch (IOException | InterruptedException | ErrorResponseException | TimeoutException e) {
             CLog.e("Failed removing instance via Host Orchestrator: %s", e);
+            return new CommandResult(CommandStatus.EXCEPTION);
         }
-        return curlRes;
+        return new CommandResult(CommandStatus.SUCCESS);
     }
 
     /** Attempt to snapshot a Cuttlefish instance via Host Orchestrator. */
@@ -421,33 +426,6 @@ public class HostOrchestratorUtil {
                     api);
         }
         return commandRes;
-    }
-
-    /** Return the value by parsing the output of list cvds with a given keyword. */
-    @VisibleForTesting
-    String parseListCvdOutput(String content, String keyword) {
-        // An example output of the given content is:
-        // {"cvds":
-        //      [{
-        //          "group":"cvd_1",
-        //          "name":"ins-1",
-        //          "build_source":{},
-        //          "status":"Running",
-        //          "displays":["720 x 1280 ( 320 )"],
-        //          "webrtc_device_id":"cvd-1",
-        //          "adb_serial":"0.0.0.0:6520"
-        //      }]
-        // }
-        JSONTokener tokener = new JSONTokener(content);
-        String output = "";
-        try {
-            JSONObject root = new JSONObject(tokener);
-            JSONArray array = root.getJSONArray("cvds");
-            output = parseCvdContent(array.getJSONObject(0).toString(), keyword);
-        } catch (JSONException e) {
-            CLog.e(e);
-        }
-        return output;
     }
 
     /** Return the value by parsing the simple JSON content with a given keyword. */

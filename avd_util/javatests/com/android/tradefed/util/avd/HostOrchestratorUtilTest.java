@@ -77,10 +77,7 @@ public class HostOrchestratorUtilTest {
     private static final String OPERATION_RES = "{\"name\":\"some_id\"}";
     private static final String OPERATION_TIMEOUT_RES = "{\"name\":\"some_id\", \"done\":false}";
     private static final String OPERATION_DONE_RES = "{\"name\":\"some_id\", \"done\":true}";
-    private static final String LIST_CVD_BADRES =
-            "{\"cvds\":[{\"build_source\":{},"
-                    + "\"status\":\"Running\",\"displays\":[\"720 x 1280 ( 320 )\"],"
-                    + "\"webrtc_device_id\":\"cvd-1\"}]}";
+    private static final String LIST_CVD_EMPTY = "{ \"cvds\": [] }";
     private HashMap<String, String> mExtraOxygenArgs;
 
     @Before
@@ -226,22 +223,9 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdCommandRes.setStdout(LIST_CVD_RES);
-        Mockito.doReturn(cvdCommandRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
         Mockito.when(mMockHttpClient.send(Mockito.any()))
                 .thenReturn(
+                        mockHttpResponse(200, LIST_CVD_RES),
                         mockHttpResponse(200, OPERATION_RES),
                         mockHttpResponse(200, OPERATION_DONE_RES),
                         mockHttpResponse(200, "fakeuuid-215c1602-db24"));
@@ -272,24 +256,13 @@ public class HostOrchestratorUtilTest {
                         Mockito.eq("-v"),
                         Mockito.eq("-X"),
                         Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
                         Mockito.eq("http://127.0.0.1:1111/cvdbugreports/fakeuuid-215c1602-db24"),
                         Mockito.eq("--output"),
                         Mockito.any());
     }
 
     @Test
-    public void testPullCvdHostLogs_Oxygenation_CurlFailedGetCvd() throws Exception {
+    public void testPullCvdHostLogs_Oxygenation_ListCvdsFails() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         Mockito.doReturn(mMockProcess)
@@ -320,28 +293,9 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdCommandRes = new CommandResult(CommandStatus.FAILED);
-        cvdCommandRes.setStderr("some error");
-        cvdCommandRes.setStdout("some output");
-        Mockito.doReturn(cvdCommandRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        (String[]) Mockito.any());
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(500, "server error"));
         Assert.assertNull(mHOUtil.pullCvdHostLogs());
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
         Mockito.verify(mMockRunUtil, times(0))
                 .runTimedCmd(
                         Mockito.anyLong(),
@@ -448,22 +402,9 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdCommandRes.setStdout(LIST_CVD_RES);
-        Mockito.doReturn(cvdCommandRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
         Mockito.when(mMockHttpClient.send(Mockito.any()))
                 .thenReturn(
+                        mockHttpResponse(200, LIST_CVD_RES),
                         mockHttpResponse(200, OPERATION_RES),
                         mockHttpResponse(200, OPERATION_DONE_RES),
                         mockHttpResponse(200, "fakeuuid-215c1602-db24"));
@@ -487,74 +428,6 @@ public class HostOrchestratorUtilTest {
         Assert.assertNull(mHOUtil.pullCvdHostLogs());
     }
 
-    @Test
-    public void testPullCvdHostLogs_Oxygenation_404() throws Exception {
-        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
-        Mockito.doReturn(true).when(mMockProcess).isAlive();
-        Mockito.doReturn(mMockProcess)
-                .when(mMockClient)
-                .createTunnelViaLHP(
-                        Mockito.eq(LHPTunnelMode.CURL),
-                        Mockito.eq("1111"),
-                        Mockito.eq(INSTANCE_NAME),
-                        Mockito.eq(HOST),
-                        Mockito.eq(TARGET_REGION),
-                        Mockito.eq(ACCOUNTING_USER),
-                        Mockito.eq(OXYGENATION_DEVICE_ID),
-                        Mockito.eq(mExtraOxygenArgs),
-                        Mockito.any());
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        true,
-                        mExtraOxygenArgs,
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        TARGET_REGION,
-                        ACCOUNTING_USER,
-                        mMockClient,
-                        mMockHttpClient) {
-                    @Override
-                    protected IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-                };
-        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdCommandRes.setStderr("some error");
-        cvdCommandRes.setStdout(mHOUtil.getUnsupportedHoResponse());
-        Mockito.doReturn(cvdCommandRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        (String[]) Mockito.any());
-        Assert.assertNull(mHOUtil.pullCvdHostLogs());
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvdbugreports/operation_id"),
-                        Mockito.eq("--output"),
-                        Mockito.any());
-    }
 
     @Test
     public void testPowerwashGce() throws Exception {
@@ -588,36 +461,12 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdRes.setStdout(LIST_CVD_RES);
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
         Mockito.when(mMockHttpClient.send(Mockito.any()))
                 .thenReturn(
+                        mockHttpResponse(200, LIST_CVD_RES),
                         mockHttpResponse(200, OPERATION_RES),
                         mockHttpResponse(200, OPERATION_DONE_RES));
-        Assert.assertNotNull(mHOUtil.powerwashGce());
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Assert.assertEquals(CommandStatus.SUCCESS, mHOUtil.powerwashGce().getStatus());
     }
 
     @Test
@@ -653,28 +502,6 @@ public class HostOrchestratorUtilTest {
                     }
                 };
         Assert.assertEquals(CommandStatus.EXCEPTION, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("POST"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1/:powerwash"));
     }
 
     @Test
@@ -709,36 +536,13 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdRes = new CommandResult(CommandStatus.FAILED);
-        cvdRes.setStdout("output");
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("POST"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1/:powerwash"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(500, "server error"));
+        Assert.assertEquals(CommandStatus.EXCEPTION, mHOUtil.powerwashGce().getStatus());
     }
 
     @Test
-    public void testPowerwashGce_ListCvd404() throws Exception {
+    public void testPowerwashGce_EmptyList() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         Mockito.doReturn(mMockProcess)
@@ -769,92 +573,9 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdRes.setStdout(mHOUtil.getUnsupportedHoResponse());
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("POST"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1/:powerwash"));
-    }
-
-    @Test
-    public void testPowerwashGce_NoCvdOutput() throws Exception {
-        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
-        Mockito.doReturn(true).when(mMockProcess).isAlive();
-        Mockito.doReturn(mMockProcess)
-                .when(mMockClient)
-                .createTunnelViaLHP(
-                        Mockito.eq(LHPTunnelMode.CURL),
-                        Mockito.eq("1111"),
-                        Mockito.eq(INSTANCE_NAME),
-                        Mockito.eq(HOST),
-                        Mockito.eq(TARGET_REGION),
-                        Mockito.eq(ACCOUNTING_USER),
-                        Mockito.eq(OXYGENATION_DEVICE_ID),
-                        Mockito.eq(mExtraOxygenArgs),
-                        Mockito.any());
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        true,
-                        mExtraOxygenArgs,
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        TARGET_REGION,
-                        ACCOUNTING_USER,
-                        mMockClient,
-                        mMockHttpClient) {
-                    @Override
-                    protected IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-                };
-        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdRes.setStdout(LIST_CVD_BADRES);
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("POST"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1/:powerwash"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, LIST_CVD_EMPTY));
+        Assert.assertNull(mHOUtil.powerwashGce());
     }
 
     @Test
@@ -889,40 +610,16 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdRes.setStdout(LIST_CVD_RES);
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
         Mockito.when(mMockHttpClient.send(Mockito.any()))
                 .thenReturn(
+                        mockHttpResponse(200, LIST_CVD_RES),
                         mockHttpResponse(200, OPERATION_RES),
                         mockHttpResponse(200, OPERATION_DONE_RES));
-        Assert.assertNotNull(mHOUtil.removeInstance());
-        Mockito.verify(mMockRunUtil, times(1))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Assert.assertEquals(CommandStatus.SUCCESS, mHOUtil.removeInstance().getStatus());
     }
 
     @Test
-    public void testStopGce_CreateHOFailed() throws Exception {
+    public void testRemoveInstance_CreateHOFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         Mockito.doReturn(null)
@@ -954,32 +651,10 @@ public class HostOrchestratorUtilTest {
                     }
                 };
         Assert.assertEquals(CommandStatus.EXCEPTION, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("DELETE"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
     }
 
     @Test
-    public void testStopGce_ListCvdFailed() throws Exception {
+    public void testRemoveInstance_ListCvdFailed() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         Mockito.doReturn(mMockProcess)
@@ -1010,36 +685,13 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdRes = new CommandResult(CommandStatus.FAILED);
-        cvdRes.setStdout("output");
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("DELETE"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(500, "server error"));
+        Assert.assertEquals(CommandStatus.EXCEPTION, mHOUtil.removeInstance().getStatus());
     }
 
     @Test
-    public void testStopGce_ListCvd404() throws Exception {
+    public void testRemoveInstance_EmptyList() throws Exception {
         Mockito.doReturn(1111).when(mMockClient).createServerSocket();
         Mockito.doReturn(true).when(mMockProcess).isAlive();
         Mockito.doReturn(mMockProcess)
@@ -1070,92 +722,9 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdRes.setStdout(mHOUtil.getUnsupportedHoResponse());
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("DELETE"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
-    }
-
-    @Test
-    public void testStopGce_NoCvdOutput() throws Exception {
-        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
-        Mockito.doReturn(true).when(mMockProcess).isAlive();
-        Mockito.doReturn(mMockProcess)
-                .when(mMockClient)
-                .createTunnelViaLHP(
-                        Mockito.eq(LHPTunnelMode.CURL),
-                        Mockito.eq("1111"),
-                        Mockito.eq(INSTANCE_NAME),
-                        Mockito.eq(HOST),
-                        Mockito.eq(TARGET_REGION),
-                        Mockito.eq(ACCOUNTING_USER),
-                        Mockito.eq(OXYGENATION_DEVICE_ID),
-                        Mockito.eq(mExtraOxygenArgs),
-                        Mockito.any());
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        true,
-                        mExtraOxygenArgs,
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        TARGET_REGION,
-                        ACCOUNTING_USER,
-                        mMockClient,
-                        mMockHttpClient) {
-                    @Override
-                    protected IRunUtil getRunUtil() {
-                        return mMockRunUtil;
-                    }
-                };
-        CommandResult cvdRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdRes.setStdout(LIST_CVD_BADRES);
-        Mockito.doReturn(cvdRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
-        Assert.assertEquals(CommandStatus.FAILED, mHOUtil.powerwashGce().getStatus());
-        Mockito.verify(mMockRunUtil, times(0))
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("DELETE"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds/cvd_1/ins-1"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, LIST_CVD_EMPTY));
+        Assert.assertNull(mHOUtil.removeInstance());
     }
 
     @Test
@@ -1185,38 +754,6 @@ public class HostOrchestratorUtilTest {
             caught = e;
         }
         Assert.assertNotNull(caught);
-    }
-
-    @Test
-    public void testParseListCvdOutput_success() throws Exception {
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        true,
-                        mExtraOxygenArgs,
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        TARGET_REGION,
-                        ACCOUNTING_USER,
-                        mMockClient,
-                        mMockHttpClient);
-        Assert.assertEquals("cvd_1", mHOUtil.parseListCvdOutput(LIST_CVD_RES, "group"));
-    }
-
-    @Test
-    public void testParseListCvdOutput_failed() throws Exception {
-        mHOUtil =
-                new HostOrchestratorUtil(
-                        true,
-                        mExtraOxygenArgs,
-                        INSTANCE_NAME,
-                        HOST,
-                        OXYGENATION_DEVICE_ID,
-                        TARGET_REGION,
-                        ACCOUNTING_USER,
-                        mMockClient,
-                        null);
-        Assert.assertEquals("", mHOUtil.parseListCvdOutput(LIST_CVD_BADRES, "group"));
     }
 
     @Test
@@ -1251,20 +788,8 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdCommandRes.setStdout(LIST_CVD_RES);
-        Mockito.doReturn(cvdCommandRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(200, LIST_CVD_RES));
         Assert.assertTrue(mHOUtil.deviceBootCompleted(10));
     }
 
@@ -1300,20 +825,8 @@ public class HostOrchestratorUtilTest {
                         return mMockRunUtil;
                     }
                 };
-        CommandResult cvdCommandRes = new CommandResult(CommandStatus.SUCCESS);
-        cvdCommandRes.setStdout(LIST_CVD_STARTING_RES);
-        Mockito.doReturn(cvdCommandRes)
-                .when(mMockRunUtil)
-                .runTimedCmd(
-                        Mockito.anyLong(),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq((OutputStream) null),
-                        Mockito.eq("curl"),
-                        Mockito.eq("-0"),
-                        Mockito.eq("-v"),
-                        Mockito.eq("-X"),
-                        Mockito.eq("GET"),
-                        Mockito.eq("http://127.0.0.1:1111/cvds"));
+        Mockito.when(mMockHttpClient.send(Mockito.any()))
+                .thenReturn(mockHttpResponse(500, "server error"));
         Assert.assertFalse(mHOUtil.deviceBootCompleted(10));
     }
 

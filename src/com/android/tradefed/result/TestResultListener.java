@@ -41,7 +41,12 @@ public abstract class TestResultListener implements ITestLifeCycleReceiver {
     public final void testStarted(TestDescription test, long startTime) {
         if (mCurrentTest != null) {
             // oh noes, previous test do not complete, forward an incomplete event
-            reportTestFinish(null);
+            mCurrentResult.setEndTime(System.currentTimeMillis());
+            mCurrentResult.setStatus(TestStatus.FAILURE);
+            mCurrentResult.setStackTrace("did not complete");
+            testResult(mCurrentTest, mCurrentResult);
+            mCurrentResult = null;
+            mCurrentTest = null;
         }
         mCurrentTest = test;
         mCurrentResult = new TestResult();
@@ -107,6 +112,8 @@ public abstract class TestResultListener implements ITestLifeCycleReceiver {
         if (mCurrentTest != null) {
             // last test did not finish! report incomplete
             mCurrentResult.setEndTime(System.currentTimeMillis());
+            mCurrentResult.setStatus(TestStatus.FAILURE);
+            mCurrentResult.setStackTrace("did not complete");
             testResult(mCurrentTest, mCurrentResult);
             mCurrentTest = null;
             mCurrentResult = null;
@@ -121,6 +128,8 @@ public abstract class TestResultListener implements ITestLifeCycleReceiver {
         if (mCurrentTest != null
                 && mCurrentTest.equals(test)
                 && TestStatus.INCOMPLETE.equals(mCurrentResult.getResultStatus())) {
+            // If we reach here with no status changed, that means passed otherwise the status
+            // would have been updated to an error
             mCurrentResult.setStatus(TestStatus.PASSED);
         }
         mCurrentResult.setEndTime(endTime);

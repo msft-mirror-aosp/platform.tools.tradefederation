@@ -255,6 +255,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         ConfigurationDescriptor configDescriptor = moduleConfig.getConfigurationDescription();
         mModuleInvocationContext = new InvocationContext();
         mModuleInvocationContext.setConfigurationDescriptor(configDescriptor.clone());
+        // Copy the command options invocation attributes to the invocation context
+        mModuleInvocationContext.addInvocationAttributes(
+                moduleConfig.getCommandOptions().getInvocationData());
 
         // If available in the suite, add the abi name
         if (configDescriptor.getAbi() != null) {

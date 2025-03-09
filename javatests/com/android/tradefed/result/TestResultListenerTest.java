@@ -54,7 +54,8 @@ public class TestResultListenerTest {
     public void testPassed() {
         mResultListener.testStarted(mTest);
         mResultListener.testEnded(mTest, Collections.emptyMap());
-        Truth.assertThat(mResults).containsEntry(mTest, createTestResult(TestStatus.PASSED));
+        Truth.assertThat(mResults).containsEntry(mTest,
+            createTestResult(TestStatus.PASSED, null));
         Truth.assertThat(mResults).hasSize(1);
     }
 
@@ -63,8 +64,7 @@ public class TestResultListenerTest {
         mResultListener.testStarted(mTest);
         mResultListener.testFailed(mTest, "foo");
         mResultListener.testEnded(mTest, Collections.emptyMap());
-        TestResult result = createTestResult(TestStatus.FAILURE);
-        result.setStackTrace("foo");
+        TestResult result = createTestResult(TestStatus.FAILURE, "foo");
         Truth.assertThat(mResults).containsEntry(mTest, result);
         Truth.assertThat(mResults).hasSize(1);
     }
@@ -75,9 +75,10 @@ public class TestResultListenerTest {
         mResultListener.testStarted(incompleteTest);
         mResultListener.testStarted(mTest);
         mResultListener.testEnded(mTest, Collections.emptyMap());
-        Truth.assertThat(mResults).containsEntry(mTest, createTestResult(TestStatus.PASSED));
+        Truth.assertThat(mResults).containsEntry(mTest, createTestResult(TestStatus.PASSED, null));
         Truth.assertThat(mResults)
-                .containsEntry(incompleteTest, createTestResult(TestStatus.INCOMPLETE));
+                .containsEntry(incompleteTest,
+                    createTestResult(TestStatus.FAILURE, "did not complete"));
         Truth.assertThat(mResults).hasSize(2);
     }
 
@@ -87,13 +88,17 @@ public class TestResultListenerTest {
         mResultListener.testStarted(incompleteTest);
         mResultListener.testRunEnded(0, Collections.emptyMap());
         Truth.assertThat(mResults)
-                .containsEntry(incompleteTest, createTestResult(TestStatus.INCOMPLETE));
+                .containsEntry(incompleteTest,
+                    createTestResult(TestStatus.FAILURE, "did not complete"));
         Truth.assertThat(mResults).hasSize(1);
     }
 
-    private TestResult createTestResult(TestStatus status) {
+    private TestResult createTestResult(TestStatus status, String trace) {
         TestResult result = new TestResult();
         result.setStatus(status);
+        if (trace != null) {
+            result.setStackTrace(trace);
+        }
         return result;
     }
 }
