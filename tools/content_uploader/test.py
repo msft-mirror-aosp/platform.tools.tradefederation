@@ -20,7 +20,7 @@ import sys
 
 def run():
     """Run unit tests for specified modules."""
-    test_modules = ['test_uploader', 'test_artifact_manager']
+    test_modules = ['test_uploader', 'test_artifact_manager', 'test_artifacts']
 
     suite = unittest.defaultTestLoader.loadTestsFromNames(test_modules)
 
