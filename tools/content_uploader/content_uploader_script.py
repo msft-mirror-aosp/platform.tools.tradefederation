@@ -25,9 +25,9 @@ import re
 import subprocess
 import time
 
-import cas_metrics_pb2  # type: ignore
-from artifacts import ARTIFACTS
 from artifact_manager import ArtifactManager
+from artifacts import ARTIFACTS
+import cas_metrics_pb2  # type: ignore
 from uploader import CasInfo
 from uploader import Uploader
 
@@ -41,8 +41,8 @@ CAS_UPLOADER_BIN = 'casuploader'
 LOG_PATH = 'logs/cas_uploader.log'
 CAS_METRICS_PATH = 'logs/cas_metrics.pb'
 METRICS_PATH = 'logs/artifact_metrics.json'
-MAX_WORKERS_LOWER_BOUND = 2
-MAX_WORKERS_UPPER_BOUND = 6
+MAX_WORKERS_LOWER_BOUND = 5
+MAX_WORKERS_UPPER_BOUND = 7
 MAX_WORKERS = random.randint(MAX_WORKERS_LOWER_BOUND, MAX_WORKERS_UPPER_BOUND)
 
 
