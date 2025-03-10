@@ -135,10 +135,16 @@ public class TestContentAnalyzer {
                     InvocationMetricLogger.addInvocationMetrics(
                             InvocationMetricKey.ABORT_CONTENT_ANALYSIS, 1);
                     // Continue with an invalidated analysis
-                    results = new ContentAnalysisResults().addModifiedSharedFolder(1);
+                    results =
+                            new ContentAnalysisResults()
+                                    .addModifiedSharedFolder(1)
+                                    .addArtifactDigestMapping(TESTS_DIR_KEY, null);
                     CLog.d("Content analysis results for %s: invalid", ac.contentEntry());
                 } else {
                     CLog.d("content analysis results for %s: %s", ac.contentEntry(), results);
+                    results.addArtifactDigestMapping(
+                            TESTS_DIR_KEY + "_" + ac.contentEntry(),
+                            ContentMerkleTree.buildTestsDirFromContext(ac, discoveredModules));
                 }
                 allResults.add(results);
             }
