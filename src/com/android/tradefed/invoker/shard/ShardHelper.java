@@ -389,7 +389,7 @@ public class ShardHelper implements IShardHelper {
 
     private static boolean isAutoRetryEnabled(IConfiguration config) {
         IRetryDecision decision = config.getRetryDecision();
-        if (decision.isAutoRetryEnabled() && decision.getMaxRetryCount() > 0) {
+        if (decision.isAutoRetryEnabled() && decision.getMaxTestRunAttempts() > 0) {
             return true;
         }
         return false;

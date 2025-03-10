@@ -1086,7 +1086,7 @@ public class InstrumentationTest
                 expectedTests.removeAll(excludeNonExecuted(testTracker.getCurrentRunResults()));
                 IRetryDecision decision = mConfiguration.getRetryDecision();
                 if (!RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())
-                        && decision.getMaxRetryCount() > 1) {
+                        && decision.getMaxTestRunAttempts() > 1) {
                     // Delegate retry to the module/invocation level.
                     // This prevents the InstrumentationTest retry from re-running by itself and
                     // creating overhead.

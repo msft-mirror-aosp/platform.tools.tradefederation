@@ -1156,7 +1156,7 @@ public class TestInvocation implements ITestInvocation {
                     .getInvocationData()
                     .containsKey(SubprocessTfLauncher.SUBPROCESS_TAG_NAME)) {
                 if (decision.isAutoRetryEnabled()
-                        && decision.getMaxRetryCount() > 1
+                        && decision.getMaxTestRunAttempts() > 1
                         && !RetryStrategy.NO_RETRY.equals(decision.getRetryStrategy())) {
                     CLog.d(
                             "Auto-retry enabled, using the ResultAggregator to handle multiple"

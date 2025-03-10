@@ -1286,7 +1286,7 @@ public class InvocationExecution implements IInvocationExecution {
                     try {
                         PrettyPrintDelimiter.printStageDelimiter("Starting auto-retry");
                         for (int attemptNumber = 1;
-                                attemptNumber < decision.getMaxRetryCount();
+                                attemptNumber < decision.getMaxTestRunAttempts();
                                 attemptNumber++) {
                             if (!firstCheck) {
                                 boolean retry =
@@ -1324,7 +1324,7 @@ public class InvocationExecution implements IInvocationExecution {
                         // Feed the last attempt if we reached here.
                         decision.addLastAttempt(
                                 mainGranularRunListener.getTestRunForAttempts(
-                                        decision.getMaxRetryCount() - 1));
+                                        decision.getMaxTestRunAttempts() - 1));
                     } finally {
                         RetryStatistics retryStats = decision.getRetryStatistics();
                         // Track how long we spend in retry

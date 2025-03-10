@@ -38,11 +38,19 @@ public interface IRetryDecision {
     /** Whether or not to reboot the device before the last attempt. */
     public boolean rebootAtLastAttempt();
 
-    /** The maximum number of attempts during auto-retry. */
-    public int getMaxRetryCount();
+    /** The maximum number of attempts per test run during auto-retry. */
+    public int getMaxTestRunAttempts();
 
-    /** The maximum number of attempts during auto-retry for a given module. */
-    public int getMaxRetryCount(ModuleDefinition module);
+    /** The maximum number of attempts per test run for a given module during
+     * auto-retry. */
+    public int getMaxTestRunAttempts(ModuleDefinition module);
+
+    /** The maximum number of attempts per test run during auto-retry. */
+    public int getMaxTestCaseAttempts();
+
+    /** The maximum number of attempts per test run for a given module during
+     * auto-retry. */
+    public int getMaxTestCaseAttempts(ModuleDefinition module);
 
     /** Returns true if we should use the updated reporting. */
     public boolean useUpdatedReporting();
@@ -104,4 +112,7 @@ public interface IRetryDecision {
     public default void addToSkipRetryList(String filterEntry) {
         // Empty by default on purpose
     }
+
+    /** Returns the command line args for the retry decision. */
+    public List<String> getCommandLineArgs();
 }
