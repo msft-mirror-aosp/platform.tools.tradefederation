@@ -22,7 +22,6 @@ import glob
 import json
 import logging
 import os
-import shutil
 import subprocess
 import tempfile
 import uuid
@@ -106,12 +105,12 @@ class Uploader:
     @staticmethod
     def setup_task_logger(working_dir: str) -> Tuple[logging.Logger, str]:
         """Creates a logger for an individual uploader task."""
-        id = uuid.uuid4()
-        logger = logging.getLogger(f"Uploader-{id}")
+        task_id = uuid.uuid4()
+        logger = logging.getLogger(f"Uploader-{task_id}")
         logger.setLevel(logging.DEBUG)
         logger.propagate = False
 
-        log_file = os.path.join(working_dir, f"_uploader_{id}.log")
+        log_file = os.path.join(working_dir, f"_uploader_{task_id}.log")
         file_handler = logging.FileHandler(log_file)
         formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
         file_handler.setFormatter(formatter)
@@ -190,7 +189,7 @@ class Uploader:
                 '-use-adc',
             ]
 
-            cmd = cmd + Uploader._path_flag_for_artifact(artifact, working_dir)
+            cmd = cmd + Uploader._path_flag_for_artifact(artifact)
 
             if artifact.chunk or artifact.chunk_dir:
                 cmd = cmd + ['-chunk', '-avg-chunk-size', str(AVG_CHUNK_SIZE_IN_KB)]
@@ -240,7 +239,7 @@ class Uploader:
             return UploadResult(digest, content_details, log_file)
 
     @staticmethod
-    def _path_flag_for_artifact(artifact: ArtifactConfig, working_dir: str) -> list[str]:
+    def _path_flag_for_artifact(artifact: ArtifactConfig) -> list[str]:
         """Returns the path flag for the artifact."""
         if artifact.standard:
             return ['-zip-path' if artifact.unzip else '-file-path', artifact.source_path]
@@ -248,11 +247,8 @@ class Uploader:
             return ['-file-path', artifact.source_path]
         if artifact.chunk_dir:
             return ['-zip-path', artifact.source_path]
-        # TODO(b/250643926) This is a workaround to handle non-directory files.
-        tmp_dir = tempfile.mkdtemp(dir=working_dir)
-        target_path = os.path.join(tmp_dir, os.path.basename(artifact.source_path))
-        shutil.copy(artifact.source_path, target_path)
-        return ['-dir-path', tmp_dir]
+        # Should neve reach here.
+        return ['-file-path', artifact.source_path]
 
     def _output_results(
             self,
