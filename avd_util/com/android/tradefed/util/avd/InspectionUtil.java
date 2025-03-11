@@ -42,22 +42,22 @@ public class InspectionUtil {
     public static final LinkedHashMap<String, ErrorIdentifier> EXPECTED_PROCESSES =
             Stream.of(
                             new AbstractMap.SimpleEntry<>(
-                                    " run_cvd",
+                                    "run_cvd",
                                     InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_RUN_CVD_MISSING),
                             new AbstractMap.SimpleEntry<>(
-                                    " netsimd",
+                                    "netsimd",
                                     InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_BLUETOOTH),
                             new AbstractMap.SimpleEntry<>(
-                                    " openwrt_control_server",
+                                    "openwrt_control_server",
                                     InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_OPENWRT),
                             new AbstractMap.SimpleEntry<>(
-                                    " webRTC",
+                                    "webRTC",
                                     InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_WEBRTC_CRASH),
                             new AbstractMap.SimpleEntry<>(
-                                    " crosvm",
+                                    "crosvm",
                                     InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_CROSVM),
                             new AbstractMap.SimpleEntry<>(
-                                    " nginx", InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_NGINX))
+                                    "nginx", InfraErrorIdentifier.CUTTLEFISH_LAUNCH_FAILURE_NGINX))
                     .collect(
                             Collectors.toMap(
                                     Map.Entry::getKey,
