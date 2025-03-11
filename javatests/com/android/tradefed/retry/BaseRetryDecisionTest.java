@@ -39,6 +39,7 @@ import com.android.tradefed.testtype.ITestFilterReceiver;
 import com.android.tradefed.testtype.InstalledInstrumentationsTest;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.truth.Truth;
 
 import org.junit.Before;
@@ -48,6 +49,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
@@ -129,6 +131,40 @@ public class BaseRetryDecisionTest {
     }
 
     @Test
+    public void testGetCommandLineArgs() throws Exception {
+        OptionSetter setter = new OptionSetter(mRetryDecision);
+        setter.setOptionValue("max-testcase-run-count", "module:1");
+        setter.setOptionValue("max-testrun-run-count", "module:2");
+        setter.setOptionValue("reboot-at-last-retry", "true");
+        setter.setOptionValue("retry-isolation-grade", "FULLY_ISOLATED");
+        setter.setOptionValue("skip-retrying-list", "module1");
+        setter.setOptionValue("skip-retrying-list", "module2");
+        setter.setOptionValue("skip-retry-in-presubmit", "true");
+
+        List<String> args = mRetryDecision.getCommandLineArgs();
+        Truth.assertThat(args)
+                .containsExactlyElementsIn(
+                        ImmutableList.of(
+                                "--max-testcase-run-count",
+                                "module:1",
+                                "--max-testcase-run-count",
+                                "3",
+                                "--max-testrun-run-count",
+                                "module:2",
+                                "--retry-strategy",
+                                "RETRY_ANY_FAILURE",
+                                "--reboot-at-last-retry",
+                                "--retry-isolation-grade",
+                                "FULLY_ISOLATED",
+                                "--skip-retrying-list",
+                                "module1",
+                                "--skip-retrying-list",
+                                "module2",
+                                "--skip-retry-in-presubmit"))
+                .inOrder();
+    }
+
+    @Test
     public void testShouldRetry() throws Exception {
         TestRunResult result = createResult(null, null);
         boolean res = mRetryDecision.shouldRetry(mTestClass, 0, Arrays.asList(result));
@@ -204,8 +240,6 @@ public class BaseRetryDecisionTest {
 
         boolean res = mRetryDecision.shouldRetry(mTestClass, 0, Arrays.asList(result, result2));
         assertFalse(res);
-        assertEquals(0, mTestClass.getIncludeFilters().size());
-        assertEquals(0, mTestClass.getExcludeFilters().size());
     }
 
     @Test

@@ -652,7 +652,7 @@ public class ITestSuiteTest {
         doReturn(decision)
                 .when(mMockDecision)
                 .shouldRetryPreparation(Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
-        doReturn(2).when(mMockDecision).getMaxRetryCount(Mockito.any());
+        doReturn(2).when(mMockDecision).getMaxTestRunAttempts(Mockito.any());
         when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
                 .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
         when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice)))

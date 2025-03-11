@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.result.resultdb;
 
-import com.android.resultdb.proto.CreateInvocationRequest;
 import com.android.resultdb.proto.Invocation;
 import com.android.resultdb.proto.TestResult;
 import com.android.resultdb.proto.UpdateInvocationRequest;
@@ -25,8 +24,6 @@ import com.android.resultdb.proto.UpdateInvocationRequest;
  * create and update invocations and upload test results.
  */
 public interface IRecorderClient {
-
-    public Invocation createInvocation(CreateInvocationRequest request);
 
     public Invocation updateInvocation(UpdateInvocationRequest request);
 

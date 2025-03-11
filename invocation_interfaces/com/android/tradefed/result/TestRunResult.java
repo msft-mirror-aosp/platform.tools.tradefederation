@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.result;
 
+import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.skipped.SkipReason;
@@ -24,6 +25,7 @@ import com.android.tradefed.util.proto.TfMetricProtoUtil;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -125,6 +127,18 @@ public class TestRunResult {
             TestStatus status = testEntry.getValue().getResultStatus();
             if (statuses.contains(status)) {
                 tests.add(testEntry.getKey());
+            }
+        }
+        return tests;
+    }
+
+    /** Gets the set of tests in given statuses. */
+    public Map<TestDescription, TestResult> getTestEntriesInState(Collection<TestStatus> statuses) {
+        Map<TestDescription, TestResult> tests = new LinkedHashMap<>();
+        for (Map.Entry<TestDescription, TestResult> testEntry : getTestResults().entrySet()) {
+            TestStatus status = testEntry.getValue().getResultStatus();
+            if (statuses.contains(status)) {
+                tests.put(testEntry.getKey(), testEntry.getValue());
             }
         }
         return tests;
@@ -301,7 +315,8 @@ public class TestRunResult {
         addTestResult(test, mCurrentTestResult);
     }
 
-    private void addTestResult(TestDescription test, TestResult testResult) {
+    @VisibleForTesting
+    public void addTestResult(TestDescription test, TestResult testResult) {
         mIsCountDirty = true;
         mTestResults.put(test, testResult);
     }

@@ -3664,8 +3664,12 @@ public class NativeDevice
 
         try (CloseableTraceScope ignored =
                 new CloseableTraceScope("reboot_in_" + mode.toString())) {
+            String fastbootSerial = getFastbootSerialNumber();
             // Update fastboot serial number before entering fastboot mode
-            mStateMonitor.setFastbootSerialNumber(getFastbootSerialNumber());
+            mStateMonitor.setFastbootSerialNumber(fastbootSerial);
+            if (!fastbootSerial.equals(getSerialNumber())) {
+                CLog.d("Using serial '%s' for fastboot detection.", fastbootSerial);
+            }
 
             // If we go to bootloader, it's probably for flashing so ensure we re-check the provider
             mShouldSkipContentProviderSetup = false;
@@ -4555,6 +4559,9 @@ public class NativeDevice
 
         mFastbootSerialNumber = getLinkLocalIpv6FastbootSerial();
         if (mFastbootSerialNumber != null) {
+            CLog.i(
+                    "Device %s's fastboot serial number is %s",
+                    getSerialNumber(), mFastbootSerialNumber);
             return mFastbootSerialNumber;
         }
 

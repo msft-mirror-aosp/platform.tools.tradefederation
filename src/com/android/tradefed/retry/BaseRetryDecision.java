@@ -15,7 +15,6 @@
  */
 package com.android.tradefed.retry;
 
-import com.android.annotations.VisibleForTesting;
 import com.android.tradefed.config.IConfiguration;
 import com.android.tradefed.config.IConfigurationReceiver;
 import com.android.tradefed.config.Option;
@@ -24,7 +23,6 @@ import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
 import com.android.tradefed.device.internal.DeviceResetHandler;
 import com.android.tradefed.device.internal.DeviceSnapshotHandler;
-import com.android.tradefed.error.HarnessRuntimeException;
 import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.invoker.InvocationContext;
 import com.android.tradefed.invoker.TestInformation;
@@ -34,12 +32,8 @@ import com.android.tradefed.invoker.logger.InvocationMetricLogger;
 import com.android.tradefed.invoker.logger.InvocationMetricLogger.InvocationMetricKey;
 import com.android.tradefed.invoker.tracing.CloseableTraceScope;
 import com.android.tradefed.log.LogUtil.CLog;
-import com.android.tradefed.result.TestDescription;
-import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
-import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
-import com.android.tradefed.result.error.InfraErrorIdentifier;
 import com.android.tradefed.testtype.IRemoteTest;
 import com.android.tradefed.testtype.ITestFileFilterReceiver;
 import com.android.tradefed.testtype.ITestFilterReceiver;
@@ -48,17 +42,12 @@ import com.android.tradefed.testtype.SubprocessTfLauncher;
 import com.android.tradefed.testtype.retry.IAutoRetriableTest;
 import com.android.tradefed.testtype.suite.ModuleDefinition;
 import com.android.tradefed.testtype.suite.SuiteTestFilter;
-import com.android.tradefed.util.FileUtil;
 
-import java.io.File;
-import java.io.IOException;
+import com.google.common.annotations.VisibleForTesting;
+
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -68,8 +57,6 @@ import java.util.stream.Collectors;
  */
 public class BaseRetryDecision
         implements IRetryDecision, IConfigurationReceiver, ITestInformationReceiver {
-
-    private static final int ABORT_MAX_FAILURES = 75;
 
     @Option(
         name = "reboot-at-last-retry",
@@ -84,12 +71,29 @@ public class BaseRetryDecision
     private IsolationGrade mRetryIsolationGrade = IsolationGrade.NOT_ISOLATED;
 
     @Option(
-        name = "max-testcase-run-count",
-        description =
-                "If the IRemoteTest can have its testcases run multiple times, "
-                        + "the max number of runs for each testcase."
-    )
-    private int mMaxRetryAttempts = 1;
+            name = "max-testrun-run-count",
+            description =
+                    "If the IRemoteTest can have its modules run multiple times, "
+                            + "the max number of runs for each test run (module). "
+                            + "This is different from max-testcase-run-count which "
+                            + "is for each test case. For example, if the testcase "
+                            + "run count is 1 and the testrun run count is 3, we "
+                            + "will run the module up to 3 times so as to execute "
+                            + "each test case once. Format is "
+                            + "[<module id>:]<run count> . If module is "
+                            + "unspecified, it applies to all modules. Default is "
+                            + "to use the value of max-testcase-run-count.")
+    private Set<String> mTestRunAttempts = new LinkedHashSet<>();
+
+    @Option(
+            name = "max-testcase-run-count",
+            description =
+                    "If the IRemoteTest can have its testcases run multiple times, "
+                            + "the max number of runs for each testcase. Format is "
+                            + "[<module id>:]<run count> . If module is "
+                            + "unspecified, it applies to all modules. "
+                            + "Default is 1 attempt.")
+    private Set<String> mTestCaseAttempts = new LinkedHashSet<>();
 
     @Option(
         name = "retry-strategy",
@@ -118,17 +122,21 @@ public class BaseRetryDecision
                             + "SuiteTestFilter.")
     private Set<String> mSkipRetryingSet = new LinkedHashSet<>();
 
+    @Deprecated
     @Option(
             name = "updated-retry-reporting",
             description = "Feature flag to use the updated retry reporting strategy.")
     private boolean mUpdatedReporting = true;
 
+    @Deprecated
+    @SuppressWarnings("unused")
     @Option(
             name = "updated-filtering",
             description = "Feature flag to use the updated filtering logic.")
     private boolean mUpdatedFiltering = true;
 
     @Deprecated
+    @SuppressWarnings("unused")
     @Option(
             name = "module-preparation-retry",
             description = "Whether or not to retry any module-level target preparation errors." +
@@ -142,18 +150,15 @@ public class BaseRetryDecision
             description = "Feature flag to use snapshot/restore instead of powerwash.")
     private boolean mUseSnapshotForReset = false;
 
-    @Option(
-            name = "module-run-count",
-            description = "Override retry count for specific modules. Format is <module id>:<run count>")
-    private Set<String> mModuleRunCount = new LinkedHashSet<>();
-
     private IInvocationContext mContext;
     private IConfiguration mConfiguration;
     private TestInformation mTestInformation;
 
     private IRemoteTest mCurrentlyConsideredTest;
-    private Set<TestDescription> mPreviouslyFailing;
     private RetryStatsHelper mStatistics;
+    private RetryTracker mRetryTracker;
+    private ExcludeFilterManager mExcludeManager;
+    private RetryCountParser mRetryCountParser;
 
     /** Constructor for the retry decision */
     public BaseRetryDecision() {}
@@ -173,30 +178,50 @@ public class BaseRetryDecision
         return mRebootAtLastRetry;
     }
 
-    @Override
-    public int getMaxRetryCount() {
-        return mMaxRetryAttempts;
+    private RetryCountParser getRetryCountParser() {
+        if (mRetryCountParser == null) {
+            mRetryCountParser = new RetryCountParser(mTestCaseAttempts, mTestRunAttempts);
+        }
+        return mRetryCountParser;
     }
 
     @Override
-    public int getMaxRetryCount(ModuleDefinition module) {
-        if (module == null) {
-            return getMaxRetryCount();
-        }
+    public int getMaxTestRunAttempts() {
+        return getMaxTestRunAttempts(null);
+    }
 
-        for (String entry : mModuleRunCount) {
-            try {
-                String[] parts = entry.split(":", 2); // Split into at most 2 parts
-                if (parts.length == 2 && parts[0].equals(module.getId())) {
-                    return Integer.parseInt(parts[1]);
-                }
-            } catch (Exception e) {
-                CLog.e("Failed to parse module run count entry: %s", entry);
-            }
-        }
+    @Override
+    public int getMaxTestRunAttempts(ModuleDefinition module) {
+        return getRetryCountParser().getMaxTestRunAttempts(module);
+    }
 
-        // If no override is found, return the default max retry count.
-        return getMaxRetryCount();
+    @Override
+    public int getMaxTestCaseAttempts() {
+        return getRetryCountParser().getMaxTestCaseAttempts(null);
+    }
+
+    @Override
+    public int getMaxTestCaseAttempts(ModuleDefinition module) {
+        return getRetryCountParser().getMaxTestCaseAttempts(module);
+    }
+
+    @Override
+    public List<String> getCommandLineArgs() {
+        List<String> args = new ArrayList<>();
+        args.addAll(getRetryCountParser().getCommandLineArgs());
+        args.addAll(List.of("--retry-strategy", mRetryStrategy.toString()));
+        if (mRebootAtLastRetry) {
+            args.add("--reboot-at-last-retry");
+        }
+        args.addAll(List.of("--retry-isolation-grade", mRetryIsolationGrade.toString()));
+        for (String filterEntry : mSkipRetryingSet) {
+            args.add("--skip-retrying-list");
+            args.add(filterEntry);
+        }
+        if (mSkipRetryInPresubmit) {
+            args.add("--skip-retry-in-presubmit");
+        }
+        return args;
     }
 
     @Override
@@ -288,7 +313,8 @@ public class BaseRetryDecision
         if (test != mCurrentlyConsideredTest) {
             mCurrentlyConsideredTest = test;
             mStatistics = new RetryStatsHelper();
-            mPreviouslyFailing = new HashSet<>();
+            mRetryTracker = new RetryTracker(getMaxTestCaseAttempts(module));
+            mExcludeManager = new ExcludeFilterManager(test);
         }
 
         if (mSkipRetryInPresubmit && InvocationContext.isPresubmit(mContext)) {
@@ -312,6 +338,7 @@ public class BaseRetryDecision
             }
         }
 
+        // Return early for strategies other than RETRY_ANY_FAILURE.
         switch (mRetryStrategy) {
             case NO_RETRY:
                 // Return directly if we are not considering retry at all.
@@ -351,11 +378,17 @@ public class BaseRetryDecision
 
         boolean shouldRetry = false;
         long retryStartTime = System.currentTimeMillis();
-        if (test instanceof ITestFilterReceiver) {
-            // TODO(b/77548917): Right now we only support ITestFilterReceiver. We should expect to
-            // support ITestFile*Filter*Receiver in the future.
-            ITestFilterReceiver filterableTest = (ITestFilterReceiver) test;
-            shouldRetry = handleRetryFailures(filterableTest, previousResults, moduleSkipList);
+        if (test instanceof ITestFilterReceiver || test instanceof ITestFileFilterReceiver) {
+            // Record the attempt for the previous failed tests.
+            mRetryTracker.recordTestRun(previousResults, attemptJustExecuted, moduleSkipList);
+
+            // Setup exclude filters.
+            mExcludeManager.resetDefaultFilters();
+            mExcludeManager.addExcludeFilters(mRetryTracker.getExcludedTests());
+
+            // Check if we should retry.
+            shouldRetry = mRetryTracker.shouldRetry();
+
             if (shouldRetry && !isAlreadyRecovered) {
                 // In case of retry, go through the recovery routine
                 recoverStateOfDevices(getDevices(), attemptJustExecuted, module);
@@ -370,8 +403,8 @@ public class BaseRetryDecision
             }
         } else {
             CLog.d(
-                    "%s does not implement ITestFilterReceiver or IAutoRetriableTest, thus "
-                            + "cannot work with auto-retry.",
+                    "%s does not implement ITestFilterReceiver or ITestFileFilterReceiver or "
+                            + "IAutoRetriableTest, thus cannot work with auto-retry.",
                     test);
             return false;
         }
@@ -396,25 +429,6 @@ public class BaseRetryDecision
         return mStatistics.calculateStatistics();
     }
 
-    /** Returns the map of failed test cases that should be retried. */
-    public static Map<TestDescription, TestResult> getFailedTestCases(
-            List<TestRunResult> previousResults) {
-        Map<TestDescription, TestResult> failedTestCases = new LinkedHashMap<>();
-        for (TestRunResult run : previousResults) {
-            if (run != null) {
-                for (Entry<TestDescription, TestResult> entry : run.getTestResults().entrySet()) {
-                    if (TestStatus.FAILURE.equals(entry.getValue().getResultStatus())) {
-                        failedTestCases.put(entry.getKey(), entry.getValue());
-                    } else if (TestStatus.SKIPPED.equals(entry.getValue().getResultStatus())) {
-                        // Retry skipped test as well
-                        failedTestCases.put(entry.getKey(), entry.getValue());
-                    }
-                }
-            }
-        }
-        return failedTestCases;
-    }
-
     /** Returns true if we should use the updated reporting. */
     @Override
     public boolean useUpdatedReporting() {
@@ -428,21 +442,6 @@ public class BaseRetryDecision
 
     public Set<String> getSkipRetrySet() {
         return mSkipRetryingSet;
-    }
-
-    private static Set<TestDescription> getPassedTestCases(List<TestRunResult> previousResults) {
-        Set<TestDescription> previousPassed = new LinkedHashSet<>();
-        for (TestRunResult run : previousResults) {
-            if (run != null) {
-                for (Entry<TestDescription, TestResult> entry : run.getTestResults().entrySet()) {
-                    if (!TestStatus.FAILURE.equals(entry.getValue().getResultStatus())
-                            && !TestStatus.SKIPPED.equals(entry.getValue().getResultStatus())) {
-                        previousPassed.add(entry.getKey());
-                    }
-                }
-            }
-        }
-        return previousPassed;
     }
 
     /**
@@ -486,93 +485,6 @@ public class BaseRetryDecision
         return shouldSkip;
     }
 
-    /** Returns the list of failure from the previous results. */
-    private static List<TestRunResult> getRunFailures(List<TestRunResult> previousResults) {
-        List<TestRunResult> runFailed = new ArrayList<>();
-        for (TestRunResult run : previousResults) {
-            if (run != null && run.isRunFailure()) {
-                runFailed.add(run);
-            }
-        }
-        return runFailed;
-    }
-
-    private static List<TestRunResult> getNonRetriableFailures(List<TestRunResult> failedRun) {
-        List<TestRunResult> nonRetriableRuns = new ArrayList<>();
-        for (TestRunResult run : failedRun) {
-            if (!run.getRunFailureDescription().isRetriable()) {
-                nonRetriableRuns.add(run);
-            }
-        }
-        return nonRetriableRuns;
-    }
-
-    private boolean handleRetryFailures(
-            ITestFilterReceiver test,
-            List<TestRunResult> previousResults,
-            Set<String> moduleSkipList) {
-        List<TestRunResult> runFailures = getRunFailures(previousResults);
-        List<TestRunResult> nonRetriableRunFailures = getNonRetriableFailures(runFailures);
-        if (!nonRetriableRunFailures.isEmpty()) {
-            CLog.d("Skipping retry since there was a non-retriable failure.");
-            return false;
-        }
-        if (mUpdatedFiltering && mUpdatedReporting) {
-            CLog.d("Using updated filtering logic.");
-            Map<TestDescription, TestResult> previousFailedTests =
-                    getFailedTestCases(previousResults);
-            if (runFailures.isEmpty() && previousFailedTests.isEmpty()) {
-                CLog.d("No test run or test case failures. No need to retry.");
-                return false;
-            }
-            Set<TestDescription> previouslyPassedTests = getPassedTestCases(previousResults);
-            excludePassedTests(test, previouslyPassedTests);
-            boolean everythingFiltered =
-                    excludeNonRetriableFailure(test, previousFailedTests, moduleSkipList);
-            if (everythingFiltered && runFailures.isEmpty()) {
-                CLog.d("No failures are retriable, skipping retry.");
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.RETRY_SKIPPED_ALL_FILTERED_COUNT, 1);
-            }
-            return !everythingFiltered || !runFailures.isEmpty();
-        } else if (!runFailures.isEmpty()) {
-            if (shouldFullRerun(runFailures)) {
-                List<String> names =
-                        runFailures.stream().map(e -> e.getName()).collect(Collectors.toList());
-                CLog.d("Retry the full run since [%s] runs have failures.", names);
-                return true;
-            }
-            // If we don't attempt full rerun add filters.
-            CLog.d("Full rerun not required, excluding previously passed tests.");
-            Set<TestDescription> previouslyPassedTests = getPassedTestCases(previousResults);
-            excludePassedTests(test, previouslyPassedTests);
-            return true;
-        }
-
-        // In case of test case failure, we retry with filters.
-        Map<TestDescription, TestResult> previousFailedTests = getFailedTestCases(previousResults);
-        if (!mPreviouslyFailing.isEmpty()) {
-            previousFailedTests.keySet().retainAll(mPreviouslyFailing);
-            mPreviouslyFailing.retainAll(previousFailedTests.keySet());
-        }
-        // Abort if number of failures is high for a given one test
-        if (previousFailedTests.size() > ABORT_MAX_FAILURES) {
-            CLog.d(
-                    "Found %s failures, skipping auto-retry to avoid large overhead.",
-                    previousFailedTests.size());
-            return false;
-        }
-
-        if (!previousFailedTests.isEmpty()) {
-            CLog.d("Retrying the test case failure.");
-            addRetriedTestsToFilters(test, previousFailedTests);
-            return true;
-        }
-
-        CLog.d("No test run or test case failures. No need to retry.");
-        return false;
-    }
-
     /** Returns true if there are any failures in the previous results. */
     private boolean hasAnyFailures(List<TestRunResult> previousResults) {
         for (TestRunResult run : previousResults) {
@@ -581,113 +493,6 @@ public class BaseRetryDecision
             }
         }
         return false;
-    }
-
-    /** If none of the run failures require a full rerun, trigger the partial rerun logic. */
-    private boolean shouldFullRerun(List<TestRunResult> runFailures) {
-        for (TestRunResult run : runFailures) {
-            if (run.getRunFailureDescription().rerunFull()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** Set the filters on the test runner for the retry. */
-    private void addRetriedTestsToFilters(
-            ITestFilterReceiver test, Map<TestDescription, TestResult> tests) {
-        // Limit the re-run to the failure we include, so clear filters then put our failures
-        test.clearIncludeFilters();
-        for (Entry<TestDescription, TestResult> testCaseEntry : tests.entrySet()) {
-            TestDescription testCase = testCaseEntry.getKey();
-            if (testCaseEntry.getValue().getFailure().isRetriable()) {
-                // We have to retry without the parameters since some runner don't support it.
-                String filter =
-                        String.format(
-                                "%s#%s",
-                                testCase.getClassName(), testCase.getTestNameWithoutParams());
-                test.addIncludeFilter(filter);
-            } else {
-                // If a test case failure is not retriable, track it, but don't retry it so we
-                // exclude it from the filters.
-                String filter =
-                        String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
-                test.addExcludeFilter(filter);
-            }
-            mPreviouslyFailing.add(testCase);
-        }
-    }
-
-    private void excludePassedTests(ITestFilterReceiver test, Set<TestDescription> passedTests) {
-        // Exclude all passed tests for the retry.
-        for (TestDescription testCase : passedTests) {
-            String filter = String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
-            if (test instanceof ITestFileFilterReceiver) {
-                addFilterToExcludeFilterFile((ITestFileFilterReceiver) test, filter);
-            } else {
-                test.addExcludeFilter(filter);
-            }
-        }
-    }
-
-    /** Returns true if all failure are filtered out */
-    private boolean excludeNonRetriableFailure(
-            ITestFilterReceiver test,
-            Map<TestDescription, TestResult> previousFailedTests,
-            Set<String> skipListForModule) {
-        Set<TestDescription> failedTests = new HashSet<>(previousFailedTests.keySet());
-        for (Entry<TestDescription, TestResult> testCaseEntry : previousFailedTests.entrySet()) {
-            TestDescription testCase = testCaseEntry.getKey();
-            if (!TestStatus.FAILURE.equals(testCaseEntry.getValue().getResultStatus())) {
-                // Only consider failures for retriable failures.
-                continue;
-            }
-            if (!testCaseEntry.getValue().getFailure().isRetriable()) {
-                // If a test case failure is not retriable, exclude it from the filters.
-                String filter =
-                        String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
-                if (test instanceof ITestFileFilterReceiver) {
-                    addFilterToExcludeFilterFile((ITestFileFilterReceiver) test, filter);
-                } else {
-                    test.addExcludeFilter(filter);
-                }
-                failedTests.remove(testCase);
-            }
-            if (skipListForModule.contains(testCase.toString())) {
-                // If a test case failure is excluded from retry, exclude it
-                String filter =
-                        String.format("%s#%s", testCase.getClassName(), testCase.getTestName());
-                if (test instanceof ITestFileFilterReceiver) {
-                    addFilterToExcludeFilterFile((ITestFileFilterReceiver) test, filter);
-                } else {
-                    test.addExcludeFilter(filter);
-                }
-                InvocationMetricLogger.addInvocationMetrics(
-                        InvocationMetricKey.RETRY_TEST_SKIPPED_COUNT, 1);
-                failedTests.remove(testCase);
-                CLog.d("Skip retry of %s, it's in skip-retry-list.", filter);
-            }
-        }
-
-        return failedTests.isEmpty();
-    }
-
-    private void addFilterToExcludeFilterFile(ITestFileFilterReceiver test, String filter) {
-        File excludeFilterFile = test.getExcludeTestFile();
-        if (excludeFilterFile == null) {
-            try {
-                excludeFilterFile = FileUtil.createTempFile("exclude-filter", ".txt");
-            } catch (IOException e) {
-                throw new HarnessRuntimeException(
-                        e.getMessage(), e, InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
-            }
-            ((ITestFileFilterReceiver) test).setExcludeTestFile(excludeFilterFile);
-        }
-        try {
-            FileUtil.writeToFile(filter + "\n", excludeFilterFile, true);
-        } catch (IOException e) {
-            CLog.e(e);
-        }
     }
 
     /** Returns all the non-stub device associated with the {@link IRemoteTest}. */
@@ -719,7 +524,7 @@ public class BaseRetryDecision
             }
         } else if (IsolationGrade.FULLY_ISOLATED.equals(mRetryIsolationGrade)) {
             resetIsolation(module, devices);
-        } else if (lastAttempt == (getMaxRetryCount(module) - 2)) {
+        } else if (lastAttempt >= (getMaxTestCaseAttempts(module) - 2)) {
             // Reset only works for suite right now
             if (mRebootAtLastRetry) {
                 for (ITestDevice device : devices) {

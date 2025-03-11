@@ -225,7 +225,7 @@ public final class TestsPoolPoller
             RemoteDynamicPool remotePool = (RemoteDynamicPool) mTestsPool;
             ITestSuite testModule = (ITestSuite) test;
             int attemptNumber = remotePool.getAttemptNumber(testModule);
-            if (attemptNumber + 1 <= mConfig.getRetryDecision().getMaxRetryCount()) {
+            if (attemptNumber + 1 <= mConfig.getRetryDecision().getMaxTestRunAttempts()) {
                 // requeue the module for execution
                 remotePool.returnToRemotePool(testModule, attemptNumber + 1);
             } else {

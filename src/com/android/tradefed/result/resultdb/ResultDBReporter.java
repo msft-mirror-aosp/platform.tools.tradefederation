@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.result.resultdb;
 
+import com.android.resultdb.proto.CreateInvocationRequest;
 import com.android.resultdb.proto.FailureReason;
 import com.android.resultdb.proto.Invocation;
 import com.android.resultdb.proto.StringPair;
@@ -82,8 +83,13 @@ public class ResultDBReporter
     @Option(name = "disable", description = "Set to true if reporter is disabled")
     private boolean mDisable = false;
 
+    // Option used to test Tradefed ResultDB integration without invocation created by ATE.
+    @Option(
+            name = "create-local-invocation",
+            description = "Create a local invocation if invocation is not provided in the context")
+    private boolean mCreateLocalInvocation = false;
+
     private Invocation mInvocation;
-    private String mInvocationId;
     private IRecorderClient mRecorder;
 
     // Common variant values for all test in this TF invocation.
@@ -128,6 +134,11 @@ public class ResultDBReporter
         return Client.create(invocationId, updateToken);
     }
 
+    @VisibleForTesting
+    IRecorderClient createRecorderClient(CreateInvocationRequest request) {
+        return Client.createWithNewInvocation(request);
+    }
+
     // Generate a random hexadecimal string of length 8.
     @VisibleForTesting
     String randomHexString() throws NoSuchAlgorithmException {
@@ -143,19 +154,39 @@ public class ResultDBReporter
             CLog.i("ResultDBReporter is disabled");
             return;
         }
-        // Obtain invocation ID from context.
-        String invocationId = context.getAttribute("resultdb_invocation_id");
-        String updateToken = context.getAttribute("resultdb_invocation_update_token");
-        if (invocationId.isEmpty() || updateToken.isEmpty()) {
-            mDisable = true;
-            CLog.i(
-                    "ResultDBReporter is disabled as invocation ID or update token is not"
-                            + " provided.");
-            return;
-        }
+        try {
+            // Obtain invocation ID from context.
+            String invocationId = context.getAttribute("resultdb_invocation_id");
+            String updateToken = context.getAttribute("resultdb_invocation_update_token");
+            if (!invocationId.isEmpty() && !updateToken.isEmpty()) {
+                mRecorder = createRecorderClient(invocationId, updateToken);
+            } else if (mCreateLocalInvocation) {
+                mInvocation = Invocation.newBuilder().setRealm("android:ants-experiment").build();
+                invocationId = randomUUIDString().toString();
+                mRecorder =
+                        createRecorderClient(
+                                CreateInvocationRequest.newBuilder()
+                                        .setInvocation(mInvocation)
+                                        .setInvocationId("u-" + invocationId)
+                                        .build());
 
-        mInvocationId = invocationId;
-        mRecorder = createRecorderClient(invocationId, updateToken);
+            } else {
+                mDisable = true;
+                CLog.i(
+                        "ResultDBReporter is disabled as invocation ID or update token is not"
+                                + " provided.");
+                return;
+            }
+        } catch (RuntimeException e) {
+            mDisable = true;
+            CLog.e("Failed to create ResultDB client.");
+            if (mRecorder != null) {
+                // Make sure we cancel the client, otherwise it will leak a thread since
+                // invocationEnded will be skipped.
+                mRecorder.finalizeTestResults();
+            }
+            throw new RuntimeException(e);
+        }
         try {
             mResultIdBase = this.randomHexString();
         } catch (NoSuchAlgorithmException e) {
@@ -169,15 +200,15 @@ public class ResultDBReporter
         Variant.Builder mBaseVariantBuilder =
                 Variant.newBuilder()
                         .putDef("scheduler", "ATP") // ATP is the only scheduler supported for now.
-                        .putDef("name", context.getTestTag());
+                        .putDef("name", Strings.nullToEmpty(context.getTestTag()));
 
         if (!context.getBuildInfos().isEmpty()) {
             IBuildInfo primaryBuild = context.getBuildInfos().get(0);
             mBaseVariantBuilder =
                     mBaseVariantBuilder
                             .putDef("build_provider", "androidbuild")
-                            .putDef("branch", primaryBuild.getBuildBranch())
-                            .putDef("target", primaryBuild.getBuildFlavor());
+                            .putDef("branch", Strings.nullToEmpty(primaryBuild.getBuildBranch()))
+                            .putDef("target", Strings.nullToEmpty(primaryBuild.getBuildFlavor()));
         }
         mBaseVariant = mBaseVariantBuilder.build();
     }
