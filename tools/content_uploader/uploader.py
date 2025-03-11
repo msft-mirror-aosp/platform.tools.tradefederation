@@ -25,6 +25,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import uuid
 import time
 from typing import Tuple
 
@@ -76,6 +77,7 @@ class UploadResult:
     """
     digest: str
     content_details: list[dict[str, any]]
+    log_file: str
 
 
 @dataclasses.dataclass
@@ -97,10 +99,52 @@ CHUNKED_DIR_ARTIFACT_NAME_PREFIX = "_chunked_dir_"
 
 class Uploader:
     """Uploader for uploading artifacts to CAS remote."""
-    def __init__(self, cas_info: CasInfo, log_file: str):
+    def __init__(self, cas_info: CasInfo):
         """Initialize the Uploader with CAS info."""
         self._cas_info = cas_info
-        self._log_file = log_file
+
+    @staticmethod
+    def setup_task_logger(working_dir: str) -> Tuple[logging.Logger, str]:
+        """Creates a logger for an individual uploader task."""
+        id = uuid.uuid4()
+        logger = logging.getLogger(f"Uploader-{id}")
+        logger.setLevel(logging.DEBUG)
+        logger.propagate = False
+
+        log_file = os.path.join(working_dir, f"_uploader_{id}.log")
+        file_handler = logging.FileHandler(log_file)
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+        return logger, log_file
+
+    @staticmethod
+    def read_file(file_path: str) -> str:
+        """Returns contents of file."""
+        try:
+            with open(file_path, "r", encoding="utf-8") as file:
+                return file.read()
+        except FileNotFoundError:
+            return f"Error: File '{file_path}' not found."
+        except Exception as e:
+            return f"Error: {e}"
+
+    @staticmethod
+    def _run_uploader_command(cmd: str, working_dir: str) -> str:
+        """"Run the uploader command using working_dir and returns the output."""
+        log_file = os.path.join(working_dir, f'_casuploader_{uuid.uuid4()}.log')
+        with open(log_file, 'w', encoding='utf8') as outfile:
+            subprocess.run(
+                cmd,
+                check=True,
+                text=True,
+                stdout=outfile,
+                stderr=subprocess.STDOUT,
+                encoding='utf-8',
+                timeout=UPLOADER_TIMEOUT_SECS
+            )
+        return Uploader.read_file(log_file)
 
     def _upload_artifact(self,
             artifact: ArtifactConfig,
@@ -117,19 +161,21 @@ class Uploader:
         Returns: the digest of the uploaded artifact, formatted as "<hash>/<size>".
         returns None if artifact upload fails.
         """
+        logger, log_file = Uploader.setup_task_logger(working_dir)
+
         # `-dump-file-details` only supports on cas uploader V1.0 or later.
         dump_file_details = self._cas_info.client_version >= (1, 0)
         if not dump_file_details:
-            logging.warning('-dump-file-details is not enabled')
+            logger.warning('-dump-file-details is not enabled')
 
         # `-dump-metrics` only supports on cas uploader V1.3 or later.
         dump_metrics = self._cas_info.client_version >= (1, 3)
         if not dump_metrics:
-            logging.warning('-dump-metrics is not enabled')
+            logger.warning('-dump-metrics is not enabled')
 
         with tempfile.NamedTemporaryFile(mode='w+') as digest_file, tempfile.NamedTemporaryFile(
         mode='w+') as content_details_file:
-            logging.info(
+            logger.info(
                 'Uploading %s to CAS instance %s', artifact.source_path, self._cas_info.cas_instance
             )
 
@@ -159,34 +205,26 @@ class Uploader:
                 cmd = cmd + ['-dump-metrics', metrics_file]
 
             try:
-                logging.info('Running command: %s', cmd)
-                with open(self._log_file, 'a', encoding='utf8') as outfile:
-                    subprocess.run(
-                        cmd,
-                        check=True,
-                        text=True,
-                        stdout=outfile,
-                        stderr=subprocess.STDOUT,
-                        encoding='utf-8',
-                        timeout=UPLOADER_TIMEOUT_SECS
-                    )
+                logger.info('Running command: %s', cmd)
+                output = Uploader._run_uploader_command(cmd, working_dir)
+                logger.info('Command output:\n %s', output)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                logging.warning(
+                logger.warning(
                     'Failed to upload %s to CAS instance %s. Skip.\nError message: %s\nLog: %s',
                     artifact.source_path, self._cas_info.cas_instance, e, e.stdout,
                 )
                 return None
             except subprocess.SubprocessError as e:
-                logging.warning('Failed to upload %s to CAS instance %s. Skip.\n. Error %s',
+                logger.warning('Failed to upload %s to CAS instance %s. Skip.\n. Error %s',
                     artifact.source_path, self._cas_info.cas_instance, e)
                 return None
 
             # Read digest of the root directory or file from dumped digest file.
             digest = digest_file.read()
             if digest:
-                logging.info('Uploaded %s to CAS. Digest: %s', artifact.source_path, digest)
+                logger.info('Uploaded %s to CAS. Digest: %s', artifact.source_path, digest)
             else:
-                logging.warning(
+                logger.warning(
                     'No digest is dumped for file %s, the uploading may fail.',
                     artifact.source_path,
                 )
@@ -197,12 +235,12 @@ class Uploader:
                 try:
                     content_details = json.loads(content_details_file.read())
                 except json.JSONDecodeError as e:
-                    logging.warning('Failed to parse uploaded content details: %s', e)
+                    logger.warning('Failed to parse uploaded content details: %s', e)
 
-            return UploadResult(digest, content_details)
+            return UploadResult(digest, content_details, log_file)
 
     @staticmethod
-    def _path_flag_for_artifact(artifact: ArtifactConfig, working_dir: str) -> str:
+    def _path_flag_for_artifact(artifact: ArtifactConfig, working_dir: str) -> list[str]:
         """Returns the path flag for the artifact."""
         if artifact.standard:
             return ['-zip-path' if artifact.unzip else '-file-path', artifact.source_path]
@@ -304,11 +342,12 @@ class Uploader:
         print(f"Total: {len(tasks)} files.")
 
     def upload(self, artifacts: list[ArtifactConfig], dist_dir: str,
-               cas_metrics: str, max_works: int, dryrun: bool = False):
+               max_works: int, dryrun: bool = False) -> cas_metrics_pb2.CasMetrics:
         """Uploads artifacts to CAS remote"""
         file_digests = {}
         content_details = []
 
+        cas_metrics = cas_metrics_pb2.CasMetrics()
         with tempfile.TemporaryDirectory() as working_dir:
             logging.info('The working dir is %s', working_dir)
 
@@ -316,14 +355,22 @@ class Uploader:
             logging.info('Uploading %d files, max workers = %d', len(tasks), max_works)
             if dryrun:
                 Uploader._print_tasks(tasks)
-                return
+                return cas_metrics
 
             # Upload artifacts in parallel
+            logging.info('==== Start uploading %d artifact(s) in parallel ====\n', len(tasks))
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_works) as executor:
                 futures = [executor.submit(self._upload_wrapper, task) for task in tasks]
 
+                index = 1
                 for future in concurrent.futures.as_completed(futures):
                     result, task = future.result()
+                    if result:
+                        output = Uploader.read_file(result.log_file) if result else ''
+                        logging.info('---- %s: %s ----\n\n%s', index, task.path, output)
+                    else:
+                        logging.info('---- %s: %s ----\n\n', index, task.path)
+                    index += 1
                     if result and result.digest:
                         file_digests[task.path] = result.digest
                     else:
@@ -340,12 +387,14 @@ class Uploader:
                     if os.path.exists(task.metrics_file):
                         Uploader._add_artifact_metrics(task.metrics_file, cas_metrics)
                         os.remove(task.metrics_file)
+            logging.info('==== Uploading of artifacts completed ====')
 
         self._output_results(
             dist_dir,
             file_digests,
             content_details,
         )
+        return cas_metrics
 
     @staticmethod
     def _add_artifact_metrics(metrics_file: str, cas_metrics: cas_metrics_pb2.CasMetrics):

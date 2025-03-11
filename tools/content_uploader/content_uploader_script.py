@@ -32,7 +32,7 @@ from uploader import CasInfo
 from uploader import Uploader
 
 
-VERSION = '1.7'
+VERSION = '1.8'
 
 CAS_UPLOADER_PREBUILT_PATH = 'tools/tradefederation/prebuilts/'
 CAS_UPLOADER_PATH = 'tools/content_addressed_storage/prebuilts/'
@@ -104,13 +104,6 @@ def main():
     """Uploads the specified artifacts to CAS."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--experiment_artifacts',
-        required=False,
-        action='append',
-        default=[],
-        help='Name of configuration which artifact to upload',
-    )
-    parser.add_argument(
         '--artifacts',
         required=False,
         action='append',
@@ -149,9 +142,8 @@ def main():
                 print(f"{name:<30}={artifact}")
 
         cas_info = _init_cas_info()
-        cas_metrics = cas_metrics_pb2.CasMetrics()
-        Uploader(cas_info, log_file).upload(list(artifacts.values()),
-                dist_dir, cas_metrics, MAX_WORKERS, args.dryrun)
+        cas_metrics = Uploader(cas_info).upload(list(artifacts.values()),
+                dist_dir, MAX_WORKERS, args.dryrun)
 
         elapsed = time.time() - start
         logging.info('Total time of uploading build artifacts to CAS: %d seconds',
