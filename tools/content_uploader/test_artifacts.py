@@ -40,6 +40,17 @@ class ArtifactsTest(unittest.TestCase):
                     f"Artifact '{name}' (unzip=True) should have a source path ending with 'zip'.",
                 )
 
+    def test_all_preset_artifacts_are_valid(self):
+        """Tests that no artrifact has all standard, chunk, and chunk_dir false."""
+        for name, artifact in ARTIFACTS.items():
+            self.assertTrue(
+                artifact.standard or artifact.chunk or artifact.chunk_dir,
+                (
+                    f"Artifact '{name}' is invalid. "
+                    "One or more of 'standard', 'chunk' or 'chunk_dir' must be true."
+                )
+            )
+
 
 if __name__ == '__main__':
     unittest.main()

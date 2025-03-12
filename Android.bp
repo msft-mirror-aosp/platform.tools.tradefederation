@@ -299,6 +299,7 @@ java_library_host {
         "aoa-helper",
         "error_prone_annotations",
         "google-api-java-client-assembly",
+        "googleapis-field-behavior-java-proto",
         "auto_value_annotations",
         "google-api-services-compute",
         "google-api-services-storage",

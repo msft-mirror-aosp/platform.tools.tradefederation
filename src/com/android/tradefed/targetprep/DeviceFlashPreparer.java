@@ -460,6 +460,7 @@ public abstract class DeviceFlashPreparer extends BaseTargetPreparer
                         FlashingMethod.FASTBOOT_UNCATEGORIZED.toString());
                 flasher.flash(device, deviceBuild);
             } catch (DeviceNotAvailableException | TargetSetupError | RuntimeException e) {
+                CLog.e(e);
                 // Clear tracking in case of error
                 DeviceImageTracker.getDefaultCache().invalidateTracking(device.getSerialNumber());
                 throw e;
