@@ -16,20 +16,29 @@
 
 package com.android.tradefed.testtype.mobly;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /** Mobly yaml result 'Test Name List' element handler. */
 public class MoblyYamlResultTestNameListHandler implements IMoblyYamlResultHandler {
 
+    private static final String REQUESTED_TESTS = "Requested Tests";
+
     @Override
     public TestNameList handle(Map<String, Object> docMap) {
         TestNameList.Builder builder = TestNameList.builder();
+        builder.addTests((List<String>) docMap.get(REQUESTED_TESTS));
         return builder.build();
     }
 
     public static class TestNameList implements ITestResult {
 
-        private TestNameList() {}
+        private List<String> testList = new ArrayList<>();
+
+        private TestNameList(List<String> testList) {
+            this.testList.addAll(testList);
+        }
 
         @Override
         public MoblyYamlResultHandlerFactory.Type getType() {
@@ -40,10 +49,22 @@ public class MoblyYamlResultTestNameListHandler implements IMoblyYamlResultHandl
             return new Builder();
         }
 
+        public List<String> getTestList() {
+            return testList;
+        }
+
         public static class Builder {
 
+            private List<String> testList = new ArrayList<>();
+
             public TestNameList build() {
-                return new TestNameList();
+                return new TestNameList(testList);
+            }
+
+            public void addTests(List<String> tests) {
+                if (tests != null) {
+                    testList.addAll(tests);
+                }
             }
         }
     }
