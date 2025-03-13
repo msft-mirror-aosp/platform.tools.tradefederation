@@ -34,10 +34,8 @@ class StubClient implements IRecorderClient {
     private StubClient() {}
 
     @Override
-    public Invocation finalizeInvocation(String invocationId) {
-        // TODO: implement this method.
-        mInvocation = mInvocation.toBuilder().setState(Invocation.State.FINALIZED).build();
-        return mInvocation;
+    public Invocation finalizeInvocation() {
+        return Invocation.getDefaultInstance();
     }
 
     @Override

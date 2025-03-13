@@ -27,7 +27,7 @@ public interface IRecorderClient {
 
     public Invocation updateInvocation(UpdateInvocationRequest request);
 
-    public Invocation finalizeInvocation(String invocationId);
+    public Invocation finalizeInvocation();
 
     public void uploadTestResult(TestResult result);
 
