@@ -134,9 +134,9 @@ public class GTestFuncTest implements IDeviceTest {
         verify(mMockListener).testStarted(Mockito.eq(testId));
         verify(mMockListener).testFailed(Mockito.eq(testId), Mockito.isA(String.class));
         verify(mMockListener).testEnded(Mockito.eq(testId), Mockito.eq(emptyMap));
-        verify(mMockListener).testRunFailed(Mockito.<String>anyObject());
+        verify(mMockListener).testRunFailed(Mockito.<String>any());
         verify(mMockListener)
-                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>anyObject());
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
     }
 
     /** Test run scenario where test process crashes while trying to access NULL ptr. */
