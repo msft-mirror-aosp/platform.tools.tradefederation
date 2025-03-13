@@ -79,11 +79,15 @@ public class TestDiscoveryInvoker {
     private IBuildInfo mBuildInfo;
     private ITestLogger mLogger;
 
+    private static final TestDiscoveryUtil mTestDiscoveryUtil = new TestDiscoveryUtil();
+
     public static final String TRADEFED_OBSERVATORY_ENTRY_PATH =
             TestDiscoveryExecutor.class.getName();
     public static final String TEST_DEPENDENCIES_LIST_KEY = "TestDependencies";
     public static final String TEST_MODULES_LIST_KEY = "TestModules";
     public static final String TEST_ZIP_REGEXES_LIST_KEY = "TestZipRegexes";
+
+    public static final String TEST_DISCOVERY_COMMENT_KEY = "TestDiscoveryComment";
     public static final String PARTIAL_FALLBACK_KEY = "PartialFallback";
     public static final String NO_POSSIBLE_TEST_DISCOVERY_KEY = "NoPossibleTestDiscovery";
     public static final String TEST_MAPPING_ZIP_FILE = "TF_TEST_MAPPING_ZIP_FILE";
@@ -108,6 +112,10 @@ public class TestDiscoveryInvoker {
 
     @VisibleForTesting
     File createOutputFile() throws IOException {
+        if (mTestDiscoveryUtil.hasOutputResultFile()) {
+            File presetOutputFile = new File(System.getenv(TestDiscoveryInvoker.OUTPUT_FILE));
+            return presetOutputFile;
+        }
         return FileUtil.createTempFile("discovery-output", ".txt");
     }
 
@@ -271,7 +279,11 @@ public class TestDiscoveryInvoker {
                 return dependencies;
             }
         } finally {
-            FileUtil.deleteFile(outputFile);
+            // Have output file set means other source is anticipating to read the output file.
+            // Therefore avoid deleting the output file if its set. (e.g. BWYN script)
+            if (!mTestDiscoveryUtil.hasOutputResultFile()) {
+                FileUtil.deleteFile(outputFile);
+            }
             try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
                 if (mLogger != null) {
                     mLogger.testLog("discovery-trace", LogDataType.PERFETTO, source);
@@ -405,7 +417,11 @@ public class TestDiscoveryInvoker {
                 return dependencies;
             }
         } finally {
-            FileUtil.deleteFile(outputFile);
+            // Have output file set means other source is anticipating to read the output file.
+            // Therefore avoid deleting the output file if its set. (e.g. BWYN script)
+            if (!mTestDiscoveryUtil.hasOutputResultFile()) {
+                FileUtil.deleteFile(outputFile);
+            }
             try (FileInputStreamSource source = new FileInputStreamSource(traceFile, true)) {
                 if (mLogger != null) {
                     mLogger.testLog("discovery-trace", LogDataType.PERFETTO, source);

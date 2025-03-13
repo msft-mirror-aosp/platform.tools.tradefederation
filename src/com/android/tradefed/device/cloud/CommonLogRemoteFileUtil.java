@@ -277,8 +277,29 @@ public class CommonLogRemoteFileUtil {
      */
     public static boolean isRemoteGceReachableBySsh(
             GceAvdInfo gceAvd, TestDeviceOptions options, IRunUtil runUtil) {
+        return isRemoteGceReachableBySsh(gceAvd, options, runUtil, "");
+    }
+
+    /**
+     * Execute a command to validate the ssh connection to the remote GCE instance.
+     *
+     * @param gceAvd The {@link GceAvdInfo} that describe the device.
+     * @param options a {@link TestDeviceOptions} describing the device options to be used for the
+     *     GCE device.
+     * @param runUtil a {@link IRunUtil} to execute commands.
+     * @param command The command to be executed.
+     * @return A boolean which indicate whether the remote GCE is reachable by ssh.
+     */
+    public static boolean isRemoteGceReachableBySsh(
+            GceAvdInfo gceAvd, TestDeviceOptions options, IRunUtil runUtil, String... command) {
+        List<String> cmd = new ArrayList<>();
+        for (String cmdOption : command) {
+            cmd.add(cmdOption);
+        }
+        cmd.add("exit");
         CommandStatus sshAttemptStatus =
-                RemoteSshUtil.remoteSshCommandExec(gceAvd, options, runUtil, 10000, "exit")
+                RemoteSshUtil.remoteSshCommandExec(
+                                gceAvd, options, runUtil, 10000, cmd.toArray(new String[0]))
                         .getStatus();
         if (!CommandStatus.SUCCESS.equals(sshAttemptStatus)) {
             CLog.e(

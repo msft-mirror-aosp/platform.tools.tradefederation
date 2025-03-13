@@ -59,11 +59,13 @@ import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.StreamUtil;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
 import com.android.tradefed.util.avd.InspectionUtil;
+import com.android.tradefed.util.avd.OxygenClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1061,147 +1063,228 @@ public class AdbSshConnection extends AdbTcpConnection {
      * @return {@link DeviceInspectionResult}
      */
     public DeviceInspectionResult debugDeviceNotAvailable() {
-        if (getDevice().getOptions().useOxygenationDevice()) {
-            // TODO(dshi): pending ssh access to Oxygenation
-            CLog.d("Oxygenation doesn't support ssh access yet, skipping device inspection.");
-            return null;
-        }
-        if (!getDevice().getOptions().useOxygen()) {
+
+        if (!getDevice().getOptions().useOxygen()
+                && !getDevice().getOptions().useOxygenationDevice()) {
             // TODO(dshi): support acloud and ARM setup
             CLog.d("Acloud setup is not supported yet, skipping device inspection.");
             return null;
         }
-        boolean isGceReachable =
-                CommonLogRemoteFileUtil.isRemoteGceReachableBySsh(
-                        mGceAvd, getDevice().getOptions(), getRunUtil());
-        if (!isGceReachable) {
-            CLog.e(
-                    "Failed to establish ssh connect to remote file host, skipping device "
-                            + "inspection.");
-            return null;
-        }
+
+        String sshPortNumber = null;
+        OxygenClient oxygenClient = null;
+        Process sshTunnel = null;
         DeviceInspectionResult inspectionResult = null;
-
-        // Check if disk is full
-        CommandResult res =
-                GceManager.remoteSshCommandExecution(
-                        mGceAvd,
-                        getDevice().getOptions(),
-                        getRunUtil(),
-                        10000L,
-                        "df -P /".split(" "));
-        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
-            CLog.e(
-                    "Failed to get disk space information: stdout: %s\nstderr: %s",
-                    res.getStdout(), res.getStderr());
-        } else {
-            String diskspaceInfo = res.getStdout().trim();
-            CLog.d("Disk space usage on the host:\n%s", diskspaceInfo);
-            Optional<Integer> usedPercentage = InspectionUtil.getDiskspaceUsage(diskspaceInfo);
-            if (usedPercentage.isPresent()
-                    && usedPercentage.get() > InspectionUtil.DISK_USAGE_MAX) {
-                if (inspectionResult == null) {
-                    inspectionResult =
-                            new DeviceInspectionResult(
-                                    InfraErrorIdentifier.NO_DISK_SPACE,
-                                    String.format(
-                                            "Host disk space availability is low, current usage is"
-                                                    + " at %d%%",
-                                            usedPercentage.get()));
-                }
-            }
-        }
-
-        // Collect host status and running processes
-        String cmd = "top -bn1";
-        if (getDevice().getOptions().useOxygen()) {
-            cmd = "toybox " + cmd;
-        }
-        res =
-                GceManager.remoteSshCommandExecution(
-                        mGceAvd, getDevice().getOptions(), getRunUtil(), 10000L, cmd.split(" "));
-        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
-            CLog.e(
-                    "Failed to get host running processes. stdout: %s\nstderr: %s",
-                    res.getStdout(), res.getStderr());
-        } else {
-            String processes = res.getStdout().trim();
-            try (final InputStreamSource source =
-                    new ByteArrayInputStreamSource(processes.getBytes())) {
-                getLogger().testLog("host_vm_processes", LogDataType.TEXT, source);
-            }
-
-            // Check unexpected processes first. If any unexpected process presents, the process
-            // is likely hang or takes too long to finish, which indicate some infra issue.
-            for (String p : InspectionUtil.UNEXPECTED_PROCESSES.keySet()) {
-                if (InspectionUtil.searchProcess(processes, p)) {
-                    CLog.e(
-                            "Found unexpected process %s. Review `host_vm_processes` log for the"
-                                    + " complete list of running processes.",
-                            p);
-                    if (inspectionResult == null) {
-                        inspectionResult =
-                                new DeviceInspectionResult(
-                                        InspectionUtil.UNEXPECTED_PROCESSES.get(p),
-                                        String.format("Unexpected process %s found", p));
-                    }
-                }
-            }
-
-            for (String p : InspectionUtil.EXPECTED_PROCESSES.keySet()) {
-                if (!InspectionUtil.searchProcess(processes, p)) {
-                    CLog.e(
-                            "Failed to locate process %s. Review `host_vm_processes` log for the"
-                                    + " complete list of running processes.",
-                            p);
-                    if (inspectionResult == null) {
-                        inspectionResult =
-                                new DeviceInspectionResult(
-                                        InspectionUtil.EXPECTED_PROCESSES.get(p),
-                                        String.format("Expected process %s not found", p));
-                    }
-                }
-            }
-        }
-
-        // Check if device is available through adb
-        String adb = getDevice().getOptions().useOxygen() ? "/tools/dynamic_adb_tool" : "adb";
-        cmd = String.format("%s start-server && sleep 5 && %s devices", adb, adb);
-        res =
-                GceManager.remoteSshCommandExecution(
-                        mGceAvd, getDevice().getOptions(), getRunUtil(), 10000L, cmd.split(" "));
-        if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
-            CLog.e(
-                    "Failed to run adb command to list devices: stdout: %s\nstderr: %s",
-                    res.getStdout(), res.getStderr());
-        } else {
-            String devices = res.getStdout().trim();
-            CLog.d("Available devices:\n%s", devices);
-            if (devices.indexOf("127.0.0.1:") == -1
-                    && devices.indexOf("localhost:") == -1
-                    && devices.indexOf("0.0.0.0:") == -1) {
-                CLog.e("No adb devices found on the host.");
-                if (inspectionResult == null) {
-                    return new DeviceInspectionResult(
-                            DeviceErrorIdentifier.DEVICE_UNAVAILABLE,
-                            "No adb devices found on the host.");
-                }
-            } else {
-                // Collect bugreport as the device is available with adb
+        File sshTunnelLog = null;
+        try {
+            if (getDevice().getOptions().useOxygenationDevice()) {
+                oxygenClient = createOxygenClient();
+                sshPortNumber = Integer.toString(oxygenClient.createServerSocket());
+                FileOutputStream sshTunnelLogStream = null;
                 try {
-                    File bugreport =
-                            GceManager.getNestedDeviceSshBugreportz(
-                                    mGceAvd, getDevice().getOptions(), getRunUtil());
-                    GceManager.logAndDeleteFile(bugreport, "bugreport-ssh.zip", getLogger());
+                    sshTunnelLog = FileUtil.createTempFile("ssh-connection", ".txt");
+                    sshTunnelLogStream = new FileOutputStream(sshTunnelLog, true);
                 } catch (IOException e) {
+                    FileUtil.deleteFile(sshTunnelLog);
                     CLog.e(e);
                 }
+                sshTunnel =
+                        oxygenClient.createTunnelViaLHP(
+                                OxygenClient.LHPTunnelMode.SSH,
+                                sshPortNumber,
+                                mGceAvd.instanceName(),
+                                mGceAvd.hostAndPort() != null
+                                        ? mGceAvd.hostAndPort().getHost()
+                                        : null,
+                                OxygenUtil.getTargetRegion(getDevice().getOptions()),
+                                getDevice().getOptions().getOxygenAccountingUser(),
+                                mGceAvd.getOxygenationDeviceId(),
+                                getDevice().getOptions().getExtraOxygenArgs(),
+                                sshTunnelLogStream);
+                if (sshTunnel == null || !sshTunnel.isAlive()) {
+                    CLog.d("Ssh tunnel isn't ready, skipping device inspection.");
+                    return null;
+                }
+            }
+
+            String cmd = getSshCommand("", sshPortNumber);
+            boolean isGceReachable =
+                    CommonLogRemoteFileUtil.isRemoteGceReachableBySsh(
+                            mGceAvd, getDevice().getOptions(), getRunUtil(), cmd.split(" "));
+            if (!isGceReachable) {
+                CLog.e(
+                        "Failed to establish ssh connect to remote file host, skipping device "
+                                + "inspection.");
+                return null;
+            }
+
+            // Collect host status and running processes
+            cmd = getSshCommand("df -P /", sshPortNumber);
+            // Check if disk is full
+            CommandResult res =
+                    GceManager.remoteSshCommandExecution(
+                            mGceAvd,
+                            getDevice().getOptions(),
+                            getRunUtil(),
+                            10000L,
+                            cmd.split(" "));
+            if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+                CLog.e(
+                        "Failed to get disk space information: stdout: %s\nstderr: %s",
+                        res.getStdout(), res.getStderr());
+            } else {
+                String diskspaceInfo = res.getStdout().trim();
+                CLog.d("Disk space usage on the host:\n%s", diskspaceInfo);
+                Optional<Integer> usedPercentage = InspectionUtil.getDiskspaceUsage(diskspaceInfo);
+                if (usedPercentage.isPresent()
+                        && usedPercentage.get() > InspectionUtil.DISK_USAGE_MAX) {
+                    if (inspectionResult == null) {
+                        inspectionResult =
+                                new DeviceInspectionResult(
+                                        InfraErrorIdentifier.NO_DISK_SPACE,
+                                        String.format(
+                                                "Host disk space availability is low, current usage"
+                                                        + " is at %d%%",
+                                                usedPercentage.get()));
+                    }
+                }
+            }
+            String baseCmd = "top -bn1";
+            if (getDevice().getOptions().useOxygenationDevice()) {
+                baseCmd = "top -bcn1 -w 512";
+            }
+            // Collect host status and running processes
+            cmd = getSshCommand(baseCmd, sshPortNumber);
+            // toybox is only for Oxygen host vm.
+            if (getDevice().getOptions().useOxygen()
+                    && !getDevice().getOptions().useOxygenationDevice()) {
+                cmd = "toybox " + cmd;
+            }
+            res =
+                    GceManager.remoteSshCommandExecution(
+                            mGceAvd,
+                            getDevice().getOptions(),
+                            getRunUtil(),
+                            10000L,
+                            cmd.split(" "));
+            if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+                CLog.e(
+                        "Failed to get host running processes. stdout: %s\nstderr: %s",
+                        res.getStdout(), res.getStderr());
+            } else {
+                String processes = res.getStdout().trim();
+                try (final InputStreamSource source =
+                        new ByteArrayInputStreamSource(processes.getBytes())) {
+                    getLogger().testLog("host_vm_processes", LogDataType.TEXT, source);
+                }
+
+                // Check unexpected processes first. If any unexpected process presents, the process
+                // is likely hang or takes too long to finish, which indicate some infra issue.
+                for (String p : InspectionUtil.UNEXPECTED_PROCESSES.keySet()) {
+                    if (InspectionUtil.searchProcess(processes, p)) {
+                        CLog.e(
+                                "Found unexpected process %s. Review `host_vm_processes` log for"
+                                        + " the complete list of running processes.",
+                                p);
+                        if (inspectionResult == null) {
+                            inspectionResult =
+                                    new DeviceInspectionResult(
+                                            InspectionUtil.UNEXPECTED_PROCESSES.get(p),
+                                            String.format("Unexpected process %s found", p));
+                        }
+                    }
+                }
+
+                for (String p : InspectionUtil.EXPECTED_PROCESSES.keySet()) {
+                    if (!InspectionUtil.searchProcess(processes, p)) {
+                        CLog.e(
+                                "Failed to locate process %s. Review `host_vm_processes` log for"
+                                        + " the complete list of running processes.",
+                                p);
+                        if (inspectionResult == null) {
+                            inspectionResult =
+                                    new DeviceInspectionResult(
+                                            InspectionUtil.EXPECTED_PROCESSES.get(p),
+                                            String.format("Expected process %s not found", p));
+                        }
+                    }
+                }
+            }
+
+            if (getDevice().getOptions().useOxygenationDevice()) {
+                CLog.d("Collecting bugreportz in Oxygenation is not supported yet, skipping...");
+            } else {
+                // Check if device is available through adb
+                String adb = "adb";
+                if (getDevice().getOptions().useOxygen()
+                        && !getDevice().getOptions().useOxygenationDevice()) {
+                    adb = "/tools/dynamic_adb_tool";
+                }
+                cmd = String.format("%s start-server && sleep 5 && %s devices", adb, adb);
+                cmd = getSshCommand(cmd, sshPortNumber);
+                res =
+                        GceManager.remoteSshCommandExecution(
+                                mGceAvd,
+                                getDevice().getOptions(),
+                                getRunUtil(),
+                                10000L,
+                                cmd.split(" "));
+                if (!CommandStatus.SUCCESS.equals(res.getStatus())) {
+                    CLog.e(
+                            "Failed to run adb command to list devices: stdout: %s\nstderr: %s",
+                            res.getStdout(), res.getStderr());
+                } else {
+                    String devices = res.getStdout().trim();
+                    CLog.d("Available devices:\n%s", devices);
+                    if (devices.indexOf("127.0.0.1:") == -1
+                            && devices.indexOf("localhost:") == -1
+                            && devices.indexOf("0.0.0.0:") == -1) {
+                        CLog.e("No adb devices found on the host.");
+                        if (inspectionResult == null) {
+                            return new DeviceInspectionResult(
+                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE,
+                                    "No adb devices found on the host.");
+                        }
+                    } else {
+                        // Collect bugreport as the device is available with adb
+                        try {
+                            File bugreport =
+                                    GceManager.getNestedDeviceSshBugreportz(
+                                            mGceAvd, getDevice().getOptions(), getRunUtil());
+                            GceManager.logAndDeleteFile(
+                                    bugreport, "bugreport-ssh.zip", getLogger());
+                        } catch (IOException e) {
+                            CLog.e(e);
+                        }
+                    }
+                }
+            }
+
+            if (inspectionResult == null) {
+                CLog.d("Device inspection did not find the cause of device failure.");
+            }
+            return inspectionResult;
+        } finally {
+            if (getDevice().getOptions().useOxygenationDevice()
+                    && oxygenClient != null
+                    && sshTunnelLog != null) {
+                oxygenClient.closeLHPConnection(sshTunnel);
+                GceManager.logAndDeleteFile(sshTunnelLog, "ssh_tunnel_log", getLogger());
             }
         }
+    }
 
-        if (inspectionResult == null) {
-            CLog.d("Device inspection did not find the cause of device failure.");
+    /** Helper to compile a ssh command. */
+    private String getSshCommand(String baseCmd, String sshPortNumber) {
+        if (getDevice().getOptions().useOxygenationDevice()) {
+            baseCmd = String.format("-p %s %s", sshPortNumber, baseCmd);
         }
-        return inspectionResult;
+        return baseCmd;
+    }
+
+    /** Helper to create an Oxygen Client. */
+    @VisibleForTesting
+    OxygenClient createOxygenClient() {
+        return OxygenUtil.createOxygenClient(getDevice().getOptions().getAvdDriverBinary());
     }
 }

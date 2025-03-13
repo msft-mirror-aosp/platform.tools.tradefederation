@@ -47,12 +47,16 @@ public class RemoteSshUtil {
             OutputStream stdout,
             OutputStream stderr,
             String... command) {
+        String hostName =
+                options.useOxygenationDevice()
+                        ? "localhost"
+                        : remoteInstance.hostAndPort().getHost();
         List<String> sshCmd =
                 GceRemoteCmdFormatter.getSshCommand(
                         options.getSshPrivateKeyPath(),
                         null,
                         options.getInstanceUser(),
-                        remoteInstance.hostAndPort().getHost(),
+                        hostName,
                         command);
         return runUtil.runTimedCmd(timeoutMs, stdout, stderr, sshCmd.toArray(new String[0]));
     }

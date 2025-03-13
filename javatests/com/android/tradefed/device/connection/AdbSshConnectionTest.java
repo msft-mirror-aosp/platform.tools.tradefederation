@@ -51,6 +51,7 @@ import com.android.tradefed.util.FileUtil;
 import com.android.tradefed.util.IRunUtil;
 import com.android.tradefed.util.MultiMap;
 import com.android.tradefed.util.avd.HostOrchestratorUtil;
+import com.android.tradefed.util.avd.OxygenClient;
 
 import com.google.common.net.HostAndPort;
 
@@ -91,7 +92,10 @@ public class AdbSshConnectionTest {
     @Mock ITestDevice mMockTestDevice;
     @Mock GceAvdInfo mMockAvdInfo;
     @Mock File mMockFile;
+    @Mock File mMockBugReport;
     @Mock HostOrchestratorUtil mMockHOUtil;
+    @Mock OxygenClient mMockClient;
+    @Mock Process mMockProcess;
 
     public static interface TestableConfigurableVirtualDevice
             extends IDevice, IConfigurableVirtualDevice {}
@@ -108,6 +112,7 @@ public class AdbSshConnectionTest {
     @Before
     public void setUp() throws Exception {
         mMockFile = Mockito.mock(File.class);
+        mMockBugReport = Mockito.mock(File.class);
         MockitoAnnotations.initMocks(this);
         mOptions = new TestDeviceOptions();
         OptionSetter setter = new OptionSetter(mOptions);
@@ -894,5 +899,193 @@ public class AdbSshConnectionTest {
         setter.setOptionValue("use-oxygenation-device", "true");
         when(mMockDevice.getOptions()).thenReturn(mOptions);
         mConnection.tearDownConnection();
+    }
+
+    /** Test device inspection when device fails to boot. */
+    @Test
+    public void testDeviceInspectionOxygenation() throws Exception {
+        mConnection =
+                new AdbSshConnection(
+                        new ConnectionBuilder(
+                                mMockRunUtil, mMockDevice, mMockBuildInfo, mMockLogger)) {
+                    @Override
+                    GceManager getGceHandler() {
+                        return mGceHandler;
+                    }
+
+                    @Override
+                    public AbstractTunnelMonitor getGceTunnelMonitor() {
+                        return mGceSshMonitor;
+                    }
+
+                    @Override
+                    OxygenClient createOxygenClient() {
+                        return mMockClient;
+                    }
+                };
+        String instanceUser = "user1";
+        mOptions.setAvdDriverBinary(mMockFile);
+        OptionSetter setter = new OptionSetter(mOptions);
+        setter.setOptionValue("use-oxygenation-device", "true");
+        setter.setOptionValue("instance-user", instanceUser);
+        when(mMockFile.exists()).thenReturn(true);
+        when(mMockFile.canExecute()).thenReturn(true);
+        when(mMockFile.getAbsolutePath()).thenReturn("test.jar");
+        Mockito.doReturn(1111).when(mMockClient).createServerSocket();
+        Mockito.doReturn(true).when(mMockProcess).isAlive();
+        Mockito.doReturn(mMockProcess)
+                .when(mMockClient)
+                .createTunnelViaLHP(
+                        Mockito.eq(OxygenClient.LHPTunnelMode.SSH),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any(),
+                        Mockito.any());
+        GceAvdInfo gceAvd =
+                new GceAvdInfo(
+                        instanceUser,
+                        HostAndPort.fromHost("127.0.0.1"),
+                        null,
+                        "acloud error",
+                        GceStatus.BOOT_FAIL);
+        doReturn(gceAvd)
+                .when(mGceHandler)
+                .startGce(
+                        Mockito.isNull(),
+                        Mockito.isNull(),
+                        Mockito.eq(0),
+                        Mockito.any(),
+                        Mockito.eq(mMockLogger));
+        OutputStream stdout = null;
+        OutputStream stderr = null;
+        CommandResult cmdResult = new CommandResult(CommandStatus.SUCCESS);
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq(stdout),
+                        Mockito.eq(stderr),
+                        Mockito.eq("ssh"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("user1@localhost"),
+                        Mockito.eq("-p"),
+                        Mockito.eq("1111"),
+                        Mockito.eq("exit")))
+                .thenReturn(cmdResult);
+        CommandResult diskSpaceRes = new CommandResult(CommandStatus.SUCCESS);
+        diskSpaceRes.setStdout(
+                "Filesystem 1024-blocks Used Available Capacity Mounted on\n "
+                        + "/dev/sda1 61679704 16567560 41956596 29% /\n");
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq(stdout),
+                        Mockito.eq(stderr),
+                        Mockito.eq("ssh"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("user1@localhost"),
+                        Mockito.eq("-p"),
+                        Mockito.eq("1111"),
+                        Mockito.eq("df"),
+                        Mockito.eq("-P"),
+                        Mockito.eq("/")))
+                .thenReturn(diskSpaceRes);
+
+        CommandResult processes = new CommandResult(CommandStatus.SUCCESS);
+        processes.setStdout(
+                "PID USER PR NI VIRT RES SHR S %CPU %MEM TIME+ COMMAND \n"
+                    + "1 root 20 0 168240 12880 9196 S 0.0 0.1 0:13.64 /sbin/init\n"
+                    + "40 _cvd-ex+ 20 0 168 60 48 S 0.0 0.0 0:00.00 /run_cvd --image_dir=/path/\n"
+                    + "40 _cvd-ex+ 20 0 199 26 20 S 0.0 0.2 4:09.24 /netsimd -s"
+                    + " {\"dev\":[{\"name\":145+\n"
+                    + "40 _cvd-ex+ 20 0 330 14 13 S 0.0 0.1 0:04.34 /openwrt_control_server"
+                    + " --grpc_uds_path=/path\n"
+                    + "40 _cvd-ex+ 20 0 330 14 13 S 0.0 0.1 0:04.34 /webRTC -group_id=cvd_1\n"
+                    + "40 _cvd-ex+ 20 0 330 14 13 S 0.0 0.1 0:04.34 /crosvm --extended-status run\n"
+                    + "10 root 20 0 105 1324 0 S 0.0 0.0 0:00.00 nginx: master process"
+                    + " /usr/sbin/nginx -g\n");
+
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq(stdout),
+                        Mockito.eq(stderr),
+                        Mockito.eq("ssh"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("user1@localhost"),
+                        Mockito.eq("-p"),
+                        Mockito.eq("1111"),
+                        Mockito.eq("top"),
+                        Mockito.eq("-bcn1"),
+                        Mockito.eq("-w"),
+                        Mockito.eq("512")))
+                .thenReturn(processes);
+
+        CommandResult adbRes = new CommandResult(CommandStatus.SUCCESS);
+        adbRes.setStdout(
+                "List of devices attached\n"
+                        + "127.0.0.1:42115 device\n"
+                        + "127.0.0.1:42116 device\n"
+                        + "127.0.0.1:42117 device\n");
+        when(mMockRunUtil.runTimedCmd(
+                        Mockito.anyLong(),
+                        Mockito.eq(stdout),
+                        Mockito.eq(stderr),
+                        Mockito.eq("ssh"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("LogLevel=ERROR"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("UserKnownHostsFile=/dev/null"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("StrictHostKeyChecking=no"),
+                        Mockito.eq("-o"),
+                        Mockito.eq("ServerAliveInterval=10"),
+                        Mockito.eq("-i"),
+                        Mockito.any(),
+                        Mockito.eq("user1@localhost"),
+                        Mockito.eq("-p"),
+                        Mockito.eq("1111"),
+                        Mockito.eq("adb"),
+                        Mockito.eq("start-server"),
+                        Mockito.eq("&&"),
+                        Mockito.eq("sleep"),
+                        Mockito.eq("5"),
+                        Mockito.eq("&&"),
+                        Mockito.eq("adb"),
+                        Mockito.eq("devices")))
+                .thenReturn(adbRes);
+        try {
+            mConnection.initializeConnection();
+            fail("Should have thrown an exception");
+        } catch (TargetSetupError expected) {
+            // expected
+        }
     }
 }

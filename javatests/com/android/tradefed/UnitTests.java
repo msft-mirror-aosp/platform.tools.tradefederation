@@ -189,6 +189,7 @@ import com.android.tradefed.monitoring.collector.DeviceWifiResourceMetricCollect
 import com.android.tradefed.monitoring.collector.ResourceMetricUtilTest;
 import com.android.tradefed.observatory.TestDiscoveryExecutorTest;
 import com.android.tradefed.observatory.TestDiscoveryInvokerTest;
+import com.android.tradefed.observatory.TestMappingDiscoveryAgentTest;
 import com.android.tradefed.postprocessor.AggregatePostProcessorTest;
 import com.android.tradefed.postprocessor.AveragePostProcessorTest;
 import com.android.tradefed.postprocessor.BasePostProcessorTest;
@@ -759,6 +760,7 @@ import org.junit.runners.Suite.SuiteClasses;
     // observatory
     TestDiscoveryExecutorTest.class,
     TestDiscoveryInvokerTest.class,
+    TestMappingDiscoveryAgentTest.class,
 
     // postprocessor
     AggregatePostProcessorTest.class,

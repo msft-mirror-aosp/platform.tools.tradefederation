@@ -36,6 +36,10 @@ public class TestDiscoveryUtil {
         return System.getenv(TestDiscoveryInvoker.OUTPUT_FILE) != null;
     }
 
+    public String getTestMappingFilePath() {
+        return System.getenv(TestDiscoveryInvoker.TEST_MAPPING_ZIP_FILE);
+    }
+
     protected String getEnvironment(String var) {
         return System.getenv(var);
     }

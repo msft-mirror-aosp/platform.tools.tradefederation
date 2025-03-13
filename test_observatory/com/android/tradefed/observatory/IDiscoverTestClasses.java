@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,10 @@
 
 package com.android.tradefed.observatory;
 
-public enum DiscoveryExitCode {
-    SUCCESS(0),
-    COMPONENT_METADATA(5),
-    NO_DISCOVERY_POSSIBLE(6), // When the command doesn't have any properties useful for discovery.
-    CONFIGURATION_EXCEPTION(7), // When the command itself doesn't parse
-    DISCOVERY_RESULTS_CORREPUTED(8), // When the discovery results are corrupted.
-    ERROR(1),
-    HAS_NON_SUITE_BASED_TEST_RUNNER_ERROR(11);
-    private final int code;
+import java.util.Set;
 
-    private DiscoveryExitCode(int code) {
-        this.code = code;
-    }
-
-    public int exitCode() {
-        return code;
-    }
+/** Interface for discovering test classes. */
+public interface IDiscoverTestClasses {
+    /** Returns a set of test class names. */
+    Set<String> getClassNames();
 }
