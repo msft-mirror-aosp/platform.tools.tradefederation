@@ -30,8 +30,12 @@ import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.testtype.HostTest;
+import com.android.tradefed.testtype.junit4.BeforeClassWithInfo;
+import com.android.tradefed.testtype.junit4.AfterClassWithInfo;
 
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -98,6 +102,45 @@ public class DeviceParameterizedRunnerTest {
         public List<String> getParams() {
             return Arrays.asList("param1", "param2");
         }
+    }
+
+    @RunWith(DeviceParameterizedRunner.class)
+    public static class TestJUnitParamsClassWithClassMethods extends BaseHostJUnit4Test {
+        public static int mBeforeClassRunCount;
+
+        @BeforeClass
+        public static void beforeClass() {
+            mBeforeClassRunCount++;
+        }
+
+        public static int mBeforeClassWithInfoRunCount;
+
+        @BeforeClassWithInfo
+        public static void beforeClassWithInfo(TestInformation testInfo) {
+            mBeforeClassWithInfoRunCount++;
+            assertNotNull(testInfo);
+        }
+
+        public static int mAfterClassRunCount;
+
+        @AfterClass
+        public static void afterClass() {
+            mAfterClassRunCount++;
+        }
+
+        public static int mAfterClassWithInfoRunCount;
+
+        @AfterClassWithInfo
+        public static void afterClassWithInfo(TestInformation testInfo) {
+            mAfterClassWithInfoRunCount++;
+            assertNotNull(testInfo);
+        }
+
+        @Test
+        public void testEmpty() {}
+
+        @Test
+        public void testEmpty2() {}
     }
 
     private HostTest mTest;
@@ -261,5 +304,19 @@ public class DeviceParameterizedRunnerTest {
         verify(mListener).testIgnored(test2_p1);
         verify(mListener).testEnded(test2_p1, new HashMap<String, Metric>());
         verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+    }
+
+    /** Test running before/after class methods. */
+    @Test
+    public void testRunClassMethods() throws Exception {
+        OptionSetter setter = new OptionSetter(mTest);
+        setter.setOptionValue("class", TestJUnitParamsClassWithClassMethods.class.getName());
+
+        mTest.run(mTestInfo, mListener);
+
+        assertEquals(1, TestJUnitParamsClassWithClassMethods.mBeforeClassRunCount);
+        assertEquals(1, TestJUnitParamsClassWithClassMethods.mBeforeClassWithInfoRunCount);
+        assertEquals(1, TestJUnitParamsClassWithClassMethods.mAfterClassRunCount);
+        assertEquals(1, TestJUnitParamsClassWithClassMethods.mAfterClassWithInfoRunCount);
     }
 }

@@ -15,6 +15,7 @@
  */
 package com.android.tradefed.testtype;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.doReturn;
@@ -39,9 +40,13 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.TestDescription;
+import com.android.tradefed.testtype.junit4.BeforeClassWithInfo;
+import com.android.tradefed.testtype.junit4.AfterClassWithInfo;
 
 import com.google.common.collect.ImmutableMap;
 
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -103,6 +108,40 @@ public class DeviceJUnit4ClassRunnerTest {
             assertNotNull(mOption);
             assertNotEquals(FAKE_REMOTE_FILE_PATH, mOption);
         }
+
+        public static int mBeforeClassRunCount;
+
+        @BeforeClass
+        public static void beforeClass() {
+            CLog.d("beforeClass");
+            mBeforeClassRunCount++;
+        }
+
+        public static int mBeforeClassWithInfoRunCount;
+
+        @BeforeClassWithInfo
+        public static void beforeClassWithInfo(TestInformation testInfo) {
+            CLog.d("beforeClassWithInfo");
+            mBeforeClassWithInfoRunCount++;
+            assertNotNull(testInfo);
+        }
+
+        public static int mAfterClassRunCount;
+
+        @AfterClass
+        public static void afterClass() {
+            CLog.d("afterClass");
+            mAfterClassRunCount++;
+        }
+
+        public static int mAfterClassWithInfoRunCount;
+
+        @AfterClassWithInfo
+        public static void afterClassWithInfo(TestInformation testInfo) {
+            CLog.d("afterClassWithInfo");
+            mAfterClassWithInfoRunCount++;
+            assertNotNull(testInfo);
+        }
     }
 
     @Mock ITestInvocationListener mListener;
@@ -136,5 +175,10 @@ public class DeviceJUnit4ClassRunnerTest {
         verify(mListener).testStarted(Mockito.eq(test1));
         verify(mListener).testEnded(Mockito.eq(test1), Mockito.<HashMap<String, Metric>>any());
         verify(mListener).testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+
+        assertEquals(1, Junit4TestClass.mBeforeClassRunCount);
+        assertEquals(1, Junit4TestClass.mBeforeClassWithInfoRunCount);
+        assertEquals(1, Junit4TestClass.mAfterClassRunCount);
+        assertEquals(1, Junit4TestClass.mAfterClassWithInfoRunCount);
     }
 }
