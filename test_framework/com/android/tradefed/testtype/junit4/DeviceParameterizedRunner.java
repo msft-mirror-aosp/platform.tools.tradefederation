@@ -103,5 +103,31 @@ public class DeviceParameterizedRunner extends JUnitParamsRunner
     @Override
     public TestInformation getTestInformation() {
         return mTestInformation;
+  }
+
+    @Override
+    protected Statement withBeforeClasses(Statement statement) {
+        Statement s = super.withBeforeClasses(statement);
+
+        List<FrameworkMethod> beforesWithDevice =
+                getTestClass().getAnnotatedMethods(BeforeClassWithInfo.class);
+        // If present, run BeforeClassWithInfo then BeforeClass
+        if (!beforesWithDevice.isEmpty()) {
+            s = new RunBeforesWithInfo(s, beforesWithDevice, mTestInformation);
+        }
+        return s;
     }
+
+    @Override
+    protected Statement withAfterClasses(Statement statement) {
+        Statement s = statement;
+
+        List<FrameworkMethod> aftersWithDevice =
+                getTestClass().getAnnotatedMethods(AfterClassWithInfo.class);
+        // If present, run AfterClass, then AfterClassWithInfo
+        if (!aftersWithDevice.isEmpty()) {
+            s = new RunAftersWithInfo(s, aftersWithDevice, mTestInformation);
+        }
+        return super.withAfterClasses(s);
+  }
 }

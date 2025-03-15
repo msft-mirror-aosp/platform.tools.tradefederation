@@ -125,20 +125,24 @@ public class DeviceJUnit4ClassRunner extends BlockJUnit4ClassRunner
 
         List<FrameworkMethod> beforesWithDevice =
                 getTestClass().getAnnotatedMethods(BeforeClassWithInfo.class);
-        return beforesWithDevice.isEmpty()
-                ? s
-                : new RunBeforesWithInfo(statement, beforesWithDevice, mTestInformation);
+        // If present, run BeforeClassWithInfo then BeforeClass
+        if (!beforesWithDevice.isEmpty()) {
+            s = new RunBeforesWithInfo(s, beforesWithDevice, mTestInformation);
+        }
+        return s;
     }
 
     @Override
     protected Statement withAfterClasses(Statement statement) {
-        Statement s = super.withAfterClasses(statement);
+        Statement s = statement;
 
         List<FrameworkMethod> aftersWithDevice =
                 getTestClass().getAnnotatedMethods(AfterClassWithInfo.class);
-        return aftersWithDevice.isEmpty()
-                ? s
-                : new RunAftersWithInfo(statement, aftersWithDevice, mTestInformation);
+        // If present, run AfterClass, then AfterClassWithInfo
+        if (!aftersWithDevice.isEmpty()) {
+            s = new RunAftersWithInfo(s, aftersWithDevice, mTestInformation);
+        }
+        return super.withAfterClasses(s);
     }
 
     @Override

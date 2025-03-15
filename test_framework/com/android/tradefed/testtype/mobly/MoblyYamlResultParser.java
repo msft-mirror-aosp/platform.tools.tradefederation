@@ -45,15 +45,19 @@ public class MoblyYamlResultParser {
     private static final String TYPE = "Type";
     private ImmutableList.Builder<ITestInvocationListener> mListenersBuilder =
             new ImmutableList.Builder<>();
-    private ImmutableList.Builder<ITestResult> mResultCacheBuilder = new ImmutableList.Builder<>();
+    private String mRunName;
+    private boolean mReportRunStart = false;
     private long mRunStartTime;
     private long mRunEndTime;
     private boolean mEnded;
     private boolean mRunFailed;
     private StringBuilder mYamlString = new StringBuilder();
 
-    public MoblyYamlResultParser(ITestInvocationListener listener) {
+    public MoblyYamlResultParser(
+            ITestInvocationListener listener, String runName, boolean reportRunStart) {
         mListenersBuilder.add(listener);
+        mRunName = runName;
+        mReportRunStart = reportRunStart;
     }
 
     public boolean parse(InputStream inputStream)
@@ -107,6 +111,15 @@ public class MoblyYamlResultParser {
             List<IMoblyYamlResultHandler.ITestResult> resultCache) {
         for (IMoblyYamlResultHandler.ITestResult result : resultCache) {
             switch (result.getType()) {
+                case TEST_NAME_LIST:
+                    if (mReportRunStart) {
+                        MoblyYamlResultTestNameListHandler.TestNameList testList =
+                                (MoblyYamlResultTestNameListHandler.TestNameList) result;
+                        for (ITestInvocationListener listener : listeners) {
+                            listener.testRunStarted(mRunName, testList.getTestList().size());
+                        }
+                    }
+                    break;
                 case RECORD:
                     MoblyYamlResultRecordHandler.Record record =
                             (MoblyYamlResultRecordHandler.Record) result;

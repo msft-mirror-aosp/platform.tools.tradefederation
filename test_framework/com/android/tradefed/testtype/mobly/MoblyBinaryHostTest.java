@@ -136,6 +136,13 @@ public class MoblyBinaryHostTest
     @Option(name = "mobly-std-log", description = "Print mobly logs to standard outputs")
     private boolean mStdLog = false;
 
+    @Option(
+            name = "use-list-tests",
+            description =
+                    "Use the list-tests feature to obtain the expected tests. This is necessary for"
+                            + " sharding.")
+    private boolean mListTests = true;
+
     private ITestDevice mDevice;
     private IBuildInfo mBuildInfo;
     private File mLogDir;
@@ -392,65 +399,70 @@ public class MoblyBinaryHostTest
                 return;
             }
         }
-        CommandResult list_result =
-                getRunUtil().runTimedCmd(60000, parFilePath, "--", "--list_tests");
-        if (!CommandStatus.SUCCESS.equals(list_result.getStatus())) {
-            String message;
-            if (CommandStatus.TIMED_OUT.equals(list_result.getStatus())) {
-                message = "Unable to list tests from the python binary: Timed out";
-            } else {
-                message =
-                        "Unable to list tests from the python binary\nstdout: "
-                                + list_result.getStdout()
-                                + "\nstderr: "
-                                + list_result.getStderr();
-            }
-            reportFailure(listener, runName, message);
-            return;
-        }
-        // Compute filtered tests.
-        Optional<Pair<List<String>, List<String>>> filteredTests =
-                filterTests(
-                        list_result.getStdout().split(System.lineSeparator()), runName, listener);
-        if (filteredTests.isEmpty()) {
-            // An empty option here mean a failure has already been reported in `filterTests`,
-            // just return.
-            return;
-        }
-        List<String> allTests = filteredTests.get().first;
-        List<String> includedTests = filteredTests.get().second;
-        CLog.d("All tests: %s", allTests);
-        CLog.d("Included tests: %s", includedTests);
-
-        // Split test across shards.
-        int totalTests = includedTests.size();
-        int chunkSize = totalTests / totalShards;
-        if (totalTests % totalShards > 0) chunkSize++;
-        // Ensure shards beyond the number of available tests get no tests
-        if (shardIndex >= totalTests) {
-            includedTests = Collections.emptyList();
-        } else {
-            int startIndex = shardIndex * chunkSize;
-            int endIndex = Math.min((shardIndex + 1) * chunkSize, totalTests);
-            if (startIndex >= totalTests) {
-                startIndex = Math.max(0, totalTests - 1);
-                endIndex = totalTests;
-            }
-            includedTests = includedTests.subList(startIndex, endIndex);
-        }
-        int testCount = includedTests.size();
-
-        // Start run.
+        List<String> includedTests = Collections.emptyList();
         long startTime = System.currentTimeMillis();
-        listener.testRunStarted(runName, testCount);
-        // No test to run, abort early.
-        if (testCount == 0) {
-            listener.testRunEnded(0, new HashMap<String, String>());
-            return;
-        }
-        // Do not pass tests to command line if all included.
-        if (includedTests.size() == allTests.size()) {
-            includedTests.clear();
+        if (mListTests) {
+            CommandResult list_result =
+                    getRunUtil().runTimedCmd(60000, parFilePath, "--", "--list_tests");
+            if (!CommandStatus.SUCCESS.equals(list_result.getStatus())) {
+                String message;
+                if (CommandStatus.TIMED_OUT.equals(list_result.getStatus())) {
+                    message = "Unable to list tests from the python binary: Timed out";
+                } else {
+                    message =
+                            "Unable to list tests from the python binary\nstdout: "
+                                    + list_result.getStdout()
+                                    + "\nstderr: "
+                                    + list_result.getStderr();
+                }
+                reportFailure(listener, runName, message);
+                return;
+            }
+            // Compute filtered tests.
+            Optional<Pair<List<String>, List<String>>> filteredTests =
+                    filterTests(
+                            list_result.getStdout().split(System.lineSeparator()),
+                            runName,
+                            listener);
+            if (filteredTests.isEmpty()) {
+                // An empty option here mean a failure has already been reported in `filterTests`,
+                // just return.
+                return;
+            }
+            List<String> allTests = filteredTests.get().first;
+            includedTests = filteredTests.get().second;
+            CLog.d("All tests: %s", allTests);
+            CLog.d("Included tests: %s", includedTests);
+
+            // Split test across shards.
+            int totalTests = includedTests.size();
+            int chunkSize = totalTests / totalShards;
+            if (totalTests % totalShards > 0) chunkSize++;
+            // Ensure shards beyond the number of available tests get no tests
+            if (shardIndex >= totalTests) {
+                includedTests = Collections.emptyList();
+            } else {
+                int startIndex = shardIndex * chunkSize;
+                int endIndex = Math.min((shardIndex + 1) * chunkSize, totalTests);
+                if (startIndex >= totalTests) {
+                    startIndex = Math.max(0, totalTests - 1);
+                    endIndex = totalTests;
+                }
+                includedTests = includedTests.subList(startIndex, endIndex);
+            }
+            int testCount = includedTests.size();
+
+            // Start run.
+            listener.testRunStarted(runName, testCount);
+            // No test to run, abort early.
+            if (testCount == 0) {
+                listener.testRunEnded(0, new HashMap<String, String>());
+                return;
+            }
+            // Do not pass tests to command line if all included.
+            if (includedTests.size() == allTests.size()) {
+                includedTests.clear();
+            }
         }
         String[] command = buildCommandLineArray(parFilePath, configPath, includedTests);
         ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -465,7 +477,7 @@ public class MoblyBinaryHostTest
                             return getRunUtil().runTimedCmd(getTestTimeout(), command);
                         },
                         executor);
-        MoblyYamlResultParser parser = new MoblyYamlResultParser(listener);
+        MoblyYamlResultParser parser = new MoblyYamlResultParser(listener, runName, !mListTests);
         File yamlSummaryFile = null;
         InputStream inputStream = null;
         boolean reportRunFailed = true;

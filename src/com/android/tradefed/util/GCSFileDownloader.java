@@ -67,7 +67,11 @@ public class GCSFileDownloader extends GCSFileDownloaderBase implements IFileDow
     }
 
     public GCSFileDownloader(File jsonKeyFile) {
-        this(false);
+        this(jsonKeyFile, false);
+    }
+
+    public GCSFileDownloader(File jsonKeyFile, Boolean createEmptyFile) {
+        this(createEmptyFile);
         mJsonKeyFile = jsonKeyFile;
     }
 
