@@ -1022,10 +1022,12 @@ public abstract class ITestSuite
                                                             .getCommandOptions()
                                                             .reportCacheResultsInPresubmit()))
                                     && mSkipContext.shouldUseCache();
-                    // TODO(b/372243975): report logs even while applying caching
+                    // If we are not gonna use the config file, delete right away after logging.
+                    boolean deleteRightAway = (moduleReporter == null);
                     if (moduleConfig != null && !applyCachedResults && !shouldSkipModule) {
+                        // TODO(b/372243975): report logs even while applying caching
                         try (InputStreamSource source =
-                                new FileInputStreamSource(moduleConfig, false)) {
+                                new FileInputStreamSource(moduleConfig, deleteRightAway)) {
                             listener.testLog(
                                     "module-configuration", LogDataType.HARNESS_CONFIG, source);
                         }
