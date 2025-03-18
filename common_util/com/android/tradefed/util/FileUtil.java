@@ -490,7 +490,7 @@ public class FileUtil {
 
                 try {
                     // Get file attributes - link count
-                    long linkCount = (long) Files.getAttribute(path, "unix:nlink");
+                    long linkCount = ((Integer) Files.getAttribute(path, "unix:nlink")).intValue();
                     // Get filesystem stats - total and free inodes
                     FileStore fileStore = Files.getFileStore(path);
                     long totalInodes = (long) fileStore.getAttribute("totalInodes");
