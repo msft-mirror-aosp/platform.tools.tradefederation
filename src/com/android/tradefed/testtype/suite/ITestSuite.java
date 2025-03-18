@@ -63,6 +63,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -929,8 +930,6 @@ public abstract class ITestSuite
                                         ModuleDefinition.MODULE_ISOLATED,
                                         CurrentInvocation.moduleCurrentIsolation().toString());
                     }
-                    // Add module specific post processors.
-                    listener = listenerWithPostProcessorsForPerfModule(module, listener);
                     // Only the module callback will be called here.
                     ITestInvocationListener listenerWithCollectors = listener;
                     if (mMetricCollectors != null) {
@@ -1005,6 +1004,12 @@ public abstract class ITestSuite
                                     MODULE_START_TIME, Long.toString(System.currentTimeMillis()));
                     listenerWithCollectors.testModuleStarted(module.getModuleInvocationContext());
                     mModuleInProgress = module;
+                    // Add module specific post processors.
+                    moduleListeners =
+                            new ArrayList<>(
+                                    Arrays.asList(
+                                            listenerWithPostProcessorsForPerfModule(
+                                                    module, moduleListeners)));
                     // Trigger module start on module level listener too
                     new ResultForwarder(moduleListeners)
                             .testModuleStarted(module.getModuleInvocationContext());
@@ -1107,11 +1112,13 @@ public abstract class ITestSuite
      * listener chain.
      */
     private ITestInvocationListener listenerWithPostProcessorsForPerfModule(
-            ModuleDefinition module, ITestInvocationListener listener) {
+            ModuleDefinition module, List<ITestInvocationListener> moduleListeners) {
         IConfiguration config = module.getModuleConfiguration();
         List<String> testTypes = config.getConfigurationDescription().getMetaData(TEST_TYPE_KEY);
+        ITestInvocationListener listenerWithLogForwarder =
+                new ResultAndLogForwarder(moduleListeners);
         if (testTypes == null || !testTypes.contains(TEST_TYPE_VALUE_PERFORMANCE)) {
-            return listener; // not a perf module
+            return listenerWithLogForwarder; // not a perf module
         }
         List<IPostProcessor> topLevelPostProcessors = mMainConfiguration.getPostProcessors();
         List<IPostProcessor> modulePostProcessors = config.getPostProcessors();
@@ -1120,14 +1127,14 @@ public abstract class ITestSuite
         }
         for (IPostProcessor postProcessor : modulePostProcessors) {
             try {
-                listener = postProcessor.init(listener);
+                listenerWithLogForwarder = postProcessor.init(listenerWithLogForwarder);
             } catch (Exception e) {
                 CLog.e(
                         "Post processor %s is ignored as it fails to init() with exception: %s",
                         postProcessor.getClass().getSimpleName(), e);
             }
         }
-        return listener;
+        return listenerWithLogForwarder;
     }
 
     /** Log the module configuration. */
