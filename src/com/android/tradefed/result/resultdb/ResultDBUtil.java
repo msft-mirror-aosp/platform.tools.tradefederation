@@ -60,4 +60,33 @@ public final class ResultDBUtil {
         }
         return result.toString();
     }
+
+    /**
+     * Ensure the key is valid for ResultDB.
+     *
+     * <p>The key must match the regex: ^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*$
+     */
+    public static String makeValidKey(String key) {
+        if (key == null || key.isEmpty()) {
+            return "empty_key";
+        }
+
+        StringBuilder validKeyBuilder = new StringBuilder();
+        for (char c : key.toCharArray()) {
+            if (c >= 'a' && c <= 'z') {
+                validKeyBuilder.append(c);
+            } else if (c >= '0' && c <= '9') {
+                validKeyBuilder.append(c);
+            } else if (c >= 'A' && c <= 'Z') {
+                validKeyBuilder.append((char) (c - 'A' + 'a'));
+            } else {
+                validKeyBuilder.append('_');
+            }
+        }
+        String validKey = validKeyBuilder.toString();
+        if (!validKey.isEmpty() && validKey.charAt(0) >= '0' && validKey.charAt(0) <= '9') {
+            validKey = "num_" + validKey;
+        }
+        return validKey;
+    }
 }

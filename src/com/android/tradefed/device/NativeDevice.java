@@ -5395,7 +5395,12 @@ public class NativeDevice
         initializeConnection(info, attributes);
     }
 
-    protected void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
+    /**
+     * Initialize the connection to the device. This is called by
+     * preInvocationSetup but in rare cases might need to be called separately
+     * when creating the connection during device setup.
+     */
+    public void initializeConnection(IBuildInfo info, MultiMap<String, String> attributes)
             throws DeviceNotAvailableException, TargetSetupError {
         try (CloseableTraceScope ignored = new CloseableTraceScope("initializeConnection")) {
             ConnectionBuilder builder =

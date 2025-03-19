@@ -24,6 +24,7 @@ import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.IManagedTestDevice;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.ITestDevice.RecoveryMode;
+import com.android.tradefed.device.NativeDevice;
 import com.android.tradefed.device.SnapuserdWaitPhase;
 import com.android.tradefed.device.TestDevice;
 import com.android.tradefed.device.TestDeviceState;
@@ -762,6 +763,11 @@ public class IncrementalImageUtil {
 
     private boolean flashStaticPartition(File imageDirectory)
             throws DeviceNotAvailableException, TargetSetupError {
+        // Invalidate properties to be updated after reboot into the new
+        // image.
+        if (mDevice instanceof NativeDevice) {
+            ((NativeDevice) mDevice).invalidatePropertyCache();
+        }
         Map<String, String> envMap = new HashMap<>();
         envMap.put("ANDROID_PRODUCT_OUT", imageDirectory.getAbsolutePath());
         CommandResult fastbootResult =

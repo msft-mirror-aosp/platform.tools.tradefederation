@@ -90,6 +90,8 @@ public class ResultDBReporter
     private boolean mCreateLocalInvocation = false;
 
     private Invocation mInvocation;
+    // Set to true if the reporter is responsible for updating and finalizing the invocation.
+    private boolean mManageInvocation = false;
     private IRecorderClient mRecorder;
 
     // Common variant values for all test in this TF invocation.
@@ -169,6 +171,7 @@ public class ResultDBReporter
                                         .setInvocation(mInvocation)
                                         .setInvocationId("u-" + invocationId)
                                         .build());
+                mManageInvocation = true;
 
             } else {
                 mDisable = true;
@@ -234,6 +237,9 @@ public class ResultDBReporter
             return;
         }
         mRecorder.finalizeTestResults();
+        if (mManageInvocation) {
+            mRecorder.finalizeInvocation();
+        }
         // TODO: Update ResultDB invocation with information from TF invocation.
     }
 
@@ -254,7 +260,8 @@ public class ResultDBReporter
         Variant.Builder variantBuilder = Variant.newBuilder();
         for (Map.Entry<String, String> property : properties.entries()) {
             if (ALLOWED_MODULE_PARAMETERS.contains(property.getKey())) {
-                variantBuilder.putDef(property.getKey(), property.getValue());
+                variantBuilder.putDef(
+                        ResultDBUtil.makeValidKey(property.getKey()), property.getValue());
             }
         }
         return variantBuilder.build();
@@ -519,7 +526,7 @@ public class ResultDBReporter
             for (String testMappingSource : testMappingSources) {
                 testResultBuilder.addTags(
                         StringPair.newBuilder()
-                                .setKey(TEST_MAPPING_TAG)
+                                .setKey(ResultDBUtil.makeValidKey(TEST_MAPPING_TAG))
                                 .setValue(testMappingSource));
             }
         }

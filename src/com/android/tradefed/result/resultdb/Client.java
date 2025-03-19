@@ -18,6 +18,7 @@ package com.android.tradefed.result.resultdb;
 import com.android.resultdb.proto.BatchCreateTestResultsRequest;
 import com.android.resultdb.proto.CreateInvocationRequest;
 import com.android.resultdb.proto.CreateTestResultRequest;
+import com.android.resultdb.proto.FinalizeInvocationRequest;
 import com.android.resultdb.proto.Invocation;
 import com.android.resultdb.proto.RecorderGrpc;
 import com.android.resultdb.proto.TestResult;
@@ -54,8 +55,8 @@ public class Client implements IRecorderClient {
             Metadata.Key.of("update-token", Metadata.ASCII_STRING_MARSHALLER);
     private final Uploader mUploader;
     private final Thread mUploadThread;
-    // The id of the ResultDB invocation to upload results to.
-    // Currently only one ResultDB invocation per TF invocation is supported.
+    // The id of the ResultDB invocation used in upload results, update and finalize invocation
+    // request. Currently only one ResultDB invocation per TF invocation is supported.
     private String mInvocationId;
     private String mUpdateToken;
 
@@ -163,10 +164,12 @@ public class Client implements IRecorderClient {
     }
 
     @Override
-    public Invocation finalizeInvocation(String invocationId) {
-        // TODO: Call recorder grpc client to finalize invocation.
-        CLog.i("Finalize invocation: %s", invocationId);
-        return Invocation.getDefaultInstance();
+    public Invocation finalizeInvocation() {
+        CLog.i("Finalizing invocation: %s", mInvocationId);
+        return mStub.finalizeInvocation(
+                FinalizeInvocationRequest.newBuilder()
+                        .setName("invocations/" + mInvocationId)
+                        .build());
     }
 
     @Override

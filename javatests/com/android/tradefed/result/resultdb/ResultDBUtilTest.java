@@ -48,4 +48,13 @@ public final class ResultDBUtilTest {
         assertThat(ResultDBUtil.truncateString("Hello 🌍!", 10)).isEqualTo("Hello 🌍");
         assertThat(ResultDBUtil.truncateString("Hello 🌍!", 11)).isEqualTo("Hello 🌍!");
     }
+
+    @Test
+    public void makeValidKey() {
+        assertThat(ResultDBUtil.makeValidKey("a-b")).isEqualTo("a_b");
+        assertThat(ResultDBUtil.makeValidKey("a/b")).isEqualTo("a_b");
+        assertThat(ResultDBUtil.makeValidKey("ABc")).isEqualTo("abc");
+        assertThat(ResultDBUtil.makeValidKey("")).isEqualTo("empty_key");
+        assertThat(ResultDBUtil.makeValidKey("0key")).isEqualTo("num_0key");
+    }
 }
