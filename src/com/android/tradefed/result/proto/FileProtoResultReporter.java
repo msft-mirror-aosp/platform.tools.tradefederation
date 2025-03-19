@@ -92,11 +92,6 @@ public class FileProtoResultReporter extends ProtoResultReporter {
         return super.createModuleChildReference(record);
     }
 
-    /** Sets the file where to output the result. */
-    public void setFileOutput(File output) {
-        mOutputFile = output;
-    }
-
     /** Enable writing each module individualy to a file. */
     public void setPeriodicWriting(boolean enabled) {
         mPeriodicWriting = enabled;

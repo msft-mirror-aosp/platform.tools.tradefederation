@@ -57,7 +57,7 @@ public class ModuleProtoResultReporterTest {
 
         mOutput = FileUtil.createTempFile("proto-file-reporter-test", ".pb");
         mReporter = new ModuleProtoResultReporter();
-        mReporter.setFileOutput(mOutput);
+        mReporter.setOutputFile(mOutput);
     }
 
     @After
@@ -103,7 +103,7 @@ public class ModuleProtoResultReporterTest {
         IInvocationContext context = new InvocationContext();
         context.addInvocationAttribute(ModuleProtoResultReporter.INVOCATION_ID_KEY, "I8888");
         mReporter = new ModuleProtoResultReporter(context, false);
-        mReporter.setFileOutput(mOutput);
+        mReporter.setOutputFile(mOutput);
         TestDescription test1 = new TestDescription("class1", "test1");
 
         IInvocationContext module1Context = createModuleContext("module1");

@@ -68,7 +68,7 @@ public class FileProtoResultReporterTest {
 
         mOutput = FileUtil.createTempFile("proto-file-reporter-test", ".pb");
         mReporter = new FileProtoResultReporter();
-        mReporter.setFileOutput(mOutput);
+        mReporter.setOutputFile(mOutput);
     }
 
     @After
