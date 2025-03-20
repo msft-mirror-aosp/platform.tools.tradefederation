@@ -430,7 +430,8 @@ public class GeneralTestsConfigValidation implements IBuildReceiver {
                             URI uri = new URI(apk.getPath());
                             if (uri.getScheme() != null
                                     && (uri.getScheme().contains("gs")
-                                            || uri.getScheme().contains("http"))) {
+                                            || uri.getScheme().contains("http")
+                                            || uri.getScheme().contains("pstash"))) {
                                 continue;
                             }
                         }
