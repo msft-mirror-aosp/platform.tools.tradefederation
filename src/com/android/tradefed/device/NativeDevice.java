@@ -5392,7 +5392,9 @@ public class NativeDevice
                     getDeviceDescriptor(),
                     InfraErrorIdentifier.FAIL_TO_CREATE_FILE);
         }
-        initializeConnection(info, attributes);
+        if (getOptions().shouldUseConnection()) {
+            initializeConnection(info, attributes);
+        }
     }
 
     /**
