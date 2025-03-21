@@ -1314,6 +1314,12 @@ public class TestInvocation implements ITestInvocation {
                     reportModuleSkip(config, listener);
                     reportHostLog(listener, config);
                     reportInvocationEnded(config, info.getContext(), listener, 0L);
+                    // Still upload results for caching
+                    if (mInvocationProtoResultReporter != null
+                            && !mInvocationProtoResultReporter.stopCaching()) {
+                        InvocationCacheHelper.uploadInvocationResults(
+                                config, mInvocationProtoResultReporter.getOutputFile(), info);
+                    }
                     return;
                 }
             }
