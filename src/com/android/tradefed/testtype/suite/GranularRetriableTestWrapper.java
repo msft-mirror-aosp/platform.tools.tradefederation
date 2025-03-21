@@ -93,7 +93,6 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     private IConfiguration mModuleConfiguration;
     private ModuleListener mMainGranularRunListener;
     private RetryLogSaverResultForwarder mRetryAttemptForwarder;
-    private List<ITestInvocationListener> mModuleLevelListeners;
     private ITestInvocationListener mRemoteTestTimeOutEnforcer;
     private ILogSaver mLogSaver;
     private String mModuleId;
@@ -108,16 +107,14 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
     public GranularRetriableTestWrapper(
             IRemoteTest test,
             ITestInvocationListener mainListener,
-            List<ITestInvocationListener> moduleLevelListeners,
             int maxRunLimit) {
-        this(test, null, mainListener, moduleLevelListeners, maxRunLimit);
+        this(test, null, mainListener, maxRunLimit);
     }
 
     public GranularRetriableTestWrapper(
             IRemoteTest test,
             ModuleDefinition module,
             ITestInvocationListener mainListener,
-            List<ITestInvocationListener> moduleLevelListeners,
             int maxRunLimit) {
         mTest = test;
         mModule = module;
@@ -126,7 +123,6 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
             context = module.getModuleInvocationContext();
         }
         initializeGranularRunListener(mainListener, context);
-        mModuleLevelListeners = moduleLevelListeners;
         mMaxRunLimit = maxRunLimit;
     }
 
@@ -232,10 +228,6 @@ public class GranularRetriableTestWrapper implements IRemoteTest, ITestCollector
      */
     private ITestInvocationListener initializeListeners() throws DeviceNotAvailableException {
         List<ITestInvocationListener> currentTestListener = new ArrayList<>();
-        // Add all the module level listeners, including TestFailureListener
-        if (mModuleLevelListeners != null) {
-            currentTestListener.addAll(mModuleLevelListeners);
-        }
         currentTestListener.add(mMainGranularRunListener);
 
         if (mRemoteTestTimeOutEnforcer != null) {

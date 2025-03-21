@@ -325,7 +325,7 @@ public class GranularRetriableTestWrapperTest {
             ModuleDefinition module)
             throws Exception {
         GranularRetriableTestWrapper granularTestWrapper =
-                new GranularRetriableTestWrapper(test, module, null, null, maxRunCount);
+                new GranularRetriableTestWrapper(test, module, null, maxRunCount);
         granularTestWrapper.setModuleId("test module");
         granularTestWrapper.setMarkTestsSkipped(false);
         granularTestWrapper.setMetricCollectors(collectors);

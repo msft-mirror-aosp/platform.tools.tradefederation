@@ -22,6 +22,7 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.FailureDescription;
+import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
@@ -309,5 +310,13 @@ public class ModuleListener extends CollectingTestListener {
             return "";
         }
         return mModuleContext.getDevices().get(0).getSerialNumber();
+    }
+
+    @Override
+    public void setLogSaver(ILogSaver logSaver) {
+        super.setLogSaver(logSaver);
+        if (mMainListener instanceof ILogSaverListener) {
+            ((ILogSaverListener) mMainListener).setLogSaver(logSaver);
+        }
     }
 }

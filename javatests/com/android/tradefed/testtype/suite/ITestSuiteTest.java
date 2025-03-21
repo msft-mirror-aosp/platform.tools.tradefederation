@@ -69,6 +69,7 @@ import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.MultiFailureDescription;
+import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
@@ -486,13 +487,16 @@ public class ITestSuiteTest {
         StatusCheckerResult result = new StatusCheckerResult(CheckStatus.FAILED);
         result.setErrorMessage("some failures.");
         result.setBugreportNeeded(true);
+        ResultAndLogForwarder allListeners = new ResultAndLogForwarder(mMockListener);
         when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice))).thenReturn(result);
-        when(mMockDevice.logBugreport(Mockito.any(), Mockito.same(mMockListener))).thenReturn(true);
+        when(mMockDevice.logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class)))
+                .thenReturn(true);
         when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice))).thenReturn(result);
-        expectTestRun(mMockListener);
+        expectTestRun(allListeners);
 
-        mTestSuite.run(mTestInfo, mMockListener);
-        verify(mMockDevice, times(2)).logBugreport(Mockito.any(), Mockito.same(mMockListener));
+        mTestSuite.run(mTestInfo, allListeners);
+        verify(mMockDevice, times(2))
+                .logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class));
     }
 
     /**
@@ -508,14 +512,17 @@ public class ITestSuiteTest {
 
         when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
                 .thenThrow(new RuntimeException("I failed."));
-        when(mMockDevice.logBugreport(Mockito.any(), Mockito.same(mMockListener))).thenReturn(true);
+        ResultAndLogForwarder allListeners = new ResultAndLogForwarder(mMockListener);
+        when(mMockDevice.logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class)))
+                .thenReturn(true);
 
         when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice)))
                 .thenThrow(new RuntimeException("I failed post."));
-        expectTestRun(mMockListener);
+        expectTestRun(allListeners);
 
-        mTestSuite.run(mTestInfo, mMockListener);
-        verify(mMockDevice, times(2)).logBugreport(Mockito.any(), Mockito.same(mMockListener));
+        mTestSuite.run(mTestInfo, allListeners);
+        verify(mMockDevice, times(2))
+                .logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class));
     }
 
     /**
@@ -572,17 +579,19 @@ public class ITestSuiteTest {
         mTestSuite.setSystemStatusChecker(sysChecker);
         when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
                 .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
-        when(mMockDevice.logBugreport(Mockito.any(), Mockito.same(mMockListener))).thenReturn(true);
+        ResultAndLogForwarder allListeners = new ResultAndLogForwarder(mMockListener);
+        when(mMockDevice.logBugreport(Mockito.any(), Mockito.any())).thenReturn(true);
 
         // No bugreport is captured if not explicitly requested
         StatusCheckerResult result = new StatusCheckerResult(CheckStatus.FAILED);
         result.setErrorMessage("some failures.");
         result.setBugreportNeeded(true);
         when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice))).thenReturn(result);
-        expectTestRun(mMockListener);
+        expectTestRun(allListeners);
 
-        mTestSuite.run(mTestInfo, mMockListener);
-        verify(mMockDevice, times(1)).logBugreport(Mockito.any(), Mockito.same(mMockListener));
+        mTestSuite.run(mTestInfo, allListeners);
+        verify(mMockDevice, times(1))
+                .logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class));
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq(ITestSuite.MODULE_CHECKER_PRE + "_test"),

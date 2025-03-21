@@ -60,7 +60,6 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.MultiFailureDescription;
-import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
 import com.android.tradefed.result.TestRunResult;
@@ -420,23 +419,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      */
     public final void run(TestInformation moduleInfo, ITestInvocationListener listener)
             throws DeviceNotAvailableException {
-        run(moduleInfo, listener, null);
-    }
-
-    /**
-     * Run all the {@link IRemoteTest} contained in the module and use all the preparers before and
-     * after to setup and clean the device.
-     *
-     * @param listener the {@link ITestInvocationListener} where to report results.
-     * @param moduleLevelListeners The list of listeners at the module level.
-     * @throws DeviceNotAvailableException in case of device going offline.
-     */
-    public final void run(
-            TestInformation moduleInfo,
-            ITestInvocationListener listener,
-            List<ITestInvocationListener> moduleLevelListeners)
-            throws DeviceNotAvailableException {
-        run(moduleInfo, listener, moduleLevelListeners, 1);
+        run(moduleInfo, listener, 1);
     }
 
     /**
@@ -445,14 +428,12 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
      *
      * @param moduleInfo the {@link TestInformation} for the module.
      * @param listener the {@link ITestInvocationListener} where to report results.
-     * @param moduleLevelListeners The list of listeners at the module level.
      * @param maxRunLimit the max number of runs for each testcase.
      * @throws DeviceNotAvailableException in case of device going offline.
      */
     public final void run(
             TestInformation moduleInfo,
             ITestInvocationListener listener,
-            List<ITestInvocationListener> moduleLevelListeners,
             int maxRunLimit)
             throws DeviceNotAvailableException {
         mMaxRetry = maxRunLimit;
@@ -530,7 +511,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             reportSetupFailure(
                     preparationException,
                     listener,
-                    moduleLevelListeners,
                     mTargetPreparerRetryCount,
                     shouldFailRun);
             if (shouldFailRun) {
@@ -610,7 +590,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                         prepareGranularRetriableWrapper(
                                 test,
                                 listener,
-                                moduleLevelListeners,
                                 skipTestCases,
                                 perModuleRetryQuota);
                 mCurrentTestWrapper.setCollectTestsOnly(mCollectTestsOnly);
@@ -621,7 +600,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     reportSetupFailure(
                             preparationException,
                             listener,
-                            moduleLevelListeners,
                             mTargetPreparerRetryCount,
                             true);
                     return;
@@ -797,12 +775,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     GranularRetriableTestWrapper prepareGranularRetriableWrapper(
             IRemoteTest test,
             ITestInvocationListener listener,
-            List<ITestInvocationListener> moduleLevelListeners,
             boolean skipTestCases,
             int maxRunLimit) {
         GranularRetriableTestWrapper retriableTest =
-                new GranularRetriableTestWrapper(
-                        test, this, listener, moduleLevelListeners, maxRunLimit);
+                new GranularRetriableTestWrapper(test, this, listener, maxRunLimit);
         retriableTest.setModuleId(getId());
         retriableTest.setMarkTestsSkipped(skipTestCases);
         retriableTest.setMetricCollectors(mRunMetricCollectors);
@@ -1552,21 +1528,12 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     private void reportSetupFailure(
             Throwable setupException,
             ITestInvocationListener invocListener,
-            List<ITestInvocationListener> moduleListeners,
             int attemptNumber,
             boolean shouldFail)
         throws DeviceNotAvailableException {
-        List<ITestInvocationListener> allListeners = new ArrayList<>();
-        allListeners.add(invocListener);
-        if (moduleListeners != null) {
-            allListeners.addAll(moduleListeners);
-        }
-        // Report the early module failures to the moduleListeners too in order for them
-        // to know about it.
-        ITestInvocationListener forwarder = new ResultForwarder(allListeners);
         // For reporting purpose we create a failure placeholder with the error stack
         // similar to InitializationError of JUnit.
-        forwarder.testRunStarted(getId(), 1, attemptNumber, System.currentTimeMillis());
+        invocListener.testRunStarted(getId(), 1, attemptNumber, System.currentTimeMillis());
         FailureDescription failureDescription =
                 CurrentInvocation.createFailure(StreamUtil.getStackTrace(setupException), null);
         if (setupException instanceof IHarnessException
@@ -1584,10 +1551,10 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             failureDescription.setFailureStatus(FailureStatus.UNSET);
         }
         failureDescription.setCause(setupException);
-        forwarder.testRunFailed(failureDescription);
+        invocListener.testRunFailed(failureDescription);
         HashMap<String, Metric> metricsProto = new HashMap<>();
         metricsProto.put(TEST_TIME, TfMetricProtoUtil.createSingleValue(0L, "milliseconds"));
-        forwarder.testRunEnded(0, metricsProto);
+        invocListener.testRunEnded(0, metricsProto);
         // If it was a not available exception rethrow it to signal the new device state.
         if (setupException instanceof DeviceNotAvailableException) {
             if (!shouldFail) {

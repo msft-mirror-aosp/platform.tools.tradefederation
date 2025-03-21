@@ -170,6 +170,8 @@ public abstract class BasePostProcessor implements IPostProcessor {
                     }
                     testLogSaved(dataName, dataType, dataStream, log);
                     logAssociation(dataName, log);
+                    // do not forward if log saved
+                    return;
                 } catch (IOException e) {
                     CLog.e("Failed to save log file %s.", dataName);
                     CLog.e(e);
