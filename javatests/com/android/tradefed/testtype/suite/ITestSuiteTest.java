@@ -19,6 +19,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -1936,14 +1937,22 @@ public class ITestSuiteTest {
     }
 
     public static class FakePostProcessor extends BasePostProcessor {
-        public static final String FAKE_KEY = "FAKE_KEY";
+        private final String mKey;
+
+        public FakePostProcessor() {
+            this(TEST_CONFIG_NAME);
+        }
+
+        public FakePostProcessor(String key) {
+            mKey = key;
+        }
 
         @Override
         public Map<String, Builder> processRunMetricsAndLogs(
                 HashMap<String, Metric> rawMetrics, Map<String, LogFile> runLogs) {
             Map<String, Builder> newMetrics = new HashMap<>();
             newMetrics.put(
-                    FAKE_KEY,
+                    mKey,
                     Metric.newBuilder()
                             .setType(DataType.RAW)
                             .setMeasurements(Measurements.newBuilder().setSingleString("")));
@@ -1954,32 +1963,40 @@ public class ITestSuiteTest {
     /** Test for module-level post-processor for perf module. */
     @Test
     public void testPostProcessorAddsMetricsForPerfModule() throws Exception {
+        final String secondTestConfigName = "test2";
+
         mTestSuite =
                 new TestSuiteImpl() {
                     @Override
                     public LinkedHashMap<String, IConfiguration> loadTests() {
                         LinkedHashMap<String, IConfiguration> testConfig = new LinkedHashMap<>();
                         try {
-                            IConfiguration config =
-                                    ConfigurationFactory.getInstance()
-                                            .createConfigurationFromArgs(
-                                                    new String[] {EMPTY_CONFIG});
-                            config.setTest(new StubCollectingTest());
-                            config.getConfigurationDescription().setModuleName(TEST_CONFIG_NAME);
-                            testConfig.put(TEST_CONFIG_NAME, config);
-
-                            // Mark module as perf module.
-                            config.getConfigurationDescription()
-                                    .addMetadata(
-                                            ITestSuite.TEST_TYPE_KEY,
-                                            ITestSuite.TEST_TYPE_VALUE_PERFORMANCE);
-                            // Add module-level post processor for perf module.
-                            config.setPostProcessors(Arrays.asList(new FakePostProcessor()));
+                            testConfig.put(TEST_CONFIG_NAME, createTestConfig(TEST_CONFIG_NAME));
+                            testConfig.put(
+                                    secondTestConfigName, createTestConfig(secondTestConfigName));
                         } catch (ConfigurationException e) {
                             CLog.e(e);
                             throw new RuntimeException(e);
                         }
                         return testConfig;
+                    }
+
+                    private IConfiguration createTestConfig(String name)
+                            throws ConfigurationException {
+                        IConfiguration config =
+                                ConfigurationFactory.getInstance()
+                                        .createConfigurationFromArgs(new String[] {EMPTY_CONFIG});
+                        config.setTest(new StubCollectingTest());
+                        config.getConfigurationDescription().setModuleName(name);
+
+                        // Mark module as perf module.
+                        config.getConfigurationDescription()
+                                .addMetadata(
+                                        ITestSuite.TEST_TYPE_KEY,
+                                        ITestSuite.TEST_TYPE_VALUE_PERFORMANCE);
+                        // Add module-level post processor for perf module.
+                        config.setPostProcessors(Arrays.asList(new FakePostProcessor(name)));
+                        return config;
                     }
                 };
         mTestSuite.setDevice(mMockDevice);
@@ -1996,9 +2013,10 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, mMockListener);
 
-        // Verify the post processor has added metric.
+        // Verify only the post processor for the most recent module has added a metric.
         ArgumentCaptor<HashMap<String, Metric>> captured = ArgumentCaptor.forClass(HashMap.class);
-        verify(mMockListener).testRunEnded(Mockito.anyLong(), captured.capture());
-        assertNotNull(captured.getValue().get(FakePostProcessor.FAKE_KEY));
+        verify(mMockListener, times(2)).testRunEnded(Mockito.anyLong(), captured.capture());
+        assertNull(captured.getValue().get(TEST_CONFIG_NAME));
+        assertNotNull(captured.getValue().get(secondTestConfigName));
     }
 }

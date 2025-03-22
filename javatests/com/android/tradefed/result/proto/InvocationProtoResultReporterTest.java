@@ -70,7 +70,7 @@ public class InvocationProtoResultReporterTest {
         IInvocationContext context = new InvocationContext();
         context.addInvocationAttribute("invocation_id", "I9999");
         mReporter = new InvocationProtoResultReporter(context, false);
-        mReporter.setFileOutput(mOutput);
+        mReporter.setOutputFile(mOutput);
         TestDescription test1 = new TestDescription("class1", "test1");
 
         mReporter.invocationStarted(context);
@@ -110,7 +110,7 @@ public class InvocationProtoResultReporterTest {
     public void testInvocationReporting_failure() throws Exception {
         IInvocationContext context = new InvocationContext();
         mReporter = new InvocationProtoResultReporter(context, false);
-        mReporter.setFileOutput(mOutput);
+        mReporter.setOutputFile(mOutput);
 
         mReporter.invocationStarted(context);
         mReporter.invocationFailed(new RuntimeException("failure"));

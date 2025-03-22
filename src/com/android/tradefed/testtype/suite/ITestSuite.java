@@ -852,9 +852,6 @@ public abstract class ITestSuite
             }
         }
 
-        /** Create the list of listeners applicable at the module level. */
-        List<ITestInvocationListener> moduleListeners = createModuleListeners();
-
         if (mUseSnapshotForReset) {
             AbstractConnection connection = mDevice.getConnection();
             if (connection instanceof AdbTcpConnection) {
@@ -899,6 +896,9 @@ public abstract class ITestSuite
                 if (!module.hasTests()) {
                     continue;
                 }
+
+                /** Create the list of listeners applicable at the module level. */
+                List<ITestInvocationListener> moduleListeners = createModuleListeners();
 
                 try (CloseableTraceScope ignore = new CloseableTraceScope(module.getId())) {
                     if (!stageAtInvocationLevel() && stageModuleLevel()) {

@@ -33,7 +33,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-
 /** Utility class for making system calls. */
 public class SystemUtil {
 
@@ -53,6 +52,7 @@ public class SystemUtil {
 
     private static final String LOCAL_AUTH_VARIABLE = "LOCAL_AUTH";
     private static final String LOCAL_MODE = "LOCAL_MODE";
+    private static final String SKIP_JAVA_QUERY = "SKIP_JAVA_QUERY";
 
     /** Keep track of the mapping of the variables to the subpath it takes in the tests dir. */
     public static final Map<EnvVariable, String> ENV_VARIABLE_PATHS_IN_TESTS_DIR = new HashMap<>();
@@ -196,7 +196,7 @@ public class SystemUtil {
 
     /** Returns the path to the Java binary that current test harness is running in */
     public static File getRunningJavaBinaryPath() {
-        return getRunningJavaBinaryPath(false);
+        return getRunningJavaBinaryPath(System.getenv(SKIP_JAVA_QUERY) != null);
     }
 
     /**
