@@ -59,6 +59,7 @@ import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
 import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.MultiFailureDescription;
+import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.ResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestRunResult;
@@ -807,7 +808,8 @@ public class ModuleDefinitionTest {
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
         mModule.setRetryDecision(mDecision);
-        mModule.run(mModuleInfo, mMockListener, Arrays.asList(mockModuleListener));
+
+        mModule.run(mModuleInfo, new ResultAndLogForwarder(mMockListener, mockModuleListener));
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
@@ -975,7 +977,7 @@ public class ModuleDefinitionTest {
                 .shouldRetryPreparation(Mockito.any(), Mockito.anyInt(), Mockito.anyInt());
         when(mMockDecision.getRetryStrategy()).thenReturn(RetryStrategy.ITERATIONS);
         mModule.setRetryDecision(mMockDecision);
-        mModule.run(mModuleInfo, mMockListener, null, 3);
+        mModule.run(mModuleInfo, mMockListener, 3);
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq(MODULE_NAME), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
@@ -1243,7 +1245,7 @@ public class ModuleDefinitionTest {
                         .setInvocationContext(mModule.getModuleInvocationContext())
                         .build();
         // module is completely skipped, no tests is recorded.
-        mModule.run(mModuleInfo, mMockListener, null);
+        mModule.run(mModuleInfo, mMockListener);
     }
 
     /**
@@ -1295,7 +1297,7 @@ public class ModuleDefinitionTest {
                         .build();
 
         // expect the module to run but tests to be ignored
-        mModule.run(mModuleInfo, mMockListener, null);
+        mModule.run(mModuleInfo, mMockListener);
         verify(mMockListener)
                 .testRunStarted(Mockito.any(), Mockito.anyInt(), Mockito.eq(0), Mockito.anyLong());
         verify(mMockListener).testStarted(Mockito.any(), Mockito.anyLong());
@@ -1479,8 +1481,8 @@ public class ModuleDefinitionTest {
     }
 
     /**
-     * Test that when a module level listener is specified it receives the events before the
-     * buffering and replay.
+     * Test that when a module level listener is specified it receives the events with buffering and
+     * replay.
      */
     @Test
     public void testRun_moduleLevelListeners() throws Exception {
@@ -1516,25 +1518,17 @@ public class ModuleDefinitionTest {
         LogSaverResultForwarder forwarder =
                 new LogSaverResultForwarder(
                         mMockLogSaver, Arrays.asList(mMockLogSaverListener), moduleConfig);
-        mModule.run(mModuleInfo, forwarder, Arrays.asList(mMockListener));
+        ResultAndLogForwarder allListeners = new ResultAndLogForwarder(forwarder, mMockListener);
+        mModule.run(mModuleInfo, allListeners);
         InOrder inOrder = Mockito.inOrder(mMockLogSaverListener, mMockListener);
         inOrder.verify(mMockLogSaverListener).setLogSaver(mMockLogSaver);
-        inOrder.verify(mMockListener)
+        inOrder.verify(mMockLogSaverListener)
                 .testRunStarted(
-                        Mockito.eq("run1"),
+                        Mockito.eq(MODULE_NAME),
                         Mockito.eq(testCount),
                         Mockito.eq(0),
                         Mockito.anyLong());
         inOrder.verify(mMockListener)
-                .testStarted((TestDescription) Mockito.any(), Mockito.anyLong());
-        inOrder.verify(mMockListener)
-                .testEnded(
-                        (TestDescription) Mockito.any(),
-                        Mockito.anyLong(),
-                        Mockito.<HashMap<String, Metric>>any());
-        inOrder.verify(mMockListener)
-                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
-        inOrder.verify(mMockLogSaverListener)
                 .testRunStarted(
                         Mockito.eq(MODULE_NAME),
                         Mockito.eq(testCount),
@@ -1542,12 +1536,21 @@ public class ModuleDefinitionTest {
                         Mockito.anyLong());
         inOrder.verify(mMockLogSaverListener)
                 .testStarted((TestDescription) Mockito.any(), Mockito.anyLong());
+        inOrder.verify(mMockListener)
+                .testStarted((TestDescription) Mockito.any(), Mockito.anyLong());
         inOrder.verify(mMockLogSaverListener)
                 .testEnded(
                         (TestDescription) Mockito.any(),
                         Mockito.anyLong(),
                         Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener)
+                .testEnded(
+                        (TestDescription) Mockito.any(),
+                        Mockito.anyLong(),
+                        Mockito.<HashMap<String, Metric>>any());
         inOrder.verify(mMockLogSaverListener)
+                .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
+        inOrder.verify(mMockListener)
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
@@ -1555,7 +1558,7 @@ public class ModuleDefinitionTest {
         verify(mMockLogSaverListener).setLogSaver(mMockLogSaver);
         verify(mMockListener)
                 .testRunStarted(
-                        Mockito.eq("run1"),
+                        Mockito.eq(MODULE_NAME),
                         Mockito.eq(testCount),
                         Mockito.eq(0),
                         Mockito.anyLong());
@@ -1724,7 +1727,7 @@ public class ModuleDefinitionTest {
         when(mMockPrep.isDisabled()).thenReturn(false);
         when(mMockPrep.isTearDownDisabled()).thenReturn(false);
 
-        mModule.run(mModuleInfo, mMockListener, null, 3);
+        mModule.run(mModuleInfo, mMockListener, 3);
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));
         verify(mMockPrep).tearDown(Mockito.eq(mModuleInfo), Mockito.isNull());
@@ -1825,7 +1828,7 @@ public class ModuleDefinitionTest {
         when(mMockPrep.isTearDownDisabled()).thenReturn(false);
         when(mMockDevice.getIDevice()).thenReturn(mock(IDevice.class));
 
-        mModule.run(mModuleInfo, mMockListener, null, 3);
+        mModule.run(mModuleInfo, mMockListener, 3);
         verify(mMockPrep, times(2)).isDisabled();
         verify(mMockDevice, times(3)).getIDevice();
         verify(mMockPrep).setUp(Mockito.eq(mModuleInfo));

@@ -530,6 +530,12 @@ public class TestMapping {
                     String.format(
                             "IO exception (%s) when reading tests from TEST_MAPPING files (%s)",
                             e.getMessage(), testMappingsDir.getAbsolutePath()), e);
+        } catch (NoTestRuntimeException e) {
+            if (System.getenv("ALLOW_EMPTY_TEST_MAPPING") == null) {
+                throw e;
+            } else {
+                CLog.d("Allowing empty test info lists.");
+            }
         } finally {
             if (delete) {
                 FileUtil.recursiveDelete(testMappingsDir);
@@ -564,12 +570,19 @@ public class TestMapping {
             }
         }
         if (allTestMappingPaths.isEmpty()) {
-            throw new RuntimeException(
+            throw new NoTestRuntimeException(
                     String.format(
                             "Couldn't find TEST_MAPPING files from %s", mTestMappingRelativePaths));
         }
         CLog.d("All resolved TEST_MAPPING paths: %s", allTestMappingPaths);
         return allTestMappingPaths;
+    }
+
+    public class NoTestRuntimeException extends RuntimeException {
+
+        public NoTestRuntimeException(String message) {
+            super(message);
+        }
     }
 
     /**

@@ -890,7 +890,9 @@ public class BasePostProcessorTest {
         listener.testEnded(TEST_DESCRIPTION, new HashMap<String, Metric>());
         listener.testRunEnded(0L, new HashMap<String, Metric>());
 
-        verify(mMockListener, times(3))
+        // test logs that are saved inside postprocessor should not be forwarded to avoid logging
+        // the file again.
+        verify(mMockListener, times(0))
                 .testLog(
                         Mockito.startsWith(TestablePostProcessor.DATA_NAME_PREFIX),
                         Mockito.any(),
