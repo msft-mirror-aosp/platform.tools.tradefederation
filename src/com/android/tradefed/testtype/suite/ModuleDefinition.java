@@ -210,6 +210,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
 
     private boolean mRecoverVirtualDevice = false;
 
+    private boolean mUseModuleResultsForwarder = false;
+
     @VisibleForTesting
     public ModuleDefinition() {
         mModuleInvocationContext = null;
@@ -778,7 +780,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             boolean skipTestCases,
             int maxRunLimit) {
         GranularRetriableTestWrapper retriableTest =
-                new GranularRetriableTestWrapper(test, this, listener, maxRunLimit);
+                new GranularRetriableTestWrapper(
+                        test, this, listener, maxRunLimit, mUseModuleResultsForwarder);
         retriableTest.setModuleId(getId());
         retriableTest.setMarkTestsSkipped(skipTestCases);
         retriableTest.setMetricCollectors(mRunMetricCollectors);
@@ -1587,5 +1590,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         } else if (test instanceof ITestFilterReceiver) {
             ((ITestFilterReceiver) test).addAllExcludeFilters(filterNames);
         }
+    }
+
+    public void setUseModuleResultsForwarder(boolean useModuleResultsForwarder) {
+        mUseModuleResultsForwarder = useModuleResultsForwarder;
     }
 }

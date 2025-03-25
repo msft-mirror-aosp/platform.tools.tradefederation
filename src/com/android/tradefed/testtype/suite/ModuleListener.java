@@ -62,6 +62,7 @@ public class ModuleListener extends CollectingTestListener {
 
     private List<String> mTestMappingSources = new ArrayList<String>();
     private static final String TEST_MAPPING_SOURCE = "test_mapping_source";
+    private boolean mUseModuleResultsForwarder = false;
 
     /** Constructor. */
     public ModuleListener(ITestInvocationListener listener, IInvocationContext moduleContext) {
@@ -138,13 +139,15 @@ public class ModuleListener extends CollectingTestListener {
     public void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
         CLog.d("ModuleListener.testRunEnded(%s) on %s", elapsedTime, getSerial());
 
-        if (!IsolationGrade.NOT_ISOLATED.equals(mAttemptIsolation)) {
-            runMetrics.put(
-                    "run-isolated", TfMetricProtoUtil.stringToMetric(mAttemptIsolation.toString()));
-            // In case something was off, reset isolation.
-            mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
+        if (!mUseModuleResultsForwarder) {
+            if (!IsolationGrade.NOT_ISOLATED.equals(mAttemptIsolation)) {
+                runMetrics.put(
+                        "run-isolated",
+                        TfMetricProtoUtil.stringToMetric(mAttemptIsolation.toString()));
+                // In case something was off, reset isolation.
+                mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
+            }
         }
-
         super.testRunEnded(elapsedTime, runMetrics);
         mRunInProgress = false;
     }
@@ -205,10 +208,12 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         logTestStatus(test, mTestStatus);
-        if (!mTestMappingSources.isEmpty()) {
-            testMetrics.put(
-                    TEST_MAPPING_SOURCE,
-                    TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
+        if (!mUseModuleResultsForwarder) {
+            if (!mTestMappingSources.isEmpty()) {
+                testMetrics.put(
+                        TEST_MAPPING_SOURCE,
+                        TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
+            }
         }
         super.testEnded(test, endTime, testMetrics);
     }
@@ -318,5 +323,9 @@ public class ModuleListener extends CollectingTestListener {
         if (mMainListener instanceof ILogSaverListener) {
             ((ILogSaverListener) mMainListener).setLogSaver(logSaver);
         }
+    }
+
+    public void setUseModuleResultsForwarder(boolean useModuleResultsForwarder) {
+        mUseModuleResultsForwarder = useModuleResultsForwarder;
     }
 }

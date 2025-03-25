@@ -407,6 +407,13 @@ public abstract class ITestSuite
                             + " test_suites rule")
     private String mRunTestSuite = null;
 
+    @Option(
+            name = "use-module-results-forwarder",
+            description =
+                    "Feature flag to enable whether metrics should be forwarded by ModuleListener"
+                            + " or the new forwarder.")
+    private boolean mUseModuleResultsForwarder = true;
+
     public enum IsolatedModuleGrade {
         REBOOT_ISOLATED, // Reboot was done before the test.
         FULLY_ISOLATED; // Test received a fresh device.
@@ -1264,6 +1271,9 @@ public abstract class ITestSuite
             }
             if (mRecoverDeviceByCvd) {
                 module.setRecoverVirtualDevice(mRecoverDeviceByCvd);
+            }
+            if (mUseModuleResultsForwarder) {
+                module.setUseModuleResultsForwarder(mUseModuleResultsForwarder);
             }
             // Pass the run defined collectors to be used.
             module.setMetricCollectors(CollectorHelper.cloneCollectors(mMetricCollectors));
