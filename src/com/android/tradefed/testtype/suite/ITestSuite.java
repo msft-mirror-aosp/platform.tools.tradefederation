@@ -890,10 +890,13 @@ public abstract class ITestSuite
             mSkipContext = SkipFeature.getSkipContext();
         }
         /** Run all the module, make sure to reduce the list to release resources as we go. */
-        try {
-            while (!mRunModules.isEmpty()) {
-                ModuleDefinition module = mRunModules.remove(0);
-
+        while (!mRunModules.isEmpty()) {
+            ModuleDefinition module = mRunModules.remove(0);
+            mModuleInProgress = module;
+            boolean moduleStartReported = false;
+            boolean moduleEndReported = false;
+            ITestInvocationListener listenerWithCollectors = null;
+            try {
                 if (!shouldModuleRun(module)) {
                     continue;
                 }
@@ -940,7 +943,7 @@ public abstract class ITestSuite
                     ITestInvocationListener allListeners =
                             listenerWithPostProcessors(module, listener, moduleListeners);
                     // Only the module callback will be called here.
-                    ITestInvocationListener listenerWithCollectors = allListeners;
+                    listenerWithCollectors = allListeners;
                     if (mMetricCollectors != null) {
                         for (IMetricCollector collector :
                                 CollectorHelper.cloneCollectors(mMetricCollectors)) {
@@ -1012,7 +1015,7 @@ public abstract class ITestSuite
                             .addInvocationAttribute(
                                     MODULE_START_TIME, Long.toString(System.currentTimeMillis()));
                     listenerWithCollectors.testModuleStarted(module.getModuleInvocationContext());
-                    mModuleInProgress = module;
+                    moduleStartReported = true;
                     boolean applyCachedResults =
                             cacheDescriptor != null
                                     && cacheDescriptor.isCacheHit()
@@ -1083,10 +1086,6 @@ public abstract class ITestSuite
                             moduleListeners.remove(moduleReporter);
                         }
                         FileUtil.deleteFile(moduleConfig);
-                        // clear out module invocation context since we are now done with module
-                        // execution
-                        listenerWithCollectors.testModuleEnded();
-                        mModuleInProgress = null;
                         if (!applyCachedResults) {
                             // Following modules will not be isolated if no action is taken
                             CurrentInvocation.setModuleIsolation(IsolationGrade.NOT_ISOLATED);
@@ -1097,13 +1096,39 @@ public abstract class ITestSuite
                         moduleIsolation(mContext, allListeners);
                     }
                 }
+            } catch (DeviceNotAvailableException e) {
+                CLog.e(
+                        "A DeviceNotAvailableException occurred, following modules did not run: %s",
+                        mRunModules);
+                // allow current module to properly report module start/end
+                mModuleInProgress.setReportModuleStart(!moduleStartReported);
+                mModuleInProgress.setReportModuleEnd(true);
+                String inProgressMessage =
+                        String.format(
+                                "Module %s was interrupted after starting due to device not"
+                                        + " available. Results might not be accurate or complete.",
+                                mModuleInProgress.getId());
+                if (listenerWithCollectors != null) {
+                    mModuleInProgress.reportNotExecuted(listenerWithCollectors, inProgressMessage);
+                } else {
+                    mModuleInProgress.reportNotExecuted(listener, inProgressMessage);
+                }
+                moduleEndReported = true;
+                reportNotExecuted(listener, "Module did not run due to device not available.");
+                throw e;
+            } finally {
+                // if module end not reported(no DNAE happened), report it now
+                if (!moduleEndReported) {
+                    if (listenerWithCollectors != null) {
+                        listenerWithCollectors.testModuleEnded();
+                    } else {
+                        listener.testModuleEnded();
+                    }
+                }
+                // clear out module invocation context since we are now done with module
+                // execution
+                mModuleInProgress = null;
             }
-        } catch (DeviceNotAvailableException e) {
-            CLog.e(
-                    "A DeviceNotAvailableException occurred, following modules did not run: %s",
-                    mRunModules);
-            reportNotExecuted(listener, "Module did not run due to device not available.");
-            throw e;
         }
     }
 
@@ -1689,16 +1714,6 @@ public abstract class ITestSuite
         }
         if (runModules == null) {
             runModules = createExecutionList();
-        }
-
-        if (mModuleInProgress != null) {
-            // TODO: Ensure in-progress data make sense
-            String inProgressMessage =
-                    String.format(
-                            "Module %s was interrupted after starting. Results might not be "
-                                    + "accurate or complete.",
-                            mModuleInProgress.getId());
-            mModuleInProgress.reportNotExecuted(listener, inProgressMessage);
         }
 
         while (!runModules.isEmpty()) {

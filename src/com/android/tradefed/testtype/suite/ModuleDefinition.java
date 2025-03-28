@@ -188,7 +188,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     private long mElapsedTearDown = 0L;
 
     private long mStartTestTime = 0L;
-    private Long mStartModuleRunDate = null;
+    private boolean mReportModuleStart = true;
+    private boolean mReportModuleEnd = true;
+    private boolean mFinalResultsReported = false;
 
     // Tracking of retry performance
     private List<RetryStatistics> mRetryStats = new ArrayList<>();
@@ -442,7 +444,6 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         mModuleInfo = moduleInfo;
         mInvocationListener = listener;
 
-        mStartModuleRunDate = System.currentTimeMillis();
         // Load extra configuration for the module from module_controller
         // TODO: make module_controller a full TF object
         boolean skipTestCases = false;
@@ -929,6 +930,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         } else {
             listener.testRunEnded(getCurrentTime() - mStartTestTime, metricsProto);
         }
+        mFinalResultsReported = true;
     }
 
     private void forwardTestResults(
@@ -1344,40 +1346,46 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         return mModuleConfiguration;
     }
 
+    public void setReportModuleStart(boolean shouldReportModuleStart) {
+        mReportModuleStart = shouldReportModuleStart;
+    }
+
+    public void setReportModuleEnd(boolean shouldReportModuleEnd) {
+        mReportModuleEnd = shouldReportModuleEnd;
+    }
+
     /** Report completely not executed modules. */
     public final void reportNotExecuted(ITestInvocationListener listener, String message) {
-        if (mStartModuleRunDate == null) {
+        if (mReportModuleStart) {
             listener.testModuleStarted(getModuleInvocationContext());
         }
         if (mCurrentTestWrapper != null)  {
-            mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
-            HarnessRuntimeException interruptedException =
-                    new HarnessRuntimeException(
-                        message, TestErrorIdentifier.MODULE_DID_NOT_EXECUTE);
-            for (int i = 0; i < mMaxRetry; i++) {
-                // Get all the results for the attempt
-                List<TestRunResult> runResultList = new ArrayList<TestRunResult>();
-                int expectedCount = 0;
-                for (ModuleListener attemptListener : mRunListenersResults) {
-                    for (String runName : attemptListener.getTestRunNames()) {
-                        TestRunResult run =
-                                attemptListener.getTestRunAtAttempt(runName, i);
-                        if (run != null) {
-                            runResultList.add(run);
-                            expectedCount += run.getExpectedTestCount();
+            // do not report results if already reported once
+            if (!mFinalResultsReported) {
+                mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
+                HarnessRuntimeException interruptedException =
+                        new HarnessRuntimeException(
+                                message, TestErrorIdentifier.MODULE_DID_NOT_EXECUTE);
+                for (int i = 0; i < mMaxRetry; i++) {
+                    // Get all the results for the attempt
+                    List<TestRunResult> runResultList = new ArrayList<TestRunResult>();
+                    int expectedCount = 0;
+                    for (ModuleListener attemptListener : mRunListenersResults) {
+                        for (String runName : attemptListener.getTestRunNames()) {
+                            TestRunResult run = attemptListener.getTestRunAtAttempt(runName, i);
+                            if (run != null) {
+                                runResultList.add(run);
+                                expectedCount += run.getExpectedTestCount();
+                            }
                         }
                     }
-                }
 
-                if (!runResultList.isEmpty()) {
-                    reportFinalResults(
-                            listener,
-                            expectedCount,
-                            runResultList,
-                            i,
-                            interruptedException);
-                } else {
-                    CLog.d("No results to be forwarded for attempt %s.", i);
+                    if (!runResultList.isEmpty()) {
+                        reportFinalResults(
+                                listener, expectedCount, runResultList, i, interruptedException);
+                    } else {
+                        CLog.d("No results to be forwarded for attempt %s.", i);
+                    }
                 }
             }
         } else {
@@ -1390,7 +1398,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             listener.testRunFailed(description);
             listener.testRunEnded(0, new HashMap<String, Metric>());
         }
-        listener.testModuleEnded();
+        if (mReportModuleEnd) {
+            listener.testModuleEnded();
+        }
     }
 
     /** Whether or not to enable dynamic download at module level. */
