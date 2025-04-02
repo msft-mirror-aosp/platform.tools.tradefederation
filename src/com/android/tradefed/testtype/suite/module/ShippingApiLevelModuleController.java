@@ -16,10 +16,10 @@
 package com.android.tradefed.testtype.suite.module;
 
 import com.android.tradefed.config.Option;
-import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.device.DeviceNotAvailableException;
 import com.android.tradefed.device.ITestDevice;
 import com.android.tradefed.device.StubDevice;
+import com.android.tradefed.invoker.IInvocationContext;
 import com.android.tradefed.log.LogUtil.CLog;
 
 /**
@@ -34,6 +34,11 @@ import com.android.tradefed.log.LogUtil.CLog;
  *       <ul>
  *         <li>The device shipped with the {@code vsr-min-api-level} or later.
  *         <li>The vendor image implemented the features for the {@code vsr-min-api-level} or later.
+ *       </ul>
+ *   <li>If {@code vendor-min-api-level} is defined:
+ *       <ul>
+ *         <li>The vendor image implemented the features for the {@code vendor-min-api-level} or
+ *             later.
  *       </ul>
  * </ul>
  */
@@ -53,6 +58,11 @@ public class ShippingApiLevelModuleController extends BaseModuleController {
 
     @Option(
             name = "vsr-min-api-level",
+            description = "The minimum VSR api-level of the device on which tests will run.")
+    private Integer mMinVsrApiLevel = 0;
+
+    @Option(
+            name = "vendor-min-api-level",
             description = "The minimum vendor api-level of the device on which tests will run.")
     private Integer mMinVendorApiLevel = 0;
 
@@ -117,19 +127,19 @@ public class ShippingApiLevelModuleController extends BaseModuleController {
                 }
             }
 
-            if (mMinVendorApiLevel > 0) {
-                if (mMinVendorApiLevel > 34 && mMinVendorApiLevel < 202404) {
+            if (mMinVsrApiLevel > 0) {
+                if (mMinVsrApiLevel > 34 && mMinVsrApiLevel < 202404) {
                     throw new RuntimeException(
                             "vsr-min-api-level must have YYYYMM format if it has a value greater"
                                     + " than 34, but has "
-                                    + mMinVendorApiLevel);
+                                    + mMinVsrApiLevel);
                 }
                 // All devices with Android T or newer defines "ro.vendor.api_level". Read this to
                 // compare the API level with vsr-min-api-level.
                 long vsrApiLevel =
                         device.getIntProperty(VSR_VENDOR_API_LEVEL_PROP, VALUE_NOT_FOUND);
                 if (vsrApiLevel != VALUE_NOT_FOUND) {
-                    if (vsrApiLevel < mMinVendorApiLevel) {
+                    if (vsrApiLevel < mMinVsrApiLevel) {
                         return RunStrategy.FULL_MODULE_BYPASS;
                     } else {
                         return RunStrategy.RUN;
@@ -142,7 +152,7 @@ public class ShippingApiLevelModuleController extends BaseModuleController {
                         new String[] {
                             SYSTEM_SHIPPING_API_LEVEL_PROP, SYSTEM_API_LEVEL_PROP,
                         },
-                        mMinVendorApiLevel)) {
+                        mMinVsrApiLevel)) {
                     return RunStrategy.FULL_MODULE_BYPASS;
                 }
                 // And then, read "ro.board.api_level" and "ro.board.first_api_level".
@@ -151,7 +161,21 @@ public class ShippingApiLevelModuleController extends BaseModuleController {
                         new String[] {
                             VENDOR_API_LEVEL_PROP, VENDOR_SHIPPING_API_LEVEL_PROP,
                         },
-                        mMinVendorApiLevel)) {
+                        mMinVsrApiLevel)) {
+                    return RunStrategy.FULL_MODULE_BYPASS;
+                }
+            }
+
+            if (mMinVendorApiLevel > 0) {
+                if (mMinVendorApiLevel < 202404) {
+                    throw new RuntimeException(
+                            "vendor-min-api-level must have YYYYMM format greater than or equal to"
+                                    + " 202404, but has "
+                                    + mMinVendorApiLevel);
+                }
+
+                long vendorApiLevel = device.getIntProperty(VENDOR_API_LEVEL_PROP, VALUE_NOT_FOUND);
+                if (vendorApiLevel == VALUE_NOT_FOUND || vendorApiLevel < mMinVendorApiLevel) {
                     return RunStrategy.FULL_MODULE_BYPASS;
                 }
             }
