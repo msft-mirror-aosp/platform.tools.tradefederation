@@ -22,13 +22,11 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.FailureDescription;
-import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
-import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.skipped.SkipReason;
@@ -275,10 +273,9 @@ public class ModuleListener extends CollectingTestListener {
     /** {@inheritDoc} */
     @Override
     public void testLog(String dataName, LogDataType dataType, InputStreamSource dataStream) {
-        if (mMainListener instanceof LogSaverResultForwarder) {
-            // If the listener is a log saver, we should simply forward the testLog not save again.
-            ((LogSaverResultForwarder) mMainListener)
-                    .testLogForward(dataName, dataType, dataStream);
+        if (mMainListener != null) {
+            // let mainListener handle the testLog event.
+            mMainListener.testLog(dataName, dataType, dataStream);
         } else {
             super.testLog(dataName, dataType, dataStream);
         }
@@ -315,14 +312,6 @@ public class ModuleListener extends CollectingTestListener {
             return "";
         }
         return mModuleContext.getDevices().get(0).getSerialNumber();
-    }
-
-    @Override
-    public void setLogSaver(ILogSaver logSaver) {
-        super.setLogSaver(logSaver);
-        if (mMainListener instanceof ILogSaverListener) {
-            ((ILogSaverListener) mMainListener).setLogSaver(logSaver);
-        }
     }
 
     public void setUseModuleResultsForwarder(boolean useModuleResultsForwarder) {

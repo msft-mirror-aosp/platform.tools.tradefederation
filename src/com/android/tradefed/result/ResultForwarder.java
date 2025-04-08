@@ -77,11 +77,11 @@ public class ResultForwarder implements ITestInvocationListener {
     }
 
     /**
-     * Get the list of listeners.  Intended only for use by subclasses.
+     * Get the list of listeners.
      *
      * @return The list of {@link ITestInvocationListener}s.
      */
-    protected List<ITestInvocationListener> getListeners() {
+    public List<ITestInvocationListener> getListeners() {
         return mListeners;
     }
 

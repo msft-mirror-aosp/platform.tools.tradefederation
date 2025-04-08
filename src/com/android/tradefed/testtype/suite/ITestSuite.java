@@ -63,6 +63,7 @@ import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
+import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.InfraErrorIdentifier;
@@ -940,10 +941,18 @@ public abstract class ITestSuite
                                         CurrentInvocation.moduleCurrentIsolation().toString());
                     }
                     // Unify invocation level listeners, module listeners and module post-processors
-                    ITestInvocationListener allListeners =
+                    ITestInvocationListener allListenersWithoutLogSaver =
                             listenerWithPostProcessors(module, listener, moduleListeners);
+                    // NOTE: do not set log saver again, since the previous log saver should have
+                    // already set it to the correct listeners.
+                    ITestInvocationListener allListenersWithLogSaver =
+                            new LogSaverResultForwarder(
+                                    mMainConfiguration.getLogSaver(),
+                                    Arrays.asList(allListenersWithoutLogSaver),
+                                    module.getModuleConfiguration(),
+                                    false);
                     // Only the module callback will be called here.
-                    listenerWithCollectors = allListeners;
+                    listenerWithCollectors = allListenersWithLogSaver;
                     if (mMetricCollectors != null) {
                         for (IMetricCollector collector :
                                 CollectorHelper.cloneCollectors(mMetricCollectors)) {
@@ -1031,7 +1040,7 @@ public abstract class ITestSuite
                         // TODO(b/372243975): report logs even while applying caching
                         try (InputStreamSource source =
                                 new FileInputStreamSource(moduleConfig, deleteRightAway)) {
-                            allListeners.testLog(
+                            allListenersWithLogSaver.testLog(
                                     "module-configuration", LogDataType.HARNESS_CONFIG, source);
                         }
                     }
@@ -1063,7 +1072,7 @@ public abstract class ITestSuite
                             module.getModuleInvocationContext()
                                     .addInvocationAttribute(ModuleDefinition.SPARSE_MODULE, "true");
                         } else {
-                            runSingleModule(module, moduleInfo, allListeners);
+                            runSingleModule(module, moduleInfo, allListenersWithoutLogSaver);
                         }
                     } finally {
                         module.getModuleInvocationContext()
@@ -1093,7 +1102,7 @@ public abstract class ITestSuite
                     }
                     if (moduleRan) {
                         // Module isolation routine
-                        moduleIsolation(mContext, allListeners);
+                        moduleIsolation(mContext, allListenersWithLogSaver);
                     }
                 }
             } catch (DeviceNotAvailableException e) {
@@ -1140,6 +1149,14 @@ public abstract class ITestSuite
             ModuleDefinition module,
             ITestInvocationListener invocationListener,
             List<ITestInvocationListener> moduleListeners) {
+        // Strip LogSaverResultForwarder from invocationListener as a RetryLogSaverResultForwarder
+        // will be added during module execution later.
+        if (invocationListener instanceof LogSaverResultForwarder) {
+            List<ITestInvocationListener> origListeners =
+                    ((LogSaverResultForwarder) invocationListener).getListeners();
+            invocationListener = new ResultAndLogForwarder(origListeners);
+        }
+
         IConfiguration config = module.getModuleConfiguration();
         List<String> testTypes = config.getConfigurationDescription().getMetaData(TEST_TYPE_KEY);
         List<ITestInvocationListener> allListeners = new ArrayList<>();
@@ -1155,6 +1172,12 @@ public abstract class ITestSuite
         List<IPostProcessor> modulePostProcessors = config.getPostProcessors();
         if (modulePostProcessors.size() > 0 && topLevelPostProcessors.size() > 0) {
             CLog.w("Post processors specified at both top level and module level (%s)", module);
+        }
+        // set log saver for module level post postprocessor manually to allow chained log
+        // processing at module level. Do this before init() to avoid passing down the log saver
+        // to invocation level listeners/reporters.
+        for (IPostProcessor postProcessor : modulePostProcessors) {
+            postProcessor.setLogSaver(mMainConfiguration.getLogSaver());
         }
         for (IPostProcessor postProcessor : modulePostProcessors) {
             try {
@@ -1274,6 +1297,12 @@ public abstract class ITestSuite
             ITestInvocationListener allListeners)
             throws DeviceNotAvailableException {
         Map<String, String> properties = new LinkedHashMap<>();
+        ITestInvocationListener allListenersWithLogSaver =
+                new LogSaverResultForwarder(
+                        mMainConfiguration.getLogSaver(),
+                        Arrays.asList(allListeners),
+                        module.getModuleConfiguration(),
+                        false);
         try (CloseableTraceScope ignored = new CloseableTraceScope("module_pre_check")) {
             if (mRebootPerModule) {
                 if ("user".equals(mDevice.getProperty(DeviceProperties.BUILD_TYPE))) {
@@ -1289,7 +1318,10 @@ public abstract class ITestSuite
             if (!mSkipAllSystemStatusCheck && !mSystemStatusCheckers.isEmpty()) {
                 properties.putAll(
                         runPreModuleCheck(
-                                module.getId(), mSystemStatusCheckers, mDevice, allListeners));
+                                module.getId(),
+                                mSystemStatusCheckers,
+                                mDevice,
+                                allListenersWithLogSaver));
             }
             if (mCollectTestsOnly) {
                 module.setCollectTestsOnly(mCollectTestsOnly);
@@ -1334,7 +1366,10 @@ public abstract class ITestSuite
             try (CloseableTraceScope ignored = new CloseableTraceScope("module_post_check")) {
                 properties.putAll(
                         runPostModuleCheck(
-                                module.getId(), mSystemStatusCheckers, mDevice, allListeners));
+                                module.getId(),
+                                mSystemStatusCheckers,
+                                mDevice,
+                                allListenersWithLogSaver));
             }
         }
         for (Map.Entry<String, String> entry : properties.entrySet()) {

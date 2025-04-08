@@ -40,12 +40,22 @@ public class LogSaverResultForwarder extends ResultForwarder implements ILogSave
 
     public LogSaverResultForwarder(
             ILogSaver logSaver, List<ITestInvocationListener> listeners, IConfiguration config) {
+        this(logSaver, listeners, config, true);
+    }
+
+    public LogSaverResultForwarder(
+            ILogSaver logSaver,
+            List<ITestInvocationListener> listeners,
+            IConfiguration config,
+            boolean setLogSaver) {
         super(listeners);
         mLogSaver = logSaver;
         mConfig = config;
-        for (ITestInvocationListener listener : listeners) {
-            if (listener instanceof ILogSaverListener) {
-                ((ILogSaverListener) listener).setLogSaver(mLogSaver);
+        if (setLogSaver) {
+            for (ITestInvocationListener listener : listeners) {
+                if (listener instanceof ILogSaverListener) {
+                    ((ILogSaverListener) listener).setLogSaver(mLogSaver);
+                }
             }
         }
     }

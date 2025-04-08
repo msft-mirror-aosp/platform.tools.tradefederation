@@ -59,6 +59,7 @@ import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.LogFile;
+import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.MultiFailureDescription;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
@@ -99,6 +100,7 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -442,7 +444,14 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             throws DeviceNotAvailableException {
         mMaxRetry = maxRunLimit;
         mModuleInfo = moduleInfo;
-        mInvocationListener = listener;
+        // until RetryLogSaverResultForwarder is created, wrap a temp log saver if needed.
+        if (!(listener instanceof LogSaverResultForwarder)) {
+            mInvocationListener =
+                    new LogSaverResultForwarder(
+                            mLogSaver, Arrays.asList(listener), mModuleConfiguration, false);
+        } else {
+            mInvocationListener = listener;
+        }
 
         // Load extra configuration for the module from module_controller
         // TODO: make module_controller a full TF object
