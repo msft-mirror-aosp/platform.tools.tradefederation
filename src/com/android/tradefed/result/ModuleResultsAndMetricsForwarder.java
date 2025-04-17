@@ -62,7 +62,7 @@ public class ModuleResultsAndMetricsForwarder extends ResultAndLogForwarder {
 
     @Override
     public void testRunStarted(String runName, int testCount, int attemptNumber) {
-        super.testRunStarted(mModuleId, testCount, attemptNumber);
+        testRunStarted(mModuleId, testCount, attemptNumber, System.currentTimeMillis());
     }
 
     @Override

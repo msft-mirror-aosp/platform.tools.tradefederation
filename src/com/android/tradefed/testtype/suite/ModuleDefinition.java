@@ -522,7 +522,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             boolean shouldFailRun = retryDecision.shouldFailRun();
             reportSetupFailure(
                     preparationException,
-                    listener,
+                    mInvocationListener,
                     mTargetPreparerRetryCount,
                     shouldFailRun);
             if (shouldFailRun) {
@@ -611,7 +611,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 if (preparationException != null) {
                     reportSetupFailure(
                             preparationException,
-                            listener,
+                            mInvocationListener,
                             mTargetPreparerRetryCount,
                             true);
                     return;
@@ -670,7 +670,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 // failed, capture a bugreport.
                 if (mCurrentTestWrapper.getResultListener().hasLastAttemptFailed()) {
                     captureBugreport(
-                            listener,
+                            mInvocationListener,
                             getId(),
                             mCurrentTestWrapper
                                     .getResultListener()
@@ -726,7 +726,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     mModuleConfiguration.cleanConfigurationData();
                     if (mMergeAttempts) {
                         reportFinalResults(
-                                listener, mExpectedTests, mTestsResults, null, tearDownException);
+                                mInvocationListener,
+                                mExpectedTests,
+                                mTestsResults,
+                                null,
+                                tearDownException);
                         mTestsResults.clear();
                         mExpectedTests = 0;
                     } else {
@@ -756,7 +760,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                             "failed in the 1st run but passed after retrying.");
                                 }
                                 reportFinalResults(
-                                        listener,
+                                        mInvocationListener,
                                         expectedCount,
                                         runResultList,
                                         i,
