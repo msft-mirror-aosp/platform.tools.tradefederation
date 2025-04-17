@@ -1127,7 +1127,7 @@ public abstract class ITestSuite
                 throw e;
             } finally {
                 // if module end not reported(no DNAE happened), report it now
-                if (!moduleEndReported) {
+                if (moduleStartReported && !moduleEndReported) {
                     if (listenerWithCollectors != null) {
                         listenerWithCollectors.testModuleEnded();
                     } else {
