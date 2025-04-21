@@ -59,6 +59,7 @@ import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.ITestLoggerReceiver;
 import com.android.tradefed.result.LogFile;
+import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.MultiFailureDescription;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestResult;
@@ -99,6 +100,7 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -188,7 +190,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     private long mElapsedTearDown = 0L;
 
     private long mStartTestTime = 0L;
-    private Long mStartModuleRunDate = null;
+    private boolean mReportModuleStart = true;
+    private boolean mReportModuleEnd = true;
+    private boolean mFinalResultsReported = false;
 
     // Tracking of retry performance
     private List<RetryStatistics> mRetryStats = new ArrayList<>();
@@ -209,6 +213,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
     private Set<TestDescription> mPassThroughFilters = new LinkedHashSet<>();
 
     private boolean mRecoverVirtualDevice = false;
+
+    private boolean mUseModuleResultsForwarder = false;
 
     @VisibleForTesting
     public ModuleDefinition() {
@@ -438,9 +444,15 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             throws DeviceNotAvailableException {
         mMaxRetry = maxRunLimit;
         mModuleInfo = moduleInfo;
-        mInvocationListener = listener;
+        // until RetryLogSaverResultForwarder is created, wrap a temp log saver if needed.
+        if (!(listener instanceof LogSaverResultForwarder)) {
+            mInvocationListener =
+                    new LogSaverResultForwarder(
+                            mLogSaver, Arrays.asList(listener), mModuleConfiguration, false);
+        } else {
+            mInvocationListener = listener;
+        }
 
-        mStartModuleRunDate = System.currentTimeMillis();
         // Load extra configuration for the module from module_controller
         // TODO: make module_controller a full TF object
         boolean skipTestCases = false;
@@ -510,7 +522,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             boolean shouldFailRun = retryDecision.shouldFailRun();
             reportSetupFailure(
                     preparationException,
-                    listener,
+                    mInvocationListener,
                     mTargetPreparerRetryCount,
                     shouldFailRun);
             if (shouldFailRun) {
@@ -599,7 +611,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 if (preparationException != null) {
                     reportSetupFailure(
                             preparationException,
-                            listener,
+                            mInvocationListener,
                             mTargetPreparerRetryCount,
                             true);
                     return;
@@ -658,7 +670,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                 // failed, capture a bugreport.
                 if (mCurrentTestWrapper.getResultListener().hasLastAttemptFailed()) {
                     captureBugreport(
-                            listener,
+                            mInvocationListener,
                             getId(),
                             mCurrentTestWrapper
                                     .getResultListener()
@@ -714,7 +726,11 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                     mModuleConfiguration.cleanConfigurationData();
                     if (mMergeAttempts) {
                         reportFinalResults(
-                                listener, mExpectedTests, mTestsResults, null, tearDownException);
+                                mInvocationListener,
+                                mExpectedTests,
+                                mTestsResults,
+                                null,
+                                tearDownException);
                         mTestsResults.clear();
                         mExpectedTests = 0;
                     } else {
@@ -744,7 +760,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
                                             "failed in the 1st run but passed after retrying.");
                                 }
                                 reportFinalResults(
-                                        listener,
+                                        mInvocationListener,
                                         expectedCount,
                                         runResultList,
                                         i,
@@ -778,7 +794,8 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             boolean skipTestCases,
             int maxRunLimit) {
         GranularRetriableTestWrapper retriableTest =
-                new GranularRetriableTestWrapper(test, this, listener, maxRunLimit);
+                new GranularRetriableTestWrapper(
+                        test, this, listener, maxRunLimit, mUseModuleResultsForwarder);
         retriableTest.setModuleId(getId());
         retriableTest.setMarkTestsSkipped(skipTestCases);
         retriableTest.setMetricCollectors(mRunMetricCollectors);
@@ -926,6 +943,7 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         } else {
             listener.testRunEnded(getCurrentTime() - mStartTestTime, metricsProto);
         }
+        mFinalResultsReported = true;
     }
 
     private void forwardTestResults(
@@ -1341,40 +1359,46 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         return mModuleConfiguration;
     }
 
+    public void setReportModuleStart(boolean shouldReportModuleStart) {
+        mReportModuleStart = shouldReportModuleStart;
+    }
+
+    public void setReportModuleEnd(boolean shouldReportModuleEnd) {
+        mReportModuleEnd = shouldReportModuleEnd;
+    }
+
     /** Report completely not executed modules. */
     public final void reportNotExecuted(ITestInvocationListener listener, String message) {
-        if (mStartModuleRunDate == null) {
+        if (mReportModuleStart) {
             listener.testModuleStarted(getModuleInvocationContext());
         }
         if (mCurrentTestWrapper != null)  {
-            mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
-            HarnessRuntimeException interruptedException =
-                    new HarnessRuntimeException(
-                        message, TestErrorIdentifier.MODULE_DID_NOT_EXECUTE);
-            for (int i = 0; i < mMaxRetry; i++) {
-                // Get all the results for the attempt
-                List<TestRunResult> runResultList = new ArrayList<TestRunResult>();
-                int expectedCount = 0;
-                for (ModuleListener attemptListener : mRunListenersResults) {
-                    for (String runName : attemptListener.getTestRunNames()) {
-                        TestRunResult run =
-                                attemptListener.getTestRunAtAttempt(runName, i);
-                        if (run != null) {
-                            runResultList.add(run);
-                            expectedCount += run.getExpectedTestCount();
+            // do not report results if already reported once
+            if (!mFinalResultsReported) {
+                mRunListenersResults.add(mCurrentTestWrapper.getResultListener());
+                HarnessRuntimeException interruptedException =
+                        new HarnessRuntimeException(
+                                message, TestErrorIdentifier.MODULE_DID_NOT_EXECUTE);
+                for (int i = 0; i < mMaxRetry; i++) {
+                    // Get all the results for the attempt
+                    List<TestRunResult> runResultList = new ArrayList<TestRunResult>();
+                    int expectedCount = 0;
+                    for (ModuleListener attemptListener : mRunListenersResults) {
+                        for (String runName : attemptListener.getTestRunNames()) {
+                            TestRunResult run = attemptListener.getTestRunAtAttempt(runName, i);
+                            if (run != null) {
+                                runResultList.add(run);
+                                expectedCount += run.getExpectedTestCount();
+                            }
                         }
                     }
-                }
 
-                if (!runResultList.isEmpty()) {
-                    reportFinalResults(
-                            listener,
-                            expectedCount,
-                            runResultList,
-                            i,
-                            interruptedException);
-                } else {
-                    CLog.d("No results to be forwarded for attempt %s.", i);
+                    if (!runResultList.isEmpty()) {
+                        reportFinalResults(
+                                listener, expectedCount, runResultList, i, interruptedException);
+                    } else {
+                        CLog.d("No results to be forwarded for attempt %s.", i);
+                    }
                 }
             }
         } else {
@@ -1387,7 +1411,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
             listener.testRunFailed(description);
             listener.testRunEnded(0, new HashMap<String, Metric>());
         }
-        listener.testModuleEnded();
+        if (mReportModuleEnd) {
+            listener.testModuleEnded();
+        }
     }
 
     /** Whether or not to enable dynamic download at module level. */
@@ -1587,5 +1613,9 @@ public class ModuleDefinition implements Comparable<ModuleDefinition>, ITestColl
         } else if (test instanceof ITestFilterReceiver) {
             ((ITestFilterReceiver) test).addAllExcludeFilters(filterNames);
         }
+    }
+
+    public void setUseModuleResultsForwarder(boolean useModuleResultsForwarder) {
+        mUseModuleResultsForwarder = useModuleResultsForwarder;
     }
 }

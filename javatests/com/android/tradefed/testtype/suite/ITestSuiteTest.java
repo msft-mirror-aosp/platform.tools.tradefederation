@@ -68,8 +68,8 @@ import com.android.tradefed.result.FailureDescription;
 import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.LogFile;
+import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.MultiFailureDescription;
-import com.android.tradefed.result.ResultAndLogForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.error.DeviceErrorIdentifier;
 import com.android.tradefed.result.error.TestErrorIdentifier;
@@ -487,16 +487,18 @@ public class ITestSuiteTest {
         StatusCheckerResult result = new StatusCheckerResult(CheckStatus.FAILED);
         result.setErrorMessage("some failures.");
         result.setBugreportNeeded(true);
-        ResultAndLogForwarder allListeners = new ResultAndLogForwarder(mMockListener);
+        LogSaverResultForwarder allListeners =
+                new LogSaverResultForwarder(
+                        mMockLogSaver, Arrays.asList(mMockListener), mStubMainConfiguration);
         when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice))).thenReturn(result);
-        when(mMockDevice.logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class)))
+        when(mMockDevice.logBugreport(Mockito.any(), Mockito.any(LogSaverResultForwarder.class)))
                 .thenReturn(true);
         when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice))).thenReturn(result);
         expectTestRun(allListeners);
 
         mTestSuite.run(mTestInfo, allListeners);
         verify(mMockDevice, times(2))
-                .logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class));
+                .logBugreport(Mockito.any(), Mockito.any(LogSaverResultForwarder.class));
     }
 
     /**
@@ -512,8 +514,10 @@ public class ITestSuiteTest {
 
         when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
                 .thenThrow(new RuntimeException("I failed."));
-        ResultAndLogForwarder allListeners = new ResultAndLogForwarder(mMockListener);
-        when(mMockDevice.logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class)))
+        LogSaverResultForwarder allListeners =
+                new LogSaverResultForwarder(
+                        mMockLogSaver, Arrays.asList(mMockListener), mStubMainConfiguration);
+        when(mMockDevice.logBugreport(Mockito.any(), Mockito.any(LogSaverResultForwarder.class)))
                 .thenReturn(true);
 
         when(mMockSysChecker.postExecutionCheck(Mockito.eq(mMockDevice)))
@@ -522,7 +526,7 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, allListeners);
         verify(mMockDevice, times(2))
-                .logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class));
+                .logBugreport(Mockito.any(), Mockito.any(LogSaverResultForwarder.class));
     }
 
     /**
@@ -579,7 +583,9 @@ public class ITestSuiteTest {
         mTestSuite.setSystemStatusChecker(sysChecker);
         when(mMockSysChecker.preExecutionCheck(Mockito.eq(mMockDevice)))
                 .thenReturn(new StatusCheckerResult(CheckStatus.SUCCESS));
-        ResultAndLogForwarder allListeners = new ResultAndLogForwarder(mMockListener);
+        LogSaverResultForwarder allListeners =
+                new LogSaverResultForwarder(
+                        mMockLogSaver, Arrays.asList(mMockListener), mStubMainConfiguration);
         when(mMockDevice.logBugreport(Mockito.any(), Mockito.any())).thenReturn(true);
 
         // No bugreport is captured if not explicitly requested
@@ -591,7 +597,7 @@ public class ITestSuiteTest {
 
         mTestSuite.run(mTestInfo, allListeners);
         verify(mMockDevice, times(1))
-                .logBugreport(Mockito.any(), Mockito.any(ResultAndLogForwarder.class));
+                .logBugreport(Mockito.any(), Mockito.any(LogSaverResultForwarder.class));
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq(ITestSuite.MODULE_CHECKER_PRE + "_test"),
@@ -1874,7 +1880,7 @@ public class ITestSuiteTest {
     public void testReportNotExecuted() {
         mTestSuite.reportNotExecuted(mMockListener, "Injected message");
 
-        verify(mMockListener).testModuleStarted(Mockito.any());
+        verify(mMockListener, times(1)).testModuleStarted(Mockito.any());
         verify(mMockListener)
                 .testRunStarted(
                         Mockito.eq(TEST_CONFIG_NAME),
@@ -1898,50 +1904,82 @@ public class ITestSuiteTest {
      * in progress.
      */
     @Test
-    public void testReportNotExecuted_moduleInProgress() {
-        ModuleDefinition m =
-                new ModuleDefinition(
-                        "in-progress",
-                        new ArrayList<>(),
-                        new HashMap<>(),
-                        new ArrayList<>(),
-                        new Configuration("", ""));
-        mTestSuite.setModuleInProgress(m);
+    public void testReportNotExecuted_moduleInProgress() throws Exception {
+        List<ISystemStatusChecker> sysChecker = new ArrayList<>();
+        sysChecker.add(mMockSysChecker);
+        mTestSuite =
+                new TestSuiteImpl() {
+                    @Override
+                    public LinkedHashMap<String, IConfiguration> loadTests() {
+                        LinkedHashMap<String, IConfiguration> testConfig = new LinkedHashMap<>();
+                        try {
+                            IConfiguration moduleOne =
+                                    ConfigurationFactory.getInstance()
+                                            .createConfigurationFromArgs(
+                                                    new String[] {EMPTY_CONFIG});
+                            moduleOne.setTest(
+                                    new StubCollectingTest(
+                                            new DeviceNotAvailableException(
+                                                    "unavailable",
+                                                    "serial",
+                                                    DeviceErrorIdentifier.DEVICE_UNAVAILABLE)));
+                            testConfig.put("in-progress", moduleOne);
 
-        FailureDescription error =
-                FailureDescription.create(
-                                "Module in-progress was interrupted after starting. Results might"
-                                        + " not be accurate or complete.")
-                        .setFailureStatus(FailureStatus.NOT_EXECUTED);
-
-        mTestSuite.reportNotExecuted(mMockListener, "Injected message");
+                            IConfiguration extraConfig =
+                                    ConfigurationFactory.getInstance()
+                                            .createConfigurationFromArgs(
+                                                    new String[] {EMPTY_CONFIG});
+                            extraConfig.setTest(new StubCollectingTest());
+                            testConfig.put("not-executed", extraConfig);
+                        } catch (ConfigurationException e) {
+                            CLog.e(e);
+                            throw new RuntimeException(e);
+                        }
+                        return testConfig;
+                    }
+                };
+        mTestSuite.setDevice(mMockDevice);
+        mTestSuite.setBuild(mMockBuildInfo);
+        mTestSuite.setInvocationContext(mContext);
+        mTestSuite.setSystemStatusChecker(sysChecker);
+        mTestSuite.setConfiguration(mStubMainConfiguration);
+        OptionSetter setter = new OptionSetter(mTestSuite);
+        setter.setOptionValue("skip-all-system-status-check", "true");
+        setter.setOptionValue("reboot-per-module", "true");
+        when(mMockDevice.getProperty("ro.build.type")).thenReturn("user");
+        when(mMockDevice.logBugreport(
+                        Mockito.eq("module-test-failure-SERIAL-bugreport"), Mockito.any()))
+                .thenReturn(true);
+        try {
+            mTestSuite.run(mTestInfo, mMockListener);
+            fail("Should have thrown an exception.");
+        } catch (DeviceNotAvailableException expected) {
+            assertEquals("unavailable", expected.getMessage());
+        }
 
         verify(mMockListener, times(2)).testModuleStarted(Mockito.any());
-        verify(mMockListener)
+        verify(mMockListener, times(1))
                 .testRunStarted(
-                        Mockito.eq("in-progress"), Mockito.eq(0), Mockito.eq(0), Mockito.anyLong());
+                        Mockito.eq("in-progress"), Mockito.eq(1), Mockito.eq(0), Mockito.anyLong());
         ArgumentCaptor<FailureDescription> captureRunFailure =
                 ArgumentCaptor.forClass(FailureDescription.class);
         verify(mMockListener, times(2)).testRunFailed(captureRunFailure.capture());
         verify(mMockListener, times(2))
                 .testRunEnded(Mockito.anyLong(), Mockito.<HashMap<String, Metric>>any());
         verify(mMockListener, times(2)).testModuleEnded();
-        verify(mMockListener)
+        verify(mMockListener, times(1))
                 .testRunStarted(
-                        Mockito.eq(TEST_CONFIG_NAME),
+                        Mockito.eq("not-executed"),
                         Mockito.eq(0),
                         Mockito.eq(0),
                         Mockito.anyLong());
-
         List<FailureDescription> failures = captureRunFailure.getAllValues();
+        assertTrue(failures.get(0).getErrorMessage().equals("unavailable"));
+        assertEquals(FailureStatus.LOST_SYSTEM_UNDER_TEST, failures.get(0).getFailureStatus());
         assertTrue(
-                failures.get(0)
+                failures.get(1)
                         .getErrorMessage()
-                        .equals(
-                                "Module in-progress was interrupted after starting. Results might"
-                                        + " not be accurate or complete."));
-        assertEquals(FailureStatus.NOT_EXECUTED, failures.get(0).getFailureStatus());
-        assertTrue(failures.get(1).getErrorMessage().equals("Injected message"));
+                        .equals("Module did not run due to device not available."));
         assertEquals(FailureStatus.NOT_EXECUTED, failures.get(1).getFailureStatus());
     }
 

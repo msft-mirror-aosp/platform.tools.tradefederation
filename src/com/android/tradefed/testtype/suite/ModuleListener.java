@@ -22,13 +22,11 @@ import com.android.tradefed.log.LogUtil.CLog;
 import com.android.tradefed.metrics.proto.MetricMeasurement.Metric;
 import com.android.tradefed.result.CollectingTestListener;
 import com.android.tradefed.result.FailureDescription;
-import com.android.tradefed.result.ILogSaver;
 import com.android.tradefed.result.ILogSaverListener;
 import com.android.tradefed.result.ITestInvocationListener;
 import com.android.tradefed.result.InputStreamSource;
 import com.android.tradefed.result.LogDataType;
 import com.android.tradefed.result.LogFile;
-import com.android.tradefed.result.LogSaverResultForwarder;
 import com.android.tradefed.result.TestDescription;
 import com.android.tradefed.result.TestStatus;
 import com.android.tradefed.result.skipped.SkipReason;
@@ -62,6 +60,7 @@ public class ModuleListener extends CollectingTestListener {
 
     private List<String> mTestMappingSources = new ArrayList<String>();
     private static final String TEST_MAPPING_SOURCE = "test_mapping_source";
+    private boolean mUseModuleResultsForwarder = false;
 
     /** Constructor. */
     public ModuleListener(ITestInvocationListener listener, IInvocationContext moduleContext) {
@@ -138,13 +137,15 @@ public class ModuleListener extends CollectingTestListener {
     public void testRunEnded(long elapsedTime, HashMap<String, Metric> runMetrics) {
         CLog.d("ModuleListener.testRunEnded(%s) on %s", elapsedTime, getSerial());
 
-        if (!IsolationGrade.NOT_ISOLATED.equals(mAttemptIsolation)) {
-            runMetrics.put(
-                    "run-isolated", TfMetricProtoUtil.stringToMetric(mAttemptIsolation.toString()));
-            // In case something was off, reset isolation.
-            mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
+        if (!mUseModuleResultsForwarder) {
+            if (!IsolationGrade.NOT_ISOLATED.equals(mAttemptIsolation)) {
+                runMetrics.put(
+                        "run-isolated",
+                        TfMetricProtoUtil.stringToMetric(mAttemptIsolation.toString()));
+                // In case something was off, reset isolation.
+                mAttemptIsolation = IsolationGrade.NOT_ISOLATED;
+            }
         }
-
         super.testRunEnded(elapsedTime, runMetrics);
         mRunInProgress = false;
     }
@@ -205,10 +206,12 @@ public class ModuleListener extends CollectingTestListener {
     @Override
     public void testEnded(TestDescription test, long endTime, HashMap<String, Metric> testMetrics) {
         logTestStatus(test, mTestStatus);
-        if (!mTestMappingSources.isEmpty()) {
-            testMetrics.put(
-                    TEST_MAPPING_SOURCE,
-                    TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
+        if (!mUseModuleResultsForwarder) {
+            if (!mTestMappingSources.isEmpty()) {
+                testMetrics.put(
+                        TEST_MAPPING_SOURCE,
+                        TfMetricProtoUtil.stringToMetric(mTestMappingSources.toString()));
+            }
         }
         super.testEnded(test, endTime, testMetrics);
     }
@@ -270,10 +273,9 @@ public class ModuleListener extends CollectingTestListener {
     /** {@inheritDoc} */
     @Override
     public void testLog(String dataName, LogDataType dataType, InputStreamSource dataStream) {
-        if (mMainListener instanceof LogSaverResultForwarder) {
-            // If the listener is a log saver, we should simply forward the testLog not save again.
-            ((LogSaverResultForwarder) mMainListener)
-                    .testLogForward(dataName, dataType, dataStream);
+        if (mMainListener != null) {
+            // let mainListener handle the testLog event.
+            mMainListener.testLog(dataName, dataType, dataStream);
         } else {
             super.testLog(dataName, dataType, dataStream);
         }
@@ -312,11 +314,7 @@ public class ModuleListener extends CollectingTestListener {
         return mModuleContext.getDevices().get(0).getSerialNumber();
     }
 
-    @Override
-    public void setLogSaver(ILogSaver logSaver) {
-        super.setLogSaver(logSaver);
-        if (mMainListener instanceof ILogSaverListener) {
-            ((ILogSaverListener) mMainListener).setLogSaver(logSaver);
-        }
+    public void setUseModuleResultsForwarder(boolean useModuleResultsForwarder) {
+        mUseModuleResultsForwarder = useModuleResultsForwarder;
     }
 }

@@ -1377,9 +1377,13 @@ public class ModuleDefinitionTest {
                 .thenReturn(loggedFile);
 
         // Simulate how the invoker actually put the log saver
-        LogSaverResultForwarder forwarder =
+        // logSaver wrapped at the invocation level
+        LogSaverResultForwarder logSaverResultForwarder =
                 new LogSaverResultForwarder(
                         mMockLogSaver, Arrays.asList(mMockLogSaverListener), moduleConfig);
+        // invocation level logSaver removed at the module level
+        List<ITestInvocationListener> listeners = logSaverResultForwarder.getListeners();
+        ResultAndLogForwarder forwarder = new ResultAndLogForwarder(listeners);
         mModule.run(mModuleInfo, forwarder);
         InOrder inOrder = Mockito.inOrder(mMockLogSaverListener);
         inOrder.verify(mMockLogSaverListener).setLogSaver(mMockLogSaver);
